@@ -22,7 +22,7 @@ class UserCreate(BaseModel):
 class UserRead(BaseModel):
     id: UUID
     username: str
-    email: EmailStr
+    email: str
     full_name: str
     branch_id: UUID | None = None
     department_id: UUID | None = None
@@ -36,4 +36,3 @@ class UserRead(BaseModel):
 
 class CurrentUserRead(UserRead):
     effective_permissions: list[str]
-

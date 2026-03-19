@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,11 +8,20 @@ from app.core.config import get_settings
 from app.core.exceptions import install_exception_handlers
 from app.core.logging import configure_logging
 from app.middleware.request_logging import RequestLoggingMiddleware
+from app.scripts.bootstrap_db import bootstrap_database
 
 settings = get_settings()
 configure_logging()
 
-app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.auto_db_bootstrap:
+        bootstrap_database()
+    yield
+
+
+app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -31,4 +42,3 @@ def live() -> dict[str, str]:
 @app.get("/health/ready")
 def ready() -> dict[str, str]:
     return {"status": "ready"}
-

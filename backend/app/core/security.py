@@ -10,7 +10,7 @@ from passlib.context import CryptContext
 from app.core.config import get_settings
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 ALGORITHM = "HS256"
 
 
@@ -65,4 +65,3 @@ def hash_token(token: str) -> str:
 
 def generate_session_id() -> str:
     return secrets.token_urlsafe(32)
-

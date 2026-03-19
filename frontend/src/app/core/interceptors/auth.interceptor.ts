@@ -1,11 +1,11 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, throwError } from 'rxjs';
+import { Observable, catchError, throwError } from 'rxjs';
 
 import { AuthService } from '../services/auth.service';
 import { TokenStorageService } from '../services/token-storage.service';
 
-export const authInterceptor: HttpInterceptorFn = (request, next) => {
+export const authInterceptor: HttpInterceptorFn = (request: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> => {
   const tokenStorage = inject(TokenStorageService);
   const authService = inject(AuthService);
   const accessToken = tokenStorage.getAccessToken();
@@ -22,7 +22,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   return next(authRequest).pipe(
     catchError((error: unknown) => {
       if (error instanceof HttpErrorResponse && error.status === 401) {
-        return authService.handleUnauthorized(authRequest, next);
+        return authService.handleUnauthorized(authRequest, next) as Observable<HttpEvent<unknown>>;
       }
       return throwError(() => error);
     })

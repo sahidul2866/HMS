@@ -17,7 +17,7 @@ from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.auth.repository import AuthRepository
 from app.schemas.auth import LoginResponse, TokenPair
-from app.schemas.user import CurrentUserRead
+from app.schemas.user import CurrentUserRead, UserRead
 from app.utils.enums import AuditAction
 
 
@@ -34,8 +34,8 @@ class AuthService:
         return sorted(permissions)
 
     def to_current_user(self, user: User) -> CurrentUserRead:
-        payload = CurrentUserRead.model_validate(user, from_attributes=True)
-        return payload.model_copy(update={"effective_permissions": self.get_effective_permissions(user)})
+        base_payload = UserRead.model_validate(user, from_attributes=True)
+        return CurrentUserRead(**base_payload.model_dump(), effective_permissions=self.get_effective_permissions(user))
 
     def _build_login_response(
         self,

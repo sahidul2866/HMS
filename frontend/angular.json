@@ -38,6 +38,7 @@
       }
     }
   },
-  "defaultProject": "hms-frontend"
+  "cli": {
+    "analytics": false
+  }
 }
-

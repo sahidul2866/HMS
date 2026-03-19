@@ -1,4 +1,4 @@
-import { HttpClient, HttpRequest } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpRequest } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
@@ -97,7 +97,10 @@ export class AuthService {
     return this.refreshInFlight$;
   }
 
-  handleUnauthorized(request: HttpRequest<unknown>, next: (request: HttpRequest<unknown>) => Observable<unknown>): Observable<unknown> {
+  handleUnauthorized(
+    request: HttpRequest<unknown>,
+    next: (request: HttpRequest<unknown>) => Observable<HttpEvent<unknown>>,
+  ): Observable<HttpEvent<unknown>> {
     if (
       request.url.endsWith('/auth/login')
       || request.url.endsWith('/auth/refresh')

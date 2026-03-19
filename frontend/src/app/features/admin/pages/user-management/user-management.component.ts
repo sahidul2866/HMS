@@ -33,6 +33,10 @@ export class UserManagementComponent {
     this.adminUserService.list().subscribe((users) => (this.users = users));
   }
 
+  getRoleCodes(user: AdminUser): string {
+    return user.roles.map((role) => role.code).join(', ');
+  }
+
   submit(): void {
     if (this.form.invalid) {
       return;
@@ -54,4 +58,3 @@ export class UserManagementComponent {
       });
   }
 }
-
