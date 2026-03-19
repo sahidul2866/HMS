@@ -1,0 +1,35 @@
+<section class="page-card">
+  <h1 class="page-title">Pharmacy Dispense</h1>
+  <div class="page-subtitle">Protected by `pharmacy.dispense`, with backend audit logging for each dispense.</div>
+
+  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label class="field">
+      <span>Prescription Reference</span>
+      <input type="text" formControlName="prescription_ref" />
+    </label>
+    <label class="field">
+      <span>Medicine</span>
+      <input type="text" formControlName="medicine_name" />
+    </label>
+    <label class="field">
+      <span>Quantity</span>
+      <input type="number" formControlName="quantity" />
+    </label>
+    <label class="field">
+      <span>Unit Price</span>
+      <input type="number" formControlName="unit_price" />
+    </label>
+    <label class="field" style="grid-column:1/-1;">
+      <span>Note</span>
+      <textarea rows="3" formControlName="note"></textarea>
+    </label>
+    <div style="grid-column:1/-1;">
+      <button class="primary-btn" type="submit">Dispense</button>
+    </div>
+  </form>
+
+  @if (resultMessage) {
+    <p class="pill">{{ resultMessage }}</p>
+  }
+</section>
+

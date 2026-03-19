@@ -1,0 +1,23 @@
+<div>
+  <div class="eyebrow">Enterprise HMS</div>
+  <h1>Secure Sign In</h1>
+  <p class="muted">JWT access token, refresh rotation, RBAC, and permission-aware navigation.</p>
+</div>
+
+<form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+  <label class="field">
+    <span>Username or Email</span>
+    <input type="text" formControlName="username_or_email" />
+  </label>
+
+  <label class="field">
+    <span>Password</span>
+    <input type="password" formControlName="password" />
+  </label>
+
+  <button class="primary-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+  @if (errorMessage) {
+    <div class="error-text">{{ errorMessage }}</div>
+  }
+</form>
+

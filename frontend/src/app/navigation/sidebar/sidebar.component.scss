@@ -1,0 +1,37 @@
+.sidebar {
+  background: linear-gradient(180deg, #083344 0%, #0f4c5c 100%);
+  color: white;
+  min-height: 100vh;
+  padding: 1.5rem 1rem;
+}
+
+.brand h2 {
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.brand p {
+  margin: 0.3rem 0 1.5rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.nav a {
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+}
+
+.nav a.active,
+.nav a:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+

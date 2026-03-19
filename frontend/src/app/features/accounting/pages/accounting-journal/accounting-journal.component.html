@@ -1,0 +1,31 @@
+<section class="page-card">
+  <h1 class="page-title">Post Accounting Journal</h1>
+  <div class="page-subtitle">Protected by `accounting.journal.post`. Backend enforces balanced journal values.</div>
+
+  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label class="field">
+      <span>Reference</span>
+      <input type="text" formControlName="reference" />
+    </label>
+    <label class="field" style="grid-column:1/-1;">
+      <span>Description</span>
+      <textarea rows="4" formControlName="description"></textarea>
+    </label>
+    <label class="field">
+      <span>Debit Amount</span>
+      <input type="number" formControlName="debit_amount" />
+    </label>
+    <label class="field">
+      <span>Credit Amount</span>
+      <input type="number" formControlName="credit_amount" />
+    </label>
+    <div style="grid-column:1/-1;">
+      <button class="primary-btn" type="submit">Post Journal</button>
+    </div>
+  </form>
+
+  @if (resultMessage) {
+    <p class="pill">{{ resultMessage }}</p>
+  }
+</section>
+

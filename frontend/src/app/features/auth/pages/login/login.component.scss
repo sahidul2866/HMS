@@ -1,0 +1,18 @@
+.eyebrow {
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  margin: 0.5rem 0;
+}
+
+.login-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+

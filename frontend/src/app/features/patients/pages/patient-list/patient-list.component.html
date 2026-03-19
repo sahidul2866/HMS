@@ -1,0 +1,35 @@
+<section class="page-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+    <div>
+      <h1 class="page-title">Patients</h1>
+      <div class="page-subtitle">Backend endpoint is protected by `patient.view`.</div>
+    </div>
+    <a *appHasPermission="'patient.create'" class="primary-btn" routerLink="/patients/new">Create Patient</a>
+  </div>
+
+  @if (loading) {
+    <div class="muted">Loading patients...</div>
+  } @else {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Patient No</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (patient of patients; track patient.id) {
+          <tr>
+            <td>{{ patient.patient_number }}</td>
+            <td>{{ patient.first_name }} {{ patient.last_name }}</td>
+            <td>{{ patient.phone || '-' }}</td>
+            <td>{{ patient.email || '-' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>
+

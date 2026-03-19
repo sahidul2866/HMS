@@ -1,0 +1,21 @@
+@if (!sessionService.snapshot.initialized) {
+  <div class="loading-screen">Loading session...</div>
+} @else {
+  <div class="shell">
+    <app-sidebar></app-sidebar>
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+          <div class="muted">{{ sessionService.snapshot.user?.email }}</div>
+        </div>
+        <button class="secondary-btn" type="button" (click)="logout()">Logout</button>
+      </header>
+
+      <section class="page-body">
+        <router-outlet></router-outlet>
+      </section>
+    </main>
+  </div>
+}
+

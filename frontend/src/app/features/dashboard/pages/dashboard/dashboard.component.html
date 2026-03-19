@@ -1,0 +1,18 @@
+<section class="page-card">
+  <h1 class="page-title">Operational Dashboard</h1>
+  <p class="page-subtitle">Permission-aware landing page for branch-scoped hospital operations.</p>
+
+  <div class="grid-2">
+    <div class="page-card">
+      <div class="muted">Current User</div>
+      <h3>{{ session.snapshot.user?.full_name }}</h3>
+      <div>{{ session.snapshot.user?.roles?.length }} role(s)</div>
+    </div>
+    <div class="page-card">
+      <div class="muted">Effective Permissions</div>
+      <h3>{{ session.snapshot.user?.effective_permissions?.length }}</h3>
+      <div>Loaded during session bootstrap</div>
+    </div>
+  </div>
+</section>
+

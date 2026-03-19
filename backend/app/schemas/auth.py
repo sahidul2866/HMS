@@ -1,0 +1,32 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from app.schemas.user import CurrentUserRead
+
+
+class LoginRequest(BaseModel):
+    username_or_email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    access_token_expires_at: datetime
+    refresh_token_expires_at: datetime
+
+
+class LoginResponse(BaseModel):
+    user: CurrentUserRead
+    tokens: TokenPair
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = None
+

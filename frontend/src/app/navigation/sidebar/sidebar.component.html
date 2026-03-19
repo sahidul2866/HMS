@@ -1,0 +1,12 @@
+<aside class="sidebar">
+  <div class="brand">
+    <h2>HMS</h2>
+    <p>Hospital + Diagnostic Center</p>
+  </div>
+
+  <nav class="nav">
+    @for (item of items; track item.route) {
+      <a [routerLink]="item.route" routerLinkActive="active">{{ item.label }}</a>
+    }
+  </nav>
+</aside>

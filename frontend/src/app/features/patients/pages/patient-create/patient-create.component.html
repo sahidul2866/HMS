@@ -1,0 +1,52 @@
+<section class="page-card">
+  <h1 class="page-title">Create Patient</h1>
+  <div class="page-subtitle">Protected by `patient.create`, with audit logging on successful create.</div>
+
+  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label class="field">
+      <span>First Name</span>
+      <input type="text" formControlName="first_name" />
+    </label>
+    <label class="field">
+      <span>Last Name</span>
+      <input type="text" formControlName="last_name" />
+    </label>
+    <label class="field">
+      <span>Phone</span>
+      <input type="text" formControlName="phone" />
+    </label>
+    <label class="field">
+      <span>Email</span>
+      <input type="email" formControlName="email" />
+    </label>
+    <label class="field">
+      <span>Gender</span>
+      <select formControlName="gender">
+        <option value="">Select</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label class="field">
+      <span>Date of Birth</span>
+      <input type="date" formControlName="date_of_birth" />
+    </label>
+    <label class="field" style="grid-column:1/-1;">
+      <span>Address</span>
+      <textarea rows="4" formControlName="address"></textarea>
+    </label>
+    <label class="field">
+      <span>Emergency Contact Name</span>
+      <input type="text" formControlName="emergency_contact_name" />
+    </label>
+    <label class="field">
+      <span>Emergency Contact Phone</span>
+      <input type="text" formControlName="emergency_contact_phone" />
+    </label>
+    <div style="grid-column:1/-1;">
+      <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Patient' }}</button>
+    </div>
+  </form>
+</section>
+
