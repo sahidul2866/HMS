@@ -45,4 +45,13 @@ class User(Base, BaseModelMixin):
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     direct_permissions = relationship("Permission", secondary=user_permissions, back_populates="users")
     refresh_tokens = relationship("RefreshToken", back_populates="user")
-
+    billed_invoices = relationship(
+        "BillingInvoice",
+        foreign_keys="BillingInvoice.billed_by_user_id",
+        back_populates="billed_by",
+    )
+    voided_invoices = relationship(
+        "BillingInvoice",
+        foreign_keys="BillingInvoice.voided_by_user_id",
+        back_populates="voided_by",
+    )

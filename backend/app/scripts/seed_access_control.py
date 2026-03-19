@@ -9,6 +9,7 @@ from app.models.department import Department
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.user import User
+from app.scripts.script_checkpoints import run_checkpoint_step
 from app.utils.seed_data import PERMISSION_CATALOG, ROLE_CATALOG
 
 
@@ -98,34 +99,55 @@ def create_or_update_user(
 
 
 def main() -> None:
-    session = SessionLocal()
-    try:
-        hq = get_or_create_branch(session, "HQ", "Headquarters", "Primary operating branch")
-        get_or_create_department(session, hq.id, "CLN", "Clinical", "General clinical services")
-        get_or_create_department(session, hq.id, "PHR", "Pharmacy", "Pharmacy operations")
-        get_or_create_department(session, hq.id, "ACC", "Accounting", "Finance and accounting")
-        get_or_create_department(session, hq.id, "ADM", "Administration", "Administrative services")
+    def seed_structure() -> str:
+        session = SessionLocal()
+        try:
+            hq = get_or_create_branch(session, "HQ", "Headquarters", "Primary operating branch")
+            get_or_create_department(session, hq.id, "CLN", "Clinical", "General clinical services")
+            get_or_create_department(session, hq.id, "PHR", "Pharmacy", "Pharmacy operations")
+            get_or_create_department(session, hq.id, "ACC", "Accounting", "Finance and accounting")
+            get_or_create_department(session, hq.id, "ADM", "Administration", "Administrative services")
+            session.commit()
+            return "Branch and departments synchronized"
+        finally:
+            session.close()
 
-        permission_map = sync_permissions(session)
-        role_map = sync_roles(session, permission_map)
+    def seed_roles_and_permissions() -> str:
+        session = SessionLocal()
+        try:
+            permission_map = sync_permissions(session)
+            sync_roles(session, permission_map)
+            session.commit()
+            return "Permissions and roles synchronized"
+        finally:
+            session.close()
 
-        admin_department = session.scalar(select(Department).where(Department.code == "ADM"))
-        create_or_update_user(
-            session,
-            username="superadmin",
-            email="superadmin@hms.local",
-            full_name="System Super Admin",
-            password="Admin123!",
-            branch_id=hq.id,
-            department_id=admin_department.id if admin_department else None,
-            roles=[role_map["SUPER_ADMIN"]],
-        )
+    def seed_superadmin() -> str:
+        session = SessionLocal()
+        try:
+            hq = session.scalar(select(Branch).where(Branch.code == "HQ"))
+            admin_department = session.scalar(select(Department).where(Department.code == "ADM"))
+            role_map = {role.code: role for role in session.scalars(select(Role))}
+            create_or_update_user(
+                session,
+                username="superadmin",
+                email="superadmin@hms.local",
+                full_name="System Super Admin",
+                password="Admin123!",
+                branch_id=hq.id if hq else None,
+                department_id=admin_department.id if admin_department else None,
+                roles=[role_map["SUPER_ADMIN"]],
+            )
+            session.commit()
+            return "Super admin synchronized"
+        finally:
+            session.close()
 
-        session.commit()
-        print("Access-control seed completed.")
-        print("Super admin: superadmin / Admin123!")
-    finally:
-        session.close()
+    run_checkpoint_step("seed_access_control", "structure", seed_structure)
+    run_checkpoint_step("seed_access_control", "roles_permissions", seed_roles_and_permissions)
+    run_checkpoint_step("seed_access_control", "superadmin", seed_superadmin)
+    print("Access-control seed completed.")
+    print("Super admin: superadmin / Admin123!")
 
 
 if __name__ == "__main__":

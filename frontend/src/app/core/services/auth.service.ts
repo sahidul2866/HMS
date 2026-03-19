@@ -3,8 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
 
-import { environment } from '../../../environments/environment';
 import { ApiError, LoginResponse, TokenPair, User } from '../models/auth.models';
+import { runtimeConfig } from '../config/runtime-config';
 import { SessionService } from './session.service';
 import { TokenStorageService } from './token-storage.service';
 import { CurrentUserService } from './current-user.service';
@@ -49,7 +49,7 @@ export class AuthService {
 
   login(username_or_email: string, password: string): Observable<User> {
     return this.http
-      .post<LoginResponse>(`${environment.apiBaseUrl}/auth/login`, { username_or_email, password }, {
+      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/login`, { username_or_email, password }, {
         headers: {
           [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
         },
@@ -75,7 +75,7 @@ export class AuthService {
 
     this.refreshInFlight$ = this.http
       .post<LoginResponse>(
-        `${environment.apiBaseUrl}/auth/refresh`,
+        `${runtimeConfig.apiBaseUrl}/auth/refresh`,
         { refresh_token: refreshToken },
         {
           headers: {
@@ -136,7 +136,7 @@ export class AuthService {
     }
 
     return this.http.post<void>(
-      `${environment.apiBaseUrl}/auth/logout`,
+      `${runtimeConfig.apiBaseUrl}/auth/logout`,
       { refresh_token: refreshToken },
       {
         headers: {

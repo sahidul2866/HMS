@@ -60,8 +60,8 @@ class BillingInvoice(Base, BaseModelMixin):
     branch = relationship("Branch")
     patient = relationship("Patient")
     referred_doctor = relationship("ReferredDoctor", back_populates="invoices")
-    billed_by = relationship("User")
-    voided_by = relationship("User", foreign_keys=[voided_by_user_id])
+    billed_by = relationship("User", foreign_keys=[billed_by_user_id], back_populates="billed_invoices")
+    voided_by = relationship("User", foreign_keys=[voided_by_user_id], back_populates="voided_invoices")
     items = relationship("BillingInvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
 
 

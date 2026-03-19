@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from sqlalchemy import select
 
 from app.core.database import SessionLocal
@@ -6,6 +8,7 @@ from app.models.branch import Branch
 from app.models.department import Department
 from app.models.role import Role
 from app.models.user import User
+from app.scripts.script_checkpoints import run_checkpoint_step
 
 SAMPLE_USERS = [
     {
@@ -66,22 +69,28 @@ def create_or_update_staff_user(session, *, branch: Branch, role: Role, departme
 
 
 def main() -> None:
-    session = SessionLocal()
-    try:
-        branch = get_required(session, Branch, Branch.code, "HQ", "branch")
+    def make_staff_step(payload: dict) -> Callable[[], str]:
+        def runner() -> str:
+            session = SessionLocal()
+            try:
+                branch = get_required(session, Branch, Branch.code, "HQ", "branch")
+                role = get_required(session, Role, Role.code, payload["role_code"], "role")
+                department = get_required(session, Department, Department.code, payload["department_code"], "department")
+                create_or_update_staff_user(session, branch=branch, role=role, department=department, payload=payload)
+                session.commit()
+                return f"{payload['username']} synchronized"
+            finally:
+                session.close()
 
-        for payload in SAMPLE_USERS:
-            role = get_required(session, Role, Role.code, payload["role_code"], "role")
-            department = get_required(session, Department, Department.code, payload["department_code"], "department")
-            create_or_update_staff_user(session, branch=branch, role=role, department=department, payload=payload)
+        return runner
 
-        session.commit()
-        print("Sample staff seed completed.")
-        print("Doctor: dr_rahman / Doctor123!")
-        print("Pharmacist: pharma_nadia / Pharma123!")
-        print("Accountant: acct_kamal / Account123!")
-    finally:
-        session.close()
+    for payload in SAMPLE_USERS:
+        run_checkpoint_step("seed_sample_staff", payload["username"], make_staff_step(payload))
+
+    print("Sample staff seed completed.")
+    print("Doctor: dr_rahman / Doctor123!")
+    print("Pharmacist: pharma_nadia / Pharma123!")
+    print("Accountant: acct_kamal / Account123!")
 
 
 if __name__ == "__main__":

@@ -299,6 +299,13 @@ HMS_API_BASE_URL=https://gracie-diploic-cher.ngrok-free.dev/api/v1 npm run deplo
 
 This publishes the built frontend to the dedicated `gh-pages` branch. Keep `frontend/dist/` ignored on `main`; the deploy command handles the publish branch for you.
 
+Shortcut publish command with the current ngrok backend already included:
+
+```bash
+cd frontend
+npm run publish
+```
+
 If your ngrok URL changes later, update only the `HMS_API_BASE_URL=...` part and rerun the same commands.
 
 ### Default Seed Login
