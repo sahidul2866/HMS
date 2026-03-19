@@ -1,8 +1,8 @@
 @if (!sessionService.snapshot.initialized) {
   <div class="loading-screen">Loading session...</div>
 } @else {
-  <div class="shell">
-    <app-sidebar></app-sidebar>
+  <div class="shell" [class.collapsed-shell]="sidebarCollapsed">
+    <app-sidebar [(collapsed)]="sidebarCollapsed"></app-sidebar>
     <main class="content">
       <header class="topbar">
         <div>
@@ -18,4 +18,3 @@
     </main>
   </div>
 }
-

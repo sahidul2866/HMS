@@ -16,9 +16,9 @@ import { SidebarComponent } from '../../navigation/sidebar/sidebar.component';
 export class AppLayoutComponent {
   readonly sessionService = inject(SessionService);
   private readonly authService = inject(AuthService);
+  sidebarCollapsed = false;
 
   logout(): void {
     this.authService.logout().subscribe();
   }
 }
-

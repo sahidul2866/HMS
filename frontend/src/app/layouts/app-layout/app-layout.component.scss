@@ -4,8 +4,13 @@
   min-height: 100vh;
 }
 
+.shell.collapsed-shell {
+  grid-template-columns: 92px 1fr;
+}
+
 .content {
   padding: 1rem 1.25rem;
+  min-width: 0;
 }
 
 .topbar {
@@ -25,4 +30,3 @@
     grid-template-columns: 1fr;
   }
 }
-

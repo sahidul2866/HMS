@@ -1,12 +1,38 @@
-<aside class="sidebar">
-  <div class="brand">
-    <h2>HMS</h2>
-    <p>Hospital + Diagnostic Center</p>
+<aside class="sidebar" [class.collapsed]="collapsed">
+  <div class="brand-row">
+    <div class="brand">
+      <h2>{{ collapsed ? 'H' : 'HMS' }}</h2>
+      @if (!collapsed) {
+        <p>Hospital + Diagnostic Center</p>
+      }
+    </div>
+    <button class="collapse-btn" type="button" (click)="toggleSidebar()">
+      {{ collapsed ? '>' : '<' }}
+    </button>
   </div>
 
   <nav class="nav">
-    @for (item of items; track item.route) {
-      <a [routerLink]="item.route" routerLinkActive="active">{{ item.label }}</a>
+    @for (item of items; track item.label) {
+      @if (item.children?.length) {
+        <div class="nav-group" [class.active-group]="isGroupActive(item)">
+          <button class="group-toggle" type="button" (click)="toggleGroup(item.label)">
+            <span>{{ collapsed ? item.label.charAt(0) : item.label }}</span>
+            @if (!collapsed) {
+              <span>{{ isExpanded(item.label) ? '-' : '+' }}</span>
+            }
+          </button>
+
+          @if (!collapsed && isExpanded(item.label)) {
+            <div class="group-links">
+              @for (child of item.children; track child.route) {
+                <a [routerLink]="child.route" routerLinkActive="active">{{ child.label }}</a>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <a [routerLink]="item.route" routerLinkActive="active">{{ collapsed ? item.label.charAt(0) : item.label }}</a>
+      }
     }
   </nav>
 </aside>
