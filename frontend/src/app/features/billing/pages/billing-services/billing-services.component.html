@@ -1,0 +1,96 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Billing Catalog</div>
+        <h1 class="page-title">Billing Services</h1>
+        <div class="page-subtitle">Shape how the front desk charges, shares referral earnings, and presents each billable line item.</div>
+      </div>
+    </div>
+
+    <div class="hero-summary">
+      <div class="hero-stat">
+        <div class="label">Configured Services</div>
+        <div class="value">{{ services.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Highest Share</div>
+        <div class="value">
+          {{ services.length ? services[0].doctor_share_percentage : '0.00' }}%
+        </div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Pricing Mode</div>
+        <div class="value">Standardized</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="soft-panel">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Create Service</h2>
+        <div class="section-copy">Define code, pricing, and doctor share once so the billing desk can pick it without manual entry.</div>
+      </div>
+    </div>
+
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Service Code</span>
+        <input type="text" formControlName="service_code" placeholder="CBC" />
+      </label>
+      <label class="field">
+        <span>Service Name</span>
+        <input type="text" formControlName="name" placeholder="Complete Blood Count" />
+      </label>
+      <label class="field">
+        <span>Unit Price</span>
+        <input type="number" min="0.01" step="0.01" formControlName="unit_price" />
+      </label>
+      <label class="field">
+        <span>Doctor Share Percentage</span>
+        <input type="number" min="0" max="100" step="0.01" formControlName="doctor_share_percentage" />
+      </label>
+      <label class="field" style="grid-column:1/-1;">
+        <span>Description</span>
+        <textarea rows="3" formControlName="description" placeholder="Visible internal summary for staff"></textarea>
+      </label>
+      <div style="grid-column:1/-1;" class="toolbar-row">
+        <button class="primary-btn" type="submit">Save Billing Service</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="soft-panel data-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="section-title">Configured Services</h2>
+        <div class="section-copy">A clean service catalog for billing, referral, and reporting flows.</div>
+      </div>
+      <div class="hero-kicker">Live Catalog</div>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Price</th>
+          <th>Doctor Share</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (service of services; track service.id) {
+          <tr>
+            <td><strong>{{ service.service_code }}</strong></td>
+            <td>{{ service.name }}</td>
+            <td>{{ formatCurrency(service.unit_price) }}</td>
+            <td>{{ service.doctor_share_percentage }}%</td>
+            <td>{{ service.description || '-' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>

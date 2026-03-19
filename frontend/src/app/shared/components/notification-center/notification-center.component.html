@@ -1,0 +1,8 @@
+<div class="notification-stack">
+  @for (item of notificationService.items(); track item.id) {
+    <div class="notification-item" [class]="'notification-item ' + item.level">
+      <div>{{ item.message }}</div>
+      <button class="notification-close" type="button" (click)="dismiss(item.id)">x</button>
+    </div>
+  }
+</div>

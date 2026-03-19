@@ -1,0 +1,39 @@
+<section class="page-card">
+  <h1 class="page-title">Laboratory Module</h1>
+  <p class="page-subtitle">Protected by `laboratory.view`. This workspace is positioned for sample collection, accessioning, and result verification.</p>
+
+  <div class="grid-2">
+    @for (item of worklist; track item.label) {
+      <div class="page-card">
+        <div class="muted">{{ item.label }}</div>
+        <h3>{{ item.value }}</h3>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="page-card">
+  <h2 class="page-title">Operational Focus</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Use Case</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Collection</td>
+        <td>Track phlebotomy queues, sample labeling, and collection exceptions.</td>
+      </tr>
+      <tr>
+        <td>Processing</td>
+        <td>Route samples through analyzers and hold flags for repeat testing.</td>
+      </tr>
+      <tr>
+        <td>Validation</td>
+        <td>Review abnormal values and release verified results to clinicians.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>

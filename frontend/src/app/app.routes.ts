@@ -8,6 +8,12 @@ import { LoginComponent } from './features/auth/pages/login/login.component';
 import { DashboardComponent } from './features/dashboard/pages/dashboard/dashboard.component';
 import { PatientListComponent } from './features/patients/pages/patient-list/patient-list.component';
 import { PatientCreateComponent } from './features/patients/pages/patient-create/patient-create.component';
+import { BillingDeskComponent } from './features/billing/pages/billing-desk/billing-desk.component';
+import { BillingDoctorsComponent } from './features/billing/pages/billing-doctors/billing-doctors.component';
+import { BillingServicesComponent } from './features/billing/pages/billing-services/billing-services.component';
+import { LaboratoryOverviewComponent } from './features/laboratory/pages/laboratory-overview/laboratory-overview.component';
+import { RadiologyOverviewComponent } from './features/radiology/pages/radiology-overview/radiology-overview.component';
+import { ReportingOverviewComponent } from './features/reporting/pages/reporting-overview/reporting-overview.component';
 import { PharmacyDispenseComponent } from './features/pharmacy/pages/pharmacy-dispense/pharmacy-dispense.component';
 import { AccountingJournalComponent } from './features/accounting/pages/accounting-journal/accounting-journal.component';
 import { UserManagementComponent } from './features/admin/pages/user-management/user-management.component';
@@ -17,7 +23,7 @@ export const appRoutes: Routes = [
   {
     path: 'auth',
     component: AuthLayoutComponent,
-    children: [{ path: 'login', component: LoginComponent }],
+    children: [{ path: 'login', component: LoginComponent, data: { tabLabel: 'Login' } }],
   },
   {
     path: '',
@@ -29,46 +35,81 @@ export const appRoutes: Routes = [
         path: 'dashboard',
         component: DashboardComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['dashboard.view'] },
+        data: { permissions: ['dashboard.view'], tabLabel: 'Dashboard' },
       },
       {
         path: 'patients',
         component: PatientListComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['patient.view'] },
+        data: { permissions: ['patient.view'], tabLabel: 'Patients' },
       },
       {
         path: 'patients/new',
         component: PatientCreateComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['patient.create'] },
+        data: { permissions: ['patient.create'], tabLabel: 'New Patient' },
+      },
+      {
+        path: 'billing',
+        component: BillingDeskComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing Desk' },
+      },
+      {
+        path: 'billing/services',
+        component: BillingServicesComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.service.manage'], tabLabel: 'Billing Services' },
+      },
+      {
+        path: 'billing/doctors',
+        component: BillingDoctorsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.doctor.manage'], tabLabel: 'Referred Doctors' },
+      },
+      {
+        path: 'laboratory',
+        component: LaboratoryOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['laboratory.view'], tabLabel: 'Laboratory' },
+      },
+      {
+        path: 'radiology',
+        component: RadiologyOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['radiology.view'], tabLabel: 'Radiology' },
+      },
+      {
+        path: 'reporting',
+        component: ReportingOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['reporting.view'], tabLabel: 'Reporting' },
       },
       {
         path: 'pharmacy/dispense',
         component: PharmacyDispenseComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['pharmacy.dispense'] },
+        data: { permissions: ['pharmacy.dispense'], tabLabel: 'Pharmacy Dispense' },
       },
       {
         path: 'accounting/journal',
         component: AccountingJournalComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['accounting.journal.post'] },
+        data: { permissions: ['accounting.journal.post'], tabLabel: 'Accounting Journal' },
       },
       {
         path: 'admin/users',
         component: UserManagementComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['settings.user.manage'] },
+        data: { permissions: ['settings.user.manage'], tabLabel: 'Users' },
       },
       {
         path: 'admin/roles',
         component: RoleManagementComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['settings.role.manage'] },
+        data: { permissions: ['settings.role.manage'], tabLabel: 'Roles' },
       },
     ],
   },
   { path: '**', redirectTo: '' },
 ];
-

@@ -10,6 +10,10 @@ export class PatientService extends ApiBaseService {
     return this.http.get<Patient[]>(this.url('/patients'));
   }
 
+  get(patientId: string): Observable<Patient> {
+    return this.http.get<Patient>(this.url(`/patients/${patientId}`));
+  }
+
   create(payload: CreatePatientPayload): Observable<Patient> {
     return this.http.post<Patient>(this.url('/patients'), payload);
   }

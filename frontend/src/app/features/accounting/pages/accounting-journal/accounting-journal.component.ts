@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
+import { NotificationService } from '../../../../core/services/notification.service';
 import { AccountingJournal } from '../../models/accounting.models';
 import { AccountingService } from '../../services/accounting.service';
 
@@ -14,6 +15,7 @@ import { AccountingService } from '../../services/accounting.service';
 export class AccountingJournalComponent {
   private readonly fb = inject(FormBuilder);
   private readonly accountingService = inject(AccountingService);
+  private readonly notificationService = inject(NotificationService);
 
   journals: AccountingJournal[] = [];
   resultMessage = '';
@@ -42,6 +44,7 @@ export class AccountingJournalComponent {
       next: (journal) => {
         this.resultMessage = `Posted ${journal.journal_number}`;
         this.loadJournals();
+        this.notificationService.success(`Journal ${journal.journal_number} posted successfully.`);
       },
     });
   }

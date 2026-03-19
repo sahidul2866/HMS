@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
+import { NotificationService } from '../../../../core/services/notification.service';
 import { CreatePatientPayload } from '../../models/patient.models';
 import { PatientService } from '../../services/patient.service';
 
@@ -16,6 +17,8 @@ export class PatientCreateComponent {
   private readonly fb = inject(FormBuilder);
   private readonly patientService = inject(PatientService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly notificationService = inject(NotificationService);
 
   saving = false;
 
@@ -49,8 +52,14 @@ export class PatientCreateComponent {
       emergency_contact_phone: this.form.getRawValue().emergency_contact_phone ?? null,
     };
     this.patientService.create(payload).subscribe({
-      next: () => {
+      next: (patient) => {
         this.saving = false;
+        this.notificationService.success(`Patient ${patient.patient_number} created successfully.`);
+        const returnTo = this.route.snapshot.queryParamMap.get('returnTo');
+        if (returnTo) {
+          void this.router.navigateByUrl(`${returnTo}?patientId=${patient.id}`);
+          return;
+        }
         void this.router.navigate(['/patients']);
       },
       error: () => {

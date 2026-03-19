@@ -1,0 +1,39 @@
+<section class="page-card">
+  <h1 class="page-title">Radiology Module</h1>
+  <p class="page-subtitle">Protected by `radiology.view`. This module covers imaging scheduling, modality coordination, and report completion.</p>
+
+  <div class="grid-2">
+    @for (item of imagingQueue; track item.label) {
+      <div class="page-card">
+        <div class="muted">{{ item.label }}</div>
+        <h3>{{ item.value }}</h3>
+      </div>
+    }
+  </div>
+</section>
+
+<section class="page-card">
+  <h2 class="page-title">Workflow Coverage</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Function</th>
+        <th>Scope</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Scheduling</td>
+        <td>Manage slot allocation for X-ray, ultrasound, CT, and MRI studies.</td>
+      </tr>
+      <tr>
+        <td>Execution</td>
+        <td>Coordinate technicians, prep instructions, and modality room usage.</td>
+      </tr>
+      <tr>
+        <td>Reporting</td>
+        <td>Track draft, review, and consultant sign-off states for studies.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>

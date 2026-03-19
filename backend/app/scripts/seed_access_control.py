@@ -9,63 +9,7 @@ from app.models.department import Department
 from app.models.permission import Permission
 from app.models.role import Role
 from app.models.user import User
-
-PERMISSION_CATALOG = [
-    ("dashboard.view", "dashboard", "view", "View operational dashboard"),
-    ("patient.view", "patient", "view", "View patient records"),
-    ("patient.create", "patient", "create", "Create patient records"),
-    ("patient.edit", "patient", "edit", "Edit patient records"),
-    ("patient.delete", "patient", "delete", "Delete patient records"),
-    ("pharmacy.view", "pharmacy", "view", "View pharmacy module"),
-    ("pharmacy.dispense", "pharmacy", "dispense", "Dispense medicines"),
-    ("pharmacy.stock.adjust", "pharmacy", "stock.adjust", "Adjust pharmacy stock"),
-    ("accounting.view", "accounting", "view", "View accounting module"),
-    ("accounting.journal.create", "accounting", "journal.create", "Create accounting journals"),
-    ("accounting.journal.post", "accounting", "journal.post", "Post accounting journals"),
-    ("settings.user.manage", "settings", "user.manage", "Manage users"),
-    ("settings.role.manage", "settings", "role.manage", "Manage roles"),
-    ("settings.permission.manage", "settings", "permission.manage", "Manage permissions"),
-    ("settings.branch.manage", "settings", "branch.manage", "Manage branches"),
-    ("settings.department.manage", "settings", "department.manage", "Manage departments"),
-    ("audit.view", "audit", "view", "View audit logs"),
-]
-
-ROLE_CATALOG: dict[str, list[str]] = {
-    "SUPER_ADMIN": [code for code, *_ in PERMISSION_CATALOG],
-    "ADMIN": [
-        "dashboard.view",
-        "patient.view",
-        "patient.create",
-        "patient.edit",
-        "pharmacy.view",
-        "accounting.view",
-        "settings.user.manage",
-        "settings.role.manage",
-        "settings.permission.manage",
-        "settings.branch.manage",
-        "settings.department.manage",
-        "audit.view",
-    ],
-    "DOCTOR": [
-        "dashboard.view",
-        "patient.view",
-        "patient.create",
-        "patient.edit",
-    ],
-    "PHARMACIST": [
-        "dashboard.view",
-        "patient.view",
-        "pharmacy.view",
-        "pharmacy.dispense",
-        "pharmacy.stock.adjust",
-    ],
-    "ACCOUNTANT": [
-        "dashboard.view",
-        "accounting.view",
-        "accounting.journal.create",
-        "accounting.journal.post",
-    ],
-}
+from app.utils.seed_data import PERMISSION_CATALOG, ROLE_CATALOG
 
 
 def get_or_create_branch(session, code: str, name: str, description: str | None = None) -> Branch:
@@ -157,14 +101,15 @@ def main() -> None:
     session = SessionLocal()
     try:
         hq = get_or_create_branch(session, "HQ", "Headquarters", "Primary operating branch")
-        clinical = get_or_create_department(session, hq.id, "CLN", "Clinical", "General clinical services")
-        pharmacy = get_or_create_department(session, hq.id, "PHR", "Pharmacy", "Pharmacy operations")
-        finance = get_or_create_department(session, hq.id, "ACC", "Accounting", "Finance and accounting")
-        admin = get_or_create_department(session, hq.id, "ADM", "Administration", "Administrative services")
+        get_or_create_department(session, hq.id, "CLN", "Clinical", "General clinical services")
+        get_or_create_department(session, hq.id, "PHR", "Pharmacy", "Pharmacy operations")
+        get_or_create_department(session, hq.id, "ACC", "Accounting", "Finance and accounting")
+        get_or_create_department(session, hq.id, "ADM", "Administration", "Administrative services")
 
         permission_map = sync_permissions(session)
         role_map = sync_roles(session, permission_map)
 
+        admin_department = session.scalar(select(Department).where(Department.code == "ADM"))
         create_or_update_user(
             session,
             username="superadmin",
@@ -172,7 +117,7 @@ def main() -> None:
             full_name="System Super Admin",
             password="Admin123!",
             branch_id=hq.id,
-            department_id=admin.id,
+            department_id=admin_department.id if admin_department else None,
             roles=[role_map["SUPER_ADMIN"]],
         )
 
@@ -185,4 +130,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

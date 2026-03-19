@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 
 import { Permission } from '../../../../core/models/auth.models';
+import { NotificationService } from '../../../../core/services/notification.service';
 import { AdminRole } from '../../models/admin.models';
 import { RoleService } from '../../services/role.service';
 
@@ -13,6 +14,7 @@ import { RoleService } from '../../services/role.service';
 })
 export class RoleManagementComponent {
   private readonly roleService = inject(RoleService);
+  private readonly notificationService = inject(NotificationService);
 
   roles: AdminRole[] = [];
   permissions: Permission[] = [];
@@ -55,6 +57,9 @@ export class RoleManagementComponent {
       return;
     }
     const codes = Array.from(this.selectedPermissionCodes.values()).sort();
-    this.roleService.updatePermissions(this.selectedRoleCode, codes).subscribe(() => this.reload());
+    this.roleService.updatePermissions(this.selectedRoleCode, codes).subscribe(() => {
+      this.reload();
+      this.notificationService.success(`Permissions updated for ${this.selectedRoleCode}.`);
+    });
   }
 }

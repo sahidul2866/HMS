@@ -25,6 +25,10 @@
   gap: 1rem;
 }
 
+:host {
+  display: contents;
+}
+
 @media (max-width: 960px) {
   .shell {
     grid-template-columns: 1fr;

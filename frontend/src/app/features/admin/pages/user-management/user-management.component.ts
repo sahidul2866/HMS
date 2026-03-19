@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
+import { NotificationService } from '../../../../core/services/notification.service';
 import { AdminUser, AdminRole } from '../../models/admin.models';
 import { AdminUserService } from '../../services/admin-user.service';
 import { RoleService } from '../../services/role.service';
@@ -16,6 +17,7 @@ export class UserManagementComponent {
   private readonly fb = inject(FormBuilder);
   private readonly adminUserService = inject(AdminUserService);
   private readonly roleService = inject(RoleService);
+  private readonly notificationService = inject(NotificationService);
 
   users: AdminUser[] = [];
   roles: AdminRole[] = [];
@@ -63,6 +65,7 @@ export class UserManagementComponent {
       .subscribe(() => {
         this.form.reset({ password: 'ChangeMe123!', role_code: 'ADMIN' });
         this.loadUsers();
+        this.notificationService.success('User created successfully.');
       });
   }
 }

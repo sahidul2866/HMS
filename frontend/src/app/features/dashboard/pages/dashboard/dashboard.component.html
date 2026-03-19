@@ -16,3 +16,28 @@
   </div>
 </section>
 
+<section class="page-card">
+  <h2 class="page-title">Module Access</h2>
+  <div class="grid-2">
+    <a *appHasPermission="'billing.invoice.create'" class="page-card" routerLink="/billing">
+      <div class="muted">Revenue Cycle</div>
+      <h3>Billing</h3>
+      <div>Invoices, settlements, and payment tracking workspace.</div>
+    </a>
+    <a *appHasPermission="'laboratory.view'" class="page-card" routerLink="/laboratory">
+      <div class="muted">Diagnostics</div>
+      <h3>Laboratory</h3>
+      <div>Sample workflow, queue monitoring, and result release checkpoints.</div>
+    </a>
+    <a *appHasPermission="'radiology.view'" class="page-card" routerLink="/radiology">
+      <div class="muted">Imaging</div>
+      <h3>Radiology</h3>
+      <div>Modality scheduling, reporting handoff, and imaging turnaround visibility.</div>
+    </a>
+    <a *appHasPermission="'reporting.view'" class="page-card" routerLink="/reporting">
+      <div class="muted">Analytics</div>
+      <h3>Reporting</h3>
+      <div>Operational snapshots for finance, diagnostics, and executive review.</div>
+    </a>
+  </div>
+</section>

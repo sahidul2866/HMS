@@ -2,9 +2,16 @@ export const PERMISSIONS = {
   dashboardView: 'dashboard.view',
   patientView: 'patient.view',
   patientCreate: 'patient.create',
+  billingView: 'billing.view',
+  billingInvoiceCreate: 'billing.invoice.create',
+  billingInvoiceVoid: 'billing.invoice.void',
+  billingServiceManage: 'billing.service.manage',
+  billingDoctorManage: 'billing.doctor.manage',
+  laboratoryView: 'laboratory.view',
+  radiologyView: 'radiology.view',
+  reportingView: 'reporting.view',
   pharmacyDispense: 'pharmacy.dispense',
   accountingJournalPost: 'accounting.journal.post',
   settingsUserManage: 'settings.user.manage',
   settingsRoleManage: 'settings.role.manage',
 } as const;
-

@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
 import { AuthService } from '../../../../core/services/auth.service';
+import { NotificationService } from '../../../../core/services/notification.service';
 
 @Component({
   selector: 'app-login',
@@ -15,6 +16,7 @@ import { AuthService } from '../../../../core/services/auth.service';
 export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
 
   errorMessage = '';
@@ -35,6 +37,7 @@ export class LoginComponent {
     this.authService.login(this.form.getRawValue().username_or_email, this.form.getRawValue().password).subscribe({
       next: () => {
         this.loading = false;
+        this.notificationService.success('Login successful.');
         void this.router.navigate(['/dashboard']);
       },
       error: (error) => {
@@ -44,4 +47,3 @@ export class LoginComponent {
     });
   }
 }
-

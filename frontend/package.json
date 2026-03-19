@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "ng serve",
-    "build": "ng build",
+    "start": "node ./scripts/write-runtime-config.mjs && ng serve",
+    "build": "node ./scripts/write-runtime-config.mjs && ng build",
+    "build:ghpages": "node ./scripts/write-runtime-config.mjs && ng build --base-href /HMS/",
+    "deploy:ghpages": "npm run build:ghpages && gh-pages -b gh-pages -d dist/hms-frontend/browser",
     "test": "ng test"
   },
   "dependencies": {
@@ -25,7 +27,7 @@
     "@angular/cli": "^19.2.0",
     "@angular/compiler-cli": "^19.2.0",
     "@types/node": "^22.13.10",
+    "gh-pages": "^6.3.0",
     "typescript": "^5.7.2"
   }
 }
-

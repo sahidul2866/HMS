@@ -1,0 +1,269 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Front Desk Billing</div>
+        <h1 class="page-title">Billing Desk</h1>
+        <div class="page-subtitle">Turn patient encounters into polished invoices with referral tracking, discount control, and print-ready output.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+      </div>
+    </div>
+
+    <div class="hero-summary">
+      <div class="hero-stat">
+        <div class="label">Patients</div>
+        <div class="value">{{ patients.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Services</div>
+        <div class="value">{{ billingServices.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Referral Doctors</div>
+        <div class="value">{{ doctors.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Invoice Queue</div>
+        <div class="value">{{ recentInvoices.length }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="spotlight-grid">
+    <section class="soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Compose Invoice</h2>
+          <div class="section-copy">Choose the patient, referral source, and service mix before posting a clean invoice.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+        <label class="field">
+          <span>Patient</span>
+          <select formControlName="patient_id">
+            <option value="">Select patient</option>
+            @for (patient of patients; track patient.id) {
+              <option [value]="patient.id">{{ formatPatient(patient) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Referred Doctor</span>
+          <select formControlName="referred_doctor_id">
+            <option value="">Select referred doctor</option>
+            @for (doctor of doctors; track doctor.id) {
+              <option [value]="doctor.id">{{ formatDoctor(doctor) }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>External Doctor Name</span>
+          <input type="text" formControlName="referred_doctor_name" placeholder="Doctor outside the directory" />
+        </label>
+        <label class="field">
+          <span>Discount Percentage</span>
+          <input type="number" min="0" max="100" formControlName="discount_percentage" (input)="recalculatePreview()" />
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Note</span>
+          <textarea rows="3" formControlName="note" placeholder="Visible internal note"></textarea>
+        </label>
+
+        <div style="grid-column:1/-1;">
+          <div class="section-header billing-inline-head">
+            <div>
+              <h3 class="section-title">Billing Items</h3>
+              <div class="section-copy">Build the invoice from the controlled service catalog.</div>
+            </div>
+            <button class="ghost-btn" type="button" (click)="addItem()">Add Item</button>
+          </div>
+
+          <div formArrayName="items" class="item-stack">
+            @for (item of items.controls; track $index) {
+              <div class="item-card" [formGroupName]="$index">
+                <div class="grid-2">
+                  <label class="field">
+                    <span>Service</span>
+                    <select formControlName="billing_service_id" (change)="onBillingItemChanged()">
+                      <option value="">Select billing service</option>
+                      @for (service of billingServices; track service.id) {
+                        <option [value]="service.id">{{ service.service_code }} - {{ service.name }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Quantity</span>
+                    <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
+                  </label>
+                </div>
+                <div class="item-footer">
+                  <span>{{ getServiceName(item.get('billing_service_id')?.value ?? '') }}</span>
+                  <strong>{{ getServiceAmount(item.get('billing_service_id')?.value ?? '', item.get('quantity')?.value ?? 0) }}</strong>
+                </div>
+                <button class="danger-btn" type="button" (click)="removeItem($index)">Remove</button>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Invoice Preview</h2>
+          <div class="section-copy">An instant financial snapshot before you commit the bill.</div>
+        </div>
+      </div>
+
+      @if (preview) {
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="label">Sub Total</div>
+            <div class="value">{{ formatCurrency(preview.sub_total) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Discount</div>
+            <div class="value">{{ formatCurrency(preview.discount_amount) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Referral Amount</div>
+            <div class="value">{{ formatCurrency(preview.referred_doctor_amount) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Grand Total</div>
+            <div class="value">{{ formatCurrency(preview.total_amount) }}</div>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-state">{{ previewMessage || 'Select services to see a live preview.' }}</div>
+      }
+    </section>
+  </section>
+
+  @if (latestInvoice) {
+    <section class="soft-panel data-panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Latest Invoice</h2>
+          <div class="section-copy">{{ latestInvoice.invoice_number }} for {{ latestInvoice.patient.first_name }} {{ latestInvoice.patient.last_name }}</div>
+        </div>
+        <div class="toolbar-row">
+          <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.status ">{{ formatStatus(latestInvoice.status) }}</span>
+          <button class="primary-btn" type="button" (click)="printInvoice()">Print Invoice</button>
+          @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
+            <button class="danger-btn" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
+          }
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of latestInvoice.items; track item.id) {
+            <tr>
+              <td>{{ item.service_name }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ formatCurrency(item.unit_price) }}</td>
+              <td>{{ formatCurrency(item.line_total) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="invoice-summary-grid">
+        <div><strong>Sub Total:</strong> {{ formatCurrency(latestInvoice.sub_total) }}</div>
+        <div><strong>Discount:</strong> {{ formatCurrency(latestInvoice.discount_amount) }}</div>
+        <div><strong>Referral Amount:</strong> {{ formatCurrency(latestInvoice.referred_doctor_amount) }}</div>
+        <div><strong>Grand Total:</strong> {{ formatCurrency(latestInvoice.total_amount) }}</div>
+        @if (latestInvoice.void_reason) {
+          <div><strong>Void Reason:</strong> {{ latestInvoice.void_reason }}</div>
+        }
+      </div>
+    </section>
+  }
+
+  <section class="soft-panel data-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="section-title">Invoice History</h2>
+        <div class="section-copy">Filter the billing stream, inspect older invoices, and jump back into print-ready details.</div>
+      </div>
+      <div class="hero-kicker">Searchable</div>
+    </div>
+
+    <form class="form-grid billing-filter-grid" [formGroup]="invoiceFilterForm">
+      <label class="field">
+        <span>Search</span>
+        <input type="text" formControlName="q" placeholder="Invoice, patient, doctor" />
+      </label>
+      <label class="field">
+        <span>Doctor</span>
+        <select formControlName="referred_doctor_id">
+          <option value="">All doctors</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ formatDoctor(doctor) }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Status</span>
+        <select formControlName="status">
+          <option value="">All statuses</option>
+          <option value="posted">Posted</option>
+          <option value="void">Void</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>From</span>
+        <input type="date" formControlName="date_from" />
+      </label>
+      <label class="field">
+        <span>To</span>
+        <input type="date" formControlName="date_to" />
+      </label>
+      <div class="toolbar-row billing-filter-actions">
+        <button class="secondary-btn" type="button" (click)="searchInvoices()">Search Invoices</button>
+      </div>
+    </form>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Invoice No</th>
+          <th>Patient</th>
+          <th>Status</th>
+          <th>Doctor</th>
+          <th>Total</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (invoice of recentInvoices; track invoice.id) {
+          <tr class="history-row" (click)="loadInvoiceDetail(invoice.id)">
+            <td><strong>{{ invoice.invoice_number }}</strong></td>
+            <td>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</td>
+            <td><span class="status-chip" [class]=" 'status-chip ' + invoice.status ">{{ formatStatus(invoice.status) }}</span></td>
+            <td>{{ invoice.referred_doctor_name || '-' }}</td>
+            <td>{{ formatCurrency(invoice.total_amount) }}</td>
+            <td>{{ invoice.created_at | date:'medium' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>

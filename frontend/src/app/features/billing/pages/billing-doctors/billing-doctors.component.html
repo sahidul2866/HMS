@@ -1,0 +1,94 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Referral Network</div>
+        <h1 class="page-title">Referred Doctors</h1>
+        <div class="page-subtitle">Maintain a reliable referral directory so billing, payout summaries, and doctor-wise analytics stay clean.</div>
+      </div>
+    </div>
+
+    <div class="hero-summary">
+      <div class="hero-stat">
+        <div class="label">Registered Doctors</div>
+        <div class="value">{{ doctors.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Referral Source</div>
+        <div class="value">Managed</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Linked to Billing</div>
+        <div class="value">Yes</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="soft-panel">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Add Doctor</h2>
+        <div class="section-copy">Capture the doctor identity once and use it everywhere the referral relationship appears.</div>
+      </div>
+    </div>
+
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Doctor Code</span>
+        <input type="text" formControlName="doctor_code" placeholder="REF-RAHMAN" />
+      </label>
+      <label class="field">
+        <span>Full Name</span>
+        <input type="text" formControlName="full_name" placeholder="Dr. Mahmudur Rahman" />
+      </label>
+      <label class="field">
+        <span>Specialty</span>
+        <input type="text" formControlName="specialty" placeholder="Internal Medicine" />
+      </label>
+      <label class="field">
+        <span>Phone</span>
+        <input type="text" formControlName="phone" placeholder="+880..." />
+      </label>
+      <label class="field" style="grid-column:1/-1;">
+        <span>Email</span>
+        <input type="email" formControlName="email" placeholder="doctor@clinic.local" />
+      </label>
+      <div style="grid-column:1/-1;" class="toolbar-row">
+        <button class="primary-btn" type="submit">Save Referred Doctor</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="soft-panel data-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="section-title">Registered Doctors</h2>
+        <div class="section-copy">This list drives the referral picker on the billing desk and referral performance reporting.</div>
+      </div>
+      <div class="hero-kicker">Directory</div>
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Specialty</th>
+          <th>Phone</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (doctor of doctors; track doctor.id) {
+          <tr>
+            <td><strong>{{ doctor.doctor_code }}</strong></td>
+            <td>{{ doctor.full_name }}</td>
+            <td>{{ doctor.specialty || '-' }}</td>
+            <td>{{ doctor.phone || '-' }}</td>
+            <td>{{ doctor.email || '-' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>

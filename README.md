@@ -271,13 +271,35 @@ cd frontend
 npm install
 ```
 
-2. Start Angular:
+2. Start Angular locally against the current ngrok backend:
 
 ```bash
-npm start
+HMS_API_BASE_URL=https://gracie-diploic-cher.ngrok-free.dev/api/v1 npm start
 ```
 
 3. Open `http://localhost:4200`.
+
+### Frontend Publish Commands
+
+Use these exact commands when publishing the Angular frontend to GitHub Pages for this repository.
+
+Build for GitHub Pages with the current ngrok backend:
+
+```bash
+cd frontend
+HMS_API_BASE_URL=https://gracie-diploic-cher.ngrok-free.dev/api/v1 npm run build:ghpages
+```
+
+Publish to GitHub Pages:
+
+```bash
+cd frontend
+HMS_API_BASE_URL=https://gracie-diploic-cher.ngrok-free.dev/api/v1 npm run deploy:ghpages
+```
+
+This publishes the built frontend to the dedicated `gh-pages` branch. Keep `frontend/dist/` ignored on `main`; the deploy command handles the publish branch for you.
+
+If your ngrok URL changes later, update only the `HMS_API_BASE_URL=...` part and rerun the same commands.
 
 ### Default Seed Login
 

@@ -1,0 +1,102 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Executive View</div>
+        <h1 class="page-title">Revenue Reporting</h1>
+        <p class="page-subtitle">A sharper operations view over posted revenue, void pressure, and doctor referral exposure across the selected period.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="loadReports()">Refresh Reports</button>
+      </div>
+    </div>
+
+    <form class="form-grid">
+      <label class="field">
+        <span>From</span>
+        <input type="date" [formControl]="form.controls.date_from" />
+      </label>
+      <label class="field">
+        <span>To</span>
+        <input type="date" [formControl]="form.controls.date_to" />
+      </label>
+    </form>
+
+    @if (summary) {
+      <div class="hero-summary">
+        <div class="hero-stat">
+          <div class="label">Posted Invoices</div>
+          <div class="value">{{ summary.posted_invoice_count }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Void Invoices</div>
+          <div class="value">{{ summary.void_invoice_count }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Net Revenue</div>
+          <div class="value">{{ formatCurrency(summary.net_amount) }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Referral Payout</div>
+          <div class="value">{{ formatCurrency(summary.referred_doctor_amount) }}</div>
+        </div>
+      </div>
+    }
+  </section>
+
+  @if (summary) {
+    <section class="metric-grid">
+      <div class="metric-card">
+        <div class="label">Gross Amount</div>
+        <div class="value">{{ formatCurrency(summary.gross_amount) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Discount Total</div>
+        <div class="value">{{ formatCurrency(summary.discount_amount) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Revenue After Discount</div>
+        <div class="value">{{ formatCurrency(summary.net_amount) }}</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Doctor Payout Exposure</div>
+        <div class="value">{{ formatCurrency(summary.referred_doctor_amount) }}</div>
+      </div>
+    </section>
+  }
+
+  <section class="soft-panel data-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="section-title">Doctor Referral Summary</h2>
+        <div class="section-copy">Compare who is driving revenue and where referral payouts are accumulating.</div>
+      </div>
+      <div class="hero-kicker">Referral Performance</div>
+    </div>
+
+    @if (referralSummary.length) {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Doctor</th>
+            <th>Invoices</th>
+            <th>Net Amount</th>
+            <th>Referral Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of referralSummary; track item.referred_doctor_name) {
+            <tr>
+              <td><strong>{{ item.referred_doctor_name }}</strong></td>
+              <td>{{ item.invoice_count }}</td>
+              <td>{{ formatCurrency(item.net_amount) }}</td>
+              <td>{{ formatCurrency(item.referred_doctor_amount) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <div class="empty-state">No referral activity is available for the selected range.</div>
+    }
+  </section>
+</div>
