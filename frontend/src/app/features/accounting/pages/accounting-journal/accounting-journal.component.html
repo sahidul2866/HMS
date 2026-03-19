@@ -29,3 +29,28 @@
   }
 </section>
 
+<section class="page-card">
+  <h2 class="page-title">Journal Grid</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Journal No</th>
+        <th>Description</th>
+        <th>Debit</th>
+        <th>Credit</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (journal of journals; track journal.id) {
+        <tr>
+          <td>{{ journal.journal_number }}</td>
+          <td>{{ journal.description }}</td>
+          <td>{{ journal.debit_amount }}</td>
+          <td>{{ journal.credit_amount }}</td>
+          <td>{{ journal.status }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

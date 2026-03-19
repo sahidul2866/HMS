@@ -19,9 +19,13 @@
       <span>Password</span>
       <input type="text" formControlName="password" />
     </label>
-    <label class="field" style="grid-column:1/-1;">
-      <span>Role Codes (comma separated)</span>
-      <input type="text" formControlName="role_codes" />
+    <label class="field">
+      <span>Role</span>
+      <select formControlName="role_code">
+        @for (role of roles; track role.id) {
+          <option [value]="role.code">{{ role.name }} ({{ role.code }})</option>
+        }
+      </select>
     </label>
     <div style="grid-column:1/-1;">
       <button class="primary-btn" type="submit">Create User</button>
@@ -33,6 +37,7 @@
       <tr>
         <th>Username</th>
         <th>Email</th>
+        <th>Branch</th>
         <th>Roles</th>
       </tr>
     </thead>
@@ -41,6 +46,7 @@
         <tr>
           <td>{{ user.username }}</td>
           <td>{{ user.email }}</td>
+          <td>{{ user.branch_id || '-' }}</td>
           <td>{{ getRoleCodes(user) }}</td>
         </tr>
       }

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
+import { PharmacyDispense } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
 
 @Component({
@@ -14,6 +15,7 @@ export class PharmacyDispenseComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
 
+  dispenses: PharmacyDispense[] = [];
   resultMessage = '';
 
   readonly form = this.fb.group({
@@ -24,6 +26,14 @@ export class PharmacyDispenseComponent {
     note: [''],
   });
 
+  constructor() {
+    this.loadDispenses();
+  }
+
+  loadDispenses(): void {
+    this.pharmacyService.list().subscribe((dispenses) => (this.dispenses = dispenses));
+  }
+
   submit(): void {
     if (this.form.invalid) {
       return;
@@ -33,8 +43,8 @@ export class PharmacyDispenseComponent {
       next: (result) => {
         this.resultMessage = `Dispensed ${result.medicine_name}. Total ${result.total_price}`;
         this.form.reset({ prescription_ref: '', medicine_name: '', quantity: 1, unit_price: 0, note: '' });
+        this.loadDispenses();
       },
     });
   }
 }
-

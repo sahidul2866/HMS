@@ -33,3 +33,26 @@
   }
 </section>
 
+<section class="page-card">
+  <h2 class="page-title">Dispense Grid</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Medicine</th>
+        <th>Quantity</th>
+        <th>Unit Price</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (dispense of dispenses; track dispense.id) {
+        <tr>
+          <td>{{ dispense.medicine_name }}</td>
+          <td>{{ dispense.quantity }}</td>
+          <td>{{ dispense.unit_price }}</td>
+          <td>{{ dispense.total_price }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

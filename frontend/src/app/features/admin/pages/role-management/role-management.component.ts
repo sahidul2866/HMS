@@ -1,15 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 
 import { Permission } from '../../../../core/models/auth.models';
-import { RoleService } from '../../services/role.service';
 import { AdminRole } from '../../models/admin.models';
+import { RoleService } from '../../services/role.service';
 
 @Component({
   selector: 'app-role-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   templateUrl: './role-management.component.html',
 })
 export class RoleManagementComponent {
@@ -18,7 +17,7 @@ export class RoleManagementComponent {
   roles: AdminRole[] = [];
   permissions: Permission[] = [];
   selectedRoleCode = '';
-  permissionCodes = '';
+  selectedPermissionCodes = new Set<string>();
 
   constructor() {
     this.reload();
@@ -32,18 +31,30 @@ export class RoleManagementComponent {
   loadRole(code: string): void {
     this.selectedRoleCode = code;
     const role = this.roles.find((item) => item.code === code);
-    this.permissionCodes = role?.permissions.map((item) => item.code).join(', ') ?? '';
+    this.selectedPermissionCodes = new Set(role?.permissions.map((item) => item.code) ?? []);
+  }
+
+  isSelected(code: string): boolean {
+    return this.selectedPermissionCodes.has(code);
+  }
+
+  togglePermission(code: string, checked: boolean): void {
+    if (checked) {
+      this.selectedPermissionCodes.add(code);
+      return;
+    }
+    this.selectedPermissionCodes.delete(code);
+  }
+
+  getSelectedPermissionCount(role: AdminRole): number {
+    return role.permissions.length;
   }
 
   save(): void {
     if (!this.selectedRoleCode) {
       return;
     }
-    const codes = this.permissionCodes
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const codes = Array.from(this.selectedPermissionCodes.values()).sort();
     this.roleService.updatePermissions(this.selectedRoleCode, codes).subscribe(() => this.reload());
   }
 }
-

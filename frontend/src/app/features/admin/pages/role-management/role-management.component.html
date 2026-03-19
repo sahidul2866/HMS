@@ -2,33 +2,52 @@
   <h1 class="page-title">Role Management</h1>
   <div class="page-subtitle">Protected by `settings.role.manage`. Updating role permissions affects the next `/auth/me` or refresh cycle.</div>
 
-  <div class="grid-2">
-    <div class="page-card">
-      <h3>Roles</h3>
-      @for (role of roles; track role.id) {
-        <button class="secondary-btn" style="width:100%;margin-bottom:0.5rem;" type="button" (click)="loadRole(role.code)">
-          {{ role.code }} ({{ role.permissions.length }})
-        </button>
-      }
-    </div>
-
-    <div class="page-card">
-      <h3>Permissions for {{ selectedRoleCode || 'Selected Role' }}</h3>
-      <textarea rows="10" style="width:100%;border:1px solid var(--border);border-radius:12px;padding:0.75rem;" [(ngModel)]="permissionCodes"></textarea>
-      <div style="margin-top:0.75rem;">
-        <button class="primary-btn" type="button" (click)="save()">Save Permissions</button>
-      </div>
-    </div>
+  <div class="page-card">
+    <h3 style="margin-top:0;">Roles Grid</h3>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Description</th>
+          <th>Permissions</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (role of roles; track role.id) {
+          <tr>
+            <td>{{ role.code }}</td>
+            <td>{{ role.description || '-' }}</td>
+            <td>{{ getSelectedPermissionCount(role) }}</td>
+            <td>
+              <button class="secondary-btn" type="button" (click)="loadRole(role.code)">Edit</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
   </div>
 
   <div class="page-card" style="margin-top:1rem;">
-    <h3>Permission Catalog</h3>
-    <div class="grid-2">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+      <h3 style="margin:0;">Permission Grid for {{ selectedRoleCode || 'Selected Role' }}</h3>
+      <button class="primary-btn" type="button" (click)="save()" [disabled]="!selectedRoleCode">Save Permissions</button>
+    </div>
+
+    <div class="permission-grid">
       @for (permission of permissions; track permission.id) {
-        <div>
-          <strong>{{ permission.code }}</strong>
-          <div class="muted">{{ permission.description }}</div>
-        </div>
+        <label class="permission-row">
+          <input
+            type="checkbox"
+            [checked]="isSelected(permission.code)"
+            [disabled]="!selectedRoleCode"
+            (change)="togglePermission(permission.code, $any($event.target).checked)"
+          />
+          <span>
+            <strong>{{ permission.code }}</strong>
+            <small class="muted">{{ permission.description }}</small>
+          </span>
+        </label>
       }
     </div>
   </div>
