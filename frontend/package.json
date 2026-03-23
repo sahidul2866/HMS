@@ -7,7 +7,7 @@
     "build": "node ./scripts/write-runtime-config.mjs && ng build",
     "build:ghpages": "node ./scripts/write-runtime-config.mjs && ng build --base-href /HMS/",
     "deploy:ghpages": "npm run build:ghpages && gh-pages -b gh-pages -d dist/hms-frontend/browser",
-    "publish": "HMS_API_BASE_URL=https://gracie-diploic-cher.ngrok-free.dev/api/v1 npm run deploy:ghpages",
+    "publish": "HMS_API_BASE_URL=https://hms-q58k.onrender.com/api/v1 npm run deploy:ghpages",
     "test": "ng test"
   },
   "dependencies": {
