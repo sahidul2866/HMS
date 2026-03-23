@@ -1,0 +1,129 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">IPD Module</div>
+        <h1 class="page-title">Admission, Bed & Discharge Control</h1>
+        <div class="page-subtitle">Track indoor admissions, ward and bed occupancy, doctor assignment, and discharge lifecycle.</div>
+      </div>
+      <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+    </div>
+    @if (summary) {
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Total Admissions</div><div class="value">{{ summary.total_admissions }}</div></div>
+        <div class="hero-stat"><div class="label">Active</div><div class="value">{{ summary.active_admissions }}</div></div>
+        <div class="hero-stat"><div class="label">Discharged</div><div class="value">{{ summary.discharged_admissions }}</div></div>
+        <div class="hero-stat"><div class="label">Occupied Beds</div><div class="value">{{ summary.occupied_beds }}</div></div>
+      </div>
+    }
+  </div>
+
+  <section class="page-card">
+    <h2 class="section-title">New Admission</h2>
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Patient</span>
+        <select formControlName="patient_id">
+          <option value="">Select patient</option>
+          @for (patient of patients; track patient.id) {
+            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Available Bed</span>
+        <select formControlName="bed_id" (change)="onBedChanged()">
+          <option value="">Select managed bed</option>
+          @for (bed of availableBeds; track bed.id) {
+            <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} - {{ bed.bed_type }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Admitted At</span><input type="datetime-local" formControlName="admitted_at" /></label>
+      <label class="field"><span>Admission Type</span><input type="text" formControlName="admission_type" /></label>
+      <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
+      <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
+      <label class="field">
+        <span>Attending Doctor Directory</span>
+        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
+          <option value="">Select from doctor directory</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Attending Doctor</span><input type="text" formControlName="attending_doctor_name" /></label>
+      <label class="field"><span>Daily Charge</span><input type="number" formControlName="daily_charge" /></label>
+      <label class="field"><span>Advance Amount</span><input type="number" formControlName="advance_amount" /></label>
+      <label class="field"><span>Expected Discharge</span><input type="date" formControlName="expected_discharge_date" /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Diagnosis</span><textarea rows="3" formControlName="diagnosis"></textarea></label>
+      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Create Admission</button></div>
+    </form>
+  </section>
+
+  <section class="page-card">
+    <h2 class="section-title">Bed Master</h2>
+    <form class="form-grid" [formGroup]="bedForm" (ngSubmit)="submitBed()">
+      <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
+      <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
+      <label class="field"><span>Bed Type</span><input type="text" formControlName="bed_type" /></label>
+      <label class="field"><span>Daily Rate</span><input type="number" formControlName="daily_rate" /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+      <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Add Bed</button></div>
+    </form>
+    <table class="table" style="margin-top:1rem;">
+      <thead>
+        <tr>
+          <th>Ward</th>
+          <th>Bed</th>
+          <th>Type</th>
+          <th>Rate</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (bed of beds; track bed.id) {
+          <tr>
+            <td>{{ bed.ward_name }}</td>
+            <td>{{ bed.bed_number }}</td>
+            <td>{{ bed.bed_type }}</td>
+            <td>{{ bed.daily_rate }}</td>
+            <td><span class="pill">{{ bed.status }}</span></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="page-card">
+    <h2 class="section-title">Current Admissions</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Admission No</th>
+          <th>Patient</th>
+          <th>Ward/Bed</th>
+          <th>Doctor</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (admission of admissions; track admission.id) {
+          <tr>
+            <td>{{ admission.admission_number }}</td>
+            <td>{{ admission.patient.first_name }} {{ admission.patient.last_name }}</td>
+            <td>{{ admission.ward_name }} / {{ admission.bed_number }}</td>
+            <td>{{ admission.attending_doctor_name }}</td>
+            <td><span class="pill">{{ admission.status }}</span></td>
+            <td>
+              @if (admission.status !== 'discharged') {
+                <button class="danger-btn" type="button" (click)="discharge(admission)">Discharge</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</section>

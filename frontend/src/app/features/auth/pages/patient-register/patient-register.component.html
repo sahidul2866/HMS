@@ -1,0 +1,24 @@
+<div>
+  <div class="eyebrow">Patient Portal</div>
+  <h1>Create Patient Account</h1>
+  <p class="muted">Register yourself, then use the portal to book appointments and view your reports.</p>
+</div>
+
+<form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+  <label class="field"><span>Full Name</span><input type="text" formControlName="full_name" /></label>
+  <label class="field"><span>Username</span><input type="text" formControlName="username" /></label>
+  <label class="field"><span>Email</span><input type="email" formControlName="email" /></label>
+  <label class="field"><span>Password</span><input type="password" formControlName="password" /></label>
+  <label class="field"><span>Phone</span><input type="text" formControlName="phone" /></label>
+  <label class="field"><span>Gender</span><input type="text" formControlName="gender" /></label>
+  <label class="field"><span>Date of Birth</span><input type="date" formControlName="date_of_birth" /></label>
+  <label class="field"><span>Address</span><textarea rows="2" formControlName="address"></textarea></label>
+  <label class="field"><span>Emergency Contact</span><input type="text" formControlName="emergency_contact_name" /></label>
+  <label class="field"><span>Emergency Contact Phone</span><input type="text" formControlName="emergency_contact_phone" /></label>
+
+  <button class="primary-btn" type="submit">{{ loading ? 'Creating...' : 'Create Account' }}</button>
+  <a routerLink="/auth/login">Already have an account? Sign in</a>
+  @if (errorMessage) {
+    <div class="error-text">{{ errorMessage }}</div>
+  }
+</form>

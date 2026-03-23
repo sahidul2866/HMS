@@ -3,6 +3,7 @@ import { ActivatedRouteSnapshot, NavigationEnd, NavigationStart, Router } from '
 import { filter } from 'rxjs';
 
 import { NotificationService } from './notification.service';
+import { TabRouteReuseStrategy } from './tab-route-reuse.strategy';
 
 export interface AppTab {
   path: string;
@@ -11,10 +12,12 @@ export interface AppTab {
 
 @Injectable({ providedIn: 'root' })
 export class TabService {
+  private static readonly STORAGE_KEY = 'hms.tabs';
   readonly maxTabs = 8;
 
   private readonly router = inject(Router);
   private readonly notificationService = inject(NotificationService);
+  private readonly routeReuseStrategy = inject(TabRouteReuseStrategy);
   private readonly tabsSignal = signal<AppTab[]>([]);
   private readonly activePathSignal = signal('');
   private previousPath = '';
@@ -24,6 +27,8 @@ export class TabService {
   readonly activePath = this.activePathSignal.asReadonly();
 
   constructor() {
+    this.restoreState();
+
     this.router.events.pipe(filter((event): event is NavigationStart => event instanceof NavigationStart)).subscribe(() => {
       this.previousPath = this.activePathSignal();
     });
@@ -46,6 +51,8 @@ export class TabService {
 
     const remainingTabs = currentTabs.filter((tab) => tab.path !== path);
     this.tabsSignal.set(remainingTabs);
+    this.routeReuseStrategy.evict(path);
+    this.persistState();
 
     if (this.activePathSignal() !== path) {
       return;
@@ -58,7 +65,15 @@ export class TabService {
     }
 
     this.activePathSignal.set('');
+    this.persistState();
     void this.router.navigateByUrl('/dashboard');
+  }
+
+  clear(): void {
+    this.tabsSignal.set([]);
+    this.activePathSignal.set('');
+    this.routeReuseStrategy.clear();
+    sessionStorage.removeItem(TabService.STORAGE_KEY);
   }
 
   private syncRoute(rawUrl: string): void {
@@ -72,6 +87,7 @@ export class TabService {
     const existing = currentTabs.find((tab) => tab.path === path);
     if (existing) {
       this.activePathSignal.set(path);
+      this.persistState();
       return;
     }
 
@@ -89,6 +105,7 @@ export class TabService {
 
     this.tabsSignal.set([...currentTabs, { path, label }]);
     this.activePathSignal.set(path);
+    this.persistState();
   }
 
   private resolveLabel(): string {
@@ -106,5 +123,30 @@ export class TabService {
   private normalizePath(rawUrl: string): string {
     const [path] = rawUrl.split('?');
     return path;
+  }
+
+  private persistState(): void {
+    sessionStorage.setItem(
+      TabService.STORAGE_KEY,
+      JSON.stringify({
+        tabs: this.tabsSignal(),
+        activePath: this.activePathSignal(),
+      })
+    );
+  }
+
+  private restoreState(): void {
+    const rawState = sessionStorage.getItem(TabService.STORAGE_KEY);
+    if (!rawState) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(rawState) as { tabs?: AppTab[]; activePath?: string };
+      this.tabsSignal.set(Array.isArray(parsed.tabs) ? parsed.tabs : []);
+      this.activePathSignal.set(parsed.activePath ?? '');
+    } catch {
+      sessionStorage.removeItem(TabService.STORAGE_KEY);
+    }
   }
 }

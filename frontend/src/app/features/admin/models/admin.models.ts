@@ -9,9 +9,18 @@ export interface CreateUserPayload {
   direct_permission_codes: string[];
   branch_id?: string | null;
   department_id?: string | null;
+  patient_id?: string | null;
   is_active: boolean;
+}
+
+export interface CreateRolePayload {
+  code: string;
+  name: string;
+  description?: string | null;
+  is_doctor_role: boolean;
+  is_referral_role: boolean;
+  permission_codes: string[];
 }
 
 export type AdminUser = User;
 export type AdminRole = Role;
-

@@ -1,8 +1,26 @@
 <section class="page-card">
   <h1 class="page-title">Pharmacy Dispense</h1>
-  <div class="page-subtitle">Protected by `pharmacy.dispense`, with backend audit logging for each dispense.</div>
+  <div class="page-subtitle">Dispense against posted billing invoices or directly against pending OPD prescription orders.</div>
 
   <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+    <label class="field">
+      <span>Pending OPD Prescription</span>
+      <select formControlName="source_visit_order_id" (change)="onPrescriptionChanged()">
+        <option value="">Select pending prescription</option>
+        @for (prescription of pendingPrescriptions; track prescription.order_id) {
+          <option [value]="prescription.order_id">{{ prescription.visit_number }} - {{ prescription.patient_name }} - {{ prescription.item_name }}</option>
+        }
+      </select>
+    </label>
+    <label class="field">
+      <span>Billing Invoice</span>
+      <select formControlName="billing_invoice_id" (change)="onInvoiceChanged()">
+        <option value="">Select posted invoice</option>
+        @for (invoice of invoices; track invoice.id) {
+          <option [value]="invoice.id">{{ invoice.invoice_number }} - {{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</option>
+        }
+      </select>
+    </label>
     <label class="field">
       <span>Prescription Reference</span>
       <input type="text" formControlName="prescription_ref" />
@@ -31,6 +49,32 @@
   @if (resultMessage) {
     <p class="pill">{{ resultMessage }}</p>
   }
+</section>
+
+<section class="page-card">
+  <h2 class="page-title">Pending OPD Prescriptions</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Visit No</th>
+        <th>Patient</th>
+        <th>Doctor</th>
+        <th>Medicine</th>
+        <th>Qty</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (prescription of pendingPrescriptions; track prescription.order_id) {
+        <tr>
+          <td>{{ prescription.visit_number }}</td>
+          <td>{{ prescription.patient_name }}</td>
+          <td>{{ prescription.doctor_name }}</td>
+          <td>{{ prescription.item_name }}</td>
+          <td>{{ prescription.quantity }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
 </section>
 
 <section class="page-card">

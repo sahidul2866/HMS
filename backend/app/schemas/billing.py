@@ -48,8 +48,7 @@ class BillingInvoiceItemCreate(BaseModel):
 class BillingInvoiceCreate(BaseModel):
     branch_id: UUID | None = None
     patient_id: UUID
-    referred_doctor_id: UUID | None = None
-    referred_doctor_name: str | None = Field(default=None, max_length=150)
+    internal_referral_user_id: UUID | None = None
     discount_percentage: Decimal = Field(default=0, ge=0, le=100)
     note: str | None = None
     items: list[BillingInvoiceItemCreate] = Field(min_length=1)
@@ -73,6 +72,7 @@ class BillingInvoiceRead(BaseModel):
     invoice_number: str
     patient_id: UUID
     patient: PatientRead
+    internal_referral_user_id: UUID | None = None
     referred_doctor_id: UUID | None = None
     referred_doctor_name: str | None = None
     status: str
@@ -95,6 +95,7 @@ class BillingInvoiceListItem(BaseModel):
     invoice_number: str
     patient_id: UUID
     patient: PatientRead
+    internal_referral_user_id: UUID | None = None
     referred_doctor_id: UUID | None = None
     status: str
     total_amount: Decimal
@@ -106,7 +107,7 @@ class BillingInvoiceListItem(BaseModel):
 
 class BillingInvoiceFilterParams(BaseModel):
     q: str | None = None
-    referred_doctor_id: UUID | None = None
+    internal_referral_user_id: UUID | None = None
     status: str | None = None
     date_from: date | None = None
     date_to: date | None = None
@@ -122,7 +123,7 @@ class BillingSummaryRead(BaseModel):
 
 
 class BillingReferralSummaryRead(BaseModel):
-    referred_doctor_id: UUID | None = None
+    internal_referral_user_id: UUID | None = None
     referred_doctor_name: str
     invoice_count: int
     net_amount: Decimal

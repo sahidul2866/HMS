@@ -6,6 +6,11 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_FRONTEND_ORIGINS = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "https://sahidul2866.github.io",
+]
 
 
 class Settings(BaseSettings):
@@ -19,7 +24,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=15, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     database_url: str = Field(alias="DATABASE_URL")
-    frontend_origins: str | list[str] = Field(default="http://localhost:4200", alias="FRONTEND_ORIGINS")
+    frontend_origins: str | list[str] = Field(default_factory=lambda: DEFAULT_FRONTEND_ORIGINS.copy(), alias="FRONTEND_ORIGINS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     auto_db_bootstrap: bool | str = Field(default=True, alias="AUTO_DB_BOOTSTRAP")
     auto_seed_sample_data: bool | str = Field(default=False, alias="AUTO_SEED_SAMPLE_DATA")

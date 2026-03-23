@@ -3,8 +3,11 @@ import { Component, inject } from '@angular/core';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { User } from '../../../../core/models/auth.models';
+import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
+import { UiStateService } from '../../../../core/services/ui-state.service';
 import { Patient } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
 import {
@@ -13,7 +16,6 @@ import {
   BillingInvoiceItemPayload,
   BillingInvoiceListItem,
   BillingInvoicePreview,
-  ReferredDoctor,
   BillingService,
   CreateBillingInvoicePayload,
 } from '../../models/billing.models';
@@ -27,17 +29,20 @@ import { BillingServiceApi } from '../../services/billing.service';
   styleUrls: ['./billing-desk.component.scss'],
 })
 export class BillingDeskComponent {
+  private static readonly STATE_KEY = 'ui-state:billing:desk';
   private readonly fb = inject(FormBuilder);
   private readonly patientService = inject(PatientService);
   private readonly billingService = inject(BillingServiceApi);
+  private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notificationService = inject(NotificationService);
+  private readonly uiStateService = inject(UiStateService);
   readonly sessionService = inject(SessionService);
 
   patients: Patient[] = [];
   billingServices: BillingService[] = [];
-  doctors: ReferredDoctor[] = [];
+  internalReferralDoctors: User[] = [];
   recentInvoices: BillingInvoiceListItem[] = [];
   latestInvoice: BillingInvoice | null = null;
   preview: BillingInvoicePreview | null = null;
@@ -46,8 +51,7 @@ export class BillingDeskComponent {
 
   readonly form = this.fb.group({
     patient_id: ['', Validators.required],
-    referred_doctor_id: [''],
-    referred_doctor_name: [''],
+    internal_referral_user_id: [''],
     discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
     note: [''],
     items: this.fb.array([]),
@@ -55,14 +59,17 @@ export class BillingDeskComponent {
 
   readonly invoiceFilterForm = this.fb.group({
     q: [''],
-    referred_doctor_id: [''],
+    internal_referral_user_id: [''],
     status: [''],
     date_from: [''],
     date_to: [''],
   });
 
   constructor() {
-    this.addItem();
+    this.restoreState();
+    if (!this.items.length) {
+      this.addItem();
+    }
     this.loadPatients();
     this.loadServices();
     this.loadDoctors();
@@ -71,8 +78,11 @@ export class BillingDeskComponent {
       const patientId = params.get('patientId');
       if (patientId) {
         this.form.patchValue({ patient_id: patientId });
+        this.persistState();
       }
     });
+    this.form.valueChanges.subscribe(() => this.persistState());
+    this.invoiceFilterForm.valueChanges.subscribe(() => this.persistState());
   }
 
   get items(): FormArray {
@@ -86,6 +96,7 @@ export class BillingDeskComponent {
         quantity: [1, [Validators.required, Validators.min(0.01)]],
       })
     );
+    this.persistState();
   }
 
   removeItem(index: number): void {
@@ -93,6 +104,7 @@ export class BillingDeskComponent {
       return;
     }
     this.items.removeAt(index);
+    this.persistState();
     this.recalculatePreview();
   }
 
@@ -108,7 +120,7 @@ export class BillingDeskComponent {
   }
 
   loadDoctors(): void {
-    this.billingService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
+    this.doctorDirectoryService.listDoctors(true).subscribe((doctors) => (this.internalReferralDoctors = doctors));
   }
 
   loadInvoices(): void {
@@ -150,8 +162,7 @@ export class BillingDeskComponent {
 
     const payload: CreateBillingInvoicePayload = {
       patient_id: this.form.getRawValue().patient_id ?? '',
-      referred_doctor_id: this.form.getRawValue().referred_doctor_id || null,
-      referred_doctor_name: this.form.getRawValue().referred_doctor_name || null,
+      internal_referral_user_id: this.form.getRawValue().internal_referral_user_id || null,
       discount_percentage: Number(this.form.getRawValue().discount_percentage ?? 0),
       note: this.form.getRawValue().note || null,
       items: this.getInvoiceItemsPayload(),
@@ -169,14 +180,14 @@ export class BillingDeskComponent {
         this.notificationService.success(`Invoice ${invoice.invoice_number} created successfully.`);
         this.form.reset({
           patient_id: this.form.getRawValue().patient_id ?? '',
-          referred_doctor_id: '',
-          referred_doctor_name: '',
+          internal_referral_user_id: '',
           discount_percentage: 0,
           note: '',
         });
         this.items.clear();
         this.addItem();
         this.preview = null;
+        this.persistState();
       },
       error: () => {
         this.saving = false;
@@ -268,8 +279,11 @@ export class BillingDeskComponent {
     return `${patient.patient_number} - ${patient.first_name} ${patient.last_name}`;
   }
 
-  formatDoctor(doctor: ReferredDoctor): string {
-    return `${doctor.doctor_code} - ${doctor.full_name}`;
+  onInternalReferralChanged(): void {
+    const userId = this.form.getRawValue().internal_referral_user_id;
+    if (!this.internalReferralDoctors.find((item) => item.id === userId)) {
+      this.form.patchValue({ internal_referral_user_id: '' });
+    }
   }
 
   loadInvoiceDetail(invoiceId: string): void {
@@ -280,6 +294,7 @@ export class BillingDeskComponent {
   }
 
   searchInvoices(): void {
+    this.persistState();
     this.loadInvoices();
   }
 
@@ -296,6 +311,7 @@ export class BillingDeskComponent {
     this.billingService.voidInvoice(this.latestInvoice.id, { reason: reason.trim() }).subscribe((invoice) => {
       this.latestInvoice = invoice;
       this.loadInvoices();
+      this.persistState();
       this.notificationService.warning(`Invoice ${invoice.invoice_number} voided.`);
     });
   }
@@ -338,10 +354,69 @@ export class BillingDeskComponent {
     const raw = this.invoiceFilterForm.getRawValue();
     return {
       q: raw.q?.trim() || undefined,
-      referred_doctor_id: raw.referred_doctor_id || undefined,
+      internal_referral_user_id: raw.internal_referral_user_id || undefined,
       status: raw.status || undefined,
       date_from: raw.date_from || undefined,
       date_to: raw.date_to || undefined,
     };
+  }
+
+  private restoreState(): void {
+    const state = this.uiStateService.load<{
+      form?: {
+        patient_id?: string;
+        internal_referral_user_id?: string;
+        discount_percentage?: number;
+        note?: string;
+        items?: BillingInvoiceItemPayload[];
+      };
+      filters?: BillingInvoiceFilters;
+    }>(BillingDeskComponent.STATE_KEY);
+
+    if (!state) {
+      return;
+    }
+
+    if (state.form) {
+      this.form.patchValue({
+        patient_id: state.form.patient_id ?? '',
+        internal_referral_user_id: state.form.internal_referral_user_id ?? '',
+        discount_percentage: state.form.discount_percentage ?? 0,
+        note: state.form.note ?? '',
+      });
+
+      this.items.clear();
+      for (const item of state.form.items ?? []) {
+        this.items.push(
+          this.fb.group({
+            billing_service_id: [item.billing_service_id, Validators.required],
+            quantity: [item.quantity, [Validators.required, Validators.min(0.01)]],
+          })
+        );
+      }
+    }
+
+    if (state.filters) {
+      this.invoiceFilterForm.patchValue({
+        q: state.filters.q ?? '',
+        internal_referral_user_id: state.filters.internal_referral_user_id ?? '',
+        status: state.filters.status ?? '',
+        date_from: state.filters.date_from ?? '',
+        date_to: state.filters.date_to ?? '',
+      });
+    }
+  }
+
+  private persistState(): void {
+    this.uiStateService.save(BillingDeskComponent.STATE_KEY, {
+      form: {
+        patient_id: this.form.getRawValue().patient_id ?? '',
+        internal_referral_user_id: this.form.getRawValue().internal_referral_user_id ?? '',
+        discount_percentage: Number(this.form.getRawValue().discount_percentage ?? 0),
+        note: this.form.getRawValue().note ?? '',
+        items: this.getInvoiceItemsPayload(),
+      },
+      filters: this.getInvoiceFilters(),
+    });
   }
 }

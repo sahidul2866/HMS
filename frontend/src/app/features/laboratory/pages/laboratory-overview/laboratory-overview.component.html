@@ -1,39 +1,67 @@
-<section class="page-card">
-  <h1 class="page-title">Laboratory Module</h1>
-  <p class="page-subtitle">Protected by `laboratory.view`. This workspace is positioned for sample collection, accessioning, and result verification.</p>
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <h1 class="page-title">Laboratory Worklist</h1>
+    <p class="page-subtitle">Laboratory now consumes OPD investigation orders directly so sample execution and result entry stay linked to the clinical visit.</p>
 
-  <div class="grid-2">
-    @for (item of worklist; track item.label) {
-      <div class="page-card">
-        <div class="muted">{{ item.label }}</div>
-        <h3>{{ item.value }}</h3>
-      </div>
-    }
-  </div>
-</section>
+    <div class="grid-2">
+      @for (item of summary; track item.label) {
+        <div class="page-card">
+          <div class="muted">{{ item.label }}</div>
+          <h3>{{ item.value }}</h3>
+        </div>
+      }
+    </div>
+  </section>
 
-<section class="page-card">
-  <h2 class="page-title">Operational Focus</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Stage</th>
-        <th>Use Case</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Collection</td>
-        <td>Track phlebotomy queues, sample labeling, and collection exceptions.</td>
-      </tr>
-      <tr>
-        <td>Processing</td>
-        <td>Route samples through analyzers and hold flags for repeat testing.</td>
-      </tr>
-      <tr>
-        <td>Validation</td>
-        <td>Review abnormal values and release verified results to clinicians.</td>
-      </tr>
-    </tbody>
-  </table>
+  <section class="page-card">
+    <h2 class="page-title">Investigation Queue</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Visit</th>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Investigation</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of worklist; track item.order_id) {
+          <tr>
+            <td>{{ item.visit_number }}</td>
+            <td>{{ item.patient_name }}</td>
+            <td>{{ item.consulting_doctor_name }}</td>
+            <td>{{ item.item_name }}</td>
+            <td><span class="pill">{{ item.status }}</span></td>
+            <td><button class="secondary-btn" type="button" (click)="selectItem(item)">Open</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedItem) {
+    <section class="page-card">
+      <h2 class="page-title">Result Entry For {{ selectedItem.visit_number }}</h2>
+      <div class="page-subtitle">{{ selectedItem.patient_name }} · {{ selectedItem.item_name }} · {{ selectedItem.instructions || 'No instructions' }}</div>
+      <form class="form-grid" [formGroup]="resultForm" (ngSubmit)="submitResult()">
+        <label class="field">
+          <span>Status</span>
+          <select formControlName="status">
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Result</span>
+          <textarea rows="5" formControlName="result_text"></textarea>
+        </label>
+        @if (sessionService.hasPermission('laboratory.manage')) {
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Save Result</button></div>
+        }
+      </form>
+    </section>
+  }
 </section>

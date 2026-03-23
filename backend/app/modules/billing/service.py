@@ -11,6 +11,7 @@ from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.billing.repository import BillingRepository
 from app.modules.patients.repository import PatientsRepository
+from app.modules.users.repository import UsersRepository
 from app.schemas.billing import (
     BillingInvoiceCreate,
     BillingInvoiceFilterParams,
@@ -32,6 +33,7 @@ class BillingServiceManager:
         self.db = db
         self.repository = BillingRepository(db)
         self.patients_repository = PatientsRepository(db)
+        self.users_repository = UsersRepository(db)
 
     def list_services(self, actor: User) -> list[BillingService]:
         return self.repository.list_services(actor.branch_id)
@@ -113,7 +115,7 @@ class BillingServiceManager:
         rows = self.repository.get_referral_summary(actor.branch_id, filters)
         return [
             BillingReferralSummaryRead(
-                referred_doctor_id=row[0],
+                internal_referral_user_id=row[0],
                 referred_doctor_name=row[1] or "Unassigned",
                 invoice_count=row[2] or 0,
                 net_amount=self._money(row[3]),
@@ -127,14 +129,15 @@ class BillingServiceManager:
 
     def create_invoice(self, payload: BillingInvoiceCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
         patient = self._get_patient(payload.patient_id, actor)
-        referred_doctor = self._get_referred_doctor(payload.referred_doctor_id, actor) if payload.referred_doctor_id else None
+        internal_referral_user = self._get_internal_referral_user(payload.internal_referral_user_id, actor) if payload.internal_referral_user_id else None
         preview = self._build_preview(payload.discount_percentage, payload.items, actor.branch_id)
         invoice = BillingInvoice(
             patient_id=patient.id,
             invoice_number=f"INV-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             branch_id=payload.branch_id or actor.branch_id or patient.branch_id,
-            referred_doctor_id=referred_doctor.id if referred_doctor else None,
-            referred_doctor_name=referred_doctor.full_name if referred_doctor else payload.referred_doctor_name,
+            internal_referral_user_id=internal_referral_user.id if internal_referral_user else None,
+            referred_doctor_id=None,
+            referred_doctor_name=internal_referral_user.full_name if internal_referral_user else None,
             sub_total=preview.sub_total,
             discount_percentage=preview.discount_percentage,
             discount_amount=preview.discount_amount,
@@ -223,12 +226,14 @@ class BillingServiceManager:
             raise AppException(403, "forbidden", "Patient belongs to a different branch")
         return patient
 
-    def _get_referred_doctor(self, doctor_id: UUID, actor: User) -> ReferredDoctor:
-        doctor = self.repository.get_doctor(doctor_id)
-        if not doctor:
-            raise AppException(404, "referred_doctor_not_found", "Referred doctor not found")
+    def _get_internal_referral_user(self, user_id: UUID, actor: User) -> User:
+        doctor = self.users_repository.get_user(user_id)
+        if not doctor or not doctor.is_active:
+            raise AppException(404, "internal_referral_user_not_found", "Referral doctor user not found")
         if actor.branch_id and doctor.branch_id and actor.branch_id != doctor.branch_id:
-            raise AppException(403, "forbidden", "Referred doctor belongs to a different branch")
+            raise AppException(403, "forbidden", "Referral doctor belongs to a different branch")
+        if not any(role.is_doctor_role and role.is_referral_role for role in doctor.roles):
+            raise AppException(400, "invalid_referral_user", "Selected user is not configured as a referral doctor")
         return doctor
 
     def _build_preview(self, discount_percentage: Decimal, items, branch_id: UUID | None) -> BillingInvoicePreview:

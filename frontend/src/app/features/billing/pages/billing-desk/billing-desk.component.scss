@@ -17,7 +17,7 @@
   padding: 1rem;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
 }
 
 .item-footer {

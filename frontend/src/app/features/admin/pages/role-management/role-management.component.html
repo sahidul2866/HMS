@@ -1,54 +1,188 @@
-<section class="page-card">
-  <h1 class="page-title">Role Management</h1>
-  <div class="page-subtitle">Protected by `settings.role.manage`. Updating role permissions affects the next `/auth/me` or refresh cycle.</div>
-
-  <div class="page-card">
-    <h3 style="margin-top:0;">Roles Grid</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Role</th>
-          <th>Description</th>
-          <th>Permissions</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (role of roles; track role.id) {
-          <tr>
-            <td>{{ role.code }}</td>
-            <td>{{ role.description || '-' }}</td>
-            <td>{{ getSelectedPermissionCount(role) }}</td>
-            <td>
-              <button class="secondary-btn" type="button" (click)="loadRole(role.code)">Edit</button>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-
-  <div class="page-card" style="margin-top:1rem;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-      <h3 style="margin:0;">Permission Grid for {{ selectedRoleCode || 'Selected Role' }}</h3>
-      <button class="primary-btn" type="button" (click)="save()" [disabled]="!selectedRoleCode">Save Permissions</button>
+<section class="role-workspace">
+  <div class="role-hero page-card">
+    <div>
+      <p class="role-kicker">Administration</p>
+      <h1 class="page-title">Role Management</h1>
+      <div class="page-subtitle">
+        Create roles, separate permissions by module, and update access without digging through a flat checkbox wall.
+      </div>
     </div>
 
-    <div class="permission-grid">
-      @for (permission of permissions; track permission.id) {
-        <label class="permission-row">
-          <input
-            type="checkbox"
-            [checked]="isSelected(permission.code)"
-            [disabled]="!selectedRoleCode"
-            (change)="togglePermission(permission.code, $any($event.target).checked)"
-          />
-          <span>
-            <strong>{{ permission.code }}</strong>
-            <small class="muted">{{ permission.description }}</small>
-          </span>
-        </label>
+    <div class="role-hero__stats">
+      <div class="role-stat">
+        <strong>{{ roles.length }}</strong>
+        <span>Total Roles</span>
+      </div>
+      <div class="role-stat">
+        <strong>{{ permissions.length }}</strong>
+        <span>Total Permissions</span>
+      </div>
+      <div class="role-stat">
+        <strong>{{ selectedPermissionCodes.size }}</strong>
+        <span>Selected</span>
+      </div>
+    </div>
+  </div>
+
+  <section class="page-card role-list-card">
+    <div class="section-heading">
+      <div>
+        <h3>Roles</h3>
+        <p class="muted">Select a role to edit its module permissions.</p>
+      </div>
+      <button class="primary-btn" type="button" (click)="openCreateRoleModal()">Add Role</button>
+    </div>
+
+    <div class="role-list">
+      @for (role of roles; track role.id) {
+        <button
+          class="role-tile"
+          type="button"
+          [class.role-tile--active]="selectedRoleCode === role.code"
+          (click)="loadRole(role.code)"
+        >
+          <div class="role-tile__top">
+            <strong>{{ role.name || role.code }}</strong>
+            <span>{{ getSelectedPermissionCount(role) }}</span>
+          </div>
+          <div class="role-tile__code">{{ role.code }}</div>
+          <div class="role-badges">
+            @if (role.is_doctor_role) {
+              <span class="pill">Doctor Role</span>
+            }
+            @if (role.is_referral_role) {
+              <span class="pill">Referral Enabled</span>
+            }
+          </div>
+          <p class="muted">{{ role.description || 'No description provided.' }}</p>
+        </button>
       }
     </div>
+  </section>
+
+  <div class="role-layout">
+    <section class="page-card permission-editor">
+      <div class="editor-header">
+        <div>
+          <p class="editor-label">Permission Editor</p>
+          <h2>{{ selectedRole?.name || 'Select a role' }}</h2>
+          <p class="muted">
+            @if (selectedRole) {
+              {{ selectedRole.description || 'Use module cards to select permissions for this role.' }}
+            } @else {
+              Choose a role from the left to begin editing.
+            }
+          </p>
+        </div>
+
+        <div class="editor-actions">
+          <label class="bulk-toggle">
+            <input
+              type="checkbox"
+              [checked]="areAllPermissionsSelected()"
+              [indeterminate]="isPartiallySelected()"
+              [disabled]="!selectedRoleCode"
+              (change)="toggleAllPermissions($any($event.target).checked)"
+            />
+            <span>Select All Permissions</span>
+          </label>
+          <button class="primary-btn" type="button" (click)="save()" [disabled]="!selectedRoleCode">Save Permissions</button>
+        </div>
+      </div>
+
+      <div class="module-grid">
+        @for (group of permissionGroups; track group.module) {
+          <section class="module-panel">
+            <div class="module-panel__header">
+              <div>
+                <h4>{{ group.label }}</h4>
+                <p class="muted">{{ getModuleSelectedCount(group) }} of {{ group.permissions.length }} enabled</p>
+              </div>
+
+              <label class="bulk-toggle">
+                <input
+                  type="checkbox"
+                  [checked]="isModuleSelected(group)"
+                  [indeterminate]="isModulePartiallySelected(group)"
+                  [disabled]="!selectedRoleCode"
+                  (change)="toggleModule(group, $any($event.target).checked)"
+                />
+                <span>Select All</span>
+              </label>
+            </div>
+
+            <div class="permission-stack">
+              @for (permission of group.permissions; track permission.id) {
+                <label class="permission-card">
+                  <input
+                    type="checkbox"
+                    [checked]="isSelected(permission.code)"
+                    [disabled]="!selectedRoleCode"
+                    (change)="togglePermission(permission.code, $any($event.target).checked)"
+                  />
+                  <span>
+                    <strong>{{ permission.code }}</strong>
+                    <small class="muted">{{ permission.description || (permission.action + ' access') }}</small>
+                  </span>
+                </label>
+              }
+            </div>
+          </section>
+        }
+      </div>
+    </section>
   </div>
+
+  @if (isCreateRoleModalOpen) {
+    <div class="modal-backdrop" (click)="closeCreateRoleModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="editor-label modal-label">New Role</p>
+            <h3>Create Role</h3>
+            <p class="muted">Create the role here, then assign module permissions from the editor.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeCreateRoleModal()">×</button>
+        </div>
+
+        <form class="role-form" [formGroup]="createRoleForm" (ngSubmit)="submitNewRole()">
+          <label class="field">
+            <span>Role Code</span>
+            <input type="text" formControlName="code" placeholder="e.g. LAB_MANAGER" />
+          </label>
+
+          <label class="field">
+            <span>Role Name</span>
+            <input type="text" formControlName="name" placeholder="e.g. Laboratory Manager" />
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea rows="3" formControlName="description" placeholder="Short summary of this role"></textarea>
+          </label>
+
+          <label class="permission-card">
+            <input type="checkbox" formControlName="is_doctor_role" />
+            <span>
+              <strong>Treat As Doctor</strong>
+              <small class="muted">Users with this role appear in OPD, IPD, and other doctor selectors.</small>
+            </span>
+          </label>
+
+          <label class="permission-card">
+            <input type="checkbox" formControlName="is_referral_role" />
+            <span>
+              <strong>Allow Referral Selection</strong>
+              <small class="muted">Users with this role can be selected as referred doctors in billing.</small>
+            </span>
+          </label>
+
+          <div class="modal-actions">
+            <button class="secondary-btn" type="button" (click)="closeCreateRoleModal()">Cancel</button>
+            <button class="primary-btn" type="submit">Create Role</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
 </section>

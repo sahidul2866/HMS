@@ -46,8 +46,7 @@ export interface BillingInvoiceItemPayload {
 export interface CreateBillingInvoicePayload {
   branch_id?: string | null;
   patient_id: string;
-  referred_doctor_id?: string | null;
-  referred_doctor_name?: string | null;
+  internal_referral_user_id?: string | null;
   discount_percentage: number;
   note?: string | null;
   items: BillingInvoiceItemPayload[];
@@ -77,7 +76,7 @@ export interface BillingInvoice {
   invoice_number: string;
   patient_id: string;
   patient: Patient;
-  referred_doctor_id?: string | null;
+  internal_referral_user_id?: string | null;
   referred_doctor_name?: string | null;
   status: string;
   void_reason?: string | null;
@@ -97,7 +96,7 @@ export interface BillingInvoiceListItem {
   invoice_number: string;
   patient_id: string;
   patient: Patient;
-  referred_doctor_id?: string | null;
+  internal_referral_user_id?: string | null;
   status: string;
   total_amount: string;
   referred_doctor_name?: string | null;
@@ -106,7 +105,7 @@ export interface BillingInvoiceListItem {
 
 export interface BillingInvoiceFilters {
   q?: string;
-  referred_doctor_id?: string;
+  internal_referral_user_id?: string;
   status?: string;
   date_from?: string;
   date_to?: string;
@@ -122,7 +121,7 @@ export interface BillingSummary {
 }
 
 export interface BillingReferralSummary {
-  referred_doctor_id?: string | null;
+  internal_referral_user_id?: string | null;
   referred_doctor_name: string;
   invoice_count: number;
   net_amount: string;

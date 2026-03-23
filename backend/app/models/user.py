@@ -34,6 +34,7 @@ class User(Base, BaseModelMixin):
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     department_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("departments.id"))
+    patient_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"))
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -42,6 +43,7 @@ class User(Base, BaseModelMixin):
 
     branch = relationship("Branch", back_populates="users")
     department = relationship("Department", back_populates="users")
+    patient = relationship("Patient")
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     direct_permissions = relationship("Permission", secondary=user_permissions, back_populates="users")
     refresh_tokens = relationship("RefreshToken", back_populates="user")

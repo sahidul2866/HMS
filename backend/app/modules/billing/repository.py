@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.billing import BillingInvoice, BillingService, ReferredDoctor
 from app.models.patient import Patient
+from app.models.user import User
 from app.schemas.billing import BillingInvoiceFilterParams
 
 
@@ -77,8 +78,8 @@ class BillingRepository:
                         Patient.patient_number.ilike(q),
                     )
                 )
-            if filters.referred_doctor_id:
-                stmt = stmt.where(BillingInvoice.referred_doctor_id == filters.referred_doctor_id)
+            if filters.internal_referral_user_id:
+                stmt = stmt.where(BillingInvoice.internal_referral_user_id == filters.internal_referral_user_id)
             if filters.status:
                 stmt = stmt.where(BillingInvoice.status == filters.status)
             if filters.date_from:
@@ -112,8 +113,8 @@ class BillingRepository:
         if branch_id:
             stmt = stmt.where(BillingInvoice.branch_id == branch_id)
         if filters:
-            if filters.referred_doctor_id:
-                stmt = stmt.where(BillingInvoice.referred_doctor_id == filters.referred_doctor_id)
+            if filters.internal_referral_user_id:
+                stmt = stmt.where(BillingInvoice.internal_referral_user_id == filters.internal_referral_user_id)
             if filters.status:
                 stmt = stmt.where(BillingInvoice.status == filters.status)
             if filters.date_from:
@@ -125,16 +126,16 @@ class BillingRepository:
     def get_referral_summary(self, branch_id: UUID | None, filters: BillingInvoiceFilterParams | None = None):
         stmt = (
             select(
-                BillingInvoice.referred_doctor_id,
-                func.coalesce(ReferredDoctor.full_name, BillingInvoice.referred_doctor_name, "Unassigned"),
+                BillingInvoice.internal_referral_user_id,
+                func.coalesce(User.full_name, BillingInvoice.referred_doctor_name, "Unassigned"),
                 func.count(BillingInvoice.id),
                 func.coalesce(func.sum(BillingInvoice.total_amount), 0),
                 func.coalesce(func.sum(BillingInvoice.referred_doctor_amount), 0),
             )
             .select_from(BillingInvoice)
-            .outerjoin(ReferredDoctor, BillingInvoice.referred_doctor_id == ReferredDoctor.id)
+            .outerjoin(User, BillingInvoice.internal_referral_user_id == User.id)
             .where(BillingInvoice.status == "posted")
-            .group_by(BillingInvoice.referred_doctor_id, ReferredDoctor.full_name, BillingInvoice.referred_doctor_name)
+            .group_by(BillingInvoice.internal_referral_user_id, User.full_name, BillingInvoice.referred_doctor_name)
             .order_by(func.coalesce(func.sum(BillingInvoice.referred_doctor_amount), 0).desc())
         )
         if branch_id:

@@ -20,10 +20,10 @@
         <div class="label">Services</div>
         <div class="value">{{ billingServices.length }}</div>
       </div>
-      <div class="hero-stat">
-        <div class="label">Referral Doctors</div>
-        <div class="value">{{ doctors.length }}</div>
-      </div>
+        <div class="hero-stat">
+          <div class="label">Referral Sources</div>
+          <div class="value">{{ internalReferralDoctors.length }}</div>
+        </div>
       <div class="hero-stat">
         <div class="label">Invoice Queue</div>
         <div class="value">{{ recentInvoices.length }}</div>
@@ -51,17 +51,13 @@
           </select>
         </label>
         <label class="field">
-          <span>Referred Doctor</span>
-          <select formControlName="referred_doctor_id">
-            <option value="">Select referred doctor</option>
-            @for (doctor of doctors; track doctor.id) {
-              <option [value]="doctor.id">{{ formatDoctor(doctor) }}</option>
+          <span>Referring Doctor</span>
+          <select formControlName="internal_referral_user_id" (change)="onInternalReferralChanged()">
+            <option value="">Select flagged doctor user</option>
+            @for (doctor of internalReferralDoctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
             }
           </select>
-        </label>
-        <label class="field">
-          <span>External Doctor Name</span>
-          <input type="text" formControlName="referred_doctor_name" placeholder="Doctor outside the directory" />
         </label>
         <label class="field">
           <span>Discount Percentage</span>
@@ -213,10 +209,10 @@
       </label>
       <label class="field">
         <span>Doctor</span>
-        <select formControlName="referred_doctor_id">
+        <select formControlName="internal_referral_user_id">
           <option value="">All doctors</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ formatDoctor(doctor) }}</option>
+          @for (doctor of internalReferralDoctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
           }
         </select>
       </label>

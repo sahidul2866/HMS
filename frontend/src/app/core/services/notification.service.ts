@@ -6,6 +6,8 @@ export interface NotificationItem {
   id: number;
   level: NotificationLevel;
   message: string;
+  createdAt: number;
+  durationMs: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -37,7 +39,8 @@ export class NotificationService {
 
   private push(level: NotificationLevel, message: string): void {
     const id = this.nextId++;
-    this.itemsSignal.update((items) => [...items, { id, level, message }]);
-    window.setTimeout(() => this.dismiss(id), 4500);
+    const durationMs = 4500;
+    this.itemsSignal.update((items) => [...items, { id, level, message, createdAt: Date.now(), durationMs }]);
+    window.setTimeout(() => this.dismiss(id), durationMs);
   }
 }

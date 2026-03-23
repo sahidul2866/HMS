@@ -1,33 +1,70 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { Permission } from '../../../../core/models/auth.models';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { AdminRole } from '../../models/admin.models';
 import { RoleService } from '../../services/role.service';
 
+interface PermissionGroup {
+  module: string;
+  label: string;
+  permissions: Permission[];
+}
+
 @Component({
   selector: 'app-role-management',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './role-management.component.html',
+  styleUrls: ['./role-management.component.scss'],
 })
 export class RoleManagementComponent {
+  private readonly fb = inject(FormBuilder);
   private readonly roleService = inject(RoleService);
   private readonly notificationService = inject(NotificationService);
 
   roles: AdminRole[] = [];
   permissions: Permission[] = [];
+  permissionGroups: PermissionGroup[] = [];
   selectedRoleCode = '';
   selectedPermissionCodes = new Set<string>();
+  isCreateRoleModalOpen = false;
+
+  readonly createRoleForm = this.fb.group({
+    code: ['', [Validators.required, Validators.minLength(3)]],
+    name: ['', [Validators.required, Validators.minLength(3)]],
+    description: [''],
+    is_doctor_role: [false],
+    is_referral_role: [false],
+  });
 
   constructor() {
     this.reload();
   }
 
   reload(): void {
-    this.roleService.list().subscribe((roles) => (this.roles = roles));
-    this.roleService.listPermissions().subscribe((permissions) => (this.permissions = permissions));
+    this.roleService.list().subscribe((roles) => {
+      this.roles = [...roles].sort((left, right) => left.code.localeCompare(right.code));
+      if (this.selectedRoleCode) {
+        const selectedRole = this.roles.find((role) => role.code === this.selectedRoleCode);
+        if (selectedRole) {
+          this.selectedPermissionCodes = new Set(selectedRole.permissions.map((item) => item.code));
+        }
+      }
+    });
+
+    this.roleService.listPermissions().subscribe((permissions) => {
+      this.permissions = [...permissions].sort((left, right) => {
+        const moduleCompare = left.module.localeCompare(right.module);
+        if (moduleCompare !== 0) {
+          return moduleCompare;
+        }
+        return left.code.localeCompare(right.code);
+      });
+      this.permissionGroups = this.buildPermissionGroups(this.permissions);
+    });
   }
 
   loadRole(code: string): void {
@@ -52,6 +89,82 @@ export class RoleManagementComponent {
     return role.permissions.length;
   }
 
+  get selectedRole(): AdminRole | undefined {
+    return this.roles.find((role) => role.code === this.selectedRoleCode);
+  }
+
+  areAllPermissionsSelected(): boolean {
+    return this.permissions.length > 0 && this.permissions.every((permission) => this.isSelected(permission.code));
+  }
+
+  isPartiallySelected(): boolean {
+    const selectedCount = this.permissions.filter((permission) => this.isSelected(permission.code)).length;
+    return selectedCount > 0 && selectedCount < this.permissions.length;
+  }
+
+  toggleAllPermissions(checked: boolean): void {
+    for (const permission of this.permissions) {
+      this.togglePermission(permission.code, checked);
+    }
+  }
+
+  isModuleSelected(group: PermissionGroup): boolean {
+    return group.permissions.length > 0 && group.permissions.every((permission) => this.isSelected(permission.code));
+  }
+
+  isModulePartiallySelected(group: PermissionGroup): boolean {
+    const selectedCount = this.getModuleSelectedCount(group);
+    return selectedCount > 0 && selectedCount < group.permissions.length;
+  }
+
+  getModuleSelectedCount(group: PermissionGroup): number {
+    return group.permissions.filter((permission) => this.isSelected(permission.code)).length;
+  }
+
+  toggleModule(group: PermissionGroup, checked: boolean): void {
+    for (const permission of group.permissions) {
+      this.togglePermission(permission.code, checked);
+    }
+  }
+
+  submitNewRole(): void {
+    if (this.createRoleForm.invalid) {
+      this.createRoleForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.createRoleForm.getRawValue();
+    const code = value.code?.trim().toUpperCase() ?? '';
+    const name = value.name?.trim() ?? '';
+    const description = value.description?.trim() ?? '';
+
+    this.roleService
+      .create({
+        code,
+        name,
+        description: description || null,
+        is_doctor_role: !!value.is_doctor_role,
+        is_referral_role: !!value.is_referral_role,
+        permission_codes: [],
+      })
+      .subscribe((role) => {
+        this.createRoleForm.reset({ code: '', name: '', description: '', is_doctor_role: false, is_referral_role: false });
+        this.isCreateRoleModalOpen = false;
+        this.notificationService.success(`Role ${role.code} created successfully.`);
+        this.reload();
+        this.loadRole(role.code);
+      });
+  }
+
+  openCreateRoleModal(): void {
+    this.isCreateRoleModalOpen = true;
+  }
+
+  closeCreateRoleModal(): void {
+    this.isCreateRoleModalOpen = false;
+    this.createRoleForm.reset({ code: '', name: '', description: '', is_doctor_role: false, is_referral_role: false });
+  }
+
   save(): void {
     if (!this.selectedRoleCode) {
       return;
@@ -61,5 +174,30 @@ export class RoleManagementComponent {
       this.reload();
       this.notificationService.success(`Permissions updated for ${this.selectedRoleCode}.`);
     });
+  }
+
+  private buildPermissionGroups(permissions: Permission[]): PermissionGroup[] {
+    const groups = new Map<string, Permission[]>();
+    for (const permission of permissions) {
+      const modulePermissions = groups.get(permission.module) ?? [];
+      modulePermissions.push(permission);
+      groups.set(permission.module, modulePermissions);
+    }
+
+    return Array.from(groups.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([module, modulePermissions]) => ({
+        module,
+        label: this.formatModuleLabel(module),
+        permissions: modulePermissions,
+      }));
+  }
+
+  private formatModuleLabel(module: string): string {
+    return module
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 }

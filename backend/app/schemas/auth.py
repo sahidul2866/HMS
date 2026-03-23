@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -30,3 +30,15 @@ class RefreshRequest(BaseModel):
 class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
+
+class PatientRegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=80)
+    email: str = Field(min_length=5, max_length=255)
+    full_name: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=8, max_length=128)
+    phone: str | None = None
+    gender: str | None = None
+    date_of_birth: date | None = None
+    address: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None

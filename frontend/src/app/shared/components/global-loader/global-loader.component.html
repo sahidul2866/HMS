@@ -1,8 +1,17 @@
 @if (loadingService.isLoading() > 0) {
   <div class="global-loader-backdrop">
     <div class="global-loader-card">
-      <span class="global-loader-spinner"></span>
-      <span>Working with server...</span>
+      <div class="loader-container" aria-hidden="true">
+        <div class="loader">
+          <div class="face"><div class="circle"></div></div>
+          <div class="face"><div class="circle"></div></div>
+        </div>
+        <div class="timer-text">{{ elapsedSeconds() }}</div>
+      </div>
+      <div class="global-loader-copy">
+        <strong>Syncing with server</strong>
+        <span>Please wait while your request is processed.</span>
+      </div>
     </div>
   </div>
 }

@@ -16,7 +16,10 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
           message: error.error?.error?.message ?? error.message,
           details: error.error?.error?.details ?? null,
         };
-        notificationService.error(normalized.message);
+        const isSilentUnauthorizedBootstrap = request.url.endsWith('/auth/me') && normalized.status === 401;
+        if (!isSilentUnauthorizedBootstrap) {
+          notificationService.error(normalized.message);
+        }
         return throwError(() => normalized);
       }
       return throwError(() => error);

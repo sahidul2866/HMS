@@ -1,15 +1,41 @@
 @if (!sessionService.snapshot.initialized) {
   <div class="loading-screen">Loading session...</div>
 } @else {
-  <div class="shell" [class.collapsed-shell]="sidebarCollapsed">
-    <app-sidebar [(collapsed)]="sidebarCollapsed"></app-sidebar>
+  <div class="shell" [class.collapsed-shell]="sidebarCollapsed && !isMobileViewport" [class.mobile-shell]="isMobileViewport">
+    @if (isMobileViewport && mobileSidebarOpen) {
+      <button class="sidebar-overlay" type="button" (click)="closeMobileSidebar()" aria-label="Close navigation"></button>
+    }
+    <app-sidebar
+      [(collapsed)]="sidebarCollapsed"
+      [(mobileOpen)]="mobileSidebarOpen"
+      [mobileMode]="isMobileViewport"
+    ></app-sidebar>
     <main class="content">
       <header class="topbar">
-        <div>
+        <div class="topbar-leading">
+          @if (isMobileViewport) {
+            <button class="menu-btn" type="button" (click)="toggleMobileSidebar()" aria-label="Open navigation">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+          }
+        <div class="topbar-user">
           <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
           <div class="muted">{{ sessionService.snapshot.user?.email }}</div>
         </div>
-        <button class="secondary-btn" type="button" (click)="logout()">Logout</button>
+        </div>
+        <div class="topbar-actions">
+          <label class="theme-picker">
+            <span>Theme</span>
+            <select [value]="themeService.activeTheme()" (change)="themeService.setTheme($any($event.target).value)">
+              @for (theme of themeService.themeOptions; track theme.value) {
+                <option [value]="theme.value">{{ theme.label }}</option>
+              }
+            </select>
+          </label>
+          <button class="secondary-btn" type="button" (click)="logout()">Logout</button>
+        </div>
       </header>
 
       <app-tab-strip></app-tab-strip>

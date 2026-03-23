@@ -43,6 +43,7 @@ class BillingInvoice(Base, BaseModelMixin):
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    internal_referral_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     referred_doctor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("referred_doctors.id"))
     referred_doctor_name: Mapped[str | None] = mapped_column(String(150))
     sub_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -59,6 +60,7 @@ class BillingInvoice(Base, BaseModelMixin):
 
     branch = relationship("Branch")
     patient = relationship("Patient")
+    internal_referral_user = relationship("User", foreign_keys=[internal_referral_user_id])
     referred_doctor = relationship("ReferredDoctor", back_populates="invoices")
     billed_by = relationship("User", foreign_keys=[billed_by_user_id], back_populates="billed_invoices")
     voided_by = relationship("User", foreign_keys=[voided_by_user_id], back_populates="voided_invoices")

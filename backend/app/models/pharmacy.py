@@ -13,6 +13,8 @@ class PharmacyDispense(Base, BaseModelMixin):
 
     patient_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"))
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    source_visit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visits.id"))
+    source_visit_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visit_orders.id"))
     prescription_ref: Mapped[str | None] = mapped_column(String(80))
     medicine_name: Mapped[str] = mapped_column(String(150), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -23,5 +25,6 @@ class PharmacyDispense(Base, BaseModelMixin):
 
     patient = relationship("Patient")
     branch = relationship("Branch")
+    source_visit = relationship("OPDVisit")
+    source_visit_order = relationship("OPDVisitOrder")
     dispensed_by = relationship("User")
-

@@ -11,6 +11,8 @@ export interface Role {
   code: string;
   name: string;
   description?: string;
+  is_doctor_role?: boolean;
+  is_referral_role?: boolean;
   permissions: Permission[];
 }
 
@@ -21,6 +23,7 @@ export interface User {
   full_name: string;
   branch_id?: string | null;
   department_id?: string | null;
+  patient_id?: string | null;
   is_active: boolean;
   roles: Role[];
   direct_permissions: Permission[];
@@ -52,4 +55,3 @@ export interface SessionState {
   authenticated: boolean;
   user: User | null;
 }
-

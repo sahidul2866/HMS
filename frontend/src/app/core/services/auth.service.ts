@@ -6,8 +6,10 @@ import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay,
 import { ApiError, LoginResponse, TokenPair, User } from '../models/auth.models';
 import { runtimeConfig } from '../config/runtime-config';
 import { SessionService } from './session.service';
+import { TabService } from './tab.service';
 import { TokenStorageService } from './token-storage.service';
 import { CurrentUserService } from './current-user.service';
+import { UiStateService } from './ui-state.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -17,6 +19,8 @@ export class AuthService {
   private readonly sessionService = inject(SessionService);
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly currentUserService = inject(CurrentUserService);
+  private readonly tabService = inject(TabService);
+  private readonly uiStateService = inject(UiStateService);
   private refreshInFlight$: Observable<LoginResponse> | null = null;
 
   async bootstrapSession(): Promise<void> {
@@ -25,6 +29,7 @@ export class AuthService {
 
     if (!accessToken && !refreshToken) {
       this.sessionService.setAnonymous();
+      await this.redirectToLoginIfNeeded();
       return;
     }
 
@@ -34,6 +39,7 @@ export class AuthService {
     } catch {
       if (!refreshToken) {
         this.clearSession();
+        await this.redirectToLoginIfNeeded();
         return;
       }
 
@@ -43,6 +49,7 @@ export class AuthService {
         this.sessionService.initialize(result.user);
       } catch {
         this.clearSession();
+        await this.redirectToLoginIfNeeded();
       }
     }
   }
@@ -50,6 +57,33 @@ export class AuthService {
   login(username_or_email: string, password: string): Observable<User> {
     return this.http
       .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/login`, { username_or_email, password }, {
+        headers: {
+          [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
+        },
+      })
+      .pipe(
+        tap((response) => {
+          this.persistTokens(response.tokens);
+          this.sessionService.setUser(response.user);
+        }),
+        map((response) => response.user)
+      );
+  }
+
+  registerPatient(payload: {
+    username: string;
+    email: string;
+    full_name: string;
+    password: string;
+    phone?: string | null;
+    gender?: string | null;
+    date_of_birth?: string | null;
+    address?: string | null;
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
+  }): Observable<User> {
+    return this.http
+      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/patient-register`, payload, {
         headers: {
           [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
         },
@@ -152,12 +186,25 @@ export class AuthService {
   clearSession(navigate = false): void {
     this.tokenStorage.clear();
     this.sessionService.clear();
+    this.tabService.clear();
+    this.uiStateService.clearAll();
     if (navigate) {
       void this.router.navigate(['/auth/login']);
     }
   }
 
+  private async redirectToLoginIfNeeded(): Promise<void> {
+    if (this.router.url.startsWith('/auth/login')) {
+      return;
+    }
+    await this.router.navigate(['/auth/login']);
+  }
+
   private persistTokens(tokens: TokenPair): void {
     this.tokenStorage.setTokens(tokens.access_token, tokens.refresh_token);
+  }
+
+  getLandingRoute(user: User): string {
+    return user.effective_permissions.includes('patient.portal.view') ? '/portal' : '/dashboard';
   }
 }

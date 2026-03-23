@@ -18,4 +18,3 @@ class PharmacyRepository:
         self.db.add(dispense)
         self.db.flush()
         return dispense
-

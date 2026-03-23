@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.admin.service import AdminService
-from app.schemas.role import RoleRead, RoleUpdatePermissions
+from app.schemas.role import RoleCreate, RoleRead, RoleUpdatePermissions
 from app.schemas.user import UserCreate, UserRead
 
 router = APIRouter(prefix="/admin", tags=["Administration"])
@@ -32,6 +32,12 @@ def list_roles(db: Session = Depends(get_db)) -> list[RoleRead]:
     return [RoleRead.model_validate(item, from_attributes=True) for item in AdminService(db).list_roles()]
 
 
+@router.post("/roles", response_model=RoleRead, dependencies=[Depends(require_permissions("settings.role.manage"))])
+def create_role(payload: RoleCreate, db: Session = Depends(get_db)) -> RoleRead:
+    role = AdminService(db).create_role(payload)
+    return RoleRead.model_validate(role, from_attributes=True)
+
+
 @router.put("/roles/{code}/permissions", response_model=RoleRead, dependencies=[Depends(require_permissions("settings.role.manage"))])
 def update_role_permissions(
     code: str,
@@ -42,4 +48,3 @@ def update_role_permissions(
 ) -> RoleRead:
     role = AdminService(db).update_role_permissions(code, payload, user.id, context)
     return RoleRead.model_validate(role, from_attributes=True)
-

@@ -1,13 +1,22 @@
-<aside class="sidebar" [class.collapsed]="collapsed">
+<aside class="sidebar" [class.collapsed]="collapsed" [class.mobile-open]="mobileOpen" [class.mobile-mode]="mobileMode">
   <div class="brand-row">
     <div class="brand">
-      <h2>{{ collapsed ? 'H' : 'HMS' }}</h2>
-      @if (!collapsed) {
+      <h2>{{ collapsed && !mobileMode ? 'H' : 'HMS' }}</h2>
+      @if (!collapsed || mobileMode) {
         <p>Hospital + Diagnostic Center</p>
       }
     </div>
-    <button class="collapse-btn" type="button" (click)="toggleSidebar()">
-      {{ collapsed ? '>' : '<' }}
+    <button class="collapse-btn" type="button" (click)="toggleSidebar()" [attr.aria-label]="mobileMode ? 'Close navigation' : (collapsed ? 'Expand navigation' : 'Collapse navigation')">
+      @if (mobileMode) {
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M6 6l12 12"></path>
+          <path d="M18 6L6 18"></path>
+        </svg>
+      } @else {
+        <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 6l-6 6 6 6"></path>
+        </svg>
+      }
     </button>
   </div>
 
@@ -16,22 +25,51 @@
       @if (item.children?.length) {
         <div class="nav-group" [class.active-group]="isGroupActive(item)">
           <button class="group-toggle" type="button" (click)="toggleGroup(item.label)">
-            <span>{{ collapsed ? item.label.charAt(0) : item.label }}</span>
-            @if (!collapsed) {
-              <span>{{ isExpanded(item.label) ? '-' : '+' }}</span>
+            <span class="nav-label">
+              <span class="nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path [attr.d]="getIconPath(item.icon)"></path>
+                </svg>
+              </span>
+              <span class="nav-text">{{ collapsed && !mobileMode ? item.label.charAt(0) : item.label }}</span>
+            </span>
+            @if (!collapsed || mobileMode) {
+              <span class="group-indicator" [class.expanded]="isExpanded(item.label)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6"></path>
+                </svg>
+              </span>
             }
           </button>
 
-          @if (!collapsed && isExpanded(item.label)) {
+          @if ((!collapsed || mobileMode) && isExpanded(item.label)) {
             <div class="group-links">
               @for (child of item.children; track child.route) {
-                <a [routerLink]="child.route" routerLinkActive="active">{{ child.label }}</a>
+                <a [routerLink]="child.route" routerLinkActive="active" (click)="closeMobileDrawer()">
+                  <span class="nav-label">
+                    <span class="nav-icon nav-icon--child" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path [attr.d]="getIconPath(child.icon)"></path>
+                      </svg>
+                    </span>
+                    <span class="nav-text">{{ child.label }}</span>
+                  </span>
+                </a>
               }
             </div>
           }
         </div>
       } @else {
-        <a [routerLink]="item.route" routerLinkActive="active">{{ collapsed ? item.label.charAt(0) : item.label }}</a>
+        <a [routerLink]="item.route" routerLinkActive="active" (click)="closeMobileDrawer()">
+          <span class="nav-label">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path [attr.d]="getIconPath(item.icon)"></path>
+              </svg>
+            </span>
+            <span class="nav-text">{{ collapsed && !mobileMode ? item.label.charAt(0) : item.label }}</span>
+          </span>
+        </a>
       }
     }
   </nav>

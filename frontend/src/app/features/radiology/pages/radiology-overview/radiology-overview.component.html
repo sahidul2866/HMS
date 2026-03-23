@@ -1,39 +1,67 @@
-<section class="page-card">
-  <h1 class="page-title">Radiology Module</h1>
-  <p class="page-subtitle">Protected by `radiology.view`. This module covers imaging scheduling, modality coordination, and report completion.</p>
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <h1 class="page-title">Radiology Worklist</h1>
+    <p class="page-subtitle">Radiology now consumes OPD investigation orders directly so imaging requests and reports stay attached to the originating visit.</p>
 
-  <div class="grid-2">
-    @for (item of imagingQueue; track item.label) {
-      <div class="page-card">
-        <div class="muted">{{ item.label }}</div>
-        <h3>{{ item.value }}</h3>
-      </div>
-    }
-  </div>
-</section>
+    <div class="grid-2">
+      @for (item of summary; track item.label) {
+        <div class="page-card">
+          <div class="muted">{{ item.label }}</div>
+          <h3>{{ item.value }}</h3>
+        </div>
+      }
+    </div>
+  </section>
 
-<section class="page-card">
-  <h2 class="page-title">Workflow Coverage</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Function</th>
-        <th>Scope</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Scheduling</td>
-        <td>Manage slot allocation for X-ray, ultrasound, CT, and MRI studies.</td>
-      </tr>
-      <tr>
-        <td>Execution</td>
-        <td>Coordinate technicians, prep instructions, and modality room usage.</td>
-      </tr>
-      <tr>
-        <td>Reporting</td>
-        <td>Track draft, review, and consultant sign-off states for studies.</td>
-      </tr>
-    </tbody>
-  </table>
+  <section class="page-card">
+    <h2 class="page-title">Imaging Queue</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Visit</th>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Study</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of worklist; track item.order_id) {
+          <tr>
+            <td>{{ item.visit_number }}</td>
+            <td>{{ item.patient_name }}</td>
+            <td>{{ item.consulting_doctor_name }}</td>
+            <td>{{ item.item_name }}</td>
+            <td><span class="pill">{{ item.status }}</span></td>
+            <td><button class="secondary-btn" type="button" (click)="selectItem(item)">Open</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedItem) {
+    <section class="page-card">
+      <h2 class="page-title">Report Entry For {{ selectedItem.visit_number }}</h2>
+      <div class="page-subtitle">{{ selectedItem.patient_name }} · {{ selectedItem.item_name }} · {{ selectedItem.instructions || 'No instructions' }}</div>
+      <form class="form-grid" [formGroup]="resultForm" (ngSubmit)="submitResult()">
+        <label class="field">
+          <span>Status</span>
+          <select formControlName="status">
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Report</span>
+          <textarea rows="5" formControlName="result_text"></textarea>
+        </label>
+        @if (sessionService.hasPermission('radiology.manage')) {
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Save Report</button></div>
+        }
+      </form>
+    </section>
+  }
 </section>

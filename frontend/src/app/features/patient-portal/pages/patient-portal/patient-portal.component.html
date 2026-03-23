@@ -1,0 +1,120 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Patient Portal</div>
+        <h1 class="page-title">My Care Dashboard</h1>
+        <div class="page-subtitle">Book appointments, follow your lab and radiology reports, and review billing and pharmacy activity from one patient-owned workspace.</div>
+      </div>
+    </div>
+
+    @if (history) {
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Appointments</div><div class="value">{{ appointments.length }}</div></div>
+        <div class="hero-stat"><div class="label">Lab Reports</div><div class="value">{{ completedLabReports.length }}</div></div>
+        <div class="hero-stat"><div class="label">Radiology Reports</div><div class="value">{{ completedRadiologyReports.length }}</div></div>
+        <div class="hero-stat"><div class="label">Invoices</div><div class="value">{{ history.billing_invoices.length }}</div></div>
+      </div>
+    }
+  </section>
+
+  <section class="page-card">
+    <h2 class="page-title">Book Appointment</h2>
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Doctor</span>
+        <select formControlName="doctor_user_id">
+          <option value="">Select doctor</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        <span>Date & Time</span>
+        <input type="datetime-local" formControlName="appointment_at" />
+      </label>
+      <label class="field" style="grid-column:1/-1;">
+        <span>Reason</span>
+        <textarea rows="3" formControlName="reason"></textarea>
+      </label>
+      <label class="field" style="grid-column:1/-1;">
+        <span>Note</span>
+        <textarea rows="2" formControlName="note"></textarea>
+      </label>
+      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Book Appointment</button></div>
+    </form>
+  </section>
+
+  <section class="page-card">
+    <h2 class="page-title">My Appointments</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Doctor</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (appointment of appointments; track appointment.id) {
+          <tr>
+            <td>{{ appointment.appointment_number }}</td>
+            <td>{{ appointment.doctor_name }}</td>
+            <td>{{ appointment.appointment_at | date:'medium' }}</td>
+            <td>{{ appointment.status }}</td>
+            <td>{{ appointment.reason || '-' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (history) {
+    <section class="page-card">
+      <h2 class="page-title">Lab Reports</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Test</th>
+            <th>Status</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of completedLabReports; track item.id) {
+            <tr>
+              <td>{{ item.item_name }}</td>
+              <td>{{ item.status }}</td>
+              <td>{{ item.result_text || '-' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card">
+      <h2 class="page-title">Radiology Reports</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Study</th>
+            <th>Status</th>
+            <th>Report</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of completedRadiologyReports; track item.id) {
+            <tr>
+              <td>{{ item.item_name }}</td>
+              <td>{{ item.status }}</td>
+              <td>{{ item.result_text || '-' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</div>

@@ -14,6 +14,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     branch_id: UUID | None = None
     department_id: UUID | None = None
+    patient_id: UUID | None = None
     role_codes: list[str] = []
     direct_permission_codes: list[str] = []
     is_active: bool = True
@@ -26,6 +27,7 @@ class UserRead(BaseModel):
     full_name: str
     branch_id: UUID | None = None
     department_id: UUID | None = None
+    patient_id: UUID | None = None
     is_active: bool
     last_login_at: datetime | None = None
     roles: list[RoleRead] = []

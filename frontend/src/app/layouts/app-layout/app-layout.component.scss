@@ -1,7 +1,10 @@
 .shell {
   display: grid;
   grid-template-columns: 280px 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  max-width: var(--shell-max-width);
+  transition: grid-template-columns 0.3s ease;
 }
 
 .shell.collapsed-shell {
@@ -11,6 +14,11 @@
 .content {
   padding: 1rem 1.25rem;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 86%, white 14%) 0%, var(--bg) 100%);
+  position: relative;
+  z-index: 1;
 }
 
 .topbar {
@@ -18,11 +26,79 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 92%, white 8%);
+  box-shadow: var(--shadow);
 }
 
 .page-body {
   display: grid;
   gap: 1rem;
+}
+
+.topbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.topbar-user {
+  min-width: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.theme-picker select {
+  min-width: 130px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  background: var(--surface);
+}
+
+.menu-btn {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.28rem;
+  padding: 0.7rem;
+  flex: 0 0 auto;
+}
+
+.menu-btn span {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--text);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 20;
 }
 
 :host {
@@ -32,5 +108,28 @@
 @media (max-width: 960px) {
   .shell {
     grid-template-columns: 1fr;
+  }
+
+  .content {
+    padding: 0.85rem;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  .topbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .theme-picker {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

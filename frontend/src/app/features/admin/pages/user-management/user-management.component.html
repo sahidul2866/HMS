@@ -1,55 +1,241 @@
-<section class="page-card">
-  <h1 class="page-title">User Management</h1>
-  <div class="page-subtitle">Protected by `settings.user.manage`. User creation is audit logged on the backend.</div>
-
-  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-    <label class="field">
-      <span>Username</span>
-      <input type="text" formControlName="username" />
-    </label>
-    <label class="field">
-      <span>Email</span>
-      <input type="email" formControlName="email" />
-    </label>
-    <label class="field">
-      <span>Full Name</span>
-      <input type="text" formControlName="full_name" />
-    </label>
-    <label class="field">
-      <span>Password</span>
-      <input type="text" formControlName="password" />
-    </label>
-    <label class="field">
-      <span>Role</span>
-      <select formControlName="role_code">
-        @for (role of roles; track role.id) {
-          <option [value]="role.code">{{ role.name }} ({{ role.code }})</option>
-        }
-      </select>
-    </label>
-    <div style="grid-column:1/-1;">
-      <button class="primary-btn" type="submit">Create User</button>
+<section class="user-workspace">
+  <section class="page-card user-hero">
+    <div>
+      <p class="user-kicker">Admin Workspace</p>
+      <h1>User Management</h1>
+      <p>Manage operational staff, doctor-linked accounts, and patient-portal users from one place. New user creation is permission-protected and audit logged.</p>
     </div>
-  </form>
 
-  <table class="table" style="margin-top:1rem;">
-    <thead>
-      <tr>
-        <th>Username</th>
-        <th>Email</th>
-        <th>Branch</th>
-        <th>Roles</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (user of users; track user.id) {
-        <tr>
-          <td>{{ user.username }}</td>
-          <td>{{ user.email }}</td>
-          <td>{{ user.branch_id || '-' }}</td>
-          <td>{{ getRoleCodes(user) }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
+    <div class="user-hero__stats">
+      <article class="user-stat">
+        <strong>{{ totalUsers }}</strong>
+        <span>Total Users</span>
+      </article>
+      <article class="user-stat">
+        <strong>{{ activeUsers }}</strong>
+        <span>Active Accounts</span>
+      </article>
+      <article class="user-stat">
+        <strong>{{ doctorUsers }}</strong>
+        <span>Doctor Users</span>
+      </article>
+      <article class="user-stat">
+        <strong>{{ portalUsers }}</strong>
+        <span>Portal Users</span>
+      </article>
+      <article class="user-stat">
+        <strong>{{ referralDoctorUsers }}</strong>
+        <span>Referral Doctors</span>
+      </article>
+    </div>
+  </section>
+
+  <section class="user-shell">
+    <section class="page-card user-list-card">
+      <div class="user-table__header">
+        <div>
+          <p class="user-kicker user-kicker--accent">Directory</p>
+          <h3>Registered Users</h3>
+          <p class="page-subtitle">Roles, portal linkage, and operational status are visible at a glance.</p>
+        </div>
+        <button class="primary-btn" type="button" (click)="openCreateModal()">Add User</button>
+      </div>
+
+      <form class="user-filters" [formGroup]="filterForm">
+        <label class="filter-field filter-field--search">
+          <span>Search</span>
+          <input type="text" formControlName="query" placeholder="Search name, username, or email" />
+        </label>
+
+        <label class="filter-field">
+          <span>Role</span>
+          <select formControlName="role_code">
+            <option value="ALL">All roles</option>
+            @for (role of roles; track role.id) {
+              <option [value]="role.code">{{ role.name }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="filter-field">
+          <span>Account Type</span>
+          <select formControlName="account_type">
+            <option value="ALL">All accounts</option>
+            <option value="STAFF">Staff accounts</option>
+            <option value="PORTAL">Portal accounts</option>
+            <option value="DOCTOR">Doctor users</option>
+            <option value="REFERRAL">Referral doctors</option>
+          </select>
+        </label>
+
+        <div class="user-filters__actions">
+          <button class="secondary-btn" type="button" (click)="resetFilters()">Reset</button>
+        </div>
+      </form>
+
+      <div class="user-table-wrap">
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role Profile</th>
+              <th>Branch / Dept</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of filteredUsers; track user.id) {
+              <tr class="user-row">
+                <td>
+                  <div class="user-identity">
+                    <span class="user-avatar">{{ getInitials(user.full_name) }}</span>
+                    <div>
+                      <strong>{{ user.full_name }}</strong>
+                      <span class="muted-line">{{ user.username }}</span>
+                      <span class="muted-line">{{ user.email }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="role-pill-group">
+                    @for (role of user.roles; track role.id) {
+                      <span class="role-pill">{{ role.name }}</span>
+                    }
+                  </div>
+                  <span class="muted-line">{{ getRoleSummary(user) }}</span>
+                </td>
+                <td>
+                  <strong>{{ user.branch_id || 'Unassigned Branch' }}</strong>
+                  <span class="muted-line">{{ user.department_id || 'No department linked' }}</span>
+                </td>
+                <td>
+                  <div class="status-pill-group">
+                    <span class="status-pill" [class.active]="user.is_active">{{ user.is_active ? 'Active' : 'Inactive' }}</span>
+                    <span class="status-pill" [class.portal]="!!user.patient_id">{{ user.patient_id ? 'Portal Linked' : 'Staff Only' }}</span>
+                    <span class="status-pill" [class.doctor]="isDoctorUser(user)" [class.staff]="!isDoctorUser(user)">
+                      {{ isDoctorUser(user) ? 'Doctor' : 'General User' }}
+                    </span>
+                    @if (isReferralDoctorUser(user)) {
+                      <span class="status-pill referral">Billing Referral</span>
+                    }
+                  </div>
+                  <span class="muted-line">{{ getPatientLabel(user.patient_id) }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        @if (!filteredUsers.length) {
+          <div class="user-empty-state">
+            <strong>No users match the current filters.</strong>
+            <p>Try clearing the search or switching the role/account type filter to bring users back into view.</p>
+          </div>
+        }
+      </div>
+    </section>
+
+    <aside class="page-card user-side-card">
+      <div class="user-section-title">
+        <div>
+          <p class="user-kicker user-kicker--accent">At A Glance</p>
+          <h3>Account Notes</h3>
+        </div>
+      </div>
+
+      <div class="insight-list">
+        <article class="insight-item">
+          <strong>Referral Doctor Visibility</strong>
+          <p>Billing now lists users whose assigned role is configured as both doctor and referral-enabled, including the new referral-doctor role.</p>
+        </article>
+
+        <article class="insight-item">
+          <strong>Operational Mix</strong>
+          <p>{{ doctorUsers }} doctor-linked users and {{ portalUsers }} patient-portal accounts are currently active in the same shared user directory.</p>
+        </article>
+
+        <article class="insight-item">
+          <strong>Portal-Ready Patients</strong>
+          <p>Patient-linked users can log into the portal, book appointments, and review their lab, radiology, and billing history.</p>
+        </article>
+
+        <article class="insight-item">
+          <strong>Safer User Creation</strong>
+          <p>New accounts are created from a focused modal so the table stays readable while data entry remains fast.</p>
+        </article>
+      </div>
+    </aside>
+  </section>
+
+  @if (createModalOpen) {
+    <div class="modal-backdrop" (click)="closeCreateModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">New User</p>
+            <h3>Create Account</h3>
+            <p class="page-subtitle">Create operational, doctor, referral-doctor, or patient-portal accounts from the same flow.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeCreateModal()">×</button>
+        </div>
+
+        <form class="modal-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field">
+            <span>Username</span>
+            <input type="text" formControlName="username" />
+          </label>
+
+          <label class="field">
+            <span>Email</span>
+            <input type="email" formControlName="email" />
+          </label>
+
+          <label class="field">
+            <span>Full Name</span>
+            <input type="text" formControlName="full_name" />
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input type="text" formControlName="password" />
+          </label>
+
+          <label class="field">
+            <span>Primary Role</span>
+            <select formControlName="role_code">
+              @for (role of roles; track role.id) {
+                <option [value]="role.code">{{ role.name }} ({{ role.code }})</option>
+              }
+            </select>
+          </label>
+
+          <label class="field field--wide">
+            <span>Linked Patient</span>
+            <select formControlName="patient_id" [disabled]="!isPatientRoleSelected()">
+              <option value="">No patient link</option>
+              @for (patient of patients; track patient.id) {
+                <option [value]="patient.id">{{ patient.patient_number }} · {{ patient.first_name }} {{ patient.last_name }}</option>
+              }
+            </select>
+            <small class="field-hint">
+              @if (isPatientRoleSelected()) {
+                Patient-role users can be linked to a registered patient profile for portal access.
+              } @else {
+                Select the Patient role to enable patient-profile linking.
+              }
+            </small>
+          </label>
+
+          <div class="field field--wide">
+            <small class="field-hint">Referral doctors used by billing should be created with the `REFERRABLE_DOCTOR` role or any role flagged as referral-enabled.</small>
+          </div>
+
+          <div class="modal-actions field--wide">
+            <button class="secondary-btn" type="button" (click)="closeCreateModal()">Cancel</button>
+            <button class="primary-btn" type="submit" [disabled]="creating">{{ creating ? 'Creating...' : 'Create User' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
 </section>

@@ -1,0 +1,67 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Appointment Desk</div>
+        <h1 class="page-title">Appointments</h1>
+        <div class="page-subtitle">Manage doctor appointments and convert arrivals into OPD visits without re-entering patient context.</div>
+      </div>
+    </div>
+    <div class="hero-summary">
+      <div class="hero-stat"><div class="label">Today</div><div class="value">{{ todayCount }}</div></div>
+      <div class="hero-stat"><div class="label">Scheduled</div><div class="value">{{ scheduledCount }}</div></div>
+      <div class="hero-stat"><div class="label">Confirmed</div><div class="value">{{ confirmedCount }}</div></div>
+      <div class="hero-stat"><div class="label">Checked In</div><div class="value">{{ checkedInCount }}</div></div>
+    </div>
+  </section>
+
+  <section class="page-card">
+    <h2 class="page-title">Appointment Queue</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Time</th>
+          <th>Status</th>
+          <th>Reason</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (appointment of appointments; track appointment.id) {
+          <tr>
+            <td>{{ appointment.appointment_number }}</td>
+            <td>{{ appointment.patient_name }}</td>
+            <td>{{ appointment.doctor_name }}</td>
+            <td>{{ appointment.appointment_at | date:'medium' }}</td>
+            <td><span class="pill">{{ appointment.status }}</span></td>
+            <td>{{ appointment.reason || '-' }}</td>
+            <td>
+              <button class="secondary-btn" type="button" (click)="selectAppointment(appointment)">Open</button>
+              @if (sessionService.hasPermission('appointment.manage')) {
+                <button class="secondary-btn" type="button" (click)="updateStatus(appointment, 'confirmed')">Confirm</button>
+                <button class="danger-btn" type="button" (click)="updateStatus(appointment, 'cancelled')">Cancel</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedAppointment && sessionService.hasPermission('appointment.manage')) {
+    <section class="page-card">
+      <h2 class="page-title">Check In {{ selectedAppointment.appointment_number }}</h2>
+      <div class="page-subtitle">{{ selectedAppointment.patient_name }} with {{ selectedAppointment.doctor_name }}</div>
+      <form class="form-grid" [formGroup]="checkInForm" (ngSubmit)="checkIn()">
+        <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
+        <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
+        <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="3" formControlName="chief_complaint"></textarea></label>
+        <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+        <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Check In To OPD</button></div>
+      </form>
+    </section>
+  }
+</div>

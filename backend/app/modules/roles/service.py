@@ -17,7 +17,13 @@ class RolesService:
         return self.repository.list_roles()
 
     def create_role(self, payload: RoleCreate) -> Role:
-        role = Role(code=payload.code, name=payload.name, description=payload.description)
+        role = Role(
+            code=payload.code,
+            name=payload.name,
+            description=payload.description,
+            is_doctor_role=payload.is_doctor_role,
+            is_referral_role=payload.is_referral_role,
+        )
         role.permissions = self.repository.get_permissions(payload.permission_codes)
         self.repository.create_role(role)
         self.db.commit()
@@ -41,4 +47,3 @@ class RolesService:
         self.db.commit()
         self.db.refresh(role)
         return role
-

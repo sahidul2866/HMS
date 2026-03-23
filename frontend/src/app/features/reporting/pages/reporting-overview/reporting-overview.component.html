@@ -65,6 +65,72 @@
     </section>
   }
 
+  @if (clinicalSummary) {
+    <section class="soft-panel data-panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Clinical Operations</h2>
+          <div class="section-copy">A live operations view over outpatient load, inpatient occupancy, investigations, and medication fulfillment.</div>
+        </div>
+        <div class="hero-kicker">Cross-Module Activity</div>
+      </div>
+
+      <section class="metric-grid">
+        <div class="metric-card">
+          <div class="label">OPD Visits</div>
+          <div class="value">{{ clinicalSummary.opd_visits }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Active IPD</div>
+          <div class="value">{{ clinicalSummary.ipd_active_admissions }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Pending Lab</div>
+          <div class="value">{{ clinicalSummary.pending_laboratory }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Pending Radiology</div>
+          <div class="value">{{ clinicalSummary.pending_radiology }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Pending Prescriptions</div>
+          <div class="value">{{ clinicalSummary.pending_prescriptions }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Pharmacy Dispenses</div>
+          <div class="value">{{ clinicalSummary.pharmacy_dispenses }}</div>
+        </div>
+      </section>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Workflow</th>
+            <th>Pending</th>
+            <th>Completed / Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Laboratory</td>
+            <td>{{ clinicalSummary.pending_laboratory }}</td>
+            <td>{{ clinicalSummary.completed_laboratory }}</td>
+          </tr>
+          <tr>
+            <td>Radiology</td>
+            <td>{{ clinicalSummary.pending_radiology }}</td>
+            <td>{{ clinicalSummary.completed_radiology }}</td>
+          </tr>
+          <tr>
+            <td>IPD</td>
+            <td>{{ clinicalSummary.ipd_total_admissions - clinicalSummary.ipd_active_admissions }}</td>
+            <td>{{ clinicalSummary.ipd_active_admissions }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  }
+
   <section class="soft-panel data-panel">
     <div class="panel-head">
       <div>

@@ -17,6 +17,9 @@ class UsersService:
     def list_users(self) -> list[User]:
         return self.repository.list_users()
 
+    def list_doctors(self, *, referral_only: bool = False) -> list[User]:
+        return self.repository.list_doctors(referral_only=referral_only)
+
     def create_user(self, payload: UserCreate, actor_id, context: dict[str, str | None]) -> User:
         existing = [user for user in self.repository.list_users() if user.username == payload.username or user.email == payload.email]
         if existing:
@@ -31,6 +34,7 @@ class UsersService:
             hashed_password=get_password_hash(payload.password),
             branch_id=payload.branch_id,
             department_id=payload.department_id,
+            patient_id=payload.patient_id,
             is_active=payload.is_active,
             created_by=actor_id,
             updated_by=actor_id,
@@ -50,4 +54,3 @@ class UsersService:
         self.db.commit()
         self.db.refresh(user)
         return user
-

@@ -1,0 +1,194 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">OPD Module</div>
+        <h1 class="page-title">Outpatient Registration & Queue</h1>
+        <div class="page-subtitle">Register OPD visits, manage the consultation queue, and keep same-day visit flow visible.</div>
+      </div>
+      <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+    </div>
+    @if (summary) {
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Today Visits</div><div class="value">{{ summary.total_visits }}</div></div>
+        <div class="hero-stat"><div class="label">Waiting</div><div class="value">{{ summary.waiting_visits }}</div></div>
+        <div class="hero-stat"><div class="label">In Consultation</div><div class="value">{{ summary.in_consultation_visits }}</div></div>
+        <div class="hero-stat"><div class="label">Completed</div><div class="value">{{ summary.completed_visits }}</div></div>
+      </div>
+    }
+  </div>
+
+  <section class="page-card">
+    <h2 class="section-title">Register Visit</h2>
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Patient</span>
+        <select formControlName="patient_id">
+          <option value="">Select patient</option>
+          @for (patient of patients; track patient.id) {
+            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Visit Date</span><input type="date" formControlName="visit_date" /></label>
+      <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
+      <label class="field">
+        <span>Registered Doctor</span>
+        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
+          <option value="">Select from doctor directory</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Doctor</span><input type="text" formControlName="consulting_doctor_name" /></label>
+      <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="3" formControlName="chief_complaint"></textarea></label>
+      <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Register OPD Visit</button></div>
+    </form>
+  </section>
+
+  <section class="page-card">
+    <h2 class="section-title">Visit Queue</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Visit No</th>
+          <th>Patient</th>
+          <th>Department</th>
+          <th>Doctor</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (visit of visits; track visit.id) {
+          <tr>
+            <td>{{ visit.visit_number }}</td>
+            <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
+            <td>{{ visit.department_name }}</td>
+            <td>{{ visit.consulting_doctor_name }}</td>
+            <td><span class="pill">{{ visit.status.replace('_', ' ') }}</span></td>
+            <td>
+              <button class="secondary-btn" type="button" (click)="selectVisit(visit)">Orders</button>
+              <button class="secondary-btn" type="button" (click)="setStatus(visit, 'in_consultation')">Start</button>
+              <button class="primary-btn" type="button" (click)="setStatus(visit, 'completed')">Complete</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedVisit) {
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Clinical Orders for {{ selectedVisit.visit_number }}</h2>
+          <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
+        <label class="field">
+          <span>Order Type</span>
+          <select formControlName="order_type" (change)="onOrderTypeChanged()">
+            <option value="prescription">Prescription</option>
+            <option value="investigation">Investigation</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Service Area</span>
+          <select formControlName="service_area">
+            <option value="">Select area when investigation</option>
+            <option value="laboratory">Laboratory</option>
+            <option value="radiology">Radiology</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Item Name</span>
+          <input type="text" formControlName="item_name" />
+        </label>
+        <label class="field">
+          <span>Quantity</span>
+          <input type="number" formControlName="quantity" />
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Instructions</span>
+          <textarea rows="2" formControlName="instructions"></textarea>
+        </label>
+        <div style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">Add Order</button>
+        </div>
+      </form>
+
+      <table class="table" style="margin-top:1rem;">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Item</th>
+            <th>Quantity</th>
+            <th>Status</th>
+            <th>Instructions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of selectedVisit.orders; track order.id) {
+            <tr>
+              <td><span class="pill">{{ order.order_type }}</span></td>
+              <td>{{ order.item_name }}</td>
+              <td>{{ order.quantity }}</td>
+              <td><span class="pill">{{ order.status }}</span></td>
+              <td>{{ order.instructions || order.result_text || '-' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Convert {{ selectedVisit.visit_number }} To IPD</h2>
+          <div class="section-copy">Move the outpatient visit into inpatient care while preserving patient and doctor context.</div>
+        </div>
+      </div>
+
+      @if (selectedVisit.converted_ipd_admission_id) {
+        <div class="pill">Already converted to IPD admission {{ selectedVisit.converted_ipd_admission_id }}</div>
+      } @else {
+        <form class="form-grid" [formGroup]="convertForm" (ngSubmit)="convertToIPD()">
+          <label class="field"><span>Admitted At</span><input type="datetime-local" formControlName="admitted_at" /></label>
+          <label class="field"><span>Admission Type</span><input type="text" formControlName="admission_type" /></label>
+          <label class="field">
+            <span>Available Bed</span>
+            <select formControlName="bed_id" (change)="onConvertBedChanged()">
+              <option value="">Select bed</option>
+              @for (bed of availableBeds; track bed.id) {
+                <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} / {{ bed.bed_type }}</option>
+              }
+            </select>
+          </label>
+          <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
+          <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
+          <label class="field">
+            <span>Attending Doctor</span>
+            <select formControlName="doctor_user_id" (change)="onConvertDoctorChanged()">
+              <option value="">Select from doctor directory</option>
+              @for (doctor of doctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field"><span>Doctor Name</span><input type="text" formControlName="attending_doctor_name" /></label>
+          <label class="field"><span>Daily Charge</span><input type="number" formControlName="daily_charge" /></label>
+          <label class="field"><span>Advance</span><input type="number" formControlName="advance_amount" /></label>
+          <label class="field"><span>Expected Discharge</span><input type="date" formControlName="expected_discharge_date" /></label>
+          <label class="field" style="grid-column:1/-1;"><span>Diagnosis</span><textarea rows="3" formControlName="diagnosis"></textarea></label>
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Convert To IPD</button></div>
+        </form>
+      }
+    </section>
+  }
+</section>

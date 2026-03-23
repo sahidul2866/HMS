@@ -4,11 +4,16 @@ import { Observable } from 'rxjs';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { AdminRole } from '../models/admin.models';
 import { Permission } from '../../../core/models/auth.models';
+import { CreateRolePayload } from '../models/admin.models';
 
 @Injectable({ providedIn: 'root' })
 export class RoleService extends ApiBaseService {
   list(): Observable<AdminRole[]> {
     return this.http.get<AdminRole[]>(this.url('/admin/roles'));
+  }
+
+  create(payload: CreateRolePayload): Observable<AdminRole> {
+    return this.http.post<AdminRole>(this.url('/admin/roles'), payload);
   }
 
   updatePermissions(code: string, permission_codes: string[]): Observable<AdminRole> {

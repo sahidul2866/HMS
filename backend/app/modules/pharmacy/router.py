@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.pharmacy.service import PharmacyService
-from app.schemas.pharmacy import PharmacyDispenseCreate, PharmacyDispenseRead
+from app.schemas.pharmacy import PharmacyDispenseCreate, PharmacyDispenseRead, PharmacyPendingPrescriptionRead
 
 router = APIRouter(prefix="/pharmacy", tags=["Pharmacy"])
 
@@ -13,6 +13,11 @@ router = APIRouter(prefix="/pharmacy", tags=["Pharmacy"])
 @router.get("/dispenses", response_model=list[PharmacyDispenseRead], dependencies=[Depends(require_permissions("pharmacy.view"))])
 def list_dispenses(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[PharmacyDispenseRead]:
     return [PharmacyDispenseRead.model_validate(item, from_attributes=True) for item in PharmacyService(db).list_dispenses(user)]
+
+
+@router.get("/opd-prescriptions", response_model=list[PharmacyPendingPrescriptionRead], dependencies=[Depends(require_permissions("pharmacy.view"))])
+def list_pending_opd_prescriptions(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[PharmacyPendingPrescriptionRead]:
+    return PharmacyService(db).list_pending_prescriptions(user)
 
 
 @router.post("/dispense", response_model=PharmacyDispenseRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
@@ -24,4 +29,3 @@ def dispense(
 ) -> PharmacyDispenseRead:
     dispense_record = PharmacyService(db).dispense(payload, user, context)
     return PharmacyDispenseRead.model_validate(dispense_record, from_attributes=True)
-

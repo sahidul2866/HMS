@@ -16,8 +16,8 @@
   </label>
 
   <button class="primary-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+  <a routerLink="/auth/patient-register">Create patient account</a>
   @if (errorMessage) {
     <div class="error-text">{{ errorMessage }}</div>
   }
 </form>
-

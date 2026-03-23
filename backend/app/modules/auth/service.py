@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
 from fastapi import status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.branch import Branch
 from app.core.exceptions import AppException
 from app.core.security import (
     create_access_token,
@@ -13,10 +15,13 @@ from app.core.security import (
     verify_password,
 )
 from app.models.refresh_token import RefreshToken
+from app.models.patient import Patient
+from app.models.role import Role
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.auth.repository import AuthRepository
 from app.schemas.auth import LoginResponse, TokenPair
+from app.schemas.auth import PatientRegisterRequest
 from app.schemas.user import CurrentUserRead, UserRead
 from app.utils.enums import AuditAction
 
@@ -161,3 +166,69 @@ class AuthService:
                 context=context,
             )
         self.db.commit()
+
+    def register_patient(self, payload: PatientRegisterRequest, context: dict[str, str | None]) -> LoginResponse:
+        existing = self.repository.find_user_for_login(payload.username) or self.repository.find_user_for_login(payload.email)
+        if existing:
+            raise AppException(status.HTTP_409_CONFLICT, "user_exists", "User with same username or email already exists")
+
+        patient_role = self.db.scalar(select(Role).where(Role.code == "PATIENT"))
+        if not patient_role:
+            raise AppException(status.HTTP_500_INTERNAL_SERVER_ERROR, "patient_role_missing", "Patient role is not configured")
+
+        branch = self.db.scalar(select(Branch).where(Branch.code == "HQ"))
+        patient = Patient(
+            branch_id=branch.id if branch else None,
+            patient_number=f"PAT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            first_name=payload.full_name.split(" ", 1)[0],
+            last_name=payload.full_name.split(" ", 1)[1] if " " in payload.full_name else "Patient",
+            phone=payload.phone,
+            email=payload.email,
+            gender=payload.gender,
+            date_of_birth=payload.date_of_birth,
+            address=payload.address,
+            emergency_contact_name=payload.emergency_contact_name,
+            emergency_contact_phone=payload.emergency_contact_phone,
+        )
+        self.db.add(patient)
+        self.db.flush()
+        user = User(
+            username=payload.username,
+            email=payload.email,
+            full_name=payload.full_name,
+            hashed_password=get_password_hash(payload.password),
+            branch_id=patient.branch_id,
+            patient_id=patient.id,
+            is_active=True,
+        )
+        user.roles = [patient_role]
+        self.db.add(user)
+        self.db.flush()
+        permissions = self.get_effective_permissions(user)
+        access_token, access_expires_at = create_access_token(str(user.id), permissions)
+        session_id = generate_session_id()
+        refresh_token, refresh_expires_at, refresh_jti = create_refresh_token(str(user.id), session_id)
+        self.repository.create_refresh_token(
+            RefreshToken(
+                user_id=user.id,
+                session_id=session_id,
+                token_hash=hash_token(refresh_token),
+                token_jti=refresh_jti,
+                expires_at=refresh_expires_at,
+                user_agent=context.get("user_agent"),
+                ip_address=context.get("ip_address"),
+            )
+        )
+        user.last_login_at = datetime.now(UTC)
+        AuditService(self.db).log(
+            user_id=user.id,
+            action=AuditAction.PATIENT_CREATE,
+            module="portal",
+            entity_type="patient_user",
+            entity_id=str(user.id),
+            detail={"username": user.username, "patient_number": patient.patient_number},
+            context=context,
+        )
+        self.db.commit()
+        self.db.refresh(user)
+        return self._build_login_response(user, access_token, refresh_token, access_expires_at, refresh_expires_at)

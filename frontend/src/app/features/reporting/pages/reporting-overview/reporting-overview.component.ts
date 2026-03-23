@@ -4,6 +4,8 @@ import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 
 import { BillingReferralSummary, BillingSummary } from '../../../billing/models/billing.models';
 import { BillingServiceApi } from '../../../billing/services/billing.service';
+import { ClinicalOperationsSummary } from '../../models/reporting.models';
+import { ReportingServiceApi } from '../../services/reporting.service';
 
 @Component({
   selector: 'app-reporting-overview',
@@ -15,9 +17,11 @@ import { BillingServiceApi } from '../../../billing/services/billing.service';
 export class ReportingOverviewComponent {
   private readonly fb = inject(FormBuilder);
   private readonly billingService = inject(BillingServiceApi);
+  private readonly reportingService = inject(ReportingServiceApi);
 
   summary: BillingSummary | null = null;
   referralSummary: BillingReferralSummary[] = [];
+  clinicalSummary: ClinicalOperationsSummary | null = null;
 
   readonly form = this.fb.group({
     date_from: [''],
@@ -35,6 +39,7 @@ export class ReportingOverviewComponent {
     };
     this.billingService.getSummary(filters).subscribe((summary) => (this.summary = summary));
     this.billingService.getReferralSummary(filters).subscribe((summary) => (this.referralSummary = summary));
+    this.reportingService.getClinicalSummary().subscribe((summary) => (this.clinicalSummary = summary));
   }
 
   formatCurrency(value: string | number): string {

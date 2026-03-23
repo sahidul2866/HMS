@@ -18,8 +18,6 @@ from app.schemas.billing import (
     BillingInvoiceVoidRequest,
     BillingReferralSummaryRead,
     BillingSummaryRead,
-    ReferredDoctorCreate,
-    ReferredDoctorRead,
     BillingServiceCreate,
     BillingServiceRead,
 )
@@ -47,37 +45,23 @@ def create_billing_service(
     return BillingServiceRead.model_validate(service, from_attributes=True)
 
 
-@router.get("/doctors", response_model=list[ReferredDoctorRead], dependencies=[Depends(require_permissions("billing.view"))])
-def list_referred_doctors(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[ReferredDoctorRead]:
-    return [ReferredDoctorRead.model_validate(item, from_attributes=True) for item in BillingServiceManager(db).list_doctors(user)]
-
-
-@router.post(
-    "/doctors",
-    response_model=ReferredDoctorRead,
-    dependencies=[Depends(require_permissions("billing.doctor.manage"))],
-)
-def create_referred_doctor(
-    payload: ReferredDoctorCreate,
-    context=Depends(get_request_context),
-    user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> ReferredDoctorRead:
-    doctor = BillingServiceManager(db).create_doctor(payload, user, context)
-    return ReferredDoctorRead.model_validate(doctor, from_attributes=True)
-
-
 @router.get("/invoices", response_model=list[BillingInvoiceListItem], dependencies=[Depends(require_permissions("billing.view"))])
 def list_billing_invoices(
     q: str | None = None,
-    referred_doctor_id: UUID | None = None,
+    internal_referral_user_id: UUID | None = None,
     status: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[BillingInvoiceListItem]:
-    filters = BillingInvoiceFilterParams(q=q, referred_doctor_id=referred_doctor_id, status=status, date_from=date_from, date_to=date_to)
+    filters = BillingInvoiceFilterParams(
+        q=q,
+        internal_referral_user_id=internal_referral_user_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+    )
     return [BillingInvoiceListItem.model_validate(item, from_attributes=True) for item in BillingServiceManager(db).list_invoices(user, filters)]
 
 
@@ -89,13 +73,13 @@ def get_billing_invoice(invoice_id: UUID, user=Depends(get_current_user), db: Se
 
 @router.get("/reports/summary", response_model=BillingSummaryRead, dependencies=[Depends(require_permissions("reporting.view"))])
 def get_billing_summary(
-    referred_doctor_id: UUID | None = None,
+    internal_referral_user_id: UUID | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BillingSummaryRead:
-    filters = BillingInvoiceFilterParams(referred_doctor_id=referred_doctor_id, date_from=date_from, date_to=date_to)
+    filters = BillingInvoiceFilterParams(internal_referral_user_id=internal_referral_user_id, date_from=date_from, date_to=date_to)
     return BillingServiceManager(db).get_summary(user, filters)
 
 

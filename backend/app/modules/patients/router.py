@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.patients.service import PatientsService
-from app.schemas.patient import PatientCreate, PatientRead
+from app.schemas.patient import PatientClinicalHistoryRead, PatientCreate, PatientRead
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
@@ -23,6 +23,11 @@ def get_patient(patient_id: UUID, user=Depends(get_current_user), db: Session = 
     return PatientRead.model_validate(patient, from_attributes=True)
 
 
+@router.get("/{patient_id}/history", response_model=PatientClinicalHistoryRead, dependencies=[Depends(require_permissions("patient.view"))])
+def get_patient_history(patient_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientClinicalHistoryRead:
+    return PatientsService(db).get_clinical_history(patient_id, user)
+
+
 @router.post("", response_model=PatientRead, dependencies=[Depends(require_permissions("patient.create"))])
 def create_patient(
     payload: PatientCreate,
@@ -32,4 +37,3 @@ def create_patient(
 ) -> PatientRead:
     patient = PatientsService(db).create_patient(payload, user, context)
     return PatientRead.model_validate(patient, from_attributes=True)
-

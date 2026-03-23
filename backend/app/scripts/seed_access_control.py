@@ -1,4 +1,6 @@
 from collections.abc import Iterable
+from hashlib import sha1
+from json import dumps
 
 from sqlalchemy import select
 
@@ -10,7 +12,15 @@ from app.models.permission import Permission
 from app.models.role import Role
 from app.models.user import User
 from app.scripts.script_checkpoints import run_checkpoint_step
-from app.utils.seed_data import PERMISSION_CATALOG, ROLE_CATALOG
+from app.utils.seed_data import PERMISSION_CATALOG, ROLE_CATALOG, ROLE_FLAGS
+
+
+def catalog_signature() -> str:
+    payload = {
+        "permissions": PERMISSION_CATALOG,
+        "roles": ROLE_CATALOG,
+    }
+    return sha1(dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:10]
 
 
 def get_or_create_branch(session, code: str, name: str, description: str | None = None) -> Branch:
@@ -58,6 +68,9 @@ def sync_roles(session, permission_map: dict[str, Permission]) -> dict[str, Role
             role = Role(code=code, name=code.replace("_", " ").title(), description=f"{code.title()} role")
             session.add(role)
             session.flush()
+        flags = ROLE_FLAGS.get(code, {})
+        role.is_doctor_role = flags.get("is_doctor_role", False)
+        role.is_referral_role = flags.get("is_referral_role", False)
         role.permissions = [permission_map[item] for item in permission_codes]
         role.is_active = True
         role_map[code] = role
@@ -99,6 +112,8 @@ def create_or_update_user(
 
 
 def main() -> None:
+    signature = catalog_signature()
+
     def seed_structure() -> str:
         session = SessionLocal()
         try:
@@ -144,8 +159,8 @@ def main() -> None:
             session.close()
 
     run_checkpoint_step("seed_access_control", "structure", seed_structure)
-    run_checkpoint_step("seed_access_control", "roles_permissions", seed_roles_and_permissions)
-    run_checkpoint_step("seed_access_control", "superadmin", seed_superadmin)
+    run_checkpoint_step("seed_access_control", f"roles_permissions:{signature}", seed_roles_and_permissions)
+    run_checkpoint_step("seed_access_control", f"superadmin:{signature}", seed_superadmin)
     print("Access-control seed completed.")
     print("Super admin: superadmin / Admin123!")
 
