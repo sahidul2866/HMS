@@ -4,6 +4,14 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class AppointmentCreate(BaseModel):
+    patient_id: UUID
+    doctor_user_id: UUID
+    appointment_at: datetime
+    reason: str | None = None
+    note: str | None = None
+
+
 class AppointmentRead(BaseModel):
     id: UUID
     appointment_number: str

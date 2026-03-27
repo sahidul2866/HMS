@@ -1,0 +1,130 @@
+.workspace-shell {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.9rem;
+}
+
+.hero-stat {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 64, 175, 0.85));
+  color: #eff6ff;
+}
+
+.hero-stat .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(219, 234, 254, 0.75);
+}
+
+.hero-stat .value {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.lab-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+}
+
+.soft-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.soft-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(239, 246, 255, 0.94));
+  pointer-events: none;
+}
+
+.soft-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.queue-toolbar,
+.panel-head,
+.work-item-head,
+.action-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.queue-toolbar {
+  margin: 1rem 0;
+}
+
+.queue-toolbar input {
+  min-width: 260px;
+}
+
+.worklist-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.work-item-card,
+.detail-card {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(236, 245, 255, 0.82));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.work-item-card {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.work-copy,
+.detail-copy {
+  color: #475569;
+  line-height: 1.55;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.detail-card.active {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.7), rgba(239, 246, 255, 0.96));
+}
+
+.empty-state {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(226, 232, 240, 0.5);
+  color: #475569;
+}
+
+@media (max-width: 1120px) {
+  .lab-grid {
+    grid-template-columns: 1fr;
+  }
+}

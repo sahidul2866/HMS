@@ -25,6 +25,7 @@ export const menuConfig: MenuItem[] = [
     permissions: ['billing.view'],
     children: [
       { label: 'Billing Desk', icon: 'receipt', route: '/billing', permissions: ['billing.invoice.create'] },
+      { label: 'New Invoice', icon: 'plus-user', route: '/billing/create', permissions: ['billing.invoice.create'] },
       { label: 'Billing Services', icon: 'service', route: '/billing/services', permissions: ['billing.service.manage'] },
     ],
   },

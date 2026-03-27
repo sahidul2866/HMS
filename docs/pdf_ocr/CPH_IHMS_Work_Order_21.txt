@@ -1,0 +1,405 @@
+
+
+===== PAGE 1 =====
+
+sAester wal AEC HST
+areTicrt rT
+Tara art eprreet
+&, MEHTA, OT |
+
+HAS FR LEA /FAATR/ROND-20VB/ 2D
+
+af
+
+Doel e-Services
+461, Farmview Super Market
+87-92 B, Green Road, Farmgate, Dhaka.
+
+faaxz- Integrated Hospital Management System AIF Hae SiC |
+
+ores OYor/2or8 Bs:
+
+Sage Rec aiece erica wey Hl, CHET APT SPATS, ASTM, WISP Q0QV-2028 BE HICt Integrated
+Hospital Management System SFr Fal ST Urras Rego ws Hara FTAA SHE (TEC) PEs Fo BATE |
+orgy Reale aera o¢ Sehars TT ATER Ke ae Sioa Med gicr frew ow SH fT aR ow BH DFTA
+‘egare Swat SATA GAT MICA GAT SCAT Pat BAT |
+
+Item | CS.SL
+No. | No
+
+Our Specifiction
+
+Unit Of
+Supply
+
+Unite
+Price
+
+Total Price
+
+Integrated Hospital Management System:
+
+Information Desk Module and Queue Management Module
+{Qum)
+
+“This module deals with all types of encuiies received about the hospital and in agad to the paar who are acmited of
+registered.
+Salone Features include:
+Information Desk Interface development
+
+Patent enaulry
+‘Appointments enaviy
+Investigation appointment enquiry
+Cconatae enauiry
+Investigation enguiey
+In-patient enaury
+(bin nfermation
+Bed information|
+“anf infomation
+Packages formation
+‘Admit patient nfermation
+‘Queue Management Module (QM
+‘Queue Management Sytem makes the process of patients consulting withthe doctor e2sy and comfortable. The patients are
+assed wth the required information at every stage of consultation by the desires actors LED/LCD dplay sereen. Thess
+LED/LCD csplay units are instal in waiting halls te inform the patients about the current calls made by the doctors. These
+units cn als be used show doctors eat suds and hoeptals information tothe patients.
+Sallent Features Include:
+
+Bengal and/or English Callout
+
+¥ Queue Management for Registration
+
+¥ Queue tanagerent for Dect
+
+¥ Queue Management fr Sample Calecton
+
+Y
+
+KR RSE EE ES
+
+‘Queue Management for Report Delivery
+‘Queue ieanngerent far Pharma
+
+01 Module
+
+275800.00
+
+275800.00
+
+The following modules of hospital automation system
+integration & commissioning with all districts/Metropolitans
+
+police hospitals.
+1. nfommation De Medule and Que Management Mele (MM
+4. _Gutdoor Patent Management Medal OPC)
+——_ndeorPasene Management ote {D),
+he Doaorertstanc resco
+¥ Sample coecton
+Wi Laboratory information Sytem {u)
+vic Pharmacy Management infomation System
+vi Reporting Desk Managemont Module
+
+x. _baa two, Cabin, 16, CCU) Management Mode
+
+01 Module
+
+275800.00
+
+275800.00
+
+Outdoor Patient Management Module (OPD)
+
+‘This module dels with recording the patents’ basic medal treatment detals and depends on other motes for acquiring
+‘thee rgistration deta, hooking sppeintments for cansltaton tet appointments, report viewing et.
+Sallent Feotures inchide:
+Patient Appointment
+Doctoe/Consutent Registration terface
+ashhoards fr patients’ atvty/sponaor activty
+Dashboards for the user activity
+Doctor wise faverie tem Setup
+(0P0 Coneulaten Pokey
+Patient evsiuation
+Diagnosis
+Laborders
+Medication orders
+Procedure orders
+Cross refera!
+Token sytem (Dil Sgrage)
+‘ata reports on user activity patient actvy/doctorsetivty
+Reports on OPD/patient caun/service bilngrevende
+Standsrdiaed pation: waiting ime/turnaraund time
+Presciption template stp
+‘Outdoor investgation- Auto investigation Came From f-Prestpton
+Send SMS by usr esti fer completing al est
+Store all patient iforstion by patient 1D
+
+Ott CCC CCC CCCCC CCS
+
+01 Module
+
+275800.00
+
+275800.00
+
+Sample Collection
+Salient Features Include:
+
+Auto Test Came From E-Preszption
+Generate Bor Code/O Cade ot US
+Repeat Same Collection
+
+‘Dut sample collection status
+
+labin sample seus
+User wise sample collection status
+‘Aiser sample collection statue
+
+KASS SS
+
+O1 Module
+
+319200.00
+
+319200.00
+
+Laboratory Information System (LIS)
+Toe pathology abo record and senate the irtrmaten resting the tess prfred ses ths mode. The brary
+eparment races cnn orders fom doctors nd alow laborer personne to genorte request Mis fethe major
+‘mode of Hostal lfomaton Sytem,
+Sent Features ncade:
+‘Service and tet setup
+Test Mapping wth Arter
+‘Sample Receive and Processing
+Biochemistry & ncnelsey
+Integration Anaer
+snmunolyanaer
+HematsogyAnaire
+ESR anairer
+eX Machine negation
+Dats low of
+Allschede Tens
+BoA Ard Repeat
+‘Sop re Rn By Bt Deconal US
+Arar Rest Race Acurly ac Automatcay
+Sporsor-wse service mapped sth eagnt tots
+Dignosti packager using erent tests
+
+CCC CCCCCCCCCCCCS
+
+lig using lab acer rom cna mode
+Requisition geneation fam lab oreo.
+
+01 Module
+
+319200.00
+
+319200.00
+
+ee
+
+
+===== PAGE 2 =====
+
+Item
+No.
+
+CS.SL
+No.
+
+Our Specifiction
+
+Unit Of
+Supply
+
+Unite Total Price
+Price
+
+‘eauiation creation bowed 6 Tacit wits, test wie Tangle pe wie
+‘Sample cotection process
+
+Interfacing with Bb analyzers
+
+Results fetching rom analyer eats
+
+Results recheck process
+
+Resuts authorisation
+
+Redo process fram sample collection
+
+Status update
+
+Standards Prints Proce
+
+Access previous ab results baseé an ets and patont 10
+Dashsnare fr autharzsion
+
+Dashboard for TAT
+
+Dashboard fr workin progress
+
+Analysis dasbogr based on parameters and acts
+
+Cer!
+
+Pharmacy Management Information System
+his module eal withthe retail sale of medines te garerl customers & OPD patients, and issue of medicines tothe ie
+Basen th hoa mesons inde inn eg resin and toy manager nde py sal
+rd consumables.
+Sion Features inches
+Median sep
+Sppber Setup
+Sener Name set
+Briary Stock
+Secondary Stock
+‘bering Sack
+Socein
+Stock Out
+etStock
+Proigesa comprehensive one tof evaabie drugs forthe dators
+spas tera drugs forthe non-vaoble cas
+Suppor interfacing wit drag detabaves
+“he ABE, VED casestion of medicines
+Aute- generation of ales when minimum tock ovals are ceached
+Online eeston fr tek orders rom themmin sore
+Provision to manage consigrmentitems
+Barcode forthe tems
+Org ler sets
+Syochroized wit € Preston
+
+KERR EER ESSER
+
+01 Module
+
+319200.00 319200.00
+
+Reporting Desk Management Module
+Salient Features Include:
+
+All user tats
+‘est tau
+
+All Machine Information
+
+Group Test Information
+
+Heath 320k Sorcode State
+
+sts.
+
+Machine wise LS Report
+
+“Tube io Satus
+
+Tube Ou States
+
+Department wis repert
+
+Report search
+
+Report Veriton tatat
+
+Barcode generation pending port
+
+Report Stacus (Management Can See reat time lraton ofthe Report
+Isthe Report Oraft rin Oko Hot
+
+Report Fina Prints Dane ar Not
+
+Report Ready for Onine or Nat
+
+Recheck the Report
+
+eps Rea or Delivery
+
+CCC C CCC CCC CCC CSCS
+
+OL Module
+
+319200.00 319200,00
+
+10
+
+Bed (Ward, Cabin, ICU, CCU) Management Module
+
+‘The bed management module maintains the record of hea oocupancy status at ll mes. it facltates the estimation of
+'sppcoprate waiting tne for patients an helps in reduengthe bed turnover time, which very essential fer aptmlation of
+Fevenues I ako provides statistical information regrsing the occupancy atu of» bed over pri
+Salient Features include
+Bed setup
+Bed information
+cupid Bes
+vacant 866
+Bed Transter
+Bed setop
+Current be allocation status overview
+Monitoring ang reeuting the bed wrnaver tne
+
+KR RR KKK
+
+01 Module
+
+319200.00 319200.00
+
+41
+
+Integration of new analyzer: service charge tor integration of anew |_Type-1
+
+ol
+
+50000.00 50000.00
+
+analyzer (aRer successfull instalation delivery ofthe system}. Type-2
+
+Ol
+
+40000.00 40000.00
+
+Total Taka =
+
+25,13,400.00
+
+Taka (Twenty five lac thirteen
+
+O2-o)}-
+
+Reha]
+
+id four hundred) only.
+
+RPF-a90@ sob
+afte eres (eer ¢ ot)
+
+icmp Aer (Far)
+
+Rate afer SATO (FiPRaBD)
+THT FR-BLOQQB00/BTF FR-BOBAADY
+
+ARS FRCS /HAFAR/QORO-ORB/
+SARA wanfe e acarely Say sects Cray Cola Bal BT (CHIT Vw ALR)s-
+
+>
+
+Q
+o.
+8,
+¢@
+
+re GaTSSH aw fap OPTS NE TE, Rts wea CreTTAOT, TTT |
+ufehie 3Fri yes (erm 6 48
+Racisa (GAB), PPD, Det |
+Gore faa, Piheeo, OFT |
+wafer BF |
+
+» RPGR, DIST
+
+wifes
+
+1/03/2028 BE
+
+(Bis lls SATE SF)
+faft-aao@spabos
+
+» IT
+
+TRIM FR-SbOR2800/TY RK-SOSAYDY

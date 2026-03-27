@@ -5,7 +5,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
-from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingService, ReferredDoctor
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingService, ReferredDoctor
+from app.models.billing import BillingRefund
 from app.models.patient import Patient
 from app.models.user import User
 from app.modules.audit.service import AuditService
@@ -17,6 +18,8 @@ from app.schemas.billing import (
     BillingInvoiceFilterParams,
     BillingInvoicePreview,
     BillingInvoicePreviewRequest,
+    BillingPaymentCreate,
+    BillingRefundCreate,
     BillingInvoiceVoidRequest,
     BillingReferralSummaryRead,
     BillingSummaryRead,
@@ -142,6 +145,10 @@ class BillingServiceManager:
             discount_percentage=preview.discount_percentage,
             discount_amount=preview.discount_amount,
             total_amount=preview.total_amount,
+            paid_amount=Decimal("0.00"),
+            refunded_amount=Decimal("0.00"),
+            due_amount=preview.total_amount,
+            payment_status="unpaid",
             referred_doctor_amount=preview.referred_doctor_amount,
             status="posted",
             note=payload.note,
@@ -191,10 +198,119 @@ class BillingServiceManager:
         self.db.commit()
         return self.get_invoice(invoice.id, actor)
 
+    def create_payment(self, invoice_id: UUID, payload: BillingPaymentCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        invoice = self.get_invoice(invoice_id, actor)
+        if invoice.status == "void":
+            raise AppException(409, "billing_invoice_void", "Cannot collect payment for a void invoice")
+        if invoice.payment_status == "paid" or invoice.due_amount <= Decimal("0.00"):
+            raise AppException(409, "billing_invoice_paid", "Invoice is already fully paid")
+        if payload.amount > invoice.due_amount:
+            raise AppException(400, "billing_payment_exceeds_due", "Payment amount cannot exceed invoice due amount")
+
+        payment = BillingPayment(
+            invoice_id=invoice.id,
+            patient_id=invoice.patient_id,
+            branch_id=invoice.branch_id,
+            receipt_number=f"RCPT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            payment_method=payload.payment_method,
+            amount=self._money(payload.amount),
+            note=payload.note,
+            received_at=payload.received_at or datetime.now(UTC),
+            collected_by_user_id=actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.repository.create_payment(payment)
+
+        entity = self.repository.get_invoice_entity(invoice_id)
+        if not entity:
+            raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
+        entity.paid_amount = self._money(entity.paid_amount + payment.amount)
+        self._recalculate_invoice_balance(entity)
+        entity.updated_by = actor.id
+        self.db.flush()
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.BILLING_PAYMENT_CREATE,
+            module="billing",
+            entity_type="billing_payment",
+            entity_id=str(payment.id),
+            detail={
+                "invoice_number": entity.invoice_number,
+                "receipt_number": payment.receipt_number,
+                "amount": str(payment.amount),
+                "payment_method": payment.payment_method,
+            },
+            context=context,
+        )
+        self.db.commit()
+        return self.get_invoice(invoice_id, actor)
+
+    def create_refund(self, invoice_id: UUID, payload: BillingRefundCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        invoice = self.get_invoice(invoice_id, actor)
+        if invoice.status == "void":
+            raise AppException(409, "billing_invoice_void", "Cannot refund a void invoice")
+        if invoice.paid_amount <= Decimal("0.00"):
+            raise AppException(409, "billing_invoice_unpaid", "Invoice has no collected amount to refund")
+        if payload.amount > invoice.paid_amount:
+            raise AppException(400, "billing_refund_exceeds_paid", "Refund amount cannot exceed collected amount")
+
+        payment = None
+        if payload.payment_id:
+            payment = self.repository.get_payment(payload.payment_id)
+            if not payment or payment.invoice_id != invoice.id:
+                raise AppException(404, "billing_payment_not_found", "Billing payment not found for this invoice")
+            already_refunded = sum((refund.amount for refund in payment.refunds), start=Decimal("0.00"))
+            refundable_amount = self._money(payment.amount - already_refunded)
+            if payload.amount > refundable_amount:
+                raise AppException(400, "billing_refund_exceeds_payment", "Refund amount exceeds refundable balance for this receipt")
+
+        refund = BillingRefund(
+            invoice_id=invoice.id,
+            payment_id=payment.id if payment else None,
+            patient_id=invoice.patient_id,
+            branch_id=invoice.branch_id,
+            refund_number=f"RFND-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            amount=self._money(payload.amount),
+            reason=payload.reason,
+            refunded_at=payload.refunded_at or datetime.now(UTC),
+            refunded_by_user_id=actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.repository.create_refund(refund)
+
+        entity = self.repository.get_invoice_entity(invoice_id)
+        if not entity:
+            raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
+        entity.refunded_amount = self._money(entity.refunded_amount + refund.amount)
+        entity.paid_amount = self._money(entity.paid_amount - refund.amount)
+        self._recalculate_invoice_balance(entity)
+        entity.updated_by = actor.id
+        self.db.flush()
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.BILLING_REFUND_CREATE,
+            module="billing",
+            entity_type="billing_refund",
+            entity_id=str(refund.id),
+            detail={
+                "invoice_number": entity.invoice_number,
+                "refund_number": refund.refund_number,
+                "amount": str(refund.amount),
+                "payment_id": str(refund.payment_id) if refund.payment_id else None,
+            },
+            context=context,
+        )
+        self.db.commit()
+        return self.get_invoice(invoice_id, actor)
+
     def void_invoice(self, invoice_id: UUID, payload: BillingInvoiceVoidRequest, actor: User, context: dict[str, str | None]) -> BillingInvoice:
         invoice = self.get_invoice(invoice_id, actor)
         if invoice.status == "void":
             raise AppException(409, "billing_invoice_already_void", "Billing invoice is already void")
+        if invoice.payments:
+            raise AppException(409, "billing_invoice_has_payments", "Refund or settle payments before voiding this invoice")
 
         entity = self.repository.get_invoice_entity(invoice_id)
         if not entity:
@@ -271,3 +387,12 @@ class BillingServiceManager:
 
     def _money(self, value: Decimal) -> Decimal:
         return value.quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+
+    def _recalculate_invoice_balance(self, invoice: BillingInvoice) -> None:
+        invoice.due_amount = self._money(invoice.total_amount - invoice.paid_amount)
+        if invoice.paid_amount <= Decimal("0.00"):
+            invoice.payment_status = "unpaid"
+        elif invoice.due_amount <= Decimal("0.00"):
+            invoice.payment_status = "paid"
+        else:
+            invoice.payment_status = "partial"

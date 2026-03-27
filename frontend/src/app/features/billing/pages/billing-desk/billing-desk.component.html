@@ -2,157 +2,42 @@
   <section class="page-card module-hero">
     <div class="hero-row">
       <div>
-        <div class="hero-kicker">Front Desk Billing</div>
+        <div class="hero-kicker">Billing Operations</div>
         <h1 class="page-title">Billing Desk</h1>
-        <div class="page-subtitle">Turn patient encounters into polished invoices with referral tracking, discount control, and print-ready output.</div>
+        <div class="page-subtitle">Manage posted invoices, load financial details fast, collect payments, process refunds, and keep the billing stream searchable.</div>
       </div>
       <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="navigateToCreateInvoice()">Create Invoice</button>
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
       </div>
     </div>
 
     <div class="hero-summary">
       <div class="hero-stat">
-        <div class="label">Patients</div>
-        <div class="value">{{ patients.length }}</div>
+        <div class="label">Referral Sources</div>
+        <div class="value">{{ internalReferralDoctors.length }}</div>
       </div>
-      <div class="hero-stat">
-        <div class="label">Services</div>
-        <div class="value">{{ billingServices.length }}</div>
-      </div>
-        <div class="hero-stat">
-          <div class="label">Referral Sources</div>
-          <div class="value">{{ internalReferralDoctors.length }}</div>
-        </div>
       <div class="hero-stat">
         <div class="label">Invoice Queue</div>
         <div class="value">{{ recentInvoices.length }}</div>
       </div>
+      <div class="hero-stat">
+        <div class="label">Active View</div>
+        <div class="value">{{ latestInvoice ? latestInvoice.invoice_number : 'History' }}</div>
+      </div>
     </div>
-  </section>
-
-  <section class="spotlight-grid">
-    <section class="soft-panel">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Compose Invoice</h2>
-          <div class="section-copy">Choose the patient, referral source, and service mix before posting a clean invoice.</div>
-        </div>
-      </div>
-
-      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-        <label class="field">
-          <span>Patient</span>
-          <select formControlName="patient_id">
-            <option value="">Select patient</option>
-            @for (patient of patients; track patient.id) {
-              <option [value]="patient.id">{{ formatPatient(patient) }}</option>
-            }
-          </select>
-        </label>
-        <label class="field">
-          <span>Referring Doctor</span>
-          <select formControlName="internal_referral_user_id" (change)="onInternalReferralChanged()">
-            <option value="">Select flagged doctor user</option>
-            @for (doctor of internalReferralDoctors; track doctor.id) {
-              <option [value]="doctor.id">{{ doctor.full_name }}</option>
-            }
-          </select>
-        </label>
-        <label class="field">
-          <span>Discount Percentage</span>
-          <input type="number" min="0" max="100" formControlName="discount_percentage" (input)="recalculatePreview()" />
-        </label>
-        <label class="field" style="grid-column:1/-1;">
-          <span>Note</span>
-          <textarea rows="3" formControlName="note" placeholder="Visible internal note"></textarea>
-        </label>
-
-        <div style="grid-column:1/-1;">
-          <div class="section-header billing-inline-head">
-            <div>
-              <h3 class="section-title">Billing Items</h3>
-              <div class="section-copy">Build the invoice from the controlled service catalog.</div>
-            </div>
-            <button class="ghost-btn" type="button" (click)="addItem()">Add Item</button>
-          </div>
-
-          <div formArrayName="items" class="item-stack">
-            @for (item of items.controls; track $index) {
-              <div class="item-card" [formGroupName]="$index">
-                <div class="grid-2">
-                  <label class="field">
-                    <span>Service</span>
-                    <select formControlName="billing_service_id" (change)="onBillingItemChanged()">
-                      <option value="">Select billing service</option>
-                      @for (service of billingServices; track service.id) {
-                        <option [value]="service.id">{{ service.service_code }} - {{ service.name }}</option>
-                      }
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Quantity</span>
-                    <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
-                  </label>
-                </div>
-                <div class="item-footer">
-                  <span>{{ getServiceName(item.get('billing_service_id')?.value ?? '') }}</span>
-                  <strong>{{ getServiceAmount(item.get('billing_service_id')?.value ?? '', item.get('quantity')?.value ?? 0) }}</strong>
-                </div>
-                <button class="danger-btn" type="button" (click)="removeItem($index)">Remove</button>
-              </div>
-            }
-          </div>
-        </div>
-
-        <div style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="soft-panel">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Invoice Preview</h2>
-          <div class="section-copy">An instant financial snapshot before you commit the bill.</div>
-        </div>
-      </div>
-
-      @if (preview) {
-        <div class="metric-grid">
-          <div class="metric-card">
-            <div class="label">Sub Total</div>
-            <div class="value">{{ formatCurrency(preview.sub_total) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Discount</div>
-            <div class="value">{{ formatCurrency(preview.discount_amount) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Referral Amount</div>
-            <div class="value">{{ formatCurrency(preview.referred_doctor_amount) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Grand Total</div>
-            <div class="value">{{ formatCurrency(preview.total_amount) }}</div>
-          </div>
-        </div>
-      } @else {
-        <div class="empty-state">{{ previewMessage || 'Select services to see a live preview.' }}</div>
-      }
-    </section>
   </section>
 
   @if (latestInvoice) {
     <section class="soft-panel data-panel">
       <div class="panel-head">
         <div>
-          <h2 class="section-title">Latest Invoice</h2>
+          <h2 class="section-title">Invoice Detail</h2>
           <div class="section-copy">{{ latestInvoice.invoice_number }} for {{ latestInvoice.patient.first_name }} {{ latestInvoice.patient.last_name }}</div>
         </div>
         <div class="toolbar-row">
           <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.status ">{{ formatStatus(latestInvoice.status) }}</span>
+          <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.payment_status ">{{ formatStatus(latestInvoice.payment_status) }}</span>
           <button class="primary-btn" type="button" (click)="printInvoice()">Print Invoice</button>
           @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
             <button class="danger-btn" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
@@ -186,9 +71,144 @@
         <div><strong>Discount:</strong> {{ formatCurrency(latestInvoice.discount_amount) }}</div>
         <div><strong>Referral Amount:</strong> {{ formatCurrency(latestInvoice.referred_doctor_amount) }}</div>
         <div><strong>Grand Total:</strong> {{ formatCurrency(latestInvoice.total_amount) }}</div>
+        <div><strong>Paid:</strong> {{ formatCurrency(latestInvoice.paid_amount) }}</div>
+        <div><strong>Refunded:</strong> {{ formatCurrency(latestInvoice.refunded_amount) }}</div>
+        <div><strong>Due:</strong> {{ formatCurrency(latestInvoice.due_amount) }}</div>
         @if (latestInvoice.void_reason) {
           <div><strong>Void Reason:</strong> {{ latestInvoice.void_reason }}</div>
         }
+      </div>
+
+      <div class="payment-grid">
+        <section class="payment-panel">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Collect Payment</h3>
+              <div class="section-copy">Post full or partial payment and keep a receipt trail against the invoice.</div>
+            </div>
+          </div>
+
+          @if (canCollectPayment(latestInvoice) && sessionService.hasPermission('billing.payment.collect')) {
+            <form class="form-grid" [formGroup]="paymentForm" (ngSubmit)="collectPayment()">
+              <label class="field">
+                <span>Amount</span>
+                <input type="number" min="0.01" step="0.01" formControlName="amount" />
+              </label>
+              <label class="field">
+                <span>Method</span>
+                <select formControlName="payment_method">
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="mobile_banking">Mobile Banking</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                </select>
+              </label>
+              <label class="field" style="grid-column:1/-1;">
+                <span>Note</span>
+                <textarea rows="2" formControlName="note" placeholder="Receipt note or reference"></textarea>
+              </label>
+              <div style="grid-column:1/-1;">
+                <button class="primary-btn" type="submit">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
+              </div>
+            </form>
+          } @else {
+            <div class="empty-state">No further payment collection is available for this invoice.</div>
+          }
+        </section>
+
+        <section class="payment-panel">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Process Refund</h3>
+              <div class="section-copy">Record a refund against the invoice and optionally tie it to a specific receipt.</div>
+            </div>
+          </div>
+
+          @if (canRefund(latestInvoice) && sessionService.hasPermission('billing.payment.refund')) {
+            <form class="form-grid" [formGroup]="refundForm" (ngSubmit)="createRefund()">
+              <label class="field">
+                <span>Refund Amount</span>
+                <input type="number" min="0.01" step="0.01" formControlName="amount" />
+              </label>
+              <label class="field">
+                <span>Receipt</span>
+                <select formControlName="payment_id">
+                  <option value="">Any collected payment</option>
+                  @for (payment of latestInvoice.payments; track payment.id) {
+                    <option [value]="payment.id">{{ payment.receipt_number }} · {{ formatCurrency(payment.amount) }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field" style="grid-column:1/-1;">
+                <span>Reason</span>
+                <textarea rows="2" formControlName="reason" placeholder="Why this refund is being issued"></textarea>
+              </label>
+              <div style="grid-column:1/-1;">
+                <button class="danger-btn" type="submit">{{ refunding ? 'Refunding...' : 'Post Refund' }}</button>
+              </div>
+            </form>
+          } @else {
+            <div class="empty-state">No refundable collected amount is available for this invoice.</div>
+          }
+        </section>
+
+        <section class="payment-panel">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Receipt History</h3>
+              <div class="section-copy">Every payment posted against this invoice stays visible here.</div>
+            </div>
+          </div>
+
+          @if (latestInvoice.payments.length) {
+            <div class="receipt-stack">
+              @for (payment of latestInvoice.payments; track payment.id) {
+                <div class="receipt-card">
+                  <div>
+                    <strong>{{ payment.receipt_number }}</strong>
+                    <div class="page-subtitle">{{ payment.received_at | date:'medium' }}</div>
+                  </div>
+                  <div class="receipt-meta">
+                    <span class="pill">{{ formatStatus(payment.payment_method) }}</span>
+                    <strong>{{ formatCurrency(payment.amount) }}</strong>
+                  </div>
+                  <div class="page-subtitle">{{ payment.note || 'No note' }}</div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">No payments collected yet.</div>
+          }
+        </section>
+
+        <section class="payment-panel">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Refund History</h3>
+              <div class="section-copy">Refund transactions remain attached to the invoice for full audit traceability.</div>
+            </div>
+          </div>
+
+          @if (latestInvoice.refunds.length) {
+            <div class="receipt-stack">
+              @for (refund of latestInvoice.refunds; track refund.id) {
+                <div class="receipt-card">
+                  <div>
+                    <strong>{{ refund.refund_number }}</strong>
+                    <div class="page-subtitle">{{ refund.refunded_at | date:'medium' }}</div>
+                  </div>
+                  <div class="receipt-meta">
+                    <span class="pill">REFUND</span>
+                    <strong>{{ formatCurrency(refund.amount) }}</strong>
+                  </div>
+                  <div class="page-subtitle">{{ refund.reason }}</div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">No refunds posted yet.</div>
+          }
+        </section>
       </div>
     </section>
   }
@@ -199,7 +219,9 @@
         <h2 class="section-title">Invoice History</h2>
         <div class="section-copy">Filter the billing stream, inspect older invoices, and jump back into print-ready details.</div>
       </div>
-      <div class="hero-kicker">Searchable</div>
+      <div class="toolbar-row">
+        <div class="hero-kicker">Searchable</div>
+      </div>
     </div>
 
     <form class="form-grid billing-filter-grid" [formGroup]="invoiceFilterForm">
@@ -243,8 +265,11 @@
           <th>Invoice No</th>
           <th>Patient</th>
           <th>Status</th>
+          <th>Payment</th>
           <th>Doctor</th>
           <th>Total</th>
+          <th>Refunded</th>
+          <th>Due</th>
           <th>Date</th>
         </tr>
       </thead>
@@ -254,8 +279,11 @@
             <td><strong>{{ invoice.invoice_number }}</strong></td>
             <td>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</td>
             <td><span class="status-chip" [class]=" 'status-chip ' + invoice.status ">{{ formatStatus(invoice.status) }}</span></td>
+            <td><span class="status-chip" [class]=" 'status-chip ' + invoice.payment_status ">{{ formatStatus(invoice.payment_status) }}</span></td>
             <td>{{ invoice.referred_doctor_name || '-' }}</td>
             <td>{{ formatCurrency(invoice.total_amount) }}</td>
+            <td>{{ formatCurrency(invoice.refunded_amount) }}</td>
+            <td>{{ formatCurrency(invoice.due_amount) }}</td>
             <td>{{ invoice.created_at | date:'medium' }}</td>
           </tr>
         }

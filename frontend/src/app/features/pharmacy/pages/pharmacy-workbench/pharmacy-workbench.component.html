@@ -1,0 +1,154 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Pharmacy Workbench</div>
+        <h1 class="page-title">Dispense And Return Workspace</h1>
+        <div class="page-subtitle">Issue medicines, use prescription or billing autofill, and process returns in a focused pharmacy execution screen.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="openQueue()">Back To Queue</button>
+      </div>
+    </div>
+  </section>
+
+  @if (loading) {
+    <section class="page-card soft-panel">
+      <div class="empty-state">Loading pharmacy workspace...</div>
+    </section>
+  } @else {
+    <section class="spotlight-grid">
+      <section class="page-card soft-panel">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Dispense Workspace</h2>
+            <div class="section-copy">Use a prescription-first flow, or fall back to a billing-linked manual dispense when needed.</div>
+          </div>
+          <button class="ghost-btn" type="button" (click)="resetForm()">Clear</button>
+        </div>
+
+        <div class="context-stack">
+          @if (selectedPrescription) {
+            <div class="context-card active">
+              <div>
+                <strong>Selected Prescription</strong>
+                <div class="page-subtitle">{{ selectedPrescription.visit_number }} · {{ selectedPrescription.patient_name }} · {{ selectedPrescription.doctor_name }}</div>
+              </div>
+              <div class="context-copy">
+                {{ selectedPrescription.item_name }} · Rx {{ selectedPrescription.quantity }} · Remaining {{ selectedPrescription.remaining_quantity }}<br />
+                {{ selectedPrescription.instructions || 'No instructions provided' }}
+              </div>
+            </div>
+          }
+
+          @if (selectedInvoice) {
+            <div class="context-card">
+              <div>
+                <strong>Billing Reference</strong>
+                <div class="page-subtitle">{{ selectedInvoice.invoice_number }} · {{ selectedInvoice.patient.first_name }} {{ selectedInvoice.patient.last_name }}</div>
+              </div>
+              <div class="context-copy">
+                Payment {{ selectedInvoice.payment_status }} · Total {{ formatCurrency(selectedInvoice.total_amount) }} · Due {{ formatCurrency(selectedInvoice.due_amount) }}
+              </div>
+            </div>
+          }
+        </div>
+
+        <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field">
+            <span>Pending Prescription</span>
+            <select formControlName="source_visit_order_id" (change)="onPrescriptionChanged()">
+              <option value="">Select from queue</option>
+              @for (prescription of pendingPrescriptions; track prescription.order_id) {
+                <option [value]="prescription.order_id">{{ prescription.visit_number }} - {{ prescription.patient_name }} - {{ prescription.item_name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Billing Invoice</span>
+            <select formControlName="billing_invoice_id" (change)="onInvoiceChanged()">
+              <option value="">Select posted invoice</option>
+              @for (invoice of invoices; track invoice.id) {
+                <option [value]="invoice.id">{{ invoice.invoice_number }} - {{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Prescription Reference</span>
+            <input type="text" formControlName="prescription_ref" />
+          </label>
+          <label class="field">
+            <span>Medicine</span>
+            <input type="text" formControlName="medicine_name" />
+          </label>
+          <label class="field">
+            <span>Quantity</span>
+            <input type="number" min="0.01" step="0.01" formControlName="quantity" />
+          </label>
+          <label class="field">
+            <span>Unit Price</span>
+            <input type="number" min="0" step="0.01" formControlName="unit_price" />
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Note</span>
+            <textarea rows="3" formControlName="note" placeholder="Dispense note, batch reference, or counseling note"></textarea>
+          </label>
+          <div class="item-foot" style="grid-column:1/-1;">
+            <div class="pill-row">
+              <span class="pill">Issue Qty {{ form.getRawValue().quantity || 0 }}</span>
+              <span class="pill">Unit {{ formatCurrency(form.getRawValue().unit_price || 0) }}</span>
+              <span class="pill">Estimated {{ formatCurrency((form.getRawValue().quantity || 0) * (form.getRawValue().unit_price || 0)) }}</span>
+            </div>
+            <button class="primary-btn" type="submit">Dispense Medicine</button>
+          </div>
+        </form>
+
+        @if (resultMessage) {
+          <div class="pill accent-note">{{ resultMessage }}</div>
+        }
+      </section>
+
+      <section class="page-card soft-panel">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Return Workspace</h2>
+            <div class="section-copy">Select an issued dispense from the queue page to process a return here with cleaner context and less visual clutter.</div>
+          </div>
+        </div>
+
+        @if (returnTarget) {
+          <div class="context-card active" style="margin-bottom: 1rem;">
+            <div>
+              <strong>Return Target</strong>
+              <div class="page-subtitle">{{ returnTarget.medicine_name }} · {{ returnTarget.patient_name || 'Walk-in / manual' }}</div>
+            </div>
+            <div class="context-copy">
+              Issued {{ returnTarget.quantity }} · Returnable {{ returnTarget.remaining_quantity }} · Ref {{ returnTarget.prescription_ref || returnTarget.visit_number || 'Not linked' }}
+            </div>
+          </div>
+
+          <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="submitReturn()">
+            <label class="field">
+              <span>Return Quantity</span>
+              <input type="number" min="0.01" step="0.01" formControlName="quantity" />
+            </label>
+            <label class="field" style="grid-column:1/-1;">
+              <span>Return Note</span>
+              <textarea rows="2" formControlName="note" placeholder="Why the patient returned this medicine"></textarea>
+            </label>
+            <div class="item-foot" style="grid-column:1/-1;">
+              <div class="pill-row">
+                <span class="pill">Target {{ returnTarget.medicine_name }}</span>
+                <span class="pill">Issued {{ returnTarget.quantity }}</span>
+                <span class="pill">Returnable {{ returnTarget.remaining_quantity }}</span>
+              </div>
+              <button class="danger-btn" type="submit">Post Return</button>
+            </div>
+          </form>
+        } @else {
+          <div class="empty-state">Open a dispense record from the queue page to process a return here.</div>
+        }
+      </section>
+    </section>
+  }
+</div>

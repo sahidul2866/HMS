@@ -1,23 +1,111 @@
-<div>
-  <div class="eyebrow">Enterprise HMS</div>
-  <h1>Secure Sign In</h1>
-  <p class="muted">JWT access token, refresh rotation, RBAC, and permission-aware navigation.</p>
-</div>
+<section class="login-page">
+  <div class="login-hero">
+    <div class="hero-art" aria-hidden="true">
+      <span class="hero-orbit hero-orbit-a"></span>
+      <span class="hero-orbit hero-orbit-b"></span>
+      <span class="hero-bubble hero-bubble-a"></span>
+      <span class="hero-bubble hero-bubble-b"></span>
+      <span class="hero-bubble hero-bubble-c"></span>
+      <span class="hero-shape hero-shape-cross"></span>
+      <span class="hero-shape hero-shape-capsule"></span>
+      <span class="hero-shape hero-shape-droplet"></span>
+      <span class="hero-shape hero-shape-heart"></span>
+      <span class="hero-heartbeat"></span>
+      <span class="hero-ring"></span>
+    </div>
 
-<form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
-  <label class="field">
-    <span>Username or Email</span>
-    <input type="text" formControlName="username_or_email" />
-  </label>
+    <div class="eyebrow">Hospital Management Suite</div>
+    <div class="hero-brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Clinical control, simplified.</h1>
+        <p class="hero-copy">Fast access for staff, billing, pharmacy, and care ops.</p>
+      </div>
+    </div>
 
-  <label class="field">
-    <span>Password</span>
-    <input type="password" formControlName="password" />
-  </label>
+    <div class="hero-grid">
+      <article class="hero-tile">
+        <span class="tile-icon tile-icon-shield" aria-hidden="true"></span>
+        <strong>Secure</strong>
+      </article>
+      <article class="hero-tile">
+        <span class="tile-icon tile-icon-bed" aria-hidden="true"></span>
+        <strong>IPD / OPD</strong>
+      </article>
+      <article class="hero-tile">
+        <span class="tile-icon tile-icon-flask" aria-hidden="true"></span>
+        <strong>Lab Ready</strong>
+      </article>
+      <article class="hero-tile">
+        <span class="tile-icon tile-icon-bill" aria-hidden="true"></span>
+        <strong>Billing</strong>
+      </article>
+    </div>
 
-  <button class="primary-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
-  <a routerLink="/auth/patient-register">Create patient account</a>
-  @if (errorMessage) {
-    <div class="error-text">{{ errorMessage }}</div>
-  }
-</form>
+    <div class="hero-status">
+      <span class="status-pill"><span class="status-dot"></span>Live workflow</span>
+      <span class="status-pill"><span class="status-icon status-icon-lock"></span>Protected access</span>
+    </div>
+  </div>
+
+  <form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+    <div class="form-header">
+      <span class="form-kicker">Staff sign in</span>
+      <h2>Welcome back</h2>
+      <p>Continue with your hospital account.</p>
+    </div>
+
+    <label class="field">
+      <span class="field-tag">
+        <span class="field-label-icon field-label-icon-mail" aria-hidden="true"></span>
+        <span>Username or Email</span>
+      </span>
+      <div class="input-shell">
+        <span class="input-accent" aria-hidden="true"></span>
+        <span class="input-icon field-label-icon field-label-icon-mail" aria-hidden="true"></span>
+        <input id="login-identity" type="text" formControlName="username_or_email" placeholder="superadmin or name@hospital.com" />
+      </div>
+    </label>
+
+    <label class="field">
+      <span class="field-tag">
+        <span class="field-label-icon field-label-icon-lock" aria-hidden="true"></span>
+        <span>Password</span>
+      </span>
+      <div class="input-shell input-shell-password">
+        <span class="input-accent" aria-hidden="true"></span>
+        <span class="input-icon field-label-icon field-label-icon-lock" aria-hidden="true"></span>
+        <input
+          id="login-password"
+          [type]="showPassword ? 'text' : 'password'"
+          formControlName="password"
+          placeholder="Enter your password"
+        />
+        <button
+          class="password-toggle"
+          type="button"
+          (click)="togglePasswordVisibility()"
+          [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+          [attr.aria-pressed]="showPassword"
+        >
+          <span class="password-toggle-icon" [class.is-visible]="showPassword" aria-hidden="true"></span>
+        </button>
+      </div>
+    </label>
+
+    @if (errorMessage) {
+      <div class="error-text">{{ errorMessage }}</div>
+    }
+
+    <div class="form-actions">
+      <button class="primary-btn submit-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+      <span class="submit-meta">Protected session</span>
+    </div>
+
+    <div class="login-meta">
+      <span class="meta-icon" aria-hidden="true"></span>
+      <span>Need patient access?</span>
+      <a routerLink="/auth/patient-register">Create patient account</a>
+    </div>
+  </form>
+</section>

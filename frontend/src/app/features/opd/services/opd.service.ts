@@ -3,12 +3,24 @@ import { Observable } from 'rxjs';
 
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { IPDAdmission } from '../../ipd/models/ipd.models';
-import { ConvertOPDToIPDPayload, CreateOPDVisitOrderPayload, CreateOPDVisitPayload, OPDSummary, OPDVisit } from '../models/opd.models';
+import {
+  ConvertOPDToIPDPayload,
+  CreateOPDVisitOrderPayload,
+  CreateOPDVisitPayload,
+  OPDSummary,
+  OPDVisit,
+  UpdateOPDConsultationPayload,
+  UpdateOPDVisitOrderPayload,
+} from '../models/opd.models';
 
 @Injectable({ providedIn: 'root' })
 export class OPDService extends ApiBaseService {
   listVisits(): Observable<OPDVisit[]> {
     return this.http.get<OPDVisit[]>(this.url('/opd/visits'));
+  }
+
+  getVisit(visitId: string): Observable<OPDVisit> {
+    return this.http.get<OPDVisit>(this.url(`/opd/visits/${visitId}`));
   }
 
   getSummary(): Observable<OPDSummary> {
@@ -23,8 +35,16 @@ export class OPDService extends ApiBaseService {
     return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/status`), { status });
   }
 
+  updateConsultation(visitId: string, payload: UpdateOPDConsultationPayload): Observable<OPDVisit> {
+    return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/consultation`), payload);
+  }
+
   createOrder(visitId: string, payload: CreateOPDVisitOrderPayload): Observable<OPDVisit> {
     return this.http.post<OPDVisit>(this.url(`/opd/visits/${visitId}/orders`), payload);
+  }
+
+  updateOrder(visitId: string, orderId: string, payload: UpdateOPDVisitOrderPayload): Observable<OPDVisit> {
+    return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/orders/${orderId}`), payload);
   }
 
   convertToIPD(visitId: string, payload: ConvertOPDToIPDPayload): Observable<IPDAdmission> {

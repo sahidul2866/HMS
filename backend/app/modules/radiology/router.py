@@ -8,8 +8,18 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_any_permissions
 from app.modules.radiology.service import RadiologyService
 from app.schemas.encounter import ClinicalInvestigationResultUpdate, ClinicalInvestigationWorkItemRead
+from app.schemas.radiology import RadiologySummaryRead
 
 router = APIRouter(prefix="/radiology", tags=["Radiology"])
+
+
+@router.get(
+    "/summary",
+    response_model=RadiologySummaryRead,
+    dependencies=[Depends(require_any_permissions("radiology.view", "radiology.manage"))],
+)
+def get_radiology_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> RadiologySummaryRead:
+    return RadiologyService(db).get_summary(user)
 
 
 @router.get(

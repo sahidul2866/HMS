@@ -1,0 +1,178 @@
+<section class="workspace-shell">
+  @if (historyLoading) {
+    <section class="page-card">
+      <div class="muted">Loading patient history...</div>
+    </section>
+  }
+
+  @if (history) {
+    <section class="page-card module-hero">
+      <div class="hero-row">
+        <div>
+          <div class="hero-kicker">Patient EMR</div>
+          <h1 class="page-title">{{ history.patient.first_name }} {{ history.patient.last_name }}</h1>
+          <div class="page-subtitle">{{ history.patient.patient_number }} · {{ history.patient.phone || 'No phone' }} · {{ history.patient.email || 'No email' }}</div>
+        </div>
+        <div class="toolbar-row">
+          <button class="secondary-btn" type="button" (click)="openList()">Back To Patient List</button>
+        </div>
+      </div>
+
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">OPD Visits</div><div class="value">{{ history.opd_visits.length }}</div></div>
+        <div class="hero-stat"><div class="label">IPD Admissions</div><div class="value">{{ history.ipd_admissions.length }}</div></div>
+        <div class="hero-stat"><div class="label">Billing Invoices</div><div class="value">{{ history.billing_invoices.length }}</div></div>
+        <div class="hero-stat"><div class="label">Follow-Ups</div><div class="value">{{ history.appointments.length }}</div></div>
+        <div class="hero-stat"><div class="label">Pharmacy</div><div class="value">{{ history.pharmacy_dispenses.length }}</div></div>
+        <div class="hero-stat"><div class="label">Pending Follow-Ups</div><div class="value">{{ getPendingFollowUps() }}</div></div>
+      </div>
+    </section>
+
+    <section class="page-card" style="margin-top:1rem;">
+      <h2 class="page-title">OPD Timeline</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Visit</th>
+            <th>Date</th>
+            <th>Doctor</th>
+            <th>Diagnosis</th>
+            <th>Status</th>
+            <th>Orders</th>
+            <th>Follow Up</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (visit of history.opd_visits; track visit.id) {
+            <tr>
+              <td>{{ visit.visit_number }}</td>
+              <td>{{ visit.visit_date }}</td>
+              <td>{{ visit.consulting_doctor_name }}</td>
+              <td>{{ getVisitDiagnosis(visit) }}</td>
+              <td>{{ visit.status }}</td>
+              <td>
+                Rx {{ getVisitOrderCount(visit, 'prescription') }} ·
+                Ix {{ getVisitOrderCount(visit, 'investigation') }} ·
+                Px {{ getVisitOrderCount(visit, 'procedure') }}
+              </td>
+              <td>{{ visit.follow_up_date || '-' }}</td>
+            </tr>
+            <tr>
+              <td colspan="7" style="background:rgba(148,163,184,0.06);">
+                <div style="display:grid;gap:0.75rem;padding:0.5rem 0;">
+                  <div><strong>Chief Complaint:</strong> {{ visit.chief_complaint || '-' }}</div>
+                  <div><strong>HPI:</strong> {{ visit.history_of_present_illness || '-' }}</div>
+                  <div><strong>Past History:</strong> {{ visit.past_history || '-' }}</div>
+                  <div><strong>Vital Signs:</strong> {{ visit.vital_signs || '-' }}</div>
+                  <div><strong>Examination:</strong> {{ visit.examination_note || '-' }}</div>
+                  <div><strong>Follow Up Advice:</strong> {{ visit.follow_up_note || '-' }}</div>
+                  <div><strong>Clinical Note:</strong> {{ visit.note || '-' }}</div>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card" style="margin-top:1rem;">
+      <h2 class="page-title">Investigation & Prescription Details</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Visit</th>
+            <th>Type</th>
+            <th>Area</th>
+            <th>Item</th>
+            <th>Status</th>
+            <th>Result / Instructions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (visit of history.opd_visits; track visit.id) {
+            @for (order of visit.orders; track order.id) {
+              <tr>
+                <td>{{ visit.visit_number }}</td>
+                <td>{{ order.order_type }}</td>
+                <td>{{ order.service_area || '-' }}</td>
+                <td>{{ order.item_name }}</td>
+                <td>{{ order.status }}</td>
+                <td>{{ order.result_text || order.instructions || '-' }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card" style="margin-top:1rem;">
+      <h2 class="page-title">Appointments & Follow-Up</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Appointment</th>
+            <th>Doctor</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (appointment of history.appointments; track appointment.id) {
+            <tr>
+              <td>{{ appointment.appointment_number }}</td>
+              <td>{{ appointment.doctor_name }}</td>
+              <td>{{ appointment.appointment_at | date:'medium' }}</td>
+              <td>{{ appointment.status }}</td>
+              <td>{{ appointment.reason || appointment.note || '-' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card" style="margin-top:1rem;">
+      <h2 class="page-title">Billing & Pharmacy</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Reference</th>
+            <th>Date</th>
+            <th>Status / Item</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invoice of history.billing_invoices; track invoice.id) {
+            <tr>
+              <td>Billing</td>
+              <td>{{ invoice.invoice_number }}</td>
+              <td>{{ invoice.created_at | date:'medium' }}</td>
+              <td>{{ invoice.status }} · {{ invoice.payment_status }} · Paid {{ formatCurrency(invoice.paid_amount) }} · Due {{ formatCurrency(invoice.due_amount) }}</td>
+              <td>{{ formatCurrency(invoice.total_amount) }}</td>
+            </tr>
+          }
+          @for (payment of history.billing_payments; track payment.id) {
+            <tr>
+              <td>Payment</td>
+              <td>{{ payment.receipt_number }} · {{ payment.invoice_number }}</td>
+              <td>{{ payment.received_at | date:'medium' }}</td>
+              <td>{{ payment.payment_method }}{{ payment.note ? ' · ' + payment.note : '' }}</td>
+              <td>{{ formatCurrency(payment.amount) }}</td>
+            </tr>
+          }
+          @for (dispense of history.pharmacy_dispenses; track dispense.id) {
+            <tr>
+              <td>Pharmacy</td>
+              <td>{{ dispense.prescription_ref || '-' }}</td>
+              <td>{{ dispense.created_at | date:'medium' }}</td>
+              <td>{{ dispense.medicine_name }} × {{ dispense.quantity }}</td>
+              <td>{{ formatCurrency(dispense.total_price) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</section>

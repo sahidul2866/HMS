@@ -29,6 +29,14 @@ export interface OPDVisit {
   consulting_doctor_user_id?: string | null;
   consulting_doctor_name: string;
   chief_complaint?: string | null;
+  history_of_present_illness?: string | null;
+  past_history?: string | null;
+  vital_signs?: string | null;
+  examination_note?: string | null;
+  provisional_diagnosis?: string | null;
+  final_diagnosis?: string | null;
+  follow_up_date?: string | null;
+  follow_up_note?: string | null;
   status: string;
   converted_ipd_admission_id?: string | null;
   consultation_fee: number;
@@ -49,12 +57,30 @@ export interface CreateOPDVisitPayload {
   note?: string | null;
 }
 
+export interface UpdateOPDConsultationPayload {
+  chief_complaint?: string | null;
+  history_of_present_illness?: string | null;
+  past_history?: string | null;
+  vital_signs?: string | null;
+  examination_note?: string | null;
+  provisional_diagnosis?: string | null;
+  final_diagnosis?: string | null;
+  follow_up_date?: string | null;
+  follow_up_note?: string | null;
+  note?: string | null;
+}
+
 export interface CreateOPDVisitOrderPayload {
   order_type: string;
   service_area?: string | null;
   item_name: string;
   instructions?: string | null;
   quantity: number;
+}
+
+export interface UpdateOPDVisitOrderPayload {
+  status: string;
+  result_text?: string | null;
 }
 
 export interface ConvertOPDToIPDPayload {

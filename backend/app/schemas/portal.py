@@ -25,6 +25,10 @@ class PatientAppointmentRead(BaseModel):
     note: str | None = None
 
 
+class PatientAppointmentStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(cancelled)$")
+
+
 class PatientPortalOverviewRead(BaseModel):
     patient: PatientClinicalHistoryRead
     appointments: list[PatientAppointmentRead]

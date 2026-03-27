@@ -1,0 +1,97 @@
+:host {
+  display: block;
+}
+
+.lookup-shell,
+.billing-items-shell,
+.preview-panel {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 88%, white) 0%, var(--surface-soft) 100%);
+  padding: 1.1rem;
+}
+
+.billing-inline-head {
+  margin-bottom: 0.85rem;
+}
+
+.billing-prefill-banner {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: 18px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 85%, white) 0%, rgba(255, 255, 255, 0.94) 100%);
+}
+
+.lookup-head {
+  margin-bottom: 0.75rem;
+}
+
+.lookup-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.lookup-row input {
+  flex: 1 1 320px;
+}
+
+.search-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.result-btn {
+  text-align: left;
+}
+
+.selected-patient {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.item-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.item-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+}
+
+.item-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--text-muted);
+}
+
+.submit-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.grand-total {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-soft) 30%, white) 0%, rgba(255, 255, 255, 0.95) 100%);
+}
+
+@media (max-width: 920px) {
+  .search-results {
+    grid-template-columns: 1fr;
+  }
+}

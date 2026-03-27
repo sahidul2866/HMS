@@ -1,24 +1,113 @@
-<div>
-  <div class="eyebrow">Patient Portal</div>
-  <h1>Create Patient Account</h1>
-  <p class="muted">Register yourself, then use the portal to book appointments and view your reports.</p>
-</div>
+<section class="register-page">
+  <header class="register-header">
+    <span class="eyebrow">Patient Portal</span>
+    <h1>Create your account</h1>
+    <p>Register once to manage appointments, reports, and patient access online.</p>
+  </header>
 
-<form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
-  <label class="field"><span>Full Name</span><input type="text" formControlName="full_name" /></label>
-  <label class="field"><span>Username</span><input type="text" formControlName="username" /></label>
-  <label class="field"><span>Email</span><input type="email" formControlName="email" /></label>
-  <label class="field"><span>Password</span><input type="password" formControlName="password" /></label>
-  <label class="field"><span>Phone</span><input type="text" formControlName="phone" /></label>
-  <label class="field"><span>Gender</span><input type="text" formControlName="gender" /></label>
-  <label class="field"><span>Date of Birth</span><input type="date" formControlName="date_of_birth" /></label>
-  <label class="field"><span>Address</span><textarea rows="2" formControlName="address"></textarea></label>
-  <label class="field"><span>Emergency Contact</span><input type="text" formControlName="emergency_contact_name" /></label>
-  <label class="field"><span>Emergency Contact Phone</span><input type="text" formControlName="emergency_contact_phone" /></label>
+  <form class="register-form" [formGroup]="form" (ngSubmit)="submit()">
+    <section class="form-section">
+      <div class="section-heading">
+        <h2>Account</h2>
+        <p>Basic details used for sign-in and communication.</p>
+      </div>
 
-  <button class="primary-btn" type="submit">{{ loading ? 'Creating...' : 'Create Account' }}</button>
-  <a routerLink="/auth/login">Already have an account? Sign in</a>
-  @if (errorMessage) {
-    <div class="error-text">{{ errorMessage }}</div>
-  }
-</form>
+      <div class="field-grid">
+        <label class="field">
+          <span>Full Name</span>
+          <input type="text" formControlName="full_name" placeholder="Enter your full name" />
+        </label>
+
+        <label class="field">
+          <span>Username</span>
+          <input type="text" formControlName="username" placeholder="Choose a username" />
+        </label>
+
+        <label class="field">
+          <span>Email</span>
+          <input type="email" formControlName="email" placeholder="name@example.com" />
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <div class="password-shell">
+            <input
+              [type]="showPassword ? 'text' : 'password'"
+              formControlName="password"
+              placeholder="At least 8 characters"
+            />
+            <button
+              class="password-toggle"
+              type="button"
+              (click)="togglePasswordVisibility()"
+              [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+              [attr.aria-pressed]="showPassword"
+            >
+              <span class="password-toggle-icon" [class.is-visible]="showPassword" aria-hidden="true"></span>
+            </button>
+          </div>
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <h2>Profile</h2>
+        <p>Optional demographic and contact details.</p>
+      </div>
+
+      <div class="field-grid">
+        <label class="field">
+          <span>Phone</span>
+          <input type="text" formControlName="phone" placeholder="Phone number" />
+        </label>
+
+        <label class="field">
+          <span>Gender</span>
+          <input type="text" formControlName="gender" placeholder="Gender" />
+        </label>
+
+        <label class="field">
+          <span>Date of Birth</span>
+          <input type="date" formControlName="date_of_birth" />
+        </label>
+
+        <label class="field field-full">
+          <span>Address</span>
+          <textarea rows="3" formControlName="address" placeholder="Current address"></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="section-heading">
+        <h2>Emergency Contact</h2>
+        <p>Provide a contact person for urgent communication.</p>
+      </div>
+
+      <div class="field-grid">
+        <label class="field">
+          <span>Contact Name</span>
+          <input type="text" formControlName="emergency_contact_name" placeholder="Emergency contact name" />
+        </label>
+
+        <label class="field">
+          <span>Contact Phone</span>
+          <input type="text" formControlName="emergency_contact_phone" placeholder="Emergency contact phone" />
+        </label>
+      </div>
+    </section>
+
+    @if (errorMessage) {
+      <div class="error-text">{{ errorMessage }}</div>
+    }
+
+    <div class="form-actions">
+      <button class="primary-btn submit-btn" type="submit">{{ loading ? 'Creating...' : 'Create Account' }}</button>
+      <div class="login-link">
+        <span>Already registered?</span>
+        <a routerLink="/auth/login">Sign in</a>
+      </div>
+    </div>
+  </form>
+</section>

@@ -1,16 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { AppointmentsService } from '../../../appointments/services/appointments.service';
 import { IPDBed } from '../../../ipd/models/ipd.models';
 import { IPDService } from '../../../ipd/services/ipd.service';
-import { Patient } from '../../../patients/models/patient.models';
-import { PatientService } from '../../../patients/services/patient.service';
-import { OPDSummary, OPDVisit } from '../../models/opd.models';
+import { OPDSummary, OPDVisit, OPDVisitOrder, UpdateOPDConsultationPayload } from '../../models/opd.models';
 import { OPDService } from '../../services/opd.service';
 
 @Component({
@@ -23,14 +22,14 @@ export class OPDOverviewComponent {
   private readonly fb = inject(FormBuilder);
   private readonly opdService = inject(OPDService);
   private readonly ipdService = inject(IPDService);
-  private readonly patientService = inject(PatientService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
+  private readonly appointmentsService = inject(AppointmentsService);
   private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   summary: OPDSummary | null = null;
   visits: OPDVisit[] = [];
-  patients: Patient[] = [];
   doctors: User[] = [];
   beds: IPDBed[] = [];
   selectedVisit: OPDVisit | null = null;
@@ -54,6 +53,26 @@ export class OPDOverviewComponent {
     quantity: [1, Validators.required],
   });
 
+  readonly consultationForm = this.fb.group({
+    chief_complaint: [''],
+    history_of_present_illness: [''],
+    past_history: [''],
+    vital_signs: [''],
+    examination_note: [''],
+    provisional_diagnosis: [''],
+    final_diagnosis: [''],
+    follow_up_date: [''],
+    follow_up_note: [''],
+    note: [''],
+  });
+
+  readonly followUpForm = this.fb.group({
+    doctor_user_id: [''],
+    appointment_at: [''],
+    reason: [''],
+    note: [''],
+  });
+
   readonly convertForm = this.fb.group({
     admitted_at: [new Date().toISOString().slice(0, 16), Validators.required],
     admission_type: ['General', Validators.required],
@@ -70,6 +89,12 @@ export class OPDOverviewComponent {
 
   constructor() {
     this.loadAll();
+    this.route.queryParamMap.subscribe((params) => {
+      const openVisitId = params.get('openVisit');
+      if (openVisitId) {
+        this.opdService.getVisit(openVisitId).subscribe((visit) => (this.selectedVisit = visit));
+      }
+    });
   }
 
   loadAll(): void {
@@ -80,33 +105,16 @@ export class OPDOverviewComponent {
         this.selectedVisit = visits.find((item) => item.id === this.selectedVisit?.id) ?? null;
       }
     });
-    this.patientService.list().subscribe((patients) => (this.patients = patients));
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
     this.ipdService.listBeds().subscribe((beds) => (this.beds = beds));
   }
 
   navigateToNewPatient(): void {
-    void this.router.navigate(['/patients/new'], { queryParams: { returnTo: '/opd' } });
+    void this.router.navigate(['/patients/new'], { queryParams: { returnTo: '/opd/register' } });
   }
 
-  submit(): void {
-    if (this.form.invalid) {
-      return;
-    }
-    this.opdService.createVisit(this.form.getRawValue() as never).subscribe((visit) => {
-      this.form.reset({
-        patient_id: '',
-        visit_date: new Date().toISOString().slice(0, 10),
-        department_name: 'General OPD',
-        doctor_user_id: '',
-        consulting_doctor_name: '',
-        chief_complaint: '',
-        consultation_fee: 0,
-        note: '',
-      });
-      this.loadAll();
-      this.notificationService.success(`OPD visit ${visit.visit_number} created.`);
-    });
+  navigateToRegisterVisit(): void {
+    void this.router.navigate(['/opd/register']);
   }
 
   setStatus(visit: OPDVisit, status: string): void {
@@ -118,6 +126,24 @@ export class OPDOverviewComponent {
 
   selectVisit(visit: OPDVisit): void {
     this.selectedVisit = visit;
+    this.consultationForm.patchValue({
+      chief_complaint: visit.chief_complaint || '',
+      history_of_present_illness: visit.history_of_present_illness || '',
+      past_history: visit.past_history || '',
+      vital_signs: visit.vital_signs || '',
+      examination_note: visit.examination_note || '',
+      provisional_diagnosis: visit.provisional_diagnosis || '',
+      final_diagnosis: visit.final_diagnosis || '',
+      follow_up_date: visit.follow_up_date || '',
+      follow_up_note: visit.follow_up_note || '',
+      note: visit.note || '',
+    });
+    this.followUpForm.patchValue({
+      doctor_user_id: visit.consulting_doctor_user_id || '',
+      appointment_at: this.buildDefaultFollowUpDateTime(visit.follow_up_date || ''),
+      reason: visit.follow_up_note || visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || '',
+      note: visit.note || '',
+    });
     this.convertForm.patchValue({
       admitted_at: new Date().toISOString().slice(0, 16),
       admission_type: 'General',
@@ -126,11 +152,56 @@ export class OPDOverviewComponent {
       bed_number: '',
       doctor_user_id: visit.consulting_doctor_user_id || visit.doctor_user_id || '',
       attending_doctor_name: visit.consulting_doctor_name,
-      diagnosis: visit.chief_complaint || '',
+      diagnosis: visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || '',
       daily_charge: 0,
       advance_amount: 0,
       expected_discharge_date: '',
     });
+  }
+
+  saveConsultation(): void {
+    if (!this.selectedVisit) {
+      return;
+    }
+    const payload = this.consultationForm.getRawValue() as UpdateOPDConsultationPayload;
+    this.opdService
+      .updateConsultation(this.selectedVisit.id, {
+        ...payload,
+        follow_up_date: payload.follow_up_date || null,
+      })
+      .subscribe((visit) => {
+        this.selectedVisit = visit;
+        this.followUpForm.patchValue({
+          appointment_at: this.buildDefaultFollowUpDateTime(visit.follow_up_date || ''),
+          reason: visit.follow_up_note || visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || '',
+          note: visit.note || '',
+        });
+        this.loadAll();
+        this.notificationService.success(`Consultation notes saved for ${visit.visit_number}.`);
+      });
+  }
+
+  createFollowUpAppointment(): void {
+    if (!this.selectedVisit || this.followUpForm.invalid) {
+      return;
+    }
+
+    const value = this.followUpForm.getRawValue();
+    if (!value.doctor_user_id || !value.appointment_at) {
+      return;
+    }
+
+    this.appointmentsService
+      .create({
+        patient_id: this.selectedVisit.patient.id,
+        doctor_user_id: value.doctor_user_id,
+        appointment_at: value.appointment_at,
+        reason: value.reason || this.selectedVisit.follow_up_note || this.selectedVisit.final_diagnosis || null,
+        note: value.note || `Follow-up from ${this.selectedVisit.visit_number}`,
+      })
+      .subscribe((appointment) => {
+        this.notificationService.success(`Follow-up appointment ${appointment.appointment_number} created.`);
+      });
   }
 
   submitOrder(): void {
@@ -146,13 +217,137 @@ export class OPDOverviewComponent {
     });
   }
 
-  onDoctorChanged(): void {
-    const doctorId = this.form.getRawValue().doctor_user_id;
-    const doctor = this.doctors.find((item) => item.id === doctorId);
-    if (!doctor) {
+  updateProcedureOrder(order: OPDVisitOrder, status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'): void {
+    if (!this.selectedVisit) {
       return;
     }
-    this.form.patchValue({ consulting_doctor_name: doctor.full_name });
+
+    const resultText =
+      status === 'completed'
+        ? window.prompt('Enter procedure outcome or note', order.result_text || order.instructions || '')
+        : order.result_text || null;
+    if (status === 'completed' && resultText === null) {
+      return;
+    }
+
+    this.opdService
+      .updateOrder(this.selectedVisit.id, order.id, {
+        status,
+        result_text: resultText || null,
+      })
+      .subscribe((visit) => {
+        this.selectedVisit = visit;
+        this.loadAll();
+        this.notificationService.success(`Procedure ${order.item_name} moved to ${status.replace('_', ' ')}.`);
+      });
+  }
+
+  getOrderTypeCount(type: string): number {
+    return this.selectedVisit?.orders.filter((order) => order.order_type === type).length ?? 0;
+  }
+
+  openBilling(visit: OPDVisit): void {
+    void this.router.navigate(['/billing/create'], {
+      queryParams: {
+        patientId: visit.patient.id,
+        opdVisitId: visit.id,
+      },
+    });
+  }
+
+  printPrescription(visit: OPDVisit): void {
+    const prescriptionOrders = visit.orders.filter((order) => order.order_type === 'prescription');
+    if (!prescriptionOrders.length) {
+      this.notificationService.info(`No prescription orders available for ${visit.visit_number}.`);
+      return;
+    }
+
+    const popup = window.open('', '_blank', 'width=960,height=720');
+    if (!popup) {
+      return;
+    }
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>${visit.visit_number} Prescription</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; color: #122033; }
+            h1, h2, h3, p { margin: 0 0 12px; }
+            .sheet { display: grid; gap: 20px; }
+            .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+            .card { border: 1px solid #d6e2ef; border-radius: 16px; padding: 18px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border-bottom: 1px solid #d6e2ef; padding: 12px 10px; text-align: left; vertical-align: top; }
+            .muted { color: #5b6b7d; }
+            .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-weight: 600; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="sheet">
+            <div>
+              <span class="badge">E-Prescription</span>
+              <h1>${visit.visit_number}</h1>
+              <p class="muted">Generated on ${new Date().toLocaleString()}</p>
+            </div>
+            <div class="row">
+              <div class="card">
+                <h3>Patient</h3>
+                <p><strong>${visit.patient.first_name} ${visit.patient.last_name}</strong></p>
+                <p>Patient No: ${visit.patient.patient_number}</p>
+                <p>Phone: ${visit.patient.phone ?? '-'}</p>
+                <p>Gender: ${visit.patient.gender ?? '-'}</p>
+              </div>
+              <div class="card">
+                <h3>Consultation</h3>
+                <p>Doctor: ${visit.consulting_doctor_name}</p>
+                <p>Date: ${visit.visit_date}</p>
+                <p>Department: ${visit.department_name}</p>
+                <p>Chief Complaint: ${visit.chief_complaint || '-'}</p>
+                <p>Vitals: ${visit.vital_signs || '-'}</p>
+                <p>Diagnosis: ${visit.final_diagnosis || visit.provisional_diagnosis || '-'}</p>
+                <p>Follow Up: ${visit.follow_up_date || '-'}</p>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Medication Plan</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Medicine</th>
+                    <th>Qty</th>
+                    <th>Instructions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${prescriptionOrders
+                    .map(
+                      (order) => `
+                        <tr>
+                          <td>${order.item_name}</td>
+                          <td>${order.quantity}</td>
+                          <td>${order.instructions || '-'}</td>
+                        </tr>`
+                    )
+                    .join('')}
+                </tbody>
+              </table>
+            </div>
+            <div class="card">
+              <h3>Clinical Note</h3>
+              <p>HPI: ${visit.history_of_present_illness || '-'}</p>
+              <p>Past History: ${visit.past_history || '-'}</p>
+              <p>Examination: ${visit.examination_note || '-'}</p>
+              <p>Advice: ${visit.follow_up_note || '-'}</p>
+              <p>Note: ${visit.note || 'No additional note recorded.'}</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    popup.focus();
+    popup.print();
   }
 
   onOrderTypeChanged(): void {
@@ -202,5 +397,12 @@ export class OPDOverviewComponent {
         this.loadAll();
         this.notificationService.success(`Visit ${this.selectedVisit?.visit_number} converted to ${admission.admission_number}.`);
       });
+  }
+
+  private buildDefaultFollowUpDateTime(followUpDate: string): string {
+    if (!followUpDate) {
+      return '';
+    }
+    return `${followUpDate}T10:00`;
   }
 }

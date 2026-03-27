@@ -8,8 +8,18 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_any_permissions
 from app.modules.laboratory.service import LaboratoryService
 from app.schemas.encounter import ClinicalInvestigationResultUpdate, ClinicalInvestigationWorkItemRead
+from app.schemas.laboratory import LaboratorySummaryRead
 
 router = APIRouter(prefix="/laboratory", tags=["Laboratory"])
+
+
+@router.get(
+    "/summary",
+    response_model=LaboratorySummaryRead,
+    dependencies=[Depends(require_any_permissions("laboratory.view", "laboratory.manage"))],
+)
+def get_laboratory_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> LaboratorySummaryRead:
+    return LaboratoryService(db).get_summary(user)
 
 
 @router.get(

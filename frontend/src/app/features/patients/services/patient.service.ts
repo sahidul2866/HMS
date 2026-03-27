@@ -2,12 +2,22 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ApiBaseService } from '../../../core/services/api-base.service';
-import { CreatePatientPayload, Patient, PatientClinicalHistory } from '../models/patient.models';
+import { CreatePatientPayload, Patient, PatientClinicalHistory, PatientLookupResult, PatientMobileLookup } from '../models/patient.models';
 
 @Injectable({ providedIn: 'root' })
 export class PatientService extends ApiBaseService {
   list(): Observable<Patient[]> {
     return this.http.get<Patient[]>(this.url('/patients'));
+  }
+
+  search(q: string, limit = 10): Observable<PatientLookupResult[]> {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    return this.http.get<PatientLookupResult[]>(this.url(`/patients/search?${params.toString()}`));
+  }
+
+  lookupByMobile(mobile: string): Observable<PatientMobileLookup> {
+    const params = new URLSearchParams({ mobile });
+    return this.http.get<PatientMobileLookup>(this.url(`/patients/by-mobile?${params.toString()}`));
   }
 
   get(patientId: string): Observable<Patient> {

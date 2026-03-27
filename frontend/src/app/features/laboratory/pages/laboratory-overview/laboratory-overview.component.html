@@ -1,67 +1,71 @@
 <section class="workspace-shell">
   <section class="page-card module-hero">
-    <h1 class="page-title">Laboratory Worklist</h1>
-    <p class="page-subtitle">Laboratory now consumes OPD investigation orders directly so sample execution and result entry stay linked to the clinical visit.</p>
-
-    <div class="grid-2">
-      @for (item of summary; track item.label) {
-        <div class="page-card">
-          <div class="muted">{{ item.label }}</div>
-          <h3>{{ item.value }}</h3>
-        </div>
-      }
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Laboratory Module</div>
+        <h1 class="page-title">Laboratory Queue</h1>
+        <p class="page-subtitle">Keep the worklist clean here, then open a dedicated bench workspace for collection, processing, results, and verification.</p>
+      </div>
     </div>
+
+    @if (summary) {
+      <div class="hero-summary">
+        @for (item of summaryCards; track item.label) {
+          <div class="hero-stat">
+            <div class="label">{{ item.label }}</div>
+            <div class="value">{{ item.value }}</div>
+          </div>
+        }
+      </div>
+    }
   </section>
 
-  <section class="page-card">
-    <h2 class="page-title">Investigation Queue</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Visit</th>
-          <th>Patient</th>
-          <th>Doctor</th>
-          <th>Investigation</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of worklist; track item.order_id) {
-          <tr>
-            <td>{{ item.visit_number }}</td>
-            <td>{{ item.patient_name }}</td>
-            <td>{{ item.consulting_doctor_name }}</td>
-            <td>{{ item.item_name }}</td>
-            <td><span class="pill">{{ item.status }}</span></td>
-            <td><button class="secondary-btn" type="button" (click)="selectItem(item)">Open</button></td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </section>
+  <section class="lab-grid">
+    <section class="page-card soft-panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Investigation Queue</h2>
+          <div class="section-copy">Review the active queue, filter by clinical context, and route each order into the dedicated workbench.</div>
+        </div>
+      </div>
 
-  @if (selectedItem) {
-    <section class="page-card">
-      <h2 class="page-title">Result Entry For {{ selectedItem.visit_number }}</h2>
-      <div class="page-subtitle">{{ selectedItem.patient_name }} · {{ selectedItem.item_name }} · {{ selectedItem.instructions || 'No instructions' }}</div>
-      <form class="form-grid" [formGroup]="resultForm" (ngSubmit)="submitResult()">
-        <label class="field">
-          <span>Status</span>
-          <select formControlName="status">
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <label class="field" style="grid-column:1/-1;">
-          <span>Result</span>
-          <textarea rows="5" formControlName="result_text"></textarea>
-        </label>
-        @if (sessionService.hasPermission('laboratory.manage')) {
-          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Save Result</button></div>
-        }
-      </form>
+      <div class="queue-toolbar">
+        <input type="text" [(ngModel)]="queueSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search visit, patient, doctor, test, diagnosis" />
+        <div class="pill-row">
+          <span class="pill">Orders {{ worklist.length }}</span>
+          @if (summary) {
+            <span class="pill">Verified {{ summary.verified_orders }}</span>
+          }
+        </div>
+      </div>
+
+      @if (filteredWorklist.length) {
+        <div class="worklist-stack">
+          @for (item of filteredWorklist; track item.order_id) {
+            <div class="work-item-card">
+              <div class="work-item-head">
+                <div>
+                  <strong>{{ item.item_name }}</strong>
+                  <div class="page-subtitle">{{ item.visit_number }} · {{ item.patient_number }} · {{ item.patient_name }}</div>
+                </div>
+                <button class="secondary-btn" type="button" (click)="openWorkbench(item)">Open Workbench</button>
+              </div>
+              <div class="pill-row">
+                <span class="pill">{{ item.status }}</span>
+                <span class="pill">{{ item.visit_date | date:'mediumDate' }}</span>
+                <span class="pill">{{ item.consulting_doctor_name }}</span>
+              </div>
+              <div class="work-copy">
+                Complaint: {{ item.chief_complaint || 'Not recorded' }}<br />
+                Diagnosis: {{ item.diagnosis || 'Not recorded' }}<br />
+                Instructions: {{ item.instructions || 'No instructions' }}
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-state">No laboratory work items match the current search.</div>
+      }
     </section>
-  }
+  </section>
 </section>

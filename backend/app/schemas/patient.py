@@ -24,6 +24,19 @@ class PatientRead(PatientCreate):
     model_config = {"from_attributes": True}
 
 
+class PatientLookupResult(PatientRead):
+    full_name: str
+
+
+class PatientMobileLookupRead(BaseModel):
+    mobile: str
+    normalized_mobile: str
+    max_patients_allowed: int
+    current_patient_count: int
+    can_add_more: bool
+    patients: list[PatientLookupResult]
+
+
 class PatientHistoryOrderRead(BaseModel):
     id: UUID
     order_type: str
@@ -43,6 +56,15 @@ class PatientHistoryOPDVisitRead(BaseModel):
     department_name: str
     consulting_doctor_name: str
     chief_complaint: str | None = None
+    history_of_present_illness: str | None = None
+    past_history: str | None = None
+    vital_signs: str | None = None
+    examination_note: str | None = None
+    provisional_diagnosis: str | None = None
+    final_diagnosis: str | None = None
+    follow_up_date: date | None = None
+    follow_up_note: str | None = None
+    note: str | None = None
     status: str
     orders: list[PatientHistoryOrderRead]
 
@@ -64,8 +86,21 @@ class PatientHistoryBillingInvoiceRead(BaseModel):
     invoice_number: str
     created_at: datetime
     status: str
+    payment_status: str
     total_amount: str
+    paid_amount: str
+    due_amount: str
     referred_doctor_name: str | None = None
+
+
+class PatientHistoryBillingPaymentRead(BaseModel):
+    id: UUID
+    invoice_number: str
+    receipt_number: str
+    payment_method: str
+    amount: str
+    received_at: datetime
+    note: str | None = None
 
 
 class PatientHistoryPharmacyDispenseRead(BaseModel):
@@ -77,9 +112,21 @@ class PatientHistoryPharmacyDispenseRead(BaseModel):
     created_at: datetime
 
 
+class PatientHistoryAppointmentRead(BaseModel):
+    id: UUID
+    appointment_number: str
+    doctor_name: str
+    appointment_at: datetime
+    status: str
+    reason: str | None = None
+    note: str | None = None
+
+
 class PatientClinicalHistoryRead(BaseModel):
     patient: PatientRead
     opd_visits: list[PatientHistoryOPDVisitRead]
+    appointments: list[PatientHistoryAppointmentRead]
     ipd_admissions: list[PatientHistoryIPDAdmissionRead]
     billing_invoices: list[PatientHistoryBillingInvoiceRead]
+    billing_payments: list[PatientHistoryBillingPaymentRead]
     pharmacy_dispenses: list[PatientHistoryPharmacyDispenseRead]

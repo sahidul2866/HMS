@@ -6,6 +6,11 @@
         <h1 class="page-title">Appointments</h1>
         <div class="page-subtitle">Manage doctor appointments and convert arrivals into OPD visits without re-entering patient context.</div>
       </div>
+      <div class="toolbar-row">
+        @if (sessionService.hasPermission('appointment.manage')) {
+          <button class="primary-btn" type="button" (click)="navigateToCreateAppointment()">Create Appointment</button>
+        }
+      </div>
     </div>
     <div class="hero-summary">
       <div class="hero-stat"><div class="label">Today</div><div class="value">{{ todayCount }}</div></div>

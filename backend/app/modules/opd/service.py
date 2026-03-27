@@ -10,7 +10,15 @@ from app.modules.ipd.service import IPDService
 from app.modules.opd.repository import OPDRepository
 from app.modules.patients.repository import PatientsRepository
 from app.modules.users.repository import UsersRepository
-from app.schemas.encounter import IPDAdmissionCreate, OPDConvertToIPD, OPDSummary, OPDVisitCreate, OPDVisitOrderCreate
+from app.schemas.encounter import (
+    IPDAdmissionCreate,
+    OPDConvertToIPD,
+    OPDSummary,
+    OPDVisitConsultationUpdate,
+    OPDVisitCreate,
+    OPDVisitOrderCreate,
+    OPDVisitOrderUpdate,
+)
 from app.utils.enums import AuditAction
 
 
@@ -23,6 +31,14 @@ class OPDService:
 
     def list_visits(self, actor: User) -> list[OPDVisit]:
         return self.repository.list_visits(actor.branch_id)
+
+    def get_visit(self, visit_id, actor: User) -> OPDVisit:
+        visit = self.repository.get_visit(visit_id)
+        if not visit:
+            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
+        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
+            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+        return visit
 
     def get_summary(self, actor: User) -> OPDSummary:
         totals = self.repository.get_summary(actor.branch_id, datetime.now(UTC).date())
@@ -86,6 +102,24 @@ class OPDService:
         self.db.refresh(visit)
         return visit
 
+    def update_consultation(self, visit_id, payload: OPDVisitConsultationUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.get_visit(visit_id, actor)
+        for field, value in payload.model_dump().items():
+            setattr(visit, field, value)
+        visit.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.OPD_VISIT_STATUS_UPDATE,
+            module="opd",
+            entity_type="opd_visit",
+            entity_id=str(visit.id),
+            detail={"visit_number": visit.visit_number, "consultation_updated": True},
+            context=context,
+        )
+        self.db.commit()
+        self.db.refresh(visit)
+        return visit
+
     def create_order(self, visit_id, payload: OPDVisitOrderCreate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.repository.get_visit(visit_id)
         if not visit:
@@ -107,6 +141,40 @@ class OPDService:
             entity_type="opd_visit_order",
             entity_id=str(order.id),
             detail={"visit_number": visit.visit_number, "order_type": order.order_type, "item_name": order.item_name},
+            context=context,
+        )
+        self.db.commit()
+        return self.repository.get_visit(visit.id) or visit
+
+    def update_order(self, visit_id, order_id, payload: OPDVisitOrderUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.repository.get_visit(visit_id)
+        if not visit:
+            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
+        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
+            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+
+        order = self.repository.get_order(order_id)
+        if not order or order.visit_id != visit.id:
+            raise AppException(404, "opd_order_not_found", "OPD order not found")
+        if order.order_type != "procedure":
+            raise AppException(400, "invalid_opd_order_type", "Only procedure orders can be updated from the OPD desk")
+
+        order.status = payload.status
+        order.result_text = payload.result_text
+        if payload.status == "completed":
+            order.completed_at = datetime.now(UTC)
+            order.completed_by_user_id = actor.id
+        else:
+            order.completed_at = None
+            order.completed_by_user_id = None
+        order.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.OPD_VISIT_ORDER_UPDATE,
+            module="opd",
+            entity_type="opd_visit_order",
+            entity_id=str(order.id),
+            detail={"visit_number": visit.visit_number, "order_type": order.order_type, "status": payload.status},
             context=context,
         )
         self.db.commit()

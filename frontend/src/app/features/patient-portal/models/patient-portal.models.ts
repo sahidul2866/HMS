@@ -24,3 +24,7 @@ export interface PatientAppointmentPayload {
   reason: string;
   note?: string | null;
 }
+
+export interface PatientAppointmentStatusPayload {
+  status: 'cancelled';
+}

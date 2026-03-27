@@ -1,0 +1,38 @@
+:host {
+  display: block;
+}
+
+.workspace-shell {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.hero-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.9rem;
+}
+
+.hero-stat {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(14, 116, 144, 0.84));
+  color: #f0fdfa;
+}
+
+.hero-stat .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(204, 251, 241, 0.78);
+}
+
+.hero-stat .value {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.page-card:not(.module-hero) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+}

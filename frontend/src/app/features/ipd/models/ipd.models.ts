@@ -24,9 +24,25 @@ export interface IPDAdmission {
   status: string;
   expected_discharge_date?: string | null;
   discharged_at?: string | null;
+  discharge_condition?: string | null;
+  discharge_diagnosis?: string | null;
+  discharge_summary?: string | null;
   discharge_note?: string | null;
   patient: Patient;
+  movements: IPDAdmissionMovement[];
   created_at: string;
+}
+
+export interface IPDAdmissionMovement {
+  id: string;
+  movement_type: string;
+  moved_at: string;
+  from_ward_name?: string | null;
+  from_bed_number?: string | null;
+  to_ward_name?: string | null;
+  to_bed_number?: string | null;
+  note?: string | null;
+  moved_by_user_id: string;
 }
 
 export interface IPDBed {
@@ -60,4 +76,18 @@ export interface CreateIPDBedPayload {
   bed_type: string;
   daily_rate: number;
   note?: string | null;
+}
+
+export interface TransferIPDAdmissionPayload {
+  bed_id?: string | null;
+  ward_name: string;
+  bed_number: string;
+  note?: string | null;
+}
+
+export interface DischargeIPDAdmissionPayload {
+  discharge_condition?: string | null;
+  discharge_diagnosis?: string | null;
+  discharge_summary?: string | null;
+  discharge_note?: string | null;
 }

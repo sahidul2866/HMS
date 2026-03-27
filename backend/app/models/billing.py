@@ -50,6 +50,10 @@ class BillingInvoice(Base, BaseModelMixin):
     discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    refunded_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    due_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    payment_status: Mapped[str] = mapped_column(String(30), nullable=False, default="unpaid")
     referred_doctor_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="posted")
     void_reason: Mapped[str | None] = mapped_column(Text)
@@ -65,6 +69,8 @@ class BillingInvoice(Base, BaseModelMixin):
     billed_by = relationship("User", foreign_keys=[billed_by_user_id], back_populates="billed_invoices")
     voided_by = relationship("User", foreign_keys=[voided_by_user_id], back_populates="voided_invoices")
     items = relationship("BillingInvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
+    payments = relationship("BillingPayment", back_populates="invoice", cascade="all, delete-orphan")
+    refunds = relationship("BillingRefund", back_populates="invoice", cascade="all, delete-orphan")
 
 
 class BillingInvoiceItem(Base, BaseModelMixin):
@@ -81,3 +87,43 @@ class BillingInvoiceItem(Base, BaseModelMixin):
 
     invoice = relationship("BillingInvoice", back_populates="items")
     billing_service = relationship("BillingService", back_populates="invoice_items")
+
+
+class BillingPayment(Base, BaseModelMixin):
+    __tablename__ = "billing_payments"
+
+    invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
+    patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    receipt_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    payment_method: Mapped[str] = mapped_column(String(30), nullable=False, default="cash")
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    collected_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    invoice = relationship("BillingInvoice", back_populates="payments")
+    patient = relationship("Patient")
+    branch = relationship("Branch")
+    collected_by = relationship("User", foreign_keys=[collected_by_user_id])
+    refunds = relationship("BillingRefund", back_populates="payment")
+
+
+class BillingRefund(Base, BaseModelMixin):
+    __tablename__ = "billing_refunds"
+
+    invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
+    payment_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_payments.id"))
+    patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    refund_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    refunded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    refunded_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    invoice = relationship("BillingInvoice", back_populates="refunds")
+    payment = relationship("BillingPayment", back_populates="refunds")
+    patient = relationship("Patient")
+    branch = relationship("Branch")
+    refunded_by = relationship("User", foreign_keys=[refunded_by_user_id])

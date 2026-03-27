@@ -10,6 +10,8 @@ import {
   BillingReferralSummary,
   BillingSummary,
   BillingInvoiceVoidPayload,
+  BillingPaymentPayload,
+  BillingRefundPayload,
   BillingInvoiceItemPayload,
   BillingService,
   CreateBillingInvoicePayload,
@@ -51,6 +53,14 @@ export class BillingServiceApi extends ApiBaseService {
 
   voidInvoice(invoiceId: string, payload: BillingInvoiceVoidPayload): Observable<BillingInvoice> {
     return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/void`), payload);
+  }
+
+  collectPayment(invoiceId: string, payload: BillingPaymentPayload): Observable<BillingInvoice> {
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/payments`), payload);
+  }
+
+  createRefund(invoiceId: string, payload: BillingRefundPayload): Observable<BillingInvoice> {
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/refunds`), payload);
   }
 
   getSummary(filters: BillingInvoiceFilters = {}): Observable<BillingSummary> {

@@ -49,4 +49,36 @@ export class ReportingOverviewComponent {
       minimumFractionDigits: 2,
     }).format(Number(value));
   }
+
+  get clinicalWorkflowRows(): Array<{ workflow: string; pending: number; active: number; verified: number | string }> {
+    if (!this.clinicalSummary) {
+      return [];
+    }
+    return [
+      {
+        workflow: 'Appointments',
+        pending: this.clinicalSummary.scheduled_appointments,
+        active: this.clinicalSummary.completed_appointments,
+        verified: this.clinicalSummary.cancelled_appointments,
+      },
+      {
+        workflow: 'Laboratory',
+        pending: this.clinicalSummary.pending_laboratory,
+        active: this.clinicalSummary.completed_laboratory,
+        verified: this.clinicalSummary.verified_laboratory,
+      },
+      {
+        workflow: 'Radiology',
+        pending: this.clinicalSummary.pending_radiology,
+        active: this.clinicalSummary.completed_radiology,
+        verified: this.clinicalSummary.verified_radiology,
+      },
+      {
+        workflow: 'Billing',
+        pending: this.clinicalSummary.unpaid_invoices + this.clinicalSummary.partial_invoices,
+        active: this.clinicalSummary.paid_invoices,
+        verified: '-',
+      },
+    ];
+  }
 }

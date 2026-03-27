@@ -1,0 +1,109 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Scheduling</div>
+        <h1 class="page-title">Create Appointment</h1>
+        <div class="page-subtitle">Book a new appointment with patient lookup, quick doctor selection, and a cleaner front-desk flow.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="ghost-btn" type="button" (click)="openAppointmentDesk()">Open Appointment Desk</button>
+      </div>
+    </div>
+
+    <div class="hero-summary">
+      <div class="hero-stat"><div class="label">Patients</div><div class="value">{{ patients.length }}</div></div>
+      <div class="hero-stat"><div class="label">Doctors</div><div class="value">{{ doctors.length }}</div></div>
+      <div class="hero-stat"><div class="label">Lookup</div><div class="value">{{ selectedPatient ? 'Matched' : 'Required' }}</div></div>
+    </div>
+  </section>
+
+  <section class="spotlight-grid">
+    <section class="soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Appointment Details</h2>
+          <div class="section-copy">Select the patient once, then fill the rest of the appointment in a focused booking form.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+        <div class="lookup-shell" style="grid-column:1/-1;">
+          <div class="lookup-head">
+            <div>
+              <h3 class="section-title">Existing Patient Lookup</h3>
+              <div class="section-copy">Reuse patient data instead of creating duplicate registrations.</div>
+            </div>
+          </div>
+          <div class="toolbar-row lookup-row">
+            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
+            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
+            @if (selectedPatient) {
+              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+            }
+          </div>
+          @if (patientSearchResults.length) {
+            <div class="search-results">
+              @for (patient of patientSearchResults; track patient.id) {
+                <button class="secondary-btn result-btn" type="button" (click)="applyPatient(patient)">
+                  {{ patient.patient_number }} - {{ patient.full_name }}
+                  @if (patient.phone) { · {{ patient.phone }} }
+                </button>
+              }
+            </div>
+          }
+          @if (selectedPatient) {
+            <div class="selected-patient">
+              <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
+              <div class="page-subtitle">
+                Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="grid-2" style="grid-column:1/-1;">
+          <label class="field">
+            <span>Patient</span>
+            <select formControlName="patient_id">
+              <option value="">Select patient</option>
+              @for (patient of patients; track patient.id) {
+                <option [value]="patient.id">{{ formatPatient(patient) }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Doctor</span>
+            <select formControlName="doctor_user_id">
+              <option value="">Select doctor</option>
+              @for (doctor of doctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="grid-2" style="grid-column:1/-1;">
+          <label class="field">
+            <span>Appointment Time</span>
+            <input type="datetime-local" formControlName="appointment_at" />
+          </label>
+          <label class="field">
+            <span>Reason</span>
+            <input type="text" formControlName="reason" placeholder="Reason for visit" />
+          </label>
+        </div>
+
+        <label class="field" style="grid-column:1/-1;">
+          <span>Note</span>
+          <textarea rows="3" formControlName="note" placeholder="Additional scheduling note"></textarea>
+        </label>
+
+        <div style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Appointment' }}</button>
+        </div>
+      </form>
+    </section>
+  </section>
+</div>

@@ -1,102 +1,149 @@
-<section class="page-card">
-  <h1 class="page-title">Pharmacy Dispense</h1>
-  <div class="page-subtitle">Dispense against posted billing invoices or directly against pending OPD prescription orders.</div>
-
-  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-    <label class="field">
-      <span>Pending OPD Prescription</span>
-      <select formControlName="source_visit_order_id" (change)="onPrescriptionChanged()">
-        <option value="">Select pending prescription</option>
-        @for (prescription of pendingPrescriptions; track prescription.order_id) {
-          <option [value]="prescription.order_id">{{ prescription.visit_number }} - {{ prescription.patient_name }} - {{ prescription.item_name }}</option>
-        }
-      </select>
-    </label>
-    <label class="field">
-      <span>Billing Invoice</span>
-      <select formControlName="billing_invoice_id" (change)="onInvoiceChanged()">
-        <option value="">Select posted invoice</option>
-        @for (invoice of invoices; track invoice.id) {
-          <option [value]="invoice.id">{{ invoice.invoice_number }} - {{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</option>
-        }
-      </select>
-    </label>
-    <label class="field">
-      <span>Prescription Reference</span>
-      <input type="text" formControlName="prescription_ref" />
-    </label>
-    <label class="field">
-      <span>Medicine</span>
-      <input type="text" formControlName="medicine_name" />
-    </label>
-    <label class="field">
-      <span>Quantity</span>
-      <input type="number" formControlName="quantity" />
-    </label>
-    <label class="field">
-      <span>Unit Price</span>
-      <input type="number" formControlName="unit_price" />
-    </label>
-    <label class="field" style="grid-column:1/-1;">
-      <span>Note</span>
-      <textarea rows="3" formControlName="note"></textarea>
-    </label>
-    <div style="grid-column:1/-1;">
-      <button class="primary-btn" type="submit">Dispense</button>
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Pharmacy Module</div>
+        <h1 class="page-title">Prescription Queue</h1>
+        <div class="page-subtitle">Keep the queue and dispense history readable here, then open a dedicated workbench for issuing medicines or processing returns.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openWorkbench()">Open Manual Workbench</button>
+      </div>
     </div>
-  </form>
 
-  @if (resultMessage) {
-    <p class="pill">{{ resultMessage }}</p>
-  }
-</section>
+    @if (summary) {
+      <div class="hero-summary">
+        <div class="hero-stat">
+          <div class="label">Pending Rx</div>
+          <div class="value">{{ summary.pending_prescriptions }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Billed In Queue</div>
+          <div class="value">{{ summary.billed_prescriptions }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Today Dispenses</div>
+          <div class="value">{{ summary.today_dispenses }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Partial Issues</div>
+          <div class="value">{{ summary.partial_dispenses }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Returns</div>
+          <div class="value">{{ summary.returned_dispenses }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Total Dispenses</div>
+          <div class="value">{{ summary.total_dispenses }}</div>
+        </div>
+      </div>
+    }
+  </section>
 
-<section class="page-card">
-  <h2 class="page-title">Pending OPD Prescriptions</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Visit No</th>
-        <th>Patient</th>
-        <th>Doctor</th>
-        <th>Medicine</th>
-        <th>Qty</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (prescription of pendingPrescriptions; track prescription.order_id) {
-        <tr>
-          <td>{{ prescription.visit_number }}</td>
-          <td>{{ prescription.patient_name }}</td>
-          <td>{{ prescription.doctor_name }}</td>
-          <td>{{ prescription.item_name }}</td>
-          <td>{{ prescription.quantity }}</td>
-        </tr>
+  <section class="spotlight-grid">
+    <section class="page-card soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Prescription Queue</h2>
+          <div class="section-copy">Select a pending prescription and open the workbench with patient, visit, medication, and clinical context already loaded.</div>
+        </div>
+      </div>
+
+      <div class="queue-toolbar">
+        <input type="text" [(ngModel)]="queueSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search by visit, patient, doctor, medicine, diagnosis" />
+        <div class="pill-row">
+          <span class="pill">Pending {{ pendingPrescriptions.length }}</span>
+          @if (summary) {
+            <span class="pill">Billed {{ summary.billed_prescriptions }}</span>
+          }
+        </div>
+      </div>
+
+      @if (filteredPendingPrescriptions.length) {
+        <div class="queue-stack">
+          @for (prescription of filteredPendingPrescriptions; track prescription.order_id) {
+            <div class="queue-card">
+              <div class="queue-head">
+                <div>
+                  <strong>{{ prescription.item_name }}</strong>
+                  <div class="page-subtitle">{{ prescription.visit_number }} · {{ prescription.patient_number }} · {{ prescription.patient_name }}</div>
+                </div>
+                <button class="secondary-btn" type="button" (click)="openWorkbench(prescription.order_id)">Open Workbench</button>
+              </div>
+              <div class="queue-meta">
+                <span class="pill">{{ prescription.visit_status }}</span>
+                <span class="pill">{{ prescription.visit_date | date:'mediumDate' }}</span>
+                <span class="pill">Rx {{ prescription.quantity }}</span>
+                <span class="pill">Issued {{ prescription.dispensed_quantity }}</span>
+                <span class="pill">Remaining {{ prescription.remaining_quantity }}</span>
+                <span class="pill">{{ prescription.doctor_name }}</span>
+              </div>
+              <div class="queue-copy">
+                Complaint: {{ prescription.chief_complaint || 'Not recorded' }}<br />
+                Diagnosis: {{ prescription.diagnosis || 'Not recorded' }}<br />
+                Instructions: {{ prescription.instructions || 'No instructions' }}
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-state">No pending prescriptions match the current search.</div>
       }
-    </tbody>
-  </table>
-</section>
+    </section>
+  </section>
 
-<section class="page-card">
-  <h2 class="page-title">Dispense Grid</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Medicine</th>
-        <th>Quantity</th>
-        <th>Unit Price</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (dispense of dispenses; track dispense.id) {
-        <tr>
-          <td>{{ dispense.medicine_name }}</td>
-          <td>{{ dispense.quantity }}</td>
-          <td>{{ dispense.unit_price }}</td>
-          <td>{{ dispense.total_price }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-</section>
+  <section class="page-card soft-panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="section-title">Dispense History</h2>
+        <div class="section-copy">Every dispense remains visible with patient, visit, staff, and note context for audit and follow-up.</div>
+      </div>
+      <div class="hero-kicker">Recent Activity</div>
+    </div>
+
+    <div class="history-toolbar">
+      <input type="text" [(ngModel)]="historySearch" [ngModelOptions]="{ standalone: true }" placeholder="Search medicine, patient, visit, reference, staff" />
+      <span class="pill">Records {{ dispenses.length }}</span>
+    </div>
+
+    @if (filteredDispenses.length) {
+      <div class="history-stack">
+        @for (dispense of filteredDispenses; track dispense.id) {
+          <div class="history-card">
+            <div class="history-top">
+              <div>
+                <strong>{{ dispense.medicine_name }}</strong>
+                <div class="page-subtitle">
+                  {{ dispense.patient_number || 'No patient no' }} · {{ dispense.patient_name || 'Walk-in / manual' }} · {{ dispense.dispensed_at | date:'medium' }}
+                </div>
+              </div>
+              <div class="pill-row">
+                <span class="pill">{{ dispense.status }}</span>
+                <span class="pill">Issued {{ dispense.quantity }}</span>
+                <span class="pill">Returned {{ dispense.returned_quantity }}</span>
+                <span class="pill">Net {{ dispense.remaining_quantity }}</span>
+                <span class="pill">{{ formatCurrency(dispense.total_price) }}</span>
+              </div>
+            </div>
+            <div class="history-copy">
+              Visit: {{ dispense.visit_number || dispense.prescription_ref || 'Not linked' }} · Dispensed by {{ dispense.dispensed_by_name || 'Unknown' }}<br />
+              Note: {{ dispense.note || 'No note recorded' }}<br />
+              Return note: {{ dispense.return_note || 'No return note' }}
+            </div>
+            <div class="toolbar-row">
+              <button class="secondary-btn" type="button" (click)="openWorkbench(undefined, undefined, dispense.id)">Process Return</button>
+            </div>
+            @if (+dispense.remaining_quantity > 0) {
+              <div class="toolbar-row">
+                <button class="secondary-btn" type="button" (click)="openWorkbench(undefined, undefined, dispense.id)">Open Return Target</button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="empty-state">No dispense history matches the current search.</div>
+    }
+  </section>
+</div>

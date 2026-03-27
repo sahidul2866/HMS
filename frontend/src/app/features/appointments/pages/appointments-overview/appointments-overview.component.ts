@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
@@ -12,11 +13,13 @@ import { AppointmentsService } from '../../services/appointments.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './appointments-overview.component.html',
+  styleUrls: ['./appointments-overview.component.scss'],
 })
 export class AppointmentsOverviewComponent {
   private readonly appointmentsService = inject(AppointmentsService);
   private readonly notificationService = inject(NotificationService);
   private readonly fb = inject(FormBuilder);
+  private readonly router = inject(Router);
   readonly sessionService = inject(SessionService);
 
   appointments: Appointment[] = [];
@@ -84,5 +87,9 @@ export class AppointmentsOverviewComponent {
 
   get checkedInCount(): number {
     return this.appointments.filter((item) => item.status === 'checked_in').length;
+  }
+
+  navigateToCreateAppointment(): void {
+    void this.router.navigate(['/appointments/create']);
   }
 }

@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+.workspace-shell {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.9rem;
+}
+
+.hero-stat {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 132, 199, 0.84));
+  color: #eff6ff;
+}
+
+.hero-stat .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(219, 234, 254, 0.75);
+}
+
+.hero-stat .value {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.page-card {
+  overflow: hidden;
+}
+
+.page-card table {
+  margin-top: 0.75rem;
+}
+
+.page-card + .page-card {
+  margin-top: 0;
+}
+
+.page-card:last-child {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
+}

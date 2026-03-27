@@ -1,0 +1,99 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Laboratory Workbench</div>
+        <h1 class="page-title">Bench Workspace</h1>
+        <p class="page-subtitle">Handle sample collection, result processing, and verification in a dedicated lab workflow screen.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="openQueue()">Back To Queue</button>
+      </div>
+    </div>
+  </section>
+
+  @if (loading) {
+    <section class="page-card soft-panel">
+      <div class="empty-state">Loading laboratory work item...</div>
+    </section>
+  } @else if (selectedItem) {
+    <section class="workbench-grid">
+      <section class="page-card soft-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">{{ selectedItem.item_name }}</h2>
+            <div class="section-copy">{{ selectedItem.visit_number }} · {{ selectedItem.patient_number }} · {{ selectedItem.patient_name }}</div>
+          </div>
+          <div class="pill-row">
+            <span class="pill">{{ formatStatus(selectedItem.status) }}</span>
+            <span class="pill">{{ selectedItem.consulting_doctor_name }}</span>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="detail-card active">
+            <strong>Clinical Context</strong>
+            <div class="detail-copy">
+              Complaint: {{ selectedItem.chief_complaint || 'Not recorded' }}<br />
+              Diagnosis: {{ selectedItem.diagnosis || 'Not recorded' }}<br />
+              Instructions: {{ selectedItem.instructions || 'No instructions' }}
+            </div>
+          </div>
+          <div class="detail-card">
+            <strong>Workflow Timeline</strong>
+            <div class="detail-copy">
+              Sample collected: {{ selectedItem.sample_collected_at ? (selectedItem.sample_collected_at | date:'medium') : 'Pending' }}<br />
+              Result completed: {{ selectedItem.completed_at ? (selectedItem.completed_at | date:'medium') : 'Pending' }}<br />
+              Result verified: {{ selectedItem.verified_at ? (selectedItem.verified_at | date:'medium') : 'Pending' }}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-card soft-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Result Workflow</h2>
+            <div class="section-copy">Move the order through collection, processing, completion, and verification without leaving the workbench.</div>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <div class="pill-row">
+            <button class="secondary-btn" type="button" (click)="applyStatus('collected')">Collect Sample</button>
+            <button class="secondary-btn" type="button" (click)="applyStatus('in_progress')">Start Processing</button>
+            <button class="secondary-btn" type="button" (click)="applyStatus('completed')">Mark Complete</button>
+            <button class="secondary-btn" type="button" (click)="applyStatus('verified')">Verify Report</button>
+          </div>
+          <span class="pill">Current {{ formatStatus(selectedItem.status) }}</span>
+        </div>
+
+        <form class="form-grid" [formGroup]="resultForm" (ngSubmit)="submitResult()">
+          <label class="field">
+            <span>Status</span>
+            <select formControlName="status">
+              <option value="collected">Collected</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="verified">Verified</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Sample Note</span>
+            <textarea rows="2" formControlName="sample_note" placeholder="Collection note, sample condition, or accession detail"></textarea>
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Result</span>
+            <textarea rows="8" formControlName="result_text" placeholder="Structured result or narrative interpretation"></textarea>
+          </label>
+          @if (sessionService.hasPermission('laboratory.manage')) {
+            <div style="grid-column:1/-1;">
+              <button class="primary-btn" type="submit">Save Laboratory Update</button>
+            </div>
+          }
+        </form>
+      </section>
+    </section>
+  }
+</section>

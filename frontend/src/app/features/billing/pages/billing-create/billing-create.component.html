@@ -1,0 +1,216 @@
+<div class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Invoice Creation</div>
+        <h1 class="page-title">Create Billing Invoice</h1>
+        <div class="page-subtitle">A cleaner entry flow with patient lookup, visit-aware autofill, live preview, and a direct handoff back to the billing desk.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="ghost-btn" type="button" (click)="openBillingDesk()">Open Billing Desk</button>
+      </div>
+    </div>
+
+    <div class="hero-summary">
+      <div class="hero-stat">
+        <div class="label">Patients</div>
+        <div class="value">{{ patients.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Services</div>
+        <div class="value">{{ billingServices.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Referral Sources</div>
+        <div class="value">{{ internalReferralDoctors.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Auto Fill</div>
+        <div class="value">{{ sourceVisit || sourceAdmission ? 'Ready' : 'Manual' }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="spotlight-grid">
+    <section class="soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Patient And Context</h2>
+          <div class="section-copy">Start with the patient, then let OPD or IPD handoff data prefill the rest of the invoice context where possible.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+        @if (sourceVisit) {
+          <div class="billing-prefill-banner" style="grid-column:1/-1;">
+            <div>
+              <strong>Linked OPD Visit:</strong> {{ sourceVisit.visit_number }} · {{ sourceVisit.consulting_doctor_name }} · {{ sourceVisit.visit_date }}
+            </div>
+            <div class="page-subtitle">
+              Complaint: {{ sourceVisit.chief_complaint || 'Not recorded' }} · Consultation fee: {{ formatCurrency(sourceVisit.consultation_fee) }}
+            </div>
+            @if (prefillMessage) {
+              <div class="page-subtitle">{{ prefillMessage }}</div>
+            }
+          </div>
+        }
+        @if (sourceAdmission) {
+          <div class="billing-prefill-banner" style="grid-column:1/-1;">
+            <div>
+              <strong>Linked IPD Admission:</strong> {{ sourceAdmission.admission_number }} · {{ sourceAdmission.ward_name }} / {{ sourceAdmission.bed_number }} · {{ sourceAdmission.attending_doctor_name }}
+            </div>
+            <div class="page-subtitle">
+              Status: {{ sourceAdmission.status }} · Admission diagnosis: {{ sourceAdmission.diagnosis || 'Not recorded' }}
+            </div>
+            <div class="page-subtitle">
+              Discharge diagnosis: {{ sourceAdmission.discharge_diagnosis || 'Not recorded' }} · Condition: {{ sourceAdmission.discharge_condition || 'Not recorded' }}
+            </div>
+            @if (prefillMessage) {
+              <div class="page-subtitle">{{ prefillMessage }}</div>
+            }
+          </div>
+        }
+
+        <div class="lookup-shell" style="grid-column:1/-1;">
+          <div class="lookup-head">
+            <div>
+              <h3 class="section-title">Existing Patient Lookup</h3>
+              <div class="section-copy">Search once and reuse stored patient information instead of retyping it.</div>
+            </div>
+          </div>
+          <div class="toolbar-row lookup-row">
+            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
+            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
+            @if (selectedPatient) {
+              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+            }
+          </div>
+          @if (patientSearchResults.length) {
+            <div class="search-results">
+              @for (patient of patientSearchResults; track patient.id) {
+                <button class="secondary-btn result-btn" type="button" (click)="applyPatient(patient)">
+                  {{ patient.patient_number }} - {{ patient.full_name }}
+                  @if (patient.phone) { · {{ patient.phone }} }
+                </button>
+              }
+            </div>
+          }
+          @if (selectedPatient) {
+            <div class="selected-patient">
+              <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
+              <div class="page-subtitle">
+                Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="grid-2" style="grid-column:1/-1;">
+          <label class="field">
+            <span>Patient</span>
+            <select formControlName="patient_id" (change)="onPatientChanged()">
+              <option value="">Select patient</option>
+              @for (patient of patients; track patient.id) {
+                <option [value]="patient.id">{{ formatPatient(patient) }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Referring Doctor</span>
+            <select formControlName="internal_referral_user_id" (change)="onInternalReferralChanged()">
+              <option value="">Select flagged doctor user</option>
+              @for (doctor of internalReferralDoctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="grid-2" style="grid-column:1/-1;">
+          <label class="field">
+            <span>Discount Percentage</span>
+            <input type="number" min="0" max="100" formControlName="discount_percentage" (input)="recalculatePreview()" />
+          </label>
+          <label class="field">
+            <span>Internal Note</span>
+            <textarea rows="3" formControlName="note" placeholder="Visible internal note"></textarea>
+          </label>
+        </div>
+
+        <div class="billing-items-shell" style="grid-column:1/-1;">
+          <div class="section-header billing-inline-head">
+            <div>
+              <h3 class="section-title">Invoice Items</h3>
+              <div class="section-copy">Build the invoice from the controlled service catalog and adjust quantity before posting.</div>
+            </div>
+            <button class="ghost-btn" type="button" (click)="addItem()">Add Item</button>
+          </div>
+
+          <div formArrayName="items" class="item-stack">
+            @for (item of items.controls; track $index) {
+              <div class="item-card" [formGroupName]="$index">
+                <div class="grid-2">
+                  <label class="field">
+                    <span>Service</span>
+                    <select formControlName="billing_service_id" (change)="onBillingItemChanged()">
+                      <option value="">Select billing service</option>
+                      @for (service of billingServices; track service.id) {
+                        <option [value]="service.id">{{ service.service_code }} - {{ service.name }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Quantity</span>
+                    <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
+                  </label>
+                </div>
+                <div class="item-footer">
+                  <span>{{ getServiceName(item.get('billing_service_id')?.value ?? '') }}</span>
+                  <strong>{{ getServiceAmount(item.get('billing_service_id')?.value ?? '', item.get('quantity')?.value ?? 0) }}</strong>
+                </div>
+                <button class="danger-btn" type="button" (click)="removeItem($index)">Remove</button>
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="submit-row" style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="soft-panel preview-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Invoice Preview</h2>
+          <div class="section-copy">Check the financial impact before posting. Discounts and referral calculations update live.</div>
+        </div>
+      </div>
+
+      @if (preview) {
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="label">Sub Total</div>
+            <div class="value">{{ formatCurrency(preview.sub_total) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Discount</div>
+            <div class="value">{{ formatCurrency(preview.discount_amount) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Referral Amount</div>
+            <div class="value">{{ formatCurrency(preview.referred_doctor_amount) }}</div>
+          </div>
+          <div class="metric-card grand-total">
+            <div class="label">Grand Total</div>
+            <div class="value">{{ formatCurrency(preview.total_amount) }}</div>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-state">{{ previewMessage || 'Select patient services to see a live invoice preview.' }}</div>
+      }
+    </section>
+  </section>
+</div>

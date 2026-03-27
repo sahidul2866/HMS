@@ -1,0 +1,43 @@
+:host {
+  display: block;
+}
+
+.workspace-shell {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.mobile-lookup-shell {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 249, 255, 0.92));
+}
+
+.mobile-search-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mobile-search-row input {
+  flex: 1 1 320px;
+}
+
+.family-results {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.family-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.lookup-note {
+  color: var(--text-muted);
+}

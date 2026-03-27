@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.patients.service import PatientsService
-from app.schemas.patient import PatientClinicalHistoryRead, PatientCreate, PatientRead
+from app.schemas.patient import PatientClinicalHistoryRead, PatientCreate, PatientLookupResult, PatientMobileLookupRead, PatientRead
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
@@ -15,6 +15,25 @@ router = APIRouter(prefix="/patients", tags=["Patients"])
 @router.get("", response_model=list[PatientRead], dependencies=[Depends(require_permissions("patient.view"))])
 def list_patients(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[PatientRead]:
     return [PatientRead.model_validate(item, from_attributes=True) for item in PatientsService(db).list_patients(user)]
+
+
+@router.get("/search", response_model=list[PatientLookupResult], dependencies=[Depends(require_permissions("patient.view"))])
+def search_patients(
+    q: str,
+    limit: int = 10,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PatientLookupResult]:
+    return PatientsService(db).search_patients(q, user, limit=min(max(limit, 1), 25))
+
+
+@router.get("/by-mobile", response_model=PatientMobileLookupRead, dependencies=[Depends(require_permissions("patient.view"))])
+def lookup_patients_by_mobile(
+    mobile: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PatientMobileLookupRead:
+    return PatientsService(db).lookup_patients_by_mobile(mobile, user)
 
 
 @router.get("/{patient_id}", response_model=PatientRead, dependencies=[Depends(require_permissions("patient.view"))])

@@ -18,103 +18,237 @@
     }
   </section>
 
-  <section class="page-card">
-    <h2 class="page-title">Book Appointment</h2>
-    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-      <label class="field">
-        <span>Doctor</span>
-        <select formControlName="doctor_user_id">
-          <option value="">Select doctor</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ doctor.full_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span>Date & Time</span>
-        <input type="datetime-local" formControlName="appointment_at" />
-      </label>
-      <label class="field" style="grid-column:1/-1;">
-        <span>Reason</span>
-        <textarea rows="3" formControlName="reason"></textarea>
-      </label>
-      <label class="field" style="grid-column:1/-1;">
-        <span>Note</span>
-        <textarea rows="2" formControlName="note"></textarea>
-      </label>
-      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Book Appointment</button></div>
-    </form>
-  </section>
+  <section class="portal-grid">
+    <section class="portal-stack">
+      <section class="page-card soft-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Book Appointment</h2>
+            <div class="section-copy">Request a consultation directly from your portal without calling the front desk.</div>
+          </div>
+        </div>
 
-  <section class="page-card">
-    <h2 class="page-title">My Appointments</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>No</th>
-          <th>Doctor</th>
-          <th>Date</th>
-          <th>Status</th>
-          <th>Reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (appointment of appointments; track appointment.id) {
-          <tr>
-            <td>{{ appointment.appointment_number }}</td>
-            <td>{{ appointment.doctor_name }}</td>
-            <td>{{ appointment.appointment_at | date:'medium' }}</td>
-            <td>{{ appointment.status }}</td>
-            <td>{{ appointment.reason || '-' }}</td>
-          </tr>
+        <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field">
+            <span>Doctor</span>
+            <select formControlName="doctor_user_id">
+              <option value="">Select doctor</option>
+              @for (doctor of doctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            <span>Date & Time</span>
+            <input type="datetime-local" formControlName="appointment_at" />
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Reason</span>
+            <textarea rows="3" formControlName="reason"></textarea>
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Note</span>
+            <textarea rows="2" formControlName="note"></textarea>
+          </label>
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Book Appointment</button></div>
+        </form>
+      </section>
+
+      <section class="page-card soft-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Upcoming Appointments</h2>
+            <div class="section-copy">Track your planned visits and cancel scheduled bookings if needed.</div>
+          </div>
+        </div>
+
+        @if (upcomingAppointments.length) {
+          <div class="record-stack">
+            @for (appointment of upcomingAppointments; track appointment.id) {
+              <div class="record-card">
+                <div class="record-head">
+                  <div>
+                    <strong>{{ appointment.appointment_number }}</strong>
+                    <div class="page-subtitle">{{ appointment.doctor_name }} · {{ appointment.appointment_at | date:'medium' }}</div>
+                  </div>
+                  <div class="toolbar-row">
+                    <span class="pill">{{ appointment.status }}</span>
+                    @if (appointment.status === 'scheduled' || appointment.status === 'confirmed') {
+                      <button class="danger-btn" type="button" (click)="cancelAppointment(appointment)">Cancel</button>
+                    }
+                  </div>
+                </div>
+                <div class="record-copy">{{ appointment.reason || 'No reason provided' }}</div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">No upcoming appointments are scheduled right now.</div>
         }
-      </tbody>
-    </table>
+      </section>
+
+      <section class="page-card soft-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Prescription Archive</h2>
+            <div class="section-copy">See the medications that were ordered during your OPD consultations.</div>
+          </div>
+        </div>
+
+        @if (prescriptionArchive.length) {
+          <div class="record-stack">
+            @for (item of prescriptionArchive; track item.id) {
+              <div class="record-card">
+                <div class="record-head">
+                  <div>
+                    <strong>{{ item.item_name }}</strong>
+                    <div class="page-subtitle">{{ item.visit_number }} · {{ item.visit_date | date:'mediumDate' }} · {{ item.doctor_name }}</div>
+                  </div>
+                  <span class="pill">{{ item.status }}</span>
+                </div>
+                <div class="record-copy">
+                  Quantity: {{ item.quantity }} · Diagnosis: {{ item.diagnosis || 'Not recorded' }}<br />
+                  Instructions: {{ item.instructions || 'No instructions' }}
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">No prescriptions are available yet.</div>
+        }
+      </section>
+    </section>
+
+    <section class="portal-stack">
+      @if (history) {
+        <section class="page-card soft-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Financial Snapshot</h2>
+              <div class="section-copy">Review your invoice count, total paid amount, and any outstanding dues.</div>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="label">Invoices</div>
+              <div class="value">{{ history.billing_invoices.length }}</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Total Paid</div>
+              <div class="value">{{ formatCurrency(totalPaidAmount) }}</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Outstanding Due</div>
+              <div class="value">{{ formatCurrency(totalOutstandingDue) }}</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Pharmacy Issues</div>
+              <div class="value">{{ history.pharmacy_dispenses.length }}</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page-card soft-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Lab Reports</h2>
+              <div class="section-copy">Verified and completed laboratory findings remain visible here.</div>
+            </div>
+          </div>
+
+          @if (completedLabReports.length) {
+            <div class="record-stack">
+              @for (item of completedLabReports; track item.id) {
+                <div class="record-card">
+                  <div class="record-head">
+                    <div>
+                      <strong>{{ item.item_name }}</strong>
+                      <div class="page-subtitle">{{ item.completed_at | date:'medium' }}</div>
+                    </div>
+                    <span class="pill">{{ item.status }}</span>
+                  </div>
+                  <div class="record-copy">{{ item.result_text || 'No result text available' }}</div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">No laboratory reports are available yet.</div>
+          }
+        </section>
+
+        <section class="page-card soft-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Radiology Reports</h2>
+              <div class="section-copy">Imaging interpretations and finalized reports appear here after completion.</div>
+            </div>
+          </div>
+
+          @if (completedRadiologyReports.length) {
+            <div class="record-stack">
+              @for (item of completedRadiologyReports; track item.id) {
+                <div class="record-card">
+                  <div class="record-head">
+                    <div>
+                      <strong>{{ item.item_name }}</strong>
+                      <div class="page-subtitle">{{ item.completed_at | date:'medium' }}</div>
+                    </div>
+                    <span class="pill">{{ item.status }}</span>
+                  </div>
+                  <div class="record-copy">{{ item.result_text || 'No report text available' }}</div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-state">No radiology reports are available yet.</div>
+          }
+        </section>
+
+        <section class="page-card soft-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="section-title">Billing And Pharmacy Activity</h2>
+              <div class="section-copy">Track invoice status, payment progress, and issued medicines from your patient account.</div>
+            </div>
+          </div>
+
+          <div class="record-stack">
+            @for (invoice of history.billing_invoices; track invoice.id) {
+              <div class="record-card">
+                <div class="record-head">
+                  <div>
+                    <strong>{{ invoice.invoice_number }}</strong>
+                    <div class="page-subtitle">{{ invoice.created_at | date:'medium' }}</div>
+                  </div>
+                  <div class="toolbar-row">
+                    <span class="pill">{{ invoice.status }}</span>
+                    <span class="pill">{{ invoice.payment_status }}</span>
+                  </div>
+                </div>
+                <div class="record-copy">
+                  Total: {{ formatCurrency(invoice.total_amount) }} · Paid: {{ formatCurrency(invoice.paid_amount) }} · Due: {{ formatCurrency(invoice.due_amount) }}
+                </div>
+              </div>
+            }
+
+            @for (dispense of history.pharmacy_dispenses; track dispense.id) {
+              <div class="record-card">
+                <div class="record-head">
+                  <div>
+                    <strong>{{ dispense.medicine_name }}</strong>
+                    <div class="page-subtitle">{{ dispense.created_at | date:'medium' }}</div>
+                  </div>
+                  <span class="pill">{{ formatCurrency(dispense.total_price) }}</span>
+                </div>
+                <div class="record-copy">
+                  Quantity: {{ dispense.quantity }} · Reference: {{ dispense.prescription_ref || 'No reference' }}
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </section>
   </section>
-
-  @if (history) {
-    <section class="page-card">
-      <h2 class="page-title">Lab Reports</h2>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Test</th>
-            <th>Status</th>
-            <th>Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of completedLabReports; track item.id) {
-            <tr>
-              <td>{{ item.item_name }}</td>
-              <td>{{ item.status }}</td>
-              <td>{{ item.result_text || '-' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="page-card">
-      <h2 class="page-title">Radiology Reports</h2>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Study</th>
-            <th>Status</th>
-            <th>Report</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of completedRadiologyReports; track item.id) {
-            <tr>
-              <td>{{ item.item_name }}</td>
-              <td>{{ item.status }}</td>
-              <td>{{ item.result_text || '-' }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-  }
 </div>

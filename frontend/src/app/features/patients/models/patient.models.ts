@@ -8,6 +8,21 @@ export interface Patient {
   gender?: string | null;
   date_of_birth?: string | null;
   address?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+}
+
+export interface PatientLookupResult extends Patient {
+  full_name: string;
+}
+
+export interface PatientMobileLookup {
+  mobile: string;
+  normalized_mobile: string;
+  max_patients_allowed: number;
+  current_patient_count: number;
+  can_add_more: boolean;
+  patients: PatientLookupResult[];
 }
 
 export interface PatientHistoryOrder {
@@ -29,6 +44,15 @@ export interface PatientHistoryOPDVisit {
   department_name: string;
   consulting_doctor_name: string;
   chief_complaint?: string | null;
+  history_of_present_illness?: string | null;
+  past_history?: string | null;
+  vital_signs?: string | null;
+  examination_note?: string | null;
+  provisional_diagnosis?: string | null;
+  final_diagnosis?: string | null;
+  follow_up_date?: string | null;
+  follow_up_note?: string | null;
+  note?: string | null;
   status: string;
   orders: PatientHistoryOrder[];
 }
@@ -50,8 +74,21 @@ export interface PatientHistoryBillingInvoice {
   invoice_number: string;
   created_at: string;
   status: string;
+  payment_status: string;
   total_amount: string;
+  paid_amount: string;
+  due_amount: string;
   referred_doctor_name?: string | null;
+}
+
+export interface PatientHistoryBillingPayment {
+  id: string;
+  invoice_number: string;
+  receipt_number: string;
+  payment_method: string;
+  amount: string;
+  received_at: string;
+  note?: string | null;
 }
 
 export interface PatientHistoryPharmacyDispense {
@@ -63,11 +100,23 @@ export interface PatientHistoryPharmacyDispense {
   created_at: string;
 }
 
+export interface PatientHistoryAppointment {
+  id: string;
+  appointment_number: string;
+  doctor_name: string;
+  appointment_at: string;
+  status: string;
+  reason?: string | null;
+  note?: string | null;
+}
+
 export interface PatientClinicalHistory {
   patient: Patient;
   opd_visits: PatientHistoryOPDVisit[];
+  appointments: PatientHistoryAppointment[];
   ipd_admissions: PatientHistoryIPDAdmission[];
   billing_invoices: PatientHistoryBillingInvoice[];
+  billing_payments: PatientHistoryBillingPayment[];
   pharmacy_dispenses: PatientHistoryPharmacyDispense[];
 }
 

@@ -81,8 +81,20 @@
           <div class="value">{{ clinicalSummary.opd_visits }}</div>
         </div>
         <div class="metric-card">
+          <div class="label">Billed OPD</div>
+          <div class="value">{{ clinicalSummary.opd_billed_visits }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Completed OPD</div>
+          <div class="value">{{ clinicalSummary.opd_completed_visits }}</div>
+        </div>
+        <div class="metric-card">
           <div class="label">Active IPD</div>
           <div class="value">{{ clinicalSummary.ipd_active_admissions }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Discharged IPD</div>
+          <div class="value">{{ clinicalSummary.ipd_discharged_admissions }}</div>
         </div>
         <div class="metric-card">
           <div class="label">Pending Lab</div>
@@ -100,6 +112,18 @@
           <div class="label">Pharmacy Dispenses</div>
           <div class="value">{{ clinicalSummary.pharmacy_dispenses }}</div>
         </div>
+        <div class="metric-card">
+          <div class="label">Outstanding Due</div>
+          <div class="value">{{ formatCurrency(clinicalSummary.outstanding_due_amount) }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Collected Amount</div>
+          <div class="value">{{ formatCurrency(clinicalSummary.collected_amount) }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Refunded Amount</div>
+          <div class="value">{{ formatCurrency(clinicalSummary.refunded_amount) }}</div>
+        </div>
       </section>
 
       <table class="table">
@@ -108,26 +132,47 @@
             <th>Workflow</th>
             <th>Pending</th>
             <th>Completed / Active</th>
+            <th>Verified / Cancelled</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>Laboratory</td>
-            <td>{{ clinicalSummary.pending_laboratory }}</td>
-            <td>{{ clinicalSummary.completed_laboratory }}</td>
-          </tr>
-          <tr>
-            <td>Radiology</td>
-            <td>{{ clinicalSummary.pending_radiology }}</td>
-            <td>{{ clinicalSummary.completed_radiology }}</td>
-          </tr>
-          <tr>
-            <td>IPD</td>
-            <td>{{ clinicalSummary.ipd_total_admissions - clinicalSummary.ipd_active_admissions }}</td>
-            <td>{{ clinicalSummary.ipd_active_admissions }}</td>
-          </tr>
+          @for (row of clinicalWorkflowRows; track row.workflow) {
+            <tr>
+              <td>{{ row.workflow }}</td>
+              <td>{{ row.pending }}</td>
+              <td>{{ row.active }}</td>
+              <td>{{ row.verified }}</td>
+            </tr>
+          }
         </tbody>
       </table>
+
+      <section class="metric-grid" style="margin-top:1rem;">
+        <div class="metric-card">
+          <div class="label">Scheduled Appointments</div>
+          <div class="value">{{ clinicalSummary.scheduled_appointments }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Completed Appointments</div>
+          <div class="value">{{ clinicalSummary.completed_appointments }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Cancelled Appointments</div>
+          <div class="value">{{ clinicalSummary.cancelled_appointments }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Payment Receipts</div>
+          <div class="value">{{ clinicalSummary.payment_receipts }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Unpaid Invoices</div>
+          <div class="value">{{ clinicalSummary.unpaid_invoices }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Partial Invoices</div>
+          <div class="value">{{ clinicalSummary.partial_invoices }}</div>
+        </div>
+      </section>
     </section>
   }
 

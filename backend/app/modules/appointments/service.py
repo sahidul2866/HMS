@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -5,13 +7,17 @@ from app.core.exceptions import AppException
 from app.models.encounter import Appointment
 from app.models.user import User
 from app.modules.opd.service import OPDService
-from app.schemas.appointment import AppointmentCheckInRequest, AppointmentRead
+from app.modules.patients.repository import PatientsRepository
+from app.modules.users.repository import UsersRepository
+from app.schemas.appointment import AppointmentCheckInRequest, AppointmentCreate, AppointmentRead
 from app.schemas.encounter import OPDVisitCreate
 
 
 class AppointmentsService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.users = UsersRepository(db)
+        self.patients = PatientsRepository(db)
 
     def list_appointments(self, actor: User) -> list[AppointmentRead]:
         stmt = (
@@ -25,6 +31,38 @@ class AppointmentsService:
             stmt = stmt.where(or_(Appointment.doctor_user_id == actor.id, Appointment.booked_by_user_id == actor.id))
         appointments = list(self.db.scalars(stmt).unique())
         return [self._serialize(item) for item in appointments]
+
+    def create_appointment(self, payload: AppointmentCreate, actor: User) -> AppointmentRead:
+        patient = self.patients.get_patient(payload.patient_id)
+        if not patient:
+            raise AppException(404, "patient_not_found", "Patient not found")
+        if actor.branch_id and patient.branch_id and actor.branch_id != patient.branch_id:
+            raise AppException(403, "forbidden", "Patient belongs to a different branch")
+
+        doctor = self.users.get_user(payload.doctor_user_id)
+        if not doctor or not doctor.is_active or not any(role.is_doctor_role for role in doctor.roles):
+            raise AppException(404, "doctor_not_found", "Doctor not found")
+        if actor.branch_id and doctor.branch_id and actor.branch_id != doctor.branch_id:
+            raise AppException(403, "forbidden", "Doctor belongs to a different branch")
+
+        appointment = Appointment(
+            branch_id=actor.branch_id or patient.branch_id or doctor.branch_id,
+            patient_id=patient.id,
+            doctor_user_id=doctor.id,
+            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            appointment_at=payload.appointment_at,
+            status="scheduled",
+            reason=payload.reason,
+            note=payload.note,
+            booked_by_user_id=actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.db.add(appointment)
+        self.db.commit()
+        self.db.refresh(appointment)
+        appointment = self._get_accessible_appointment(appointment.id, actor)
+        return self._serialize(appointment)
 
     def update_status(self, appointment_id, status: str, actor: User) -> AppointmentRead:
         appointment = self._get_accessible_appointment(appointment_id, actor)

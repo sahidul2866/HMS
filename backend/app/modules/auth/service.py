@@ -24,6 +24,7 @@ from app.schemas.auth import LoginResponse, TokenPair
 from app.schemas.auth import PatientRegisterRequest
 from app.schemas.user import CurrentUserRead, UserRead
 from app.utils.enums import AuditAction
+from app.utils.phone import normalize_phone
 
 
 class AuthService:
@@ -177,12 +178,13 @@ class AuthService:
             raise AppException(status.HTTP_500_INTERNAL_SERVER_ERROR, "patient_role_missing", "Patient role is not configured")
 
         branch = self.db.scalar(select(Branch).where(Branch.code == "HQ"))
+        normalized_phone = normalize_phone(payload.phone)
         patient = Patient(
             branch_id=branch.id if branch else None,
             patient_number=f"PAT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             first_name=payload.full_name.split(" ", 1)[0],
             last_name=payload.full_name.split(" ", 1)[1] if " " in payload.full_name else "Patient",
-            phone=payload.phone,
+            phone=normalized_phone,
             email=payload.email,
             gender=payload.gender,
             date_of_birth=payload.date_of_birth,

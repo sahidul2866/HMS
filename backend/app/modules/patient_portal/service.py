@@ -80,6 +80,34 @@ class PatientPortalService:
             note=appointment.note,
         )
 
+    def update_appointment_status(self, appointment_id, status: str, actor: User) -> PatientAppointmentRead:
+        patient_id = self._require_patient_account(actor)
+        stmt = (
+            select(Appointment)
+            .join(Appointment.doctor)
+            .where(Appointment.id == appointment_id, Appointment.patient_id == patient_id)
+        )
+        appointment = self.db.scalar(stmt)
+        if not appointment:
+            raise AppException(404, "appointment_not_found", "Appointment not found")
+        if appointment.status not in {"scheduled", "confirmed"}:
+            raise AppException(409, "appointment_status_locked", "Only scheduled appointments can be cancelled from the portal")
+
+        appointment.status = status
+        appointment.updated_by = actor.id
+        self.db.commit()
+        self.db.refresh(appointment)
+        return PatientAppointmentRead(
+            id=appointment.id,
+            appointment_number=appointment.appointment_number,
+            doctor_user_id=appointment.doctor_user_id,
+            doctor_name=appointment.doctor.full_name,
+            appointment_at=appointment.appointment_at,
+            status=appointment.status,
+            reason=appointment.reason,
+            note=appointment.note,
+        )
+
     def _require_patient_account(self, actor: User):
         if not actor.patient_id:
             raise AppException(403, "patient_account_required", "This account is not linked to a patient")

@@ -3,10 +3,13 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">OPD Module</div>
-        <h1 class="page-title">Outpatient Registration & Queue</h1>
-        <div class="page-subtitle">Register OPD visits, manage the consultation queue, and keep same-day visit flow visible.</div>
+        <h1 class="page-title">Outpatient Queue And Consultation Desk</h1>
+        <div class="page-subtitle">Keep registration separate from the live OPD queue so consultation work stays focused and readable.</div>
       </div>
-      <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="primary-btn" type="button" (click)="navigateToRegisterVisit()">Register Visit</button>
+      </div>
     </div>
     @if (summary) {
       <div class="hero-summary">
@@ -17,37 +20,6 @@
       </div>
     }
   </div>
-
-  <section class="page-card">
-    <h2 class="section-title">Register Visit</h2>
-    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-      <label class="field">
-        <span>Patient</span>
-        <select formControlName="patient_id">
-          <option value="">Select patient</option>
-          @for (patient of patients; track patient.id) {
-            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field"><span>Visit Date</span><input type="date" formControlName="visit_date" /></label>
-      <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
-      <label class="field">
-        <span>Registered Doctor</span>
-        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
-          <option value="">Select from doctor directory</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ doctor.full_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field"><span>Doctor</span><input type="text" formControlName="consulting_doctor_name" /></label>
-      <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
-      <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="3" formControlName="chief_complaint"></textarea></label>
-      <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
-      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Register OPD Visit</button></div>
-    </form>
-  </section>
 
   <section class="page-card">
     <h2 class="section-title">Visit Queue</h2>
@@ -72,7 +44,10 @@
             <td><span class="pill">{{ visit.status.replace('_', ' ') }}</span></td>
             <td>
               <button class="secondary-btn" type="button" (click)="selectVisit(visit)">Orders</button>
+              <button class="secondary-btn" type="button" (click)="printPrescription(visit)">E-Prescription</button>
+              <button class="secondary-btn" type="button" (click)="openBilling(visit)">Billing</button>
               <button class="secondary-btn" type="button" (click)="setStatus(visit, 'in_consultation')">Start</button>
+              <button class="secondary-btn" type="button" (click)="setStatus(visit, 'prescribed')">Prescribed</button>
               <button class="primary-btn" type="button" (click)="setStatus(visit, 'completed')">Complete</button>
             </td>
           </tr>
@@ -85,8 +60,37 @@
     <section class="page-card">
       <div class="section-header">
         <div>
+          <h2 class="section-title">Consultation Notes for {{ selectedVisit.visit_number }}</h2>
+          <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="consultationForm" (ngSubmit)="saveConsultation()">
+        <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="2" formControlName="chief_complaint"></textarea></label>
+        <label class="field" style="grid-column:1/-1;"><span>History Of Present Illness</span><textarea rows="3" formControlName="history_of_present_illness"></textarea></label>
+        <label class="field" style="grid-column:1/-1;"><span>Past History</span><textarea rows="3" formControlName="past_history"></textarea></label>
+        <label class="field"><span>Vital Signs</span><textarea rows="3" formControlName="vital_signs" placeholder="BP, pulse, temperature, SpO2"></textarea></label>
+        <label class="field"><span>Examination</span><textarea rows="3" formControlName="examination_note"></textarea></label>
+        <label class="field"><span>Provisional Diagnosis</span><textarea rows="3" formControlName="provisional_diagnosis"></textarea></label>
+        <label class="field"><span>Final Diagnosis</span><textarea rows="3" formControlName="final_diagnosis"></textarea></label>
+        <label class="field"><span>Follow Up Date</span><input type="date" formControlName="follow_up_date" /></label>
+        <label class="field" style="grid-column:1/-1;"><span>Follow Up Advice</span><textarea rows="3" formControlName="follow_up_note"></textarea></label>
+        <label class="field" style="grid-column:1/-1;"><span>Consultation Note</span><textarea rows="3" formControlName="note"></textarea></label>
+        <div style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">Save Consultation</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
           <h2 class="section-title">Clinical Orders for {{ selectedVisit.visit_number }}</h2>
           <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
+        </div>
+        <div class="toolbar-row">
+          <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Print E-Prescription</button>
+          <button class="primary-btn" type="button" (click)="openBilling(selectedVisit)">Send To Billing</button>
         </div>
       </div>
 
@@ -96,6 +100,7 @@
           <select formControlName="order_type" (change)="onOrderTypeChanged()">
             <option value="prescription">Prescription</option>
             <option value="investigation">Investigation</option>
+            <option value="procedure">Procedure</option>
           </select>
         </label>
         <label class="field">
@@ -123,14 +128,22 @@
         </div>
       </form>
 
+      <div class="hero-summary" style="margin-top:1rem;">
+        <div class="hero-stat"><div class="label">Prescriptions</div><div class="value">{{ getOrderTypeCount('prescription') }}</div></div>
+        <div class="hero-stat"><div class="label">Investigations</div><div class="value">{{ getOrderTypeCount('investigation') }}</div></div>
+        <div class="hero-stat"><div class="label">Procedures</div><div class="value">{{ getOrderTypeCount('procedure') }}</div></div>
+      </div>
+
       <table class="table" style="margin-top:1rem;">
         <thead>
           <tr>
             <th>Type</th>
             <th>Item</th>
+            <th>Area</th>
             <th>Quantity</th>
             <th>Status</th>
             <th>Instructions</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -138,13 +151,62 @@
             <tr>
               <td><span class="pill">{{ order.order_type }}</span></td>
               <td>{{ order.item_name }}</td>
+              <td>{{ order.service_area || '-' }}</td>
               <td>{{ order.quantity }}</td>
               <td><span class="pill">{{ order.status }}</span></td>
               <td>{{ order.instructions || order.result_text || '-' }}</td>
+              <td>
+                @if (order.order_type === 'procedure') {
+                  <div class="toolbar-row" style="gap:0.5rem; flex-wrap:wrap;">
+                    <button class="secondary-btn" type="button" (click)="updateProcedureOrder(order, 'scheduled')">Schedule</button>
+                    <button class="secondary-btn" type="button" (click)="updateProcedureOrder(order, 'in_progress')">Start</button>
+                    <button class="primary-btn" type="button" (click)="updateProcedureOrder(order, 'completed')">Complete</button>
+                    <button class="danger-btn" type="button" (click)="updateProcedureOrder(order, 'cancelled')">Cancel</button>
+                  </div>
+                } @else {
+                  <span class="page-subtitle">Managed from linked module</span>
+                }
+              </td>
             </tr>
           }
         </tbody>
       </table>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Follow-Up Scheduling</h2>
+          <div class="section-copy">Turn follow-up advice into a real appointment from the same OPD visit.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="followUpForm" (ngSubmit)="createFollowUpAppointment()">
+        <label class="field">
+          <span>Follow-Up Doctor</span>
+          <select formControlName="doctor_user_id">
+            <option value="">Select doctor</option>
+            @for (doctor of doctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Appointment Time</span>
+          <input type="datetime-local" formControlName="appointment_at" />
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Reason</span>
+          <textarea rows="2" formControlName="reason"></textarea>
+        </label>
+        <label class="field" style="grid-column:1/-1;">
+          <span>Scheduling Note</span>
+          <textarea rows="2" formControlName="note"></textarea>
+        </label>
+        <div style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">Create Follow-Up Appointment</button>
+        </div>
+      </form>
     </section>
 
     <section class="page-card">

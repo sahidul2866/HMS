@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     auto_db_bootstrap: bool | str = Field(default=True, alias="AUTO_DB_BOOTSTRAP")
     auto_seed_sample_data: bool | str = Field(default=False, alias="AUTO_SEED_SAMPLE_DATA")
+    max_patients_per_mobile: int = Field(default=5, alias="MAX_PATIENTS_PER_MOBILE")
 
     def model_post_init(self, __context: object) -> None:
         self.debug = self._normalize_bool(self.debug, default=False)

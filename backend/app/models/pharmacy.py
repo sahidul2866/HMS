@@ -17,9 +17,13 @@ class PharmacyDispense(Base, BaseModelMixin):
     source_visit_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visit_orders.id"))
     prescription_ref: Mapped[str | None] = mapped_column(String(80))
     medicine_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    requested_quantity: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    returned_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="dispensed")
+    return_note: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
     dispensed_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 

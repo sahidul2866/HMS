@@ -60,6 +60,46 @@ export interface BillingInvoicePreview {
   referred_doctor_amount: string;
 }
 
+export interface BillingPayment {
+  id: string;
+  invoice_id: string;
+  patient_id: string;
+  receipt_number: string;
+  payment_method: string;
+  amount: string;
+  note?: string | null;
+  received_at: string;
+  collected_by_user_id: string;
+  created_at: string;
+}
+
+export interface BillingPaymentPayload {
+  amount: number;
+  payment_method: 'cash' | 'card' | 'mobile_banking' | 'bank_transfer';
+  note?: string | null;
+  received_at?: string | null;
+}
+
+export interface BillingRefund {
+  id: string;
+  invoice_id: string;
+  payment_id?: string | null;
+  patient_id: string;
+  refund_number: string;
+  amount: string;
+  reason: string;
+  refunded_at: string;
+  refunded_by_user_id: string;
+  created_at: string;
+}
+
+export interface BillingRefundPayload {
+  amount: number;
+  payment_id?: string | null;
+  reason: string;
+  refunded_at?: string | null;
+}
+
 export interface BillingInvoiceItem {
   id: string;
   billing_service_id: string;
@@ -79,16 +119,22 @@ export interface BillingInvoice {
   internal_referral_user_id?: string | null;
   referred_doctor_name?: string | null;
   status: string;
+  payment_status: string;
   void_reason?: string | null;
   voided_at?: string | null;
   sub_total: string;
   discount_percentage: string;
   discount_amount: string;
   total_amount: string;
+  paid_amount: string;
+  refunded_amount: string;
+  due_amount: string;
   referred_doctor_amount: string;
   note?: string | null;
   created_at: string;
   items: BillingInvoiceItem[];
+  payments: BillingPayment[];
+  refunds: BillingRefund[];
 }
 
 export interface BillingInvoiceListItem {
@@ -98,6 +144,10 @@ export interface BillingInvoiceListItem {
   patient: Patient;
   internal_referral_user_id?: string | null;
   status: string;
+  payment_status: string;
+  paid_amount: string;
+  refunded_amount: string;
+  due_amount: string;
   total_amount: string;
   referred_doctor_name?: string | null;
   created_at: string;

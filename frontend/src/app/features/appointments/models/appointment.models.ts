@@ -21,3 +21,11 @@ export interface AppointmentCheckInPayload {
   chief_complaint?: string | null;
   note?: string | null;
 }
+
+export interface AppointmentCreatePayload {
+  patient_id: string;
+  doctor_user_id: string;
+  appointment_at: string;
+  reason?: string | null;
+  note?: string | null;
+}

@@ -1,12 +1,22 @@
-<section class="page-card">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+<section class="page-card module-hero">
+  <div class="hero-row">
     <div>
+      <div class="hero-kicker">Patient Registry</div>
       <h1 class="page-title">Patients</h1>
-      <div class="page-subtitle">Backend endpoint is protected by `patient.view`.</div>
+      <div class="page-subtitle">Keep the registry view clean here, then open a dedicated EMR screen for the full patient timeline.</div>
     </div>
     <a *appHasPermission="'patient.create'" class="primary-btn" routerLink="/patients/new">Create Patient</a>
   </div>
 
+  <div class="hero-summary">
+    <div class="hero-stat">
+      <div class="label">Registered Patients</div>
+      <div class="value">{{ patients.length }}</div>
+    </div>
+  </div>
+</section>
+
+<section class="page-card">
   @if (loading) {
     <div class="muted">Loading patients...</div>
   } @else {
@@ -27,138 +37,10 @@
             <td>{{ patient.first_name }} {{ patient.last_name }}</td>
             <td>{{ patient.phone || '-' }}</td>
             <td>{{ patient.email || '-' }}</td>
-            <td><button class="secondary-btn" type="button" (click)="openHistory(patient)">History</button></td>
+            <td><button class="secondary-btn" type="button" (click)="openHistory(patient)">Open EMR</button></td>
           </tr>
         }
       </tbody>
     </table>
   }
 </section>
-
-@if (historyLoading) {
-  <section class="page-card">
-    <div class="muted">Loading patient history...</div>
-  </section>
-}
-
-@if (selectedHistory) {
-  <section class="page-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-      <div>
-        <h2 class="page-title">Clinical History for {{ selectedHistory.patient.first_name }} {{ selectedHistory.patient.last_name }}</h2>
-        <div class="page-subtitle">{{ selectedHistory.patient.patient_number }} · {{ selectedHistory.patient.phone || 'No phone' }}</div>
-      </div>
-      <button class="secondary-btn" type="button" (click)="closeHistory()">Close</button>
-    </div>
-
-    <div class="grid-2">
-      <div class="page-card">
-        <div class="muted">OPD Visits</div>
-        <h3>{{ selectedHistory.opd_visits.length }}</h3>
-      </div>
-      <div class="page-card">
-        <div class="muted">IPD Admissions</div>
-        <h3>{{ selectedHistory.ipd_admissions.length }}</h3>
-      </div>
-      <div class="page-card">
-        <div class="muted">Billing Invoices</div>
-        <h3>{{ selectedHistory.billing_invoices.length }}</h3>
-      </div>
-      <div class="page-card">
-        <div class="muted">Pharmacy Dispenses</div>
-        <h3>{{ selectedHistory.pharmacy_dispenses.length }}</h3>
-      </div>
-    </div>
-
-    <section class="page-card" style="margin-top:1rem;">
-      <h3 class="page-title">OPD Timeline</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Visit</th>
-            <th>Date</th>
-            <th>Doctor</th>
-            <th>Status</th>
-            <th>Orders</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (visit of selectedHistory.opd_visits; track visit.id) {
-            <tr>
-              <td>{{ visit.visit_number }}</td>
-              <td>{{ visit.visit_date }}</td>
-              <td>{{ visit.consulting_doctor_name }}</td>
-              <td>{{ visit.status }}</td>
-              <td>{{ visit.orders.length }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="page-card" style="margin-top:1rem;">
-      <h3 class="page-title">Investigation & Prescription Details</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Visit</th>
-            <th>Type</th>
-            <th>Area</th>
-            <th>Item</th>
-            <th>Status</th>
-            <th>Result / Instructions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (visit of selectedHistory.opd_visits; track visit.id) {
-            @for (order of visit.orders; track order.id) {
-              <tr>
-                <td>{{ visit.visit_number }}</td>
-                <td>{{ order.order_type }}</td>
-                <td>{{ order.service_area || '-' }}</td>
-                <td>{{ order.item_name }}</td>
-                <td>{{ order.status }}</td>
-                <td>{{ order.result_text || order.instructions || '-' }}</td>
-              </tr>
-            }
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="page-card" style="margin-top:1rem;">
-      <h3 class="page-title">Billing & Pharmacy</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Reference</th>
-            <th>Date</th>
-            <th>Status / Item</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (invoice of selectedHistory.billing_invoices; track invoice.id) {
-            <tr>
-              <td>Billing</td>
-              <td>{{ invoice.invoice_number }}</td>
-              <td>{{ invoice.created_at | date:'medium' }}</td>
-              <td>{{ invoice.status }}</td>
-              <td>{{ formatCurrency(invoice.total_amount) }}</td>
-            </tr>
-          }
-          @for (dispense of selectedHistory.pharmacy_dispenses; track dispense.id) {
-            <tr>
-              <td>Pharmacy</td>
-              <td>{{ dispense.prescription_ref || '-' }}</td>
-              <td>{{ dispense.created_at | date:'medium' }}</td>
-              <td>{{ dispense.medicine_name }} × {{ dispense.quantity }}</td>
-              <td>{{ formatCurrency(dispense.total_price) }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-  </section>
-}

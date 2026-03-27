@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.encounter import IPDAdmission, IPDBed
+from app.models.encounter import IPDAdmission, IPDAdmissionMovement, IPDBed
 
 
 class IPDRepository:
@@ -9,19 +9,32 @@ class IPDRepository:
         self.db = db
 
     def list_admissions(self, branch_id=None) -> list[IPDAdmission]:
-        stmt = select(IPDAdmission).options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed)).order_by(IPDAdmission.admitted_at.desc())
+        stmt = (
+            select(IPDAdmission)
+            .options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed), joinedload(IPDAdmission.movements))
+            .order_by(IPDAdmission.admitted_at.desc())
+        )
         if branch_id:
             stmt = stmt.where(IPDAdmission.branch_id == branch_id)
-        return list(self.db.scalars(stmt))
+        return list(self.db.scalars(stmt).unique())
 
     def get_admission(self, admission_id) -> IPDAdmission | None:
-        stmt = select(IPDAdmission).options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed)).where(IPDAdmission.id == admission_id)
+        stmt = (
+            select(IPDAdmission)
+            .options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed), joinedload(IPDAdmission.movements))
+            .where(IPDAdmission.id == admission_id)
+        )
         return self.db.scalar(stmt)
 
     def create_admission(self, admission: IPDAdmission) -> IPDAdmission:
         self.db.add(admission)
         self.db.flush()
         return admission
+
+    def create_movement(self, movement: IPDAdmissionMovement) -> IPDAdmissionMovement:
+        self.db.add(movement)
+        self.db.flush()
+        return movement
 
     def get_summary(self, branch_id=None) -> tuple[int, int, int, int]:
         stmt = select(

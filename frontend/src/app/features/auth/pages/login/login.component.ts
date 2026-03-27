@@ -21,11 +21,16 @@ export class LoginComponent {
 
   errorMessage = '';
   loading = false;
+  showPassword = false;
 
   readonly form = this.fb.nonNullable.group({
     username_or_email: ['superadmin', [Validators.required]],
     password: ['Admin123!', [Validators.required, Validators.minLength(8)]],
   });
+
+  togglePasswordVisibility(): void {
+    this.showPassword = !this.showPassword;
+  }
 
   submit(): void {
     if (this.form.invalid || this.loading) {

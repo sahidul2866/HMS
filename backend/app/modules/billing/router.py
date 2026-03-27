@@ -16,6 +16,8 @@ from app.schemas.billing import (
     BillingInvoicePreviewRequest,
     BillingInvoiceRead,
     BillingInvoiceVoidRequest,
+    BillingPaymentCreate,
+    BillingRefundCreate,
     BillingReferralSummaryRead,
     BillingSummaryRead,
     BillingServiceCreate,
@@ -115,6 +117,38 @@ def create_billing_invoice(
     db: Session = Depends(get_db),
 ) -> BillingInvoiceRead:
     invoice = BillingServiceManager(db).create_invoice(payload, user, context)
+    return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
+
+
+@router.post(
+    "/invoices/{invoice_id}/payments",
+    response_model=BillingInvoiceRead,
+    dependencies=[Depends(require_permissions("billing.payment.collect"))],
+)
+def collect_billing_payment(
+    invoice_id: UUID,
+    payload: BillingPaymentCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingInvoiceRead:
+    invoice = BillingServiceManager(db).create_payment(invoice_id, payload, user, context)
+    return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
+
+
+@router.post(
+    "/invoices/{invoice_id}/refunds",
+    response_model=BillingInvoiceRead,
+    dependencies=[Depends(require_permissions("billing.payment.refund"))],
+)
+def create_billing_refund(
+    invoice_id: UUID,
+    payload: BillingRefundCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingInvoiceRead:
+    invoice = BillingServiceManager(db).create_refund(invoice_id, payload, user, context)
     return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
 
 

@@ -13,6 +13,7 @@ import { PatientPortalService } from '../../services/patient-portal.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './patient-portal.component.html',
+  styleUrls: ['./patient-portal.component.scss'],
 })
 export class PatientPortalComponent {
   private readonly portalService = inject(PatientPortalService);
@@ -53,15 +54,59 @@ export class PatientPortalComponent {
     });
   }
 
+  cancelAppointment(appointment: PatientAppointment): void {
+    if (appointment.status !== 'scheduled' && appointment.status !== 'confirmed') {
+      return;
+    }
+    this.portalService.updateAppointmentStatus(appointment.id, { status: 'cancelled' }).subscribe((updated) => {
+      this.appointments = this.appointments.map((item) => (item.id === updated.id ? updated : item));
+      this.notificationService.warning(`Appointment ${updated.appointment_number} cancelled.`);
+    });
+  }
+
   get completedLabReports() {
     return (this.history?.opd_visits ?? []).flatMap((visit) =>
-      visit.orders.filter((order) => order.service_area === 'laboratory' && order.status === 'completed')
+      visit.orders.filter((order) => order.service_area === 'laboratory' && ['completed', 'verified'].includes(order.status))
     );
   }
 
   get completedRadiologyReports() {
     return (this.history?.opd_visits ?? []).flatMap((visit) =>
-      visit.orders.filter((order) => order.service_area === 'radiology' && order.status === 'completed')
+      visit.orders.filter((order) => order.service_area === 'radiology' && ['completed', 'verified'].includes(order.status))
     );
+  }
+
+  get prescriptionArchive() {
+    return (this.history?.opd_visits ?? []).flatMap((visit) =>
+      visit.orders
+        .filter((order) => order.order_type === 'prescription')
+        .map((order) => ({
+          visit_number: visit.visit_number,
+          visit_date: visit.visit_date,
+          doctor_name: visit.consulting_doctor_name,
+          diagnosis: visit.final_diagnosis || visit.provisional_diagnosis,
+          ...order,
+        }))
+    );
+  }
+
+  get totalOutstandingDue(): number {
+    return (this.history?.billing_invoices ?? []).reduce((sum, invoice) => sum + Number(invoice.due_amount || 0), 0);
+  }
+
+  get totalPaidAmount(): number {
+    return (this.history?.billing_invoices ?? []).reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0);
+  }
+
+  get upcomingAppointments(): PatientAppointment[] {
+    return this.appointments.filter((item) => ['scheduled', 'confirmed'].includes(item.status));
+  }
+
+  formatCurrency(value: string | number): string {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(Number(value || 0));
   }
 }

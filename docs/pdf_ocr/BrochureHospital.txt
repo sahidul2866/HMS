@@ -1,0 +1,489 @@
+
+
+===== PAGE 1 =====
+
+@ Hospital Automation System (integrated)
+@ Diagnostic Automation System
+@ Medical College Automation System
+
+@ Nursing Automation System
+@ GCC Health Care Software
+
+461, Farmview Super Market, 87-92 B,
+Green Road, Farmgate, Dhaka-1215
+Phone: +8801720981682, +8801531554336
+Email: info@doelhosting.com, info@doeleservices.com
+Web: wwwdoelhosting.com, www.doeleservices.com
+
+
+===== PAGE 2 =====
+
+Cm
+
+Doctor Appointment
+
+{¥ Doctor Schedule and Room Setup
+
+{¥ Appointment over phone, mobile
+application and website
+
+{¥ Search by Department/Doctor Name
+
+(Send SMS with Serial Number
+
+(Patient appointed List Status Report
+
+Settings and User 7iccess control
+
+(&Y Company Information
+
+& Test Information
+
+& Doctor Information
+
+& Electric sign
+
+&Y Department Information
+
+&Y Item Information
+
+& Employee Information
+
+& User Role and Role based access
+
+Patient Registration and
+Health Card
+
+& Patient Registration Number
+& Patient Health Card with QR code
+
+Patient Portal
+
+& Patient Profile
+
+& Investigation History
+
+& Payment History
+
+Y E-Prescription
+
+&Y Package
+
+Y Promotional offer
+
+& SMS and Email Notification
+
+
+===== PAGE 3 =====
+
+Service Rating
+
+Overall rating
+Departments wise rating
+
+Doctor Portal and e-Prescription
+
+Patient appointment list &amp; reports
+e-prescription system with QR/Barcode
+Integrated with Investigation and
+Pharmacy
+
+Previous prescription of a patient
+Patients medical/health/case/records
+Diagnostics report on patients records
+Dynamically e-prescription setup &amp;
+template
+
+Tel lici
+
+Doctor Information
+
+Electronic Medical Record (EMR)
+Upload Image
+
+Prescription
+
+Investigation Billing
+
+Investigation Entry with Scanning
+a) of e-Prescription or Health Card
+Invoice with QR/Barcode
+
+Edit Patient Information
+
+Refund and due collection
+Investigation Logs.
+
+
+===== PAGE 4 =====
+
+Indoor Billing /1PD
+
+Y Patient Registration (if new patient)
+
+[(Y Health Card with Barcode
+
+YY Patient admission/transfer with SMS
+notification to ref. doctor.
+
+(YX Bed/ward/cabin management by floor or type
+
+Y Patient list with hospital/doctor/
+pathology/pharmacy/canteen bill
+
+Y OT entry, doctor service and doctor visit
+entry, hospital services entry.
+
+Y Patient list with hospital/doctor/pathology/
+pharmacy/canteen bill
+
+&Y OT Bill Distribution
+
+[Yj Nurse station medicine requisition
+
+[Yj Generate birth/death certificates, discharge
+certificate.
+
+(Y Doctors payment ledger, Indoor MIS
+
+OPD Services.
+
+Y Emergency
+
+(Y Dental
+
+(Y Physiotherapy
+Y Eve Care
+
+OT management System
+
+& Anesthesia Type Setup
+
+& Doctor Schedule for OT
+
+&Y Operation Name Setup
+
+& Operation Booking Board
+
+&Y Operation Re-schedule
+
+& SMS notification for Doctor and
+Guardian
+
+&Y Supplier wise Item summary and
+
+detail report
+
+Sample Collection
+
+Receive investigation request from
+billing Invoice
+
+5 | Y Collect sample of invoiced investigation
+
+| using Scanning barcode
+
+| (Lab Sample Collection using Scanning
+
+Barcode
+
+Repeat Sample Collection
+
+User wise daily sample collection
+
+&Y Sample location status
+
+
+===== PAGE 5 =====
+
+aboratory Information System
+(WS)
+
+Analyzer wise test and reference value
+mapping
+
+Sample Receive and Processing
+
+All schedule test, re-run, and repeat
+sample are run by Bi-directional LIS
+
+All Analyzers’ results receive accurately
+and automatically
+
+Reagent Management System
+
+Analyzer wise reagent lot entry and
+mapping with barcode
+
+Reagent In/Out with scanning barcode
+and store
+
+Get expiry date/stock status with
+notification
+
+fab QC Management System
+Lot Number and Label wise QC
+Reference Value Mapping
+QC barcode Generate
+Automatically Receive QC data from
+Analyzer
+
+Daily QC Report.
+
+Radiological Information System
+(EY)
+
+Automatically update patients data to
+radiological System
+
+RIS, MWL, PACS
+
+Archive Radiological film for future use
+
+Provide own radiological report template
+
+Use of Supported Protocol to exchange
+
+patient information between MRI,
+
+X-ray, CT scan and Radiological Machines
+
+
+===== PAGE 6 =====
+
+Pathology and Radiology Report
+
+Faster Report print after checking report
+using system
+
+Check Data/Draft
+
+Find out patients’ abnormal report for
+re-run or recheck.
+
+Faster result entry on your own template
+report
+
+Deliver reports based on investigation
+payment status
+
+Monitor investigation status &amp;
+current queue
+
+SMS/email to patient when results are
+available
+
+Notify patients for follow-up test by
+SMS/MMS.
+
+Online (with Payment get way) |
+Offline Report Delivery
+
+Collect report from delivery desk with
+consultant sign.
+
+After paid, patient can view report from
+patient portal with digital sign
+
+Confirm report delivery status using
+name or phone.
+
+Pharmacy Management
+System (OPD/1PD)
+
+Medicine management
+Notification for expired medicine/
+
+low stock
+
+Gross profit report for medicine
+
+Medicine requisition from nurse station
+Purchase requisition based on shortage
+and past sell history
+
+Sale/return on credit and maintain ledger
+Stock adjustment, scrap and exchange
+Sell medicine to IPD/OPD patients
+Provide discount based on Health Card
+Supplier/Vendor Management
+
+
+===== PAGE 7 =====
+
+Blood Bank Management System
+
+Blood requisition
+Cross match
+Blood issue register and issue return
+Blood Bag Discard Report
+
+Blood group wise stock
+
+Marketing and Business
+Development
+
+Test wise Palli-Commision Setup
+Palli-Commision bill payment.
+Department wise monthly/
+
+yearly indoor/outdoor report
+Date wise income and expense report
+
+Canteen Management System
+
+IPD and OPD food sell
+
+Food purchase from suppliers
+Canteen item adjustment
+Canteen item sell on credit
+Canteen item ledger report
+Gross profit report
+
+Ambulance Management System
+
+Ambulance info entry
+
+Ambulance bill entry
+
+Ambulance availability information
+Date wise / ambulance wise total
+collected amount report
+
+Date wise / ambulance wise due amount
+report
+
+Date wise / ambulance wise due collect
+report
+
+
+===== PAGE 8 =====
+
+y Hospital Maintenance Management
+
+VW
+qm
+
+Demand entry
+
+Maintenance status update by
+engineer’s/ maintenance dept.
+Maintenance demand status report
+for management
+
+free medical camp
+
+Information entry for medical
+camping on special daus.
+
+Home Health Care Service
+
+Collection patient blood and other sample
+Provide pretreatment.
+
+Digital firchive
+
+All Documents (Scan copy) — Trade
+license, VAT, TAX etc.
+
+Board of directors and share holders
+Board meeting
+Vendors
+
+Emplouee certificates
+
+
+===== PAGE 9 =====
+
+E-Dispatch
+
+(Y Initialize Note
+™ Transfer Note
+
+Purchase
+
+© Order management
+
+© Supply chain planning
+© Supplier management
+& Productions
+
+& Service
+
+YY Product lifecycle management
+(Y Supply chain intelligence
+
+General Store
+
+& Purchase requisition with approval
+
+(Y Purchase order with approval
+
+(% MRN/GRN with approval
+
+&Y QC with approval
+
+Y Transfer (Store to Lab) with approval
+
+Y Assembling (General costing based on
+standard cost.)
+
+&Y Issue
+
+&Y MIS report
+
+HR with Payroll
+
+( Employee data management
+@) YY Leave and attendance (finger print/
+face detection ) management with
+roster
+& Payroll management
+&Y Employee task, checklist, performance
+© HR documents management
+(Y HR Manager notification by SMS
+
+{Y Employee annual confidential report
+(CXa;9)
+
+
+===== PAGE 10 =====
+
+Budget Management System
+
+Department wise budget managemen
+
+Audit and Togs
+
+Confidential log management
+
+Fixed assets
+
+Asset Registration
+
+Asset Movement/Transfer
+Asset Retirement/Disposal
+Asset Depreciation Calculation
+(Straight line method)
+
+Asset Re-evaluation
+
+MIS Report
+
+Financial flccounting System
+Chart of Accounts setup
+Journal
+General Ledger
+Voucher Entry
+Trial Balance
+Balance Sheet
+Cash Flow Statement
+Income Statement
+Movement of Accounts
+Cash Book
+Bank Book
+Check Print
+Account Receivable
+Account Payable
+Bank Reconciliation
+Transfer voucher

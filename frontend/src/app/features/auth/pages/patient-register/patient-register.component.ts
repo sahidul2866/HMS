@@ -11,6 +11,7 @@ import { NotificationService } from '../../../../core/services/notification.serv
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './patient-register.component.html',
+  styleUrl: './patient-register.component.scss',
 })
 export class PatientRegisterComponent {
   private readonly fb = inject(FormBuilder);
@@ -20,6 +21,7 @@ export class PatientRegisterComponent {
 
   loading = false;
   errorMessage = '';
+  showPassword = false;
 
   readonly form = this.fb.group({
     full_name: ['', Validators.required],
@@ -33,6 +35,10 @@ export class PatientRegisterComponent {
     emergency_contact_name: [''],
     emergency_contact_phone: [''],
   });
+
+  togglePasswordVisibility(): void {
+    this.showPassword = !this.showPassword;
+  }
 
   submit(): void {
     if (this.form.invalid || this.loading) {

@@ -7,6 +7,7 @@ from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.opd.repository import OPDRepository
 from app.schemas.encounter import ClinicalInvestigationResultUpdate, ClinicalInvestigationWorkItemRead
+from app.schemas.radiology import RadiologySummaryRead
 from app.utils.enums import AuditAction
 
 
@@ -19,6 +20,17 @@ class RadiologyService:
         orders = self.repository.list_investigation_orders("radiology", actor.branch_id)
         return [self._serialize(order) for order in orders]
 
+    def get_summary(self, actor: User) -> RadiologySummaryRead:
+        items = self.list_worklist(actor)
+        return RadiologySummaryRead(
+            total_orders=len(items),
+            pending_orders=len([item for item in items if item.status == "pending"]),
+            ready_orders=len([item for item in items if item.status == "collected"]),
+            in_progress_orders=len([item for item in items if item.status == "in_progress"]),
+            completed_orders=len([item for item in items if item.status == "completed"]),
+            verified_orders=len([item for item in items if item.status == "verified"]),
+        )
+
     def update_result(self, order_id, payload: ClinicalInvestigationResultUpdate, actor: User, context: dict[str, str | None]) -> ClinicalInvestigationWorkItemRead:
         order = self.repository.get_order(order_id)
         if not order or order.order_type != "investigation" or order.service_area != "radiology":
@@ -27,13 +39,23 @@ class RadiologyService:
             raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
 
         order.status = payload.status
+        order.sample_note = payload.sample_note
         order.result_text = payload.result_text
-        if payload.status == "completed":
-            order.completed_at = datetime.now(UTC)
+        if payload.status in {"collected", "in_progress", "completed", "verified"} and not order.sample_collected_at:
+            order.sample_collected_at = datetime.now(UTC)
+            order.sample_collected_by_user_id = actor.id
+        if payload.status in {"completed", "verified"}:
+            order.completed_at = order.completed_at or datetime.now(UTC)
             order.completed_by_user_id = actor.id
         else:
             order.completed_at = None
             order.completed_by_user_id = None
+        if payload.status == "verified":
+            order.verified_at = datetime.now(UTC)
+            order.verified_by_user_id = actor.id
+        else:
+            order.verified_at = None
+            order.verified_by_user_id = None
         order.updated_by = actor.id
         AuditService(self.db).log(
             user_id=actor.id,
@@ -55,13 +77,19 @@ class RadiologyService:
             visit_number=order.visit.visit_number,
             visit_date=order.visit.visit_date,
             patient_id=order.visit.patient_id,
+            patient_number=order.visit.patient.patient_number,
             patient_name=f"{order.visit.patient.first_name} {order.visit.patient.last_name}",
             consulting_doctor_name=order.visit.consulting_doctor_name,
             service_area=order.service_area or "radiology",
             item_name=order.item_name,
             quantity=order.quantity,
             instructions=order.instructions,
+            chief_complaint=order.visit.chief_complaint,
+            diagnosis=order.visit.final_diagnosis or order.visit.provisional_diagnosis,
             status=order.status,
+            sample_note=order.sample_note,
+            sample_collected_at=order.sample_collected_at,
             result_text=order.result_text,
             completed_at=order.completed_at,
+            verified_at=order.verified_at,
         )

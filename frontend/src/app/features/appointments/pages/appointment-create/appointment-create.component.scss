@@ -1,0 +1,51 @@
+:host {
+  display: block;
+}
+
+.lookup-shell {
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 88%, white) 0%, var(--surface-soft) 100%);
+  padding: 1.1rem;
+}
+
+.lookup-head {
+  margin-bottom: 0.75rem;
+}
+
+.lookup-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.lookup-row input {
+  flex: 1 1 320px;
+}
+
+.search-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.result-btn {
+  text-align: left;
+}
+
+.selected-patient {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+@media (max-width: 920px) {
+  .search-results {
+    grid-template-columns: 1fr;
+  }
+}

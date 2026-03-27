@@ -1,0 +1,90 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">OPD Registration</div>
+        <h1 class="page-title">Register Outpatient Visit</h1>
+        <div class="page-subtitle">Keep registration separate from the consultation queue so front-desk staff can work faster with less visual noise.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="ghost-btn" type="button" (click)="backToQueue()">Back To Queue</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="page-card">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Patient And Visit Details</h2>
+        <div class="section-copy">Use existing-patient autofill first, then complete only the visit-specific details.</div>
+      </div>
+    </div>
+
+    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="field" style="grid-column:1/-1;">
+        <span>Existing Patient Lookup</span>
+        <div class="toolbar-row" style="align-items:flex-start; gap:0.75rem; flex-wrap:wrap;">
+          <input
+            [formControl]="patientLookupControl"
+            type="text"
+            placeholder="Search by patient number, phone, email, or name"
+            style="flex:1 1 320px;"
+          />
+          <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
+          @if (selectedPatient) {
+            <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+          }
+        </div>
+        @if (patientSearchResults.length) {
+          <div class="page-card" style="padding:0.75rem;">
+            <div class="page-subtitle" style="margin-bottom:0.75rem;">Matching patients</div>
+            <div class="grid-2">
+              @for (patient of patientSearchResults; track patient.id) {
+                <button class="secondary-btn" type="button" (click)="applyPatient(patient)" style="text-align:left;">
+                  {{ patient.patient_number }} - {{ patient.full_name }}
+                  @if (patient.phone) { · {{ patient.phone }} }
+                </button>
+              }
+            </div>
+          </div>
+        }
+        @if (selectedPatient) {
+          <div class="page-card" style="padding:0.85rem;">
+            <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
+            <div class="page-subtitle" style="margin:0.35rem 0 0;">
+              Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
+            </div>
+          </div>
+        }
+      </div>
+      <label class="field">
+        <span>Patient</span>
+        <select formControlName="patient_id" (change)="onPatientChanged()">
+          <option value="">Select patient</option>
+          @for (patient of patients; track patient.id) {
+            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Visit Date</span><input type="date" formControlName="visit_date" /></label>
+      <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
+      <label class="field">
+        <span>Doctor Directory</span>
+        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
+          <option value="">Select from doctor directory</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field"><span>Consulting Doctor</span><input type="text" formControlName="consulting_doctor_name" /></label>
+      <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="3" formControlName="chief_complaint"></textarea></label>
+      <label class="field" style="grid-column:1/-1;"><span>Front Desk Note</span><textarea rows="2" formControlName="note"></textarea></label>
+      <div style="grid-column:1/-1;">
+        <button class="primary-btn" type="submit">Register OPD Visit</button>
+      </div>
+    </form>
+  </section>
+</section>

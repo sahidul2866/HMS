@@ -1,0 +1,129 @@
+.workspace-shell {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.9rem;
+}
+
+.hero-stat {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(14, 116, 144, 0.82));
+  color: #f0fdfa;
+}
+
+.hero-stat .label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(204, 251, 241, 0.76);
+}
+
+.hero-stat .value {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.portal-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+
+.portal-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.soft-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.soft-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(240, 253, 250, 0.94));
+  pointer-events: none;
+}
+
+.soft-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.panel-head,
+.summary-grid,
+.record-head,
+.toolbar-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.9rem;
+}
+
+.metric-card,
+.record-card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(236, 253, 245, 0.86));
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+.metric-card .label {
+  font-size: 0.78rem;
+  color: #0f766e;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metric-card .value {
+  margin-top: 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.record-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.record-card {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.record-copy {
+  color: #475569;
+  line-height: 1.55;
+}
+
+.empty-state {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(204, 251, 241, 0.35);
+  color: #475569;
+}
+
+@media (max-width: 1120px) {
+  .portal-grid {
+    grid-template-columns: 1fr;
+  }
+}

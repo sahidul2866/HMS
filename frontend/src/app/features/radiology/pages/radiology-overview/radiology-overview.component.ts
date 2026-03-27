@@ -1,69 +1,79 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 
-import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
-import { InvestigationWorkItem } from '../../models/radiology.models';
+import { InvestigationWorkItem, RadiologySummary } from '../../models/radiology.models';
 import { RadiologyServiceApi } from '../../services/radiology.service';
 
 @Component({
   selector: 'app-radiology-overview',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './radiology-overview.component.html',
+  styleUrls: ['./radiology-overview.component.scss'],
 })
 export class RadiologyOverviewComponent {
   private readonly radiologyService = inject(RadiologyServiceApi);
-  private readonly notificationService = inject(NotificationService);
-  private readonly fb = inject(FormBuilder);
+  private readonly router = inject(Router);
   readonly sessionService = inject(SessionService);
 
+  summary: RadiologySummary | null = null;
   worklist: InvestigationWorkItem[] = [];
-  selectedItem: InvestigationWorkItem | null = null;
-
-  readonly resultForm = this.fb.group({
-    status: ['in_progress'],
-    result_text: [''],
-  });
+  queueSearch = '';
 
   constructor() {
+    this.loadAll();
+  }
+
+  loadAll(): void {
+    this.loadSummary();
     this.loadWorklist();
   }
 
+  loadSummary(): void {
+    this.radiologyService.getSummary().subscribe((summary) => (this.summary = summary));
+  }
+
   loadWorklist(): void {
-    this.radiologyService.listWorklist().subscribe((items) => {
-      this.worklist = items;
-      if (this.selectedItem) {
-        this.selectedItem = items.find((item) => item.order_id === this.selectedItem?.order_id) ?? null;
-      }
-    });
+    this.radiologyService.listWorklist().subscribe((items) => (this.worklist = items));
   }
 
-  selectItem(item: InvestigationWorkItem): void {
-    this.selectedItem = item;
-    this.resultForm.patchValue({
-      status: item.status === 'pending' ? 'in_progress' : item.status,
-      result_text: item.result_text || '',
-    });
+  openWorkbench(item: InvestigationWorkItem): void {
+    void this.router.navigate(['/radiology/workbench', item.order_id]);
   }
 
-  submitResult(): void {
-    if (!this.selectedItem) {
-      return;
+  get filteredWorklist(): InvestigationWorkItem[] {
+    const query = this.queueSearch.trim().toLowerCase();
+    if (!query) {
+      return this.worklist;
     }
-    this.radiologyService.updateResult(this.selectedItem.order_id, this.resultForm.getRawValue() as never).subscribe((item) => {
-      this.selectedItem = item;
-      this.loadWorklist();
-      this.notificationService.success(`Radiology result for ${item.visit_number} updated.`);
-    });
+    return this.worklist.filter((item) =>
+      [
+        item.visit_number,
+        item.patient_number,
+        item.patient_name,
+        item.consulting_doctor_name,
+        item.item_name,
+        item.chief_complaint,
+        item.diagnosis,
+      ]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query))
+    );
   }
 
-  get summary(): { label: string; value: number }[] {
+  get summaryCards(): { label: string; value: number }[] {
+    if (!this.summary) {
+      return [];
+    }
     return [
-      { label: 'Pending Studies', value: this.worklist.filter((item) => item.status === 'pending').length },
-      { label: 'In Progress', value: this.worklist.filter((item) => item.status === 'in_progress').length },
-      { label: 'Completed', value: this.worklist.filter((item) => item.status === 'completed').length },
+      { label: 'Pending', value: this.summary.pending_orders },
+      { label: 'Ready', value: this.summary.ready_orders },
+      { label: 'In Progress', value: this.summary.in_progress_orders },
+      { label: 'Reported', value: this.summary.completed_orders },
+      { label: 'Verified', value: this.summary.verified_orders },
     ];
   }
 }

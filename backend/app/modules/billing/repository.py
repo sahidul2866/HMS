@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.billing import BillingInvoice, BillingService, ReferredDoctor
+from app.models.billing import BillingInvoice, BillingPayment, BillingRefund, BillingService, ReferredDoctor
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.billing import BillingInvoiceFilterParams
@@ -91,7 +91,13 @@ class BillingRepository:
     def get_invoice(self, invoice_id: UUID) -> BillingInvoice | None:
         stmt = (
             select(BillingInvoice)
-            .options(joinedload(BillingInvoice.patient), joinedload(BillingInvoice.items), joinedload(BillingInvoice.referred_doctor))
+            .options(
+                joinedload(BillingInvoice.patient),
+                joinedload(BillingInvoice.items),
+                joinedload(BillingInvoice.referred_doctor),
+                joinedload(BillingInvoice.payments),
+                joinedload(BillingInvoice.refunds),
+            )
             .where(BillingInvoice.id == invoice_id)
         )
         return self.db.scalar(stmt)
@@ -100,6 +106,19 @@ class BillingRepository:
         self.db.add(invoice)
         self.db.flush()
         return invoice
+
+    def create_payment(self, payment: BillingPayment) -> BillingPayment:
+        self.db.add(payment)
+        self.db.flush()
+        return payment
+
+    def create_refund(self, refund: BillingRefund) -> BillingRefund:
+        self.db.add(refund)
+        self.db.flush()
+        return refund
+
+    def get_payment(self, payment_id: UUID) -> BillingPayment | None:
+        return self.db.get(BillingPayment, payment_id)
 
     def get_summary(self, branch_id: UUID | None, filters: BillingInvoiceFilterParams | None = None):
         stmt = select(
