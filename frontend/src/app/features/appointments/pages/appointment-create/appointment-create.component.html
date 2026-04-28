@@ -1,109 +1,170 @@
-<div class="workspace-shell">
-  <section class="page-card module-hero">
-    <div class="hero-row">
+<section class="workspace-shell appointment-entry-page">
+  <section class="page-card module-hero appointment-hero">
+    <div class="hero-main">
       <div>
         <div class="hero-kicker">Scheduling</div>
         <h1 class="page-title">Create Appointment</h1>
-        <div class="page-subtitle">Book a new appointment with patient lookup, quick doctor selection, and a cleaner front-desk flow.</div>
+        <p class="page-subtitle">Book a patient into the doctor schedule with a clean intake flow and a focused patient picker.</p>
       </div>
-      <div class="toolbar-row">
+      <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="openAppointmentDesk()">Open Appointment Desk</button>
       </div>
     </div>
-
-    <div class="hero-summary">
-      <div class="hero-stat"><div class="label">Patients</div><div class="value">{{ patients.length }}</div></div>
-      <div class="hero-stat"><div class="label">Doctors</div><div class="value">{{ doctors.length }}</div></div>
-      <div class="hero-stat"><div class="label">Lookup</div><div class="value">{{ selectedPatient ? 'Matched' : 'Required' }}</div></div>
-    </div>
   </section>
 
-  <section class="spotlight-grid">
-    <section class="soft-panel">
-      <div class="section-header">
+  <div class="entry-layout">
+    <section class="page-card entry-card">
+      <div class="section-intro">
         <div>
-          <h2 class="section-title">Appointment Details</h2>
-          <div class="section-copy">Select the patient once, then fill the rest of the appointment in a focused booking form.</div>
+          <div class="section-eyebrow">Step 1</div>
+          <h2 class="section-title">Patient Lookup</h2>
+          <p class="section-copy">Find the patient first, then confirm the doctor, time, and reason without mixing queue and booking views.</p>
         </div>
+        @if (selectedPatient) {
+          <div class="selection-badge">
+            <strong>{{ selectedPatient.patient_number }}</strong>
+            <span>{{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</span>
+          </div>
+        }
       </div>
 
-      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-        <div class="lookup-shell" style="grid-column:1/-1;">
-          <div class="lookup-head">
-            <div>
-              <h3 class="section-title">Existing Patient Lookup</h3>
-              <div class="section-copy">Reuse patient data instead of creating duplicate registrations.</div>
-            </div>
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="lookup-banner">
+          <div class="lookup-copy">
+            <div class="lookup-title">Existing Patient Search</div>
+            <p>Search by patient number, name, phone, or email. Results open in a modal so the booking page stays focused.</p>
           </div>
-          <div class="toolbar-row lookup-row">
+          <div class="lookup-row">
             <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
             <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
+            <button class="ghost-btn" type="button" [disabled]="!patientSearchResults.length" (click)="openPatientLookupModal()">View Matches</button>
             @if (selectedPatient) {
               <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
             }
           </div>
-          @if (patientSearchResults.length) {
-            <div class="search-results">
-              @for (patient of patientSearchResults; track patient.id) {
-                <button class="secondary-btn result-btn" type="button" (click)="applyPatient(patient)">
-                  {{ patient.patient_number }} - {{ patient.full_name }}
-                  @if (patient.phone) { · {{ patient.phone }} }
-                </button>
-              }
-            </div>
-          }
-          @if (selectedPatient) {
-            <div class="selected-patient">
-              <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
-              <div class="page-subtitle">
-                Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 2</div>
+            <h3>Booking Details</h3>
+          </div>
+          <div class="form-grid appointment-grid">
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.patient_id, submitted)">
+              <div class="field-label-row">
+                <span>Patient</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.patient_id)" [class.field-badge--optional]="!validation.isRequired(form.controls.patient_id)">{{ validation.fieldStateLabel(form.controls.patient_id) }}</span>
+                </span>
               </div>
-            </div>
-          }
-        </div>
-
-        <div class="grid-2" style="grid-column:1/-1;">
-          <label class="field">
-            <span>Patient</span>
-            <select formControlName="patient_id">
-              <option value="">Select patient</option>
-              @for (patient of patients; track patient.id) {
-                <option [value]="patient.id">{{ formatPatient(patient) }}</option>
+              <select formControlName="patient_id">
+                <option value="">Select patient</option>
+                @for (patient of patients; track patient.id) {
+                  <option [value]="patient.id">{{ formatPatient(patient) }}</option>
+                }
+              </select>
+              @if (validation.isInvalid(form.controls.patient_id, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.patient_id, 'Patient') }}</div>
               }
-            </select>
-          </label>
-          <label class="field">
-            <span>Doctor</span>
-            <select formControlName="doctor_user_id">
-              <option value="">Select doctor</option>
-              @for (doctor of doctors; track doctor.id) {
-                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.doctor_user_id, submitted)">
+              <div class="field-label-row">
+                <span>Doctor</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.doctor_user_id)" [class.field-badge--optional]="!validation.isRequired(form.controls.doctor_user_id)">{{ validation.fieldStateLabel(form.controls.doctor_user_id) }}</span>
+                  <span class="field-tooltip" title="Only active referral-ready doctors appear here.">i</span>
+                </span>
+              </div>
+              <select formControlName="doctor_user_id">
+                <option value="">Select doctor</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+              @if (validation.isInvalid(form.controls.doctor_user_id, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.doctor_user_id, 'Doctor') }}</div>
               }
-            </select>
-          </label>
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.appointment_at, submitted)">
+              <div class="field-label-row">
+                <span>Appointment Time</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.appointment_at)" [class.field-badge--optional]="!validation.isRequired(form.controls.appointment_at)">{{ validation.fieldStateLabel(form.controls.appointment_at) }}</span>
+                </span>
+              </div>
+              <input type="datetime-local" formControlName="appointment_at" />
+              @if (validation.isInvalid(form.controls.appointment_at, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.appointment_at, 'Appointment time') }}</div>
+              }
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Reason</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="reason" placeholder="Reason for visit" />
+            </label>
+            <label class="field field-wide">
+              <div class="field-label-row">
+                <span>Note</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <textarea rows="3" formControlName="note" placeholder="Additional scheduling note"></textarea>
+            </label>
+          </div>
         </div>
 
-        <div class="grid-2" style="grid-column:1/-1;">
-          <label class="field">
-            <span>Appointment Time</span>
-            <input type="datetime-local" formControlName="appointment_at" />
-          </label>
-          <label class="field">
-            <span>Reason</span>
-            <input type="text" formControlName="reason" placeholder="Reason for visit" />
-          </label>
-        </div>
-
-        <label class="field" style="grid-column:1/-1;">
-          <span>Note</span>
-          <textarea rows="3" formControlName="note" placeholder="Additional scheduling note"></textarea>
-        </label>
-
-        <div style="grid-column:1/-1;">
+        <div class="form-actions">
+          <button class="ghost-btn" type="button" (click)="openAppointmentDesk()">Cancel</button>
           <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Appointment' }}</button>
         </div>
       </form>
     </section>
-  </section>
-</div>
+
+    <aside class="side-stack">
+      <section class="page-card summary-card">
+        <div class="section-eyebrow">Appointment Snapshot</div>
+        <h3>{{ selectedPatient ? selectedPatient.first_name + ' ' + selectedPatient.last_name : 'Patient pending' }}</h3>
+        <ul class="summary-list">
+          <li><span>Patient</span><strong>{{ selectedPatient?.patient_number || 'Pending' }}</strong></li>
+          <li><span>Doctor</span><strong>{{ selectedDoctorName }}</strong></li>
+          <li><span>Schedule</span><strong>{{ form.getRawValue().appointment_at || 'Pending' }}</strong></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  @if (patientLookupModalOpen) {
+    <div class="modal-backdrop" (click)="closePatientLookupModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Patient Matches</p>
+            <h3>Select Patient For Appointment</h3>
+          </div>
+          <button class="icon-btn" type="button" (click)="closePatientLookupModal()">×</button>
+        </div>
+
+        <div class="modal-results">
+          @for (patient of patientSearchResults; track patient.id) {
+            <button class="result-card" type="button" (click)="applyPatient(patient)">
+              <div class="result-main">
+                <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                <span>{{ patient.phone || 'No mobile' }}</span>
+              </div>
+              <div class="result-meta">
+                <span>{{ patient.email || 'No email' }}</span>
+                <span>{{ patient.gender || 'No gender' }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+  }
+</section>

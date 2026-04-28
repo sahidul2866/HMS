@@ -50,6 +50,16 @@
               <div class="context-copy">
                 Payment {{ selectedInvoice.payment_status }} · Total {{ formatCurrency(selectedInvoice.total_amount) }} · Due {{ formatCurrency(selectedInvoice.due_amount) }}
               </div>
+              @if (invoicePharmacyItems.length) {
+                <div class="invoice-item-stack">
+                  @for (item of invoicePharmacyItems; track item.id) {
+                    <button class="invoice-item-btn" type="button" (click)="applyInvoiceMedicineItem(item)" [class.active]="selectedInvoiceItem?.id === item.id">
+                      <strong>{{ item.service_name }}</strong>
+                      <span>Qty {{ item.quantity }} · Unit {{ formatCurrency(item.unit_price) }} · Net {{ formatCurrency(item.line_total) }}</span>
+                    </button>
+                  }
+                </div>
+              }
             </div>
           }
         </div>

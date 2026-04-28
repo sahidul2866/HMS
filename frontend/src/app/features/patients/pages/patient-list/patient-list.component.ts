@@ -35,4 +35,16 @@ export class PatientListComponent {
   openHistory(patient: Patient): void {
     void this.router.navigate(['/patients', patient.id]);
   }
+
+  openBilling(patient: Patient): void {
+    void this.router.navigate(['/billing/create'], { queryParams: { patientId: patient.id } });
+  }
+
+  openIpdAdmission(patient: Patient): void {
+    void this.router.navigate(['/ipd/admit'], { queryParams: { patientId: patient.id } });
+  }
+
+  openOpdRegistration(patient: Patient): void {
+    void this.router.navigate(['/opd/register'], { queryParams: { patientId: patient.id } });
+  }
 }

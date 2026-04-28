@@ -1,0 +1,143 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Diagnostics Config</div>
+        <h1 class="page-title">Investigation Setting</h1>
+        <div class="page-subtitle">Configure laboratory and radiology tests, fees, rooms, specimen rules, turnaround notes, and report templates.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openCreate()">Add Setting</button>
+      </div>
+      <div class="hero-summary">
+        <div class="hero-stat">
+          <div class="label">Visible Rows</div>
+          <div class="value">{{ total }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Active</div>
+          <div class="value">{{ activeCount }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Inactive</div>
+          <div class="value">{{ inactiveCount }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid-shell">
+    <section class="page-card settings-catalog">
+      <div class="filter-grid">
+        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search test, code, category" />
+        <select [(ngModel)]="serviceAreaFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All service areas</option>
+          <option value="laboratory">Laboratory</option>
+          <option value="radiology">Radiology</option>
+        </select>
+        <select [(ngModel)]="activeFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+          <option value="">All statuses</option>
+        </select>
+        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+      </div>
+
+      <div class="status-strip">
+        <div class="status-chip">
+          <strong>{{ total }}</strong>
+          <span>Total matching tests</span>
+        </div>
+        <div class="status-chip">
+          <strong>{{ serviceAreaFilter || 'all' }}</strong>
+          <span>Service area filter</span>
+        </div>
+        <div class="status-chip">
+          <strong>{{ activeFilter === '' ? 'all' : activeFilter }}</strong>
+          <span>Record status</span>
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Test</th>
+            <th>Category</th>
+            <th>Area</th>
+            <th>Room</th>
+            <th>Range</th>
+            <th>Fee</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of settings; track item.id) {
+            <tr>
+              <td><strong>{{ item.code }}</strong></td>
+              <td>
+                <strong>{{ item.test_name }}</strong>
+                <div class="muted-line">{{ item.description || 'No description added' }}</div>
+              </td>
+              <td>{{ item.category_name }}</td>
+              <td>{{ item.service_area }}</td>
+              <td>{{ item.room_number || '-' }}</td>
+              <td>{{ item.normal_range || '-' }}<div class="muted-line">{{ item.unit || 'No unit' }}</div></td>
+              <td>{{ item.fee }}<div class="muted-line">{{ item.turnaround_time || 'No TAT' }}</div></td>
+              <td><span class="pill">{{ item.is_active ? 'active' : 'inactive' }}</span></td>
+              <td class="action-cell">
+                <button class="secondary-btn" type="button" (click)="edit(item)">Edit</button>
+                <button class="danger-btn" type="button" (click)="remove(item)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+    </section>
+  </div>
+
+  @if (editorOpen) {
+    <div class="modal-backdrop" (click)="closeEditor()">
+      <section class="modal-card diagnostics-editor-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Diagnostics Setting</p>
+            <h3>{{ editingId ? 'Edit Setting' : 'Add Setting' }}</h3>
+            <p class="page-subtitle">Codes are validated against duplicates on save.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditor()">×</button>
+        </div>
+
+        <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field"><span>Category</span><input type="text" formControlName="category_name" /></label>
+          <label class="field"><span>Test Name</span><input type="text" formControlName="test_name" /></label>
+          <label class="field"><span>Code</span><input type="text" formControlName="code" /></label>
+          <label class="field"><span>Service Area</span><select formControlName="service_area"><option value="laboratory">Laboratory</option><option value="radiology">Radiology</option></select></label>
+          <label class="field"><span>Fee</span><input type="number" min="0" step="0.01" formControlName="fee" /></label>
+          <label class="field"><span>Room Number</span><input type="text" formControlName="room_number" /></label>
+          <label class="field"><span>Normal Range</span><input type="text" formControlName="normal_range" /></label>
+          <label class="field"><span>Unit</span><input type="text" formControlName="unit" /></label>
+          <label class="field"><span>Specimen Type</span><input type="text" formControlName="specimen_type" /></label>
+          <label class="field"><span>Turnaround Time</span><input type="text" formControlName="turnaround_time" /></label>
+          <label class="field"><span>Requires Report</span><select formControlName="requires_report"><option [ngValue]="true">Yes</option><option [ngValue]="false">No</option></select></label>
+          <label class="field"><span>Status</span><select formControlName="is_active"><option [ngValue]="true">Active</option><option [ngValue]="false">Inactive</option></select></label>
+          <label class="field field--wide"><span>Description</span><textarea rows="2" formControlName="description"></textarea></label>
+          <label class="field field--wide"><span>Report Header</span><textarea rows="2" formControlName="report_header"></textarea></label>
+          <label class="field field--wide"><span>Report Template</span><textarea rows="3" formControlName="report_template"></textarea></label>
+          <label class="field field--wide"><span>Report Note Template</span><textarea rows="2" formControlName="report_note_template"></textarea></label>
+          <div class="toolbar-row field--wide">
+            <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
+            <button class="primary-btn" type="submit">{{ editingId ? 'Update Setting' : 'Save Setting' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</section>

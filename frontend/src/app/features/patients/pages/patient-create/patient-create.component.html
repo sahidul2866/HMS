@@ -1,80 +1,219 @@
-<section class="workspace-shell">
-  <section class="page-card module-hero">
-    <div class="hero-row">
+<section class="workspace-shell intake-page">
+  <section class="page-card module-hero intake-hero">
+    <div class="hero-main">
       <div>
         <div class="hero-kicker">Patient Registration</div>
-        <h1 class="page-title">Create Patient</h1>
-        <div class="page-subtitle">Use the mobile-first family lookup to auto-fill shared contact details and keep each mobile within the configured patient limit.</div>
+        <h1 class="page-title">Create Patient Profile</h1>
+        <p class="page-subtitle">
+          Start with the mobile number, reuse family contact data when possible, and keep registration tight enough for front-desk staff.
+        </p>
+      </div>
+      <div class="hero-pills">
+        <span class="hero-pill">Mobile-first lookup</span>
+        <span class="hero-pill">Family autofill</span>
+        <span class="hero-pill">Fast handoff to OPD/IPD</span>
       </div>
     </div>
   </section>
 
-  <section class="page-card">
-    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="mobile-lookup-shell" style="grid-column:1/-1;">
+  <div class="intake-layout">
+    <section class="page-card form-card">
+      <div class="section-intro">
         <div>
-          <strong>Mobile Lookup</strong>
-          <div class="lookup-note">Search by mobile to find existing family-linked patients before creating a new record.</div>
+          <div class="section-eyebrow">Step 1</div>
+          <h2 class="section-title">Identity And Contact</h2>
+          <p class="section-copy">Search the mobile first. If family-linked records already exist, pull the shared details instead of retyping them.</p>
         </div>
-        <div class="mobile-search-row">
-          <input type="text" formControlName="phone" placeholder="Enter mobile number" />
-          <button class="secondary-btn" type="button" (click)="searchMobile()">Search Mobile</button>
-        </div>
-        @if (mobileLookupMessage) {
-          <div class="lookup-note">{{ mobileLookupMessage }}</div>
-        }
-        @if (mobileSearchResults.length) {
-          <div class="family-results">
-            @for (patient of mobileSearchResults; track patient.id) {
-              <button class="secondary-btn family-option" type="button" (click)="applyFamilyAutoFill(patient)">
-                <span>{{ patient.patient_number }} · {{ patient.full_name }}</span>
-                <span>{{ patient.phone || '-' }}</span>
-              </button>
-            }
+        @if (mobileLookup) {
+          <div class="lookup-chip" [class.lookup-chip--warn]="mobileUsageTone === 'warn'" [class.lookup-chip--full]="mobileUsageTone === 'full'">
+            <strong>{{ mobileLookup.current_patient_count }}</strong>
+            <span>of {{ mobileLookup.max_patients_allowed }} linked to this mobile</span>
           </div>
         }
       </div>
 
-      <label class="field">
-        <span>First Name</span>
-        <input type="text" formControlName="first_name" />
-      </label>
-      <label class="field">
-        <span>Last Name</span>
-        <input type="text" formControlName="last_name" />
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input type="email" formControlName="email" />
-      </label>
-      <label class="field">
-        <span>Gender</span>
-        <select formControlName="gender">
-          <option value="">Select</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="other">Other</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Date of Birth</span>
-        <input type="date" formControlName="date_of_birth" />
-      </label>
-      <label class="field" style="grid-column:1/-1;">
-        <span>Address</span>
-        <textarea rows="4" formControlName="address"></textarea>
-      </label>
-      <label class="field">
-        <span>Emergency Contact Name</span>
-        <input type="text" formControlName="emergency_contact_name" />
-      </label>
-      <label class="field">
-        <span>Emergency Contact Phone</span>
-        <input type="text" formControlName="emergency_contact_phone" />
-      </label>
-      <div style="grid-column:1/-1;">
-        <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Patient' }}</button>
-      </div>
-    </form>
-  </section>
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="lookup-banner">
+          <div class="lookup-copy">
+            <div class="lookup-title">Mobile Lookup</div>
+            <p>Use the same mobile for family-linked patients. Shared address and emergency contact can be pulled into the new profile.</p>
+          </div>
+          <div class="lookup-controls">
+            <input type="text" formControlName="phone" placeholder="Enter mobile number" />
+            <button class="secondary-btn" type="button" (click)="searchMobile()">Search</button>
+            <button class="ghost-btn" type="button" [disabled]="!mobileSearchResults.length" (click)="openLookupModal()">View Matches</button>
+          </div>
+          @if (mobileLookupMessage) {
+            <div class="lookup-feedback">{{ mobileLookupMessage }}</div>
+          }
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 2</div>
+            <h3>Patient Basics</h3>
+          </div>
+          <div class="form-grid patient-grid">
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.first_name, submitted)">
+              <div class="field-label-row">
+                <span>First Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.first_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.first_name)">{{ validation.fieldStateLabel(form.controls.first_name) }}</span>
+                  <span class="field-tooltip" title="Use the official first name from patient identity records.">i</span>
+                </span>
+              </div>
+              <input type="text" formControlName="first_name" placeholder="Given name" />
+              @if (validation.isInvalid(form.controls.first_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.first_name, 'First name') }}</div>
+              }
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.last_name, submitted)">
+              <div class="field-label-row">
+                <span>Last Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.last_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.last_name)">{{ validation.fieldStateLabel(form.controls.last_name) }}</span>
+                  <span class="field-tooltip" title="Use the family or surname used on hospital records.">i</span>
+                </span>
+              </div>
+              <input type="text" formControlName="last_name" placeholder="Family name" />
+              @if (validation.isInvalid(form.controls.last_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.last_name, 'Last name') }}</div>
+              }
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Email</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                  <span class="field-tooltip" title="Useful for appointment reminders and report sharing.">i</span>
+                </span>
+              </div>
+              <input type="email" formControlName="email" placeholder="name@example.com" />
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Gender</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <select formControlName="gender">
+                <option value="">Select</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Date Of Birth</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="date" formControlName="date_of_birth" />
+            </label>
+            <div class="metric-tile">
+              <div class="metric-label">Profile Preview</div>
+              <strong>{{ patientDisplayName }}</strong>
+              <span>{{ form.getRawValue().phone || 'No mobile added yet' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 3</div>
+            <h3>Address And Emergency</h3>
+          </div>
+          <div class="form-grid patient-grid">
+            <label class="field field-wide">
+              <div class="field-label-row">
+                <span>Address</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                  <span class="field-tooltip" title="Reuse from family-linked records if the household address is the same.">i</span>
+                </span>
+              </div>
+              <textarea rows="4" formControlName="address" placeholder="Village, road, area, city"></textarea>
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Emergency Contact Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="emergency_contact_name" placeholder="Primary emergency contact" />
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Emergency Contact Phone</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="emergency_contact_phone" placeholder="Contact number" />
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="ghost-btn" type="button" (click)="cancel()">Cancel</button>
+          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Patient' }}</button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="side-stack">
+      <section class="page-card summary-card">
+        <div class="section-eyebrow">Registration Snapshot</div>
+        <h3>{{ patientDisplayName }}</h3>
+        <ul class="summary-list">
+          <li><span>Mobile</span><strong>{{ form.getRawValue().phone || 'Pending' }}</strong></li>
+          <li><span>Email</span><strong>{{ form.getRawValue().email || 'Pending' }}</strong></li>
+          <li><span>Emergency</span><strong>{{ form.getRawValue().emergency_contact_phone || 'Pending' }}</strong></li>
+        </ul>
+      </section>
+
+      <section class="page-card note-card">
+        <div class="section-eyebrow">Front Desk Tips</div>
+        <ul class="tip-list">
+          <li>Reuse the same mobile for family records if they share address and emergency contact.</li>
+          <li>Use the mobile lookup before creating another profile to avoid duplicates.</li>
+          <li>After save, the record can be handed back to OPD, appointments, or billing entry.</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  @if (lookupModalOpen) {
+    <div class="modal-backdrop" (click)="closeLookupModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Family-Linked Patients</p>
+            <h3>Choose Existing Shared Details</h3>
+            <p class="modal-copy">Select a patient to reuse address and emergency contact information for this mobile number.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeLookupModal()">×</button>
+        </div>
+
+        <div class="modal-results">
+          @for (patient of mobileSearchResults; track patient.id) {
+            <button class="result-card" type="button" (click)="applyFamilyAutoFill(patient)">
+              <div class="result-main">
+                <strong>{{ patient.full_name }}</strong>
+                <span>{{ patient.patient_number }}</span>
+              </div>
+              <div class="result-meta">
+                <span>{{ patient.phone || 'No mobile' }}</span>
+                <span>{{ patient.address || 'No saved address' }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+  }
 </section>

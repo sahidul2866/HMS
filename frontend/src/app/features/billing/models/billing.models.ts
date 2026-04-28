@@ -7,6 +7,9 @@ export interface BillingService {
   description?: string | null;
   unit_price: string;
   doctor_share_percentage: string;
+  max_discount_percentage?: string | null;
+  max_discount_amount?: string | null;
+  room_number?: string | null;
   is_active: boolean;
 }
 
@@ -17,6 +20,17 @@ export interface CreateBillingServicePayload {
   description?: string | null;
   unit_price: number;
   doctor_share_percentage: number;
+  max_discount_percentage?: number | null;
+  max_discount_amount?: number | null;
+  room_number?: string | null;
+}
+
+export interface UpdateBillingServiceControlsPayload {
+  max_discount_percentage?: number | null;
+  max_discount_amount?: number | null;
+  doctor_share_percentage: number;
+  room_number?: string | null;
+  is_active?: boolean | null;
 }
 
 export interface ReferredDoctor {
@@ -39,13 +53,23 @@ export interface CreateReferredDoctorPayload {
 }
 
 export interface BillingInvoiceItemPayload {
-  billing_service_id: string;
+  billing_service_id?: string | null;
   quantity: number;
+  discount_percentage: number;
+  source_opd_visit_order_id?: string | null;
+  source_label?: string | null;
+  source_module?: string | null;
+  source_item_type?: 'billing_service' | 'medicine' | 'investigation_setting' | null;
+  source_item_id?: string | null;
 }
 
 export interface CreateBillingInvoicePayload {
   branch_id?: string | null;
   patient_id: string;
+  source_opd_visit_id?: string | null;
+  source_ipd_admission_id?: string | null;
+  source_module?: string | null;
+  billing_stage?: string | null;
   internal_referral_user_id?: string | null;
   discount_percentage: number;
   note?: string | null;
@@ -54,10 +78,20 @@ export interface CreateBillingInvoicePayload {
 
 export interface BillingInvoicePreview {
   sub_total: string;
+  item_discount_amount: string;
   discount_percentage: string;
+  invoice_discount_amount: string;
   discount_amount: string;
   total_amount: string;
   referred_doctor_amount: string;
+}
+
+export interface BillingSettings {
+  max_item_discount_percentage: string;
+  max_item_discount_amount?: string | null;
+  max_invoice_discount_percentage: string;
+  max_invoice_discount_amount?: string | null;
+  default_referral_percentage: string;
 }
 
 export interface BillingPayment {
@@ -103,10 +137,18 @@ export interface BillingRefundPayload {
 export interface BillingInvoiceItem {
   id: string;
   billing_service_id: string;
+  source_opd_visit_order_id?: string | null;
+  source_label?: string | null;
+  source_module?: string | null;
   service_name: string;
   quantity: string;
   unit_price: string;
+  discount_percentage: string;
+  discount_amount: string;
   line_total: string;
+  max_discount_percentage?: string | null;
+  max_discount_amount?: string | null;
+  room_number?: string | null;
   doctor_share_percentage: string;
   doctor_share_amount: string;
 }
@@ -115,6 +157,10 @@ export interface BillingInvoice {
   id: string;
   invoice_number: string;
   patient_id: string;
+  source_opd_visit_id?: string | null;
+  source_ipd_admission_id?: string | null;
+  source_module?: string | null;
+  billing_stage?: string | null;
   patient: Patient;
   internal_referral_user_id?: string | null;
   referred_doctor_name?: string | null;
@@ -123,7 +169,9 @@ export interface BillingInvoice {
   void_reason?: string | null;
   voided_at?: string | null;
   sub_total: string;
+  item_discount_amount: string;
   discount_percentage: string;
+  invoice_discount_amount: string;
   discount_amount: string;
   total_amount: string;
   paid_amount: string;
@@ -141,6 +189,10 @@ export interface BillingInvoiceListItem {
   id: string;
   invoice_number: string;
   patient_id: string;
+  source_opd_visit_id?: string | null;
+  source_ipd_admission_id?: string | null;
+  source_module?: string | null;
+  billing_stage?: string | null;
   patient: Patient;
   internal_referral_user_id?: string | null;
   status: string;
@@ -180,4 +232,30 @@ export interface BillingReferralSummary {
 
 export interface BillingInvoiceVoidPayload {
   reason: string;
+}
+
+export interface BillingDraftItem {
+  source_label: string;
+  source_module: string;
+  source_item_type?: 'billing_service' | 'medicine' | 'investigation_setting' | null;
+  source_item_id?: string | null;
+  billing_service_id?: string | null;
+  billing_service_name?: string | null;
+  quantity: string;
+  discount_percentage: string;
+  source_opd_visit_order_id?: string | null;
+  warning?: string | null;
+}
+
+export interface BillingDraft {
+  patient_id: string;
+  patient_name: string;
+  source_module: string;
+  billing_stage: string;
+  source_opd_visit_id?: string | null;
+  source_ipd_admission_id?: string | null;
+  internal_referral_user_id?: string | null;
+  note?: string | null;
+  message?: string | null;
+  items: BillingDraftItem[];
 }

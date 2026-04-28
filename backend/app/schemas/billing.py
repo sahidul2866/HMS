@@ -15,6 +15,9 @@ class BillingServiceCreate(BaseModel):
     description: str | None = None
     unit_price: Decimal = Field(gt=0)
     doctor_share_percentage: Decimal = Field(ge=0, le=100)
+    max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
+    max_discount_amount: Decimal | None = Field(default=None, ge=0)
+    room_number: str | None = Field(default=None, max_length=60)
 
 
 class BillingServiceRead(BillingServiceCreate):
@@ -22,6 +25,14 @@ class BillingServiceRead(BillingServiceCreate):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class BillingServiceControlsUpdate(BaseModel):
+    max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
+    max_discount_amount: Decimal | None = Field(default=None, ge=0)
+    doctor_share_percentage: Decimal = Field(ge=0, le=100)
+    room_number: str | None = Field(default=None, max_length=60)
+    is_active: bool | None = None
 
 
 class ReferredDoctorCreate(BaseModel):
@@ -41,13 +52,23 @@ class ReferredDoctorRead(ReferredDoctorCreate):
 
 
 class BillingInvoiceItemCreate(BaseModel):
-    billing_service_id: UUID
+    billing_service_id: UUID | None = None
     quantity: Decimal = Field(gt=0)
+    discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    source_opd_visit_order_id: UUID | None = None
+    source_label: str | None = Field(default=None, max_length=180)
+    source_module: str | None = Field(default=None, max_length=40)
+    source_item_type: str | None = Field(default=None, pattern="^(billing_service|medicine|investigation_setting)$")
+    source_item_id: UUID | None = None
 
 
 class BillingInvoiceCreate(BaseModel):
     branch_id: UUID | None = None
     patient_id: UUID
+    source_opd_visit_id: UUID | None = None
+    source_ipd_admission_id: UUID | None = None
+    source_module: str | None = Field(default=None, max_length=40)
+    billing_stage: str | None = Field(default=None, max_length=40)
     internal_referral_user_id: UUID | None = None
     discount_percentage: Decimal = Field(default=0, ge=0, le=100)
     note: str | None = None
@@ -57,10 +78,18 @@ class BillingInvoiceCreate(BaseModel):
 class BillingInvoiceItemRead(BaseModel):
     id: UUID
     billing_service_id: UUID
+    source_opd_visit_order_id: UUID | None = None
+    source_label: str | None = None
+    source_module: str | None = None
     service_name: str
     quantity: Decimal
     unit_price: Decimal
+    discount_percentage: Decimal
+    discount_amount: Decimal
     line_total: Decimal
+    max_discount_percentage: Decimal | None = None
+    max_discount_amount: Decimal | None = None
+    room_number: str | None = None
     doctor_share_percentage: Decimal
     doctor_share_amount: Decimal
 
@@ -71,6 +100,10 @@ class BillingInvoiceRead(BaseModel):
     id: UUID
     invoice_number: str
     patient_id: UUID
+    source_opd_visit_id: UUID | None = None
+    source_ipd_admission_id: UUID | None = None
+    source_module: str | None = None
+    billing_stage: str | None = None
     patient: PatientRead
     internal_referral_user_id: UUID | None = None
     referred_doctor_id: UUID | None = None
@@ -80,7 +113,9 @@ class BillingInvoiceRead(BaseModel):
     void_reason: str | None = None
     voided_at: datetime | None = None
     sub_total: Decimal
+    item_discount_amount: Decimal
     discount_percentage: Decimal
+    invoice_discount_amount: Decimal
     discount_amount: Decimal
     total_amount: Decimal
     paid_amount: Decimal
@@ -100,6 +135,10 @@ class BillingInvoiceListItem(BaseModel):
     id: UUID
     invoice_number: str
     patient_id: UUID
+    source_opd_visit_id: UUID | None = None
+    source_ipd_admission_id: UUID | None = None
+    source_module: str | None = None
+    billing_stage: str | None = None
     patient: PatientRead
     internal_referral_user_id: UUID | None = None
     referred_doctor_id: UUID | None = None
@@ -190,7 +229,9 @@ class BillingRefundRead(BaseModel):
 
 class BillingInvoicePreview(BaseModel):
     sub_total: Decimal
+    item_discount_amount: Decimal
     discount_percentage: Decimal
+    invoice_discount_amount: Decimal
     discount_amount: Decimal
     total_amount: Decimal
     referred_doctor_amount: Decimal
@@ -205,6 +246,50 @@ class BillingInvoicePreviewRequest(BaseModel):
         if not self.items:
             raise ValueError("At least one billing item is required")
         return self
+
+
+class BillingDraftItemRead(BaseModel):
+    source_label: str
+    source_module: str
+    source_item_type: str | None = None
+    source_item_id: UUID | None = None
+    billing_service_id: UUID | None = None
+    billing_service_name: str | None = None
+    quantity: Decimal
+    discount_percentage: Decimal = Decimal("0")
+    source_opd_visit_order_id: UUID | None = None
+    warning: str | None = None
+
+
+class BillingDraftRead(BaseModel):
+    patient_id: UUID
+    patient_name: str
+    source_module: str
+    billing_stage: str
+    source_opd_visit_id: UUID | None = None
+    source_ipd_admission_id: UUID | None = None
+    internal_referral_user_id: UUID | None = None
+    note: str | None = None
+    message: str | None = None
+    items: list[BillingDraftItemRead]
+
+
+class BillingSettingsRead(BaseModel):
+    max_item_discount_percentage: Decimal
+    max_item_discount_amount: Decimal | None = None
+    max_invoice_discount_percentage: Decimal
+    max_invoice_discount_amount: Decimal | None = None
+    default_referral_percentage: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class BillingSettingsUpdate(BaseModel):
+    max_item_discount_percentage: Decimal = Field(ge=0, le=100)
+    max_item_discount_amount: Decimal | None = Field(default=None, ge=0)
+    max_invoice_discount_percentage: Decimal = Field(ge=0, le=100)
+    max_invoice_discount_amount: Decimal | None = Field(default=None, ge=0)
+    default_referral_percentage: Decimal = Field(ge=0, le=100)
 
 
 BillingInvoiceRead.model_rebuild()

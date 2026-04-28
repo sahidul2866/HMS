@@ -14,6 +14,15 @@
           <div class="page-subtitle">{{ history.patient.patient_number }} · {{ history.patient.phone || 'No phone' }} · {{ history.patient.email || 'No email' }}</div>
         </div>
         <div class="toolbar-row">
+          @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+            <button class="primary-btn" type="button" (click)="openBilling()">New Bill</button>
+          }
+          @if (sessionService.hasPermission(permissions.opdView)) {
+            <button class="secondary-btn" type="button" (click)="openOpdRegistration()">New OPD</button>
+          }
+          @if (sessionService.hasPermission(permissions.ipdAdmissionManage)) {
+            <button class="secondary-btn" type="button" (click)="openIpdAdmission()">Admit IPD</button>
+          }
           <button class="secondary-btn" type="button" (click)="openList()">Back To Patient List</button>
         </div>
       </div>
@@ -40,6 +49,7 @@
             <th>Status</th>
             <th>Orders</th>
             <th>Follow Up</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -56,9 +66,14 @@
                 Px {{ getVisitOrderCount(visit, 'procedure') }}
               </td>
               <td>{{ visit.follow_up_date || '-' }}</td>
+              <td>
+                @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+                  <button class="secondary-btn" type="button" (click)="openVisitBilling(visit)">Bill Visit</button>
+                }
+              </td>
             </tr>
             <tr>
-              <td colspan="7" style="background:rgba(148,163,184,0.06);">
+              <td colspan="8" style="background:rgba(148,163,184,0.06);">
                 <div style="display:grid;gap:0.75rem;padding:0.5rem 0;">
                   <div><strong>Chief Complaint:</strong> {{ visit.chief_complaint || '-' }}</div>
                   <div><strong>HPI:</strong> {{ visit.history_of_present_illness || '-' }}</div>

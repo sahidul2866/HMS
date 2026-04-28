@@ -3,8 +3,8 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">Billing Operations</div>
-        <h1 class="page-title">Billing Desk</h1>
-        <div class="page-subtitle">Manage posted invoices, load financial details fast, collect payments, process refunds, and keep the billing stream searchable.</div>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <div class="page-subtitle">{{ pageSubtitle }}</div>
       </div>
       <div class="toolbar-row">
         <button class="primary-btn" type="button" (click)="navigateToCreateInvoice()">Create Invoice</button>
@@ -18,7 +18,7 @@
         <div class="value">{{ internalReferralDoctors.length }}</div>
       </div>
       <div class="hero-stat">
-        <div class="label">Invoice Queue</div>
+        <div class="label">{{ queueLabel }}</div>
         <div class="value">{{ recentInvoices.length }}</div>
       </div>
       <div class="hero-stat">
@@ -32,7 +32,7 @@
     <section class="soft-panel data-panel">
       <div class="panel-head">
         <div>
-          <h2 class="section-title">Invoice Detail</h2>
+          <h2 class="section-title">{{ detailTitle }}</h2>
           <div class="section-copy">{{ latestInvoice.invoice_number }} for {{ latestInvoice.patient.first_name }} {{ latestInvoice.patient.last_name }}</div>
         </div>
         <div class="toolbar-row">
@@ -80,6 +80,7 @@
       </div>
 
       <div class="payment-grid">
+        @if (isDueMode) {
         <section class="payment-panel">
           <div class="section-header">
             <div>
@@ -151,6 +152,7 @@
             <div class="empty-state">No refundable collected amount is available for this invoice.</div>
           }
         </section>
+        }
 
         <section class="payment-panel">
           <div class="section-header">
@@ -216,8 +218,8 @@
   <section class="soft-panel data-panel">
     <div class="panel-head">
       <div>
-        <h2 class="section-title">Invoice History</h2>
-        <div class="section-copy">Filter the billing stream, inspect older invoices, and jump back into print-ready details.</div>
+        <h2 class="section-title">{{ listTitle }}</h2>
+        <div class="section-copy">{{ listCopy }}</div>
       </div>
       <div class="toolbar-row">
         <div class="hero-kicker">Searchable</div>
@@ -255,7 +257,7 @@
         <input type="date" formControlName="date_to" />
       </label>
       <div class="toolbar-row billing-filter-actions">
-        <button class="secondary-btn" type="button" (click)="searchInvoices()">Search Invoices</button>
+        <button class="secondary-btn" type="button" (click)="searchInvoices()">Search</button>
       </div>
     </form>
 
@@ -290,4 +292,23 @@
       </tbody>
     </table>
   </section>
+
+  @if (invoicePreviewInvoice && invoicePreviewHtml && invoicePreviewUrl) {
+    <div class="modal-backdrop invoice-preview-backdrop" (click)="closeInvoicePreview()">
+      <section class="modal-card invoice-preview-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Invoice Preview</p>
+            <h3>{{ invoicePreviewInvoice.invoice_number }} · {{ invoicePreviewInvoice.patient.first_name }} {{ invoicePreviewInvoice.patient.last_name }}</h3>
+            <p class="modal-copy">Printable billing invoice preview with patient and office copies.</p>
+          </div>
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closeInvoicePreview()">Close</button>
+            <button class="primary-btn" type="button" (click)="printInvoicePreview()">Print Invoice</button>
+          </div>
+        </div>
+        <iframe #invoiceFrame class="invoice-preview-frame" [src]="invoicePreviewUrl"></iframe>
+      </section>
+    </div>
+  }
 </div>

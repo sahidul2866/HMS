@@ -74,9 +74,26 @@
   min-width: 260px;
 }
 
+.sort-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sort-controls select {
+  min-width: 140px;
+}
+
 .worklist-stack {
   display: grid;
   gap: 0.9rem;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .work-item-card,
@@ -91,6 +108,28 @@
 .work-item-card {
   display: grid;
   gap: 0.7rem;
+  border-left: 5px solid #94a3b8;
+}
+
+.work-item-card--pending {
+  border-left-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 247, 237, 0.9));
+}
+
+.work-item-card--collected,
+.work-item-card--in-progress {
+  border-left-color: #7c3aed;
+  background: linear-gradient(180deg, rgba(250, 245, 255, 0.98), rgba(243, 232, 255, 0.86));
+}
+
+.work-item-card--completed {
+  border-left-color: #16a34a;
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.84));
+}
+
+.work-item-card--verified {
+  border-left-color: #0f766e;
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.98), rgba(204, 251, 241, 0.82));
 }
 
 .pill-row {

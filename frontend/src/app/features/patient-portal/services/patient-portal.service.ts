@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { Observable, tap } from 'rxjs';
 
+import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import {
   PatientAppointment,
@@ -11,19 +12,25 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class PatientPortalService extends ApiBaseService {
+  private readonly cache = inject(ApiCacheService);
+
   getOverview(): Observable<PatientPortalOverview> {
-    return this.http.get<PatientPortalOverview>(this.url('/portal/overview'));
+    return this.cache.get('portal:overview', () => this.http.get<PatientPortalOverview>(this.url('/portal/overview')));
   }
 
   listAppointments(): Observable<PatientAppointment[]> {
-    return this.http.get<PatientAppointment[]>(this.url('/portal/appointments'));
+    return this.cache.get('portal:appointments', () => this.http.get<PatientAppointment[]>(this.url('/portal/appointments')));
   }
 
   bookAppointment(payload: PatientAppointmentPayload): Observable<PatientAppointment> {
-    return this.http.post<PatientAppointment>(this.url('/portal/appointments'), payload);
+    return this.http.post<PatientAppointment>(this.url('/portal/appointments'), payload).pipe(tap(() => this.clearCache()));
   }
 
   updateAppointmentStatus(appointmentId: string, payload: PatientAppointmentStatusPayload): Observable<PatientAppointment> {
-    return this.http.put<PatientAppointment>(this.url(`/portal/appointments/${appointmentId}/status`), payload);
+    return this.http.put<PatientAppointment>(this.url(`/portal/appointments/${appointmentId}/status`), payload).pipe(tap(() => this.clearCache()));
+  }
+
+  clearCache(): void {
+    this.cache.clearPrefix('portal:');
   }
 }

@@ -10,15 +10,21 @@ class OPDRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def list_visits(self, branch_id=None) -> list[OPDVisit]:
-        stmt = select(OPDVisit).options(joinedload(OPDVisit.patient), joinedload(OPDVisit.orders)).order_by(OPDVisit.visit_date.desc(), OPDVisit.created_at.desc())
+    def list_visits(self, branch_id=None, doctor_user_id=None) -> list[OPDVisit]:
+        stmt = (
+            select(OPDVisit)
+            .options(joinedload(OPDVisit.patient), joinedload(OPDVisit.orders))
+            .order_by(OPDVisit.visit_date.desc(), OPDVisit.created_at.desc())
+        )
         if branch_id:
             stmt = stmt.where(OPDVisit.branch_id == branch_id)
-        return list(self.db.scalars(stmt))
+        if doctor_user_id:
+            stmt = stmt.where(OPDVisit.consulting_doctor_user_id == doctor_user_id)
+        return list(self.db.scalars(stmt).unique())
 
     def get_visit(self, visit_id) -> OPDVisit | None:
         stmt = select(OPDVisit).options(joinedload(OPDVisit.patient), joinedload(OPDVisit.orders)).where(OPDVisit.id == visit_id)
-        return self.db.scalar(stmt)
+        return self.db.scalars(stmt).unique().one_or_none()
 
     def create_visit(self, visit: OPDVisit) -> OPDVisit:
         self.db.add(visit)
@@ -62,7 +68,7 @@ class OPDRepository:
             stmt = stmt.where(OPDVisit.branch_id == branch_id)
         return list(self.db.scalars(stmt).unique())
 
-    def get_summary(self, branch_id=None, visit_date: date | None = None) -> tuple[int, int, int, int]:
+    def get_summary(self, branch_id=None, visit_date: date | None = None, doctor_user_id=None) -> tuple[int, int, int, int]:
         stmt = select(
             func.count(OPDVisit.id),
             func.count().filter(OPDVisit.status == "waiting"),
@@ -73,5 +79,7 @@ class OPDRepository:
             stmt = stmt.where(OPDVisit.branch_id == branch_id)
         if visit_date:
             stmt = stmt.where(OPDVisit.visit_date == visit_date)
+        if doctor_user_id:
+            stmt = stmt.where(OPDVisit.consulting_doctor_user_id == doctor_user_id)
         row = self.db.execute(stmt).one()
         return row[0], row[1], row[2], row[3]

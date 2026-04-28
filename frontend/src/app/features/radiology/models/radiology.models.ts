@@ -9,6 +9,7 @@ export interface InvestigationWorkItem {
   consulting_doctor_name: string;
   service_area: string;
   item_name: string;
+  room_number?: string | null;
   quantity: string;
   instructions?: string | null;
   chief_complaint?: string | null;

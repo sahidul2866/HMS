@@ -76,6 +76,7 @@
 .user-side-card {
   border-radius: 24px;
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 255, 0.95));
 }
 
 .user-table__header,
@@ -251,6 +252,15 @@
   border: 1px dashed rgba(148, 163, 184, 0.4);
 }
 
+.doctor-settings-cell {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.doctor-settings-title {
+  color: #0f172a;
+}
+
 .user-empty-state strong {
   display: block;
 }
@@ -298,11 +308,15 @@
   border-radius: 24px;
   background:
     radial-gradient(circle at top right, rgba(14, 116, 144, 0.1), transparent 28%),
-    #ffffff;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(243, 248, 255, 0.97));
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
   padding: 1.4rem;
   display: grid;
   gap: 1rem;
+}
+
+.modal-card--opd-settings {
+  width: min(920px, 100%);
 }
 
 .modal-header {
@@ -334,6 +348,50 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem;
+  padding: 0.85rem;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.opd-settings-grid {
+  grid-template-columns: 1fr;
+}
+
+.settings-section {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(14, 116, 144, 0.06), transparent 30%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.settings-section__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.settings-section__head h4 {
+  margin: 0;
+}
+
+.settings-section__head .page-subtitle {
+  max-width: 26rem;
+}
+
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.settings-columns--fees {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field {
@@ -351,13 +409,18 @@
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   padding: 0.85rem 0.95rem;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.34);
   background: #f8fafc;
   font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
 }
 
 .field-hint {
@@ -394,8 +457,12 @@
     grid-template-columns: 1fr;
   }
 
-  .modal-grid {
+  .modal-grid,
+  .settings-columns,
+  .settings-columns--fees,
+  .settings-section__head {
     grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }
 

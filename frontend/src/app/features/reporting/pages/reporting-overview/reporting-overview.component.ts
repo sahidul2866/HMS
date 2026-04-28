@@ -43,9 +43,9 @@ export class ReportingOverviewComponent {
   }
 
   formatCurrency(value: string | number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-BD', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 2,
     }).format(Number(value));
   }

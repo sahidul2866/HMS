@@ -7,6 +7,13 @@
   gap: 1.5rem;
 }
 
+.module-hero {
+  background:
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 28rem),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(2, 132, 199, 0.92));
+  color: #f8fbff;
+}
+
 .workbench-grid {
   display: grid;
   gap: 1rem;
@@ -15,6 +22,8 @@
 .soft-panel {
   position: relative;
   overflow: hidden;
+  border-radius: 22px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
 .soft-panel::before {
@@ -84,6 +93,13 @@
   border-radius: 1rem;
   background: rgba(226, 232, 240, 0.5);
   color: #475569;
+}
+
+.form-grid {
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 @media (max-width: 920px) {

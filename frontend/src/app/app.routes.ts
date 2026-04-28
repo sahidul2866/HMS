@@ -12,6 +12,7 @@ import { PatientCreateComponent } from './features/patients/pages/patient-create
 import { PatientDetailComponent } from './features/patients/pages/patient-detail/patient-detail.component';
 import { BillingCreateComponent } from './features/billing/pages/billing-create/billing-create.component';
 import { BillingDeskComponent } from './features/billing/pages/billing-desk/billing-desk.component';
+import { BillingSettingsComponent } from './features/billing/pages/billing-settings/billing-settings.component';
 import { BillingServicesComponent } from './features/billing/pages/billing-services/billing-services.component';
 import { AppointmentCreateComponent } from './features/appointments/pages/appointment-create/appointment-create.component';
 import { AppointmentsOverviewComponent } from './features/appointments/pages/appointments-overview/appointments-overview.component';
@@ -21,12 +22,23 @@ import { LaboratoryOverviewComponent } from './features/laboratory/pages/laborat
 import { LaboratoryWorkbenchComponent } from './features/laboratory/pages/laboratory-workbench/laboratory-workbench.component';
 import { OPDOverviewComponent } from './features/opd/pages/opd-overview/opd-overview.component';
 import { OPDRegisterComponent } from './features/opd/pages/opd-register/opd-register.component';
+import { OPDSettingsComponent } from './features/opd/pages/opd-settings/opd-settings.component';
 import { RadiologyOverviewComponent } from './features/radiology/pages/radiology-overview/radiology-overview.component';
 import { RadiologyWorkbenchComponent } from './features/radiology/pages/radiology-workbench/radiology-workbench.component';
 import { ReportingOverviewComponent } from './features/reporting/pages/reporting-overview/reporting-overview.component';
 import { PatientPortalComponent } from './features/patient-portal/pages/patient-portal/patient-portal.component';
 import { PharmacyDispenseComponent } from './features/pharmacy/pages/pharmacy-dispense/pharmacy-dispense.component';
+import { PharmacyOverviewComponent } from './features/pharmacy/pages/pharmacy-overview/pharmacy-overview.component';
+import { PharmacySettingsComponent } from './features/pharmacy/pages/pharmacy-settings/pharmacy-settings.component';
 import { PharmacyWorkbenchComponent } from './features/pharmacy/pages/pharmacy-workbench/pharmacy-workbench.component';
+import { PharmacyMasterPageComponent } from './features/pharmacy/pages/pharmacy-master-page/pharmacy-master-page.component';
+import { PharmacyMedicinesComponent } from './features/pharmacy/pages/pharmacy-medicines/pharmacy-medicines.component';
+import { PharmacyPurchasesComponent } from './features/pharmacy/pages/pharmacy-purchases/pharmacy-purchases.component';
+import { PharmacySalesEditorComponent } from './features/pharmacy/pages/pharmacy-sales-editor/pharmacy-sales-editor.component';
+import { PharmacySalesListComponent } from './features/pharmacy/pages/pharmacy-sales-list/pharmacy-sales-list.component';
+import { PharmacyReturnsComponent } from './features/pharmacy/pages/pharmacy-returns/pharmacy-returns.component';
+import { PharmacyInvestigationSettingsComponent } from './features/diagnostics/pages/diagnostics-settings/pharmacy-investigation-settings.component';
+import { PharmacyInvestigationsComponent } from './features/diagnostics/pages/diagnostics-orders/pharmacy-investigations.component';
 import { AccountingJournalComponent } from './features/accounting/pages/accounting-journal/accounting-journal.component';
 import { UserManagementComponent } from './features/admin/pages/user-management/user-management.component';
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
@@ -77,22 +89,28 @@ export const appRoutes: Routes = [
         data: { permissions: ['patient.view'], tabLabel: 'Patients' },
       },
       {
-        path: 'patients/:patientId',
-        component: PatientDetailComponent,
-        canActivate: [permissionGuard],
-        data: { permissions: ['patient.view'], tabLabel: 'Patient Detail' },
-      },
-      {
         path: 'patients/new',
         component: PatientCreateComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['patient.create'], tabLabel: 'New Patient' },
       },
       {
+        path: 'patients/:patientId',
+        component: PatientDetailComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['patient.view'], tabLabel: 'Patient Detail' },
+      },
+      {
         path: 'billing',
         component: BillingDeskComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing Desk' },
+        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing List', billingView: 'all' },
+      },
+      {
+        path: 'billing/due-payments',
+        component: BillingDeskComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.invoice.create'], tabLabel: 'Due Payment List', billingView: 'due' },
       },
       {
         path: 'billing/create',
@@ -107,6 +125,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['billing.service.manage'], tabLabel: 'Billing Services' },
       },
       {
+        path: 'billing/settings',
+        component: BillingSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.service.manage'], tabLabel: 'Billing Settings' },
+      },
+      {
         path: 'opd',
         component: OPDOverviewComponent,
         canActivate: [permissionGuard],
@@ -117,6 +141,12 @@ export const appRoutes: Routes = [
         component: OPDRegisterComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['opd.view'], tabLabel: 'Register OPD Visit' },
+      },
+      {
+        path: 'opd/settings',
+        component: OPDSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['settings.user.manage'], tabLabel: 'OPD Settings' },
       },
       {
         path: 'ipd',
@@ -161,6 +191,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['reporting.view'], tabLabel: 'Reporting' },
       },
       {
+        path: 'pharmacy',
+        component: PharmacyOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Pharmacy' },
+      },
+      {
         path: 'pharmacy/dispense',
         component: PharmacyDispenseComponent,
         canActivate: [permissionGuard],
@@ -171,6 +207,175 @@ export const appRoutes: Routes = [
         component: PharmacyWorkbenchComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['pharmacy.dispense'], tabLabel: 'Pharmacy Workbench' },
+      },
+      {
+        path: 'pharmacy/settings',
+        component: PharmacySettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Pharmacy Settings' },
+      },
+      {
+        path: 'pharmacy/medicine-types',
+        component: PharmacyMasterPageComponent,
+        canActivate: [permissionGuard],
+        data: {
+          permissions: ['pharmacy.view'],
+          tabLabel: 'Medicine Type',
+          config: {
+            entityKey: 'medicine-types',
+            title: 'Medicine Type',
+            subtitle: 'Maintain core medicine type master data for classification and filtering.',
+            eyebrow: 'Pharmacy Master',
+            createLabel: 'Create Medicine Type',
+            searchPlaceholder: 'Search medicine type',
+            fields: [
+              { key: 'name', label: 'Name', type: 'text', required: true },
+              { key: 'description', label: 'Description', type: 'textarea' },
+            ],
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'description', label: 'Description' },
+            ],
+          },
+        },
+      },
+      {
+        path: 'pharmacy/generics',
+        component: PharmacyMasterPageComponent,
+        canActivate: [permissionGuard],
+        data: {
+          permissions: ['pharmacy.view'],
+          tabLabel: 'Generic Information',
+          config: {
+            entityKey: 'generics',
+            title: 'Generic Information',
+            subtitle: 'Maintain generic names used by medicine records and downstream pharmacy lookups.',
+            eyebrow: 'Pharmacy Master',
+            createLabel: 'Create Generic',
+            searchPlaceholder: 'Search generic',
+            fields: [
+              { key: 'name', label: 'Name', type: 'text', required: true },
+              { key: 'description', label: 'Description', type: 'textarea' },
+            ],
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'description', label: 'Description' },
+            ],
+          },
+        },
+      },
+      {
+        path: 'pharmacy/companies',
+        component: PharmacyMasterPageComponent,
+        canActivate: [permissionGuard],
+        data: {
+          permissions: ['pharmacy.view'],
+          tabLabel: 'Medicine Company Info',
+          config: {
+            entityKey: 'companies',
+            title: 'Medicine Company Info',
+            subtitle: 'Track manufacturer and supplier-facing company information used by medicine catalog records.',
+            eyebrow: 'Pharmacy Master',
+            createLabel: 'Create Company',
+            searchPlaceholder: 'Search company, contact, phone',
+            fields: [
+              { key: 'name', label: 'Company Name', type: 'text', required: true },
+              { key: 'contact_person', label: 'Contact Person', type: 'text' },
+              { key: 'phone', label: 'Phone', type: 'text' },
+              { key: 'email', label: 'Email', type: 'email' },
+              { key: 'address', label: 'Address', type: 'textarea' },
+              { key: 'note', label: 'Note', type: 'textarea' },
+            ],
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'contact_person', label: 'Contact' },
+              { key: 'phone', label: 'Phone' },
+              { key: 'email', label: 'Email' },
+            ],
+          },
+        },
+      },
+      {
+        path: 'pharmacy/customers',
+        component: PharmacyMasterPageComponent,
+        canActivate: [permissionGuard],
+        data: {
+          permissions: ['pharmacy.view'],
+          tabLabel: 'Customer Information',
+          config: {
+            entityKey: 'customers',
+            title: 'Customer Information',
+            subtitle: 'Maintain pharmacy walk-in customer and linked patient records for sales and investigation intake.',
+            eyebrow: 'Pharmacy Master',
+            createLabel: 'Create Customer',
+            searchPlaceholder: 'Search customer name, number, phone',
+            fields: [
+              { key: 'name', label: 'Customer Name', type: 'text', required: true },
+              { key: 'phone', label: 'Phone', type: 'text' },
+              { key: 'email', label: 'Email', type: 'email' },
+              { key: 'address', label: 'Address', type: 'textarea' },
+              { key: 'note', label: 'Note', type: 'textarea' },
+            ],
+            columns: [
+              { key: 'customer_number', label: 'Customer No' },
+              { key: 'name', label: 'Name' },
+              { key: 'phone', label: 'Phone' },
+              { key: 'patient_number', label: 'Patient' },
+            ],
+          },
+        },
+      },
+      {
+        path: 'pharmacy/medicines',
+        component: PharmacyMedicinesComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Information' },
+      },
+      {
+        path: 'pharmacy/purchases',
+        component: PharmacyPurchasesComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Purchase History' },
+      },
+      {
+        path: 'pharmacy/sales',
+        component: PharmacySalesEditorComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Sales' },
+      },
+      {
+        path: 'pharmacy/sales/list',
+        component: PharmacySalesListComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Sales List' },
+      },
+      {
+        path: 'pharmacy/returns',
+        component: PharmacyReturnsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Return List' },
+      },
+      {
+        path: 'diagnostics/settings',
+        component: PharmacyInvestigationSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['laboratory.view'], tabLabel: 'Diagnostics Settings' },
+      },
+      {
+        path: 'diagnostics/orders',
+        component: PharmacyInvestigationsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['laboratory.view'], tabLabel: 'Diagnostics Orders' },
+      },
+      {
+        path: 'pharmacy/investigation-settings',
+        redirectTo: 'diagnostics/settings',
+        pathMatch: 'full',
+      },
+      {
+        path: 'pharmacy/investigations',
+        redirectTo: 'diagnostics/orders',
+        pathMatch: 'full',
       },
       {
         path: 'accounting/journal',

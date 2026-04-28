@@ -2,20 +2,18 @@
   <section class="page-card module-hero">
     <div class="hero-row">
       <div>
-        <div class="hero-kicker">Invoice Creation</div>
-        <h1 class="page-title">Create Billing Invoice</h1>
-        <div class="page-subtitle">A cleaner entry flow with patient lookup, visit-aware autofill, live preview, and a direct handoff back to the billing desk.</div>
+        <div class="hero-kicker">Billing Intake</div>
+        <h1 class="page-title">Create Invoice</h1>
       </div>
       <div class="toolbar-row">
-        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="openBillingDesk()">Open Billing Desk</button>
       </div>
     </div>
 
     <div class="hero-summary">
       <div class="hero-stat">
-        <div class="label">Patients</div>
-        <div class="value">{{ patients.length }}</div>
+        <div class="label">Patient Flow</div>
+        <div class="value">{{ hasExistingPatientSelection ? 'Existing' : 'New / Manual' }}</div>
       </div>
       <div class="hero-stat">
         <div class="label">Services</div>
@@ -26,166 +24,404 @@
         <div class="value">{{ internalReferralDoctors.length }}</div>
       </div>
       <div class="hero-stat">
-        <div class="label">Auto Fill</div>
-        <div class="value">{{ sourceVisit || sourceAdmission ? 'Ready' : 'Manual' }}</div>
+        <div class="label">Billing Items</div>
+        <div class="value">{{ items.length }}</div>
+      </div>
+      <div class="hero-stat">
+        <div class="label">Discount Caps</div>
+        <div class="value">{{ maxItemDiscountPercentage }}% / {{ maxInvoiceDiscountPercentage }}%</div>
+      </div>
+    </div>
+
+    <div class="billing-steps">
+      @for (step of billingSteps; track step.label) {
+        <div class="billing-step" [class.billing-step--done]="step.state === 'done'" [class.billing-step--active]="step.state === 'active'">
+          <span></span>
+          <strong>{{ step.label }}</strong>
+        </div>
+      }
+      <div class="billing-step billing-step--context">
+        <span></span>
+        <strong>{{ sourceContextLabel }}</strong>
       </div>
     </div>
   </section>
 
-  <section class="spotlight-grid">
-    <section class="soft-panel">
+  <form class="billing-layout" [formGroup]="form" (ngSubmit)="submit()">
+    @if (selectedPatient) {
+      <section class="top-patient-bar">
+        <div>
+          <strong>{{ selectedPatient.patient_number }} - {{ selectedPatientName }}</strong>
+          <span>{{ selectedPatient.phone || '-' }} · {{ selectedPatient.gender || '-' }} · {{ selectedPatient.email || '-' }}</span>
+        </div>
+        @if (sourceVisit) {
+          <div class="source-chip">OPD {{ sourceVisit.visit_number }}</div>
+        }
+        @if (sourceAdmission) {
+          <div class="source-chip">IPD {{ sourceAdmission.admission_number }}</div>
+        }
+        @if (sourceVisit || sourceAdmission) {
+          <button class="secondary-btn compact-btn" type="button" (click)="clearBillingContext()">Direct Bill</button>
+        }
+        <button class="danger-btn compact-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+      </section>
+    }
+
+    <div class="billing-main">
+    @if (!selectedPatient) {
+      <section class="soft-panel">
       <div class="section-header">
         <div>
-          <h2 class="section-title">Patient And Context</h2>
-          <div class="section-copy">Start with the patient, then let OPD or IPD handoff data prefill the rest of the invoice context where possible.</div>
+          <h2 class="section-title">Patient</h2>
         </div>
       </div>
 
-      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-        @if (sourceVisit) {
-          <div class="billing-prefill-banner" style="grid-column:1/-1;">
-            <div>
-              <strong>Linked OPD Visit:</strong> {{ sourceVisit.visit_number }} · {{ sourceVisit.consulting_doctor_name }} · {{ sourceVisit.visit_date }}
-            </div>
-            <div class="page-subtitle">
-              Complaint: {{ sourceVisit.chief_complaint || 'Not recorded' }} · Consultation fee: {{ formatCurrency(sourceVisit.consultation_fee) }}
-            </div>
-            @if (prefillMessage) {
-              <div class="page-subtitle">{{ prefillMessage }}</div>
-            }
+      @if (sourceVisit) {
+        <div class="billing-prefill-banner">
+          <div>
+            <strong>Linked OPD Visit:</strong> {{ sourceVisit.visit_number }} · {{ sourceVisit.consulting_doctor_name }} · {{ sourceVisit.visit_date }}
           </div>
-        }
-        @if (sourceAdmission) {
-          <div class="billing-prefill-banner" style="grid-column:1/-1;">
-            <div>
-              <strong>Linked IPD Admission:</strong> {{ sourceAdmission.admission_number }} · {{ sourceAdmission.ward_name }} / {{ sourceAdmission.bed_number }} · {{ sourceAdmission.attending_doctor_name }}
-            </div>
-            <div class="page-subtitle">
-              Status: {{ sourceAdmission.status }} · Admission diagnosis: {{ sourceAdmission.diagnosis || 'Not recorded' }}
-            </div>
-            <div class="page-subtitle">
-              Discharge diagnosis: {{ sourceAdmission.discharge_diagnosis || 'Not recorded' }} · Condition: {{ sourceAdmission.discharge_condition || 'Not recorded' }}
-            </div>
-            @if (prefillMessage) {
-              <div class="page-subtitle">{{ prefillMessage }}</div>
+          <div class="page-subtitle">Complaint: {{ sourceVisit.chief_complaint || 'Not recorded' }} · Consultation fee: {{ formatCurrency(sourceVisit.consultation_fee) }}</div>
+          @if (prefillMessage) {
+            <div class="page-subtitle">{{ prefillMessage }}</div>
+          }
+        </div>
+      }
+
+      @if (sourceAdmission) {
+        <div class="billing-prefill-banner">
+          <div>
+            <strong>Linked IPD Admission:</strong> {{ sourceAdmission.admission_number }} · {{ sourceAdmission.ward_name }} / {{ sourceAdmission.bed_number }} · {{ sourceAdmission.attending_doctor_name }}
+          </div>
+          <div class="page-subtitle">
+            Status: {{ sourceAdmission.status }} · Admission diagnosis: {{ sourceAdmission.diagnosis || 'Not recorded' }}
+          </div>
+          @if (prefillMessage) {
+            <div class="page-subtitle">{{ prefillMessage }}</div>
+          }
+        </div>
+      }
+
+      <div class="lookup-shell">
+        <div class="lookup-head">
+          <div>
+            <h3 class="section-title">Patient Search</h3>
+          </div>
+          @if (hasExistingPatientSelection) {
+            <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+          }
+        </div>
+
+        <div class="lookup-row">
+          <input [formControl]="patientLookupControl" type="text" placeholder="Search patient id, name, phone, or email" />
+        </div>
+
+        @if (showSearchContext('lookup')) {
+          <div class="search-dropdown">
+            @for (patient of patientSearchResults; track patient.id) {
+              <button class="result-card" type="button" (click)="applyPatient(patient)">
+                <div class="result-main">
+                  <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                  <span>{{ formatPatientLookupMeta(patient) }}</span>
+                </div>
+              </button>
             }
           </div>
         }
 
-        <div class="lookup-shell" style="grid-column:1/-1;">
-          <div class="lookup-head">
-            <div>
-              <h3 class="section-title">Existing Patient Lookup</h3>
-              <div class="section-copy">Search once and reuse stored patient information instead of retyping it.</div>
-            </div>
+        <div class="intake-hint">
+          <strong>New patient</strong>
+        </div>
+      </div>
+
+      <div class="patient-grid">
+        <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.first_name, submitted)">
+          <div class="field-label-row">
+            <span>First Name</span>
+            <span class="field-label-meta">
+              <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.first_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.first_name)">{{ validation.fieldStateLabel(form.controls.first_name) }}</span>
+            </span>
           </div>
-          <div class="toolbar-row lookup-row">
-            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
-            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
-            @if (selectedPatient) {
-              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
-            }
+          <input type="text" formControlName="first_name" [readonly]="hasExistingPatientSelection" placeholder="Patient first name" />
+          @if (validation.isInvalid(form.controls.first_name, submitted)) {
+            <div class="field-error">{{ validation.errorMessage(form.controls.first_name, 'First name') }}</div>
+          }
+        </label>
+
+        <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.last_name, submitted)">
+          <div class="field-label-row">
+            <span>Last Name</span>
+            <span class="field-label-meta">
+              <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.last_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.last_name)">{{ validation.fieldStateLabel(form.controls.last_name) }}</span>
+            </span>
           </div>
-          @if (patientSearchResults.length) {
-            <div class="search-results">
+          <input type="text" formControlName="last_name" [readonly]="hasExistingPatientSelection" placeholder="Patient last name" />
+          @if (validation.isInvalid(form.controls.last_name, submitted)) {
+            <div class="field-error">{{ validation.errorMessage(form.controls.last_name, 'Last name') }}</div>
+          }
+        </label>
+
+        <label class="field field-with-search">
+          <div class="field-label-row">
+            <span>Phone</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="text" formControlName="phone" [readonly]="hasExistingPatientSelection" placeholder="Phone number" />
+          @if (showSearchContext('phone')) {
+            <div class="search-dropdown">
               @for (patient of patientSearchResults; track patient.id) {
-                <button class="secondary-btn result-btn" type="button" (click)="applyPatient(patient)">
-                  {{ patient.patient_number }} - {{ patient.full_name }}
-                  @if (patient.phone) { · {{ patient.phone }} }
+                <button class="result-card" type="button" (click)="applyPatient(patient)">
+                  <div class="result-main">
+                    <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                    <span>{{ formatPatientLookupMeta(patient) }}</span>
+                  </div>
                 </button>
               }
             </div>
           }
-          @if (selectedPatient) {
-            <div class="selected-patient">
-              <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
-              <div class="page-subtitle">
-                Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
-              </div>
+        </label>
+
+        <label class="field field-with-search" [class.field--invalid]="validation.isInvalid(form.controls.email, submitted)">
+          <div class="field-label-row">
+            <span>Email</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="email" formControlName="email" [readonly]="hasExistingPatientSelection" placeholder="Email address" />
+          @if (showSearchContext('email')) {
+            <div class="search-dropdown">
+              @for (patient of patientSearchResults; track patient.id) {
+                <button class="result-card" type="button" (click)="applyPatient(patient)">
+                  <div class="result-main">
+                    <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                    <span>{{ formatPatientLookupMeta(patient) }}</span>
+                  </div>
+                </button>
+              }
             </div>
           }
-        </div>
+          @if (validation.isInvalid(form.controls.email, submitted)) {
+            <div class="field-error">{{ validation.errorMessage(form.controls.email, 'Email') }}</div>
+          }
+        </label>
 
-        <div class="grid-2" style="grid-column:1/-1;">
-          <label class="field">
-            <span>Patient</span>
-            <select formControlName="patient_id" (change)="onPatientChanged()">
-              <option value="">Select patient</option>
-              @for (patient of patients; track patient.id) {
-                <option [value]="patient.id">{{ formatPatient(patient) }}</option>
-              }
-            </select>
-          </label>
-          <label class="field">
-            <span>Referring Doctor</span>
-            <select formControlName="internal_referral_user_id" (change)="onInternalReferralChanged()">
-              <option value="">Select flagged doctor user</option>
-              @for (doctor of internalReferralDoctors; track doctor.id) {
-                <option [value]="doctor.id">{{ doctor.full_name }}</option>
-              }
-            </select>
-          </label>
-        </div>
-
-        <div class="grid-2" style="grid-column:1/-1;">
-          <label class="field">
-            <span>Discount Percentage</span>
-            <input type="number" min="0" max="100" formControlName="discount_percentage" (input)="recalculatePreview()" />
-          </label>
-          <label class="field">
-            <span>Internal Note</span>
-            <textarea rows="3" formControlName="note" placeholder="Visible internal note"></textarea>
-          </label>
-        </div>
-
-        <div class="billing-items-shell" style="grid-column:1/-1;">
-          <div class="section-header billing-inline-head">
-            <div>
-              <h3 class="section-title">Invoice Items</h3>
-              <div class="section-copy">Build the invoice from the controlled service catalog and adjust quantity before posting.</div>
-            </div>
-            <button class="ghost-btn" type="button" (click)="addItem()">Add Item</button>
+        <label class="field">
+          <div class="field-label-row">
+            <span>Date Of Birth</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
           </div>
+          <input type="date" formControlName="date_of_birth" [readonly]="hasExistingPatientSelection" />
+        </label>
 
-          <div formArrayName="items" class="item-stack">
-            @for (item of items.controls; track $index) {
-              <div class="item-card" [formGroupName]="$index">
-                <div class="grid-2">
-                  <label class="field">
-                    <span>Service</span>
-                    <select formControlName="billing_service_id" (change)="onBillingItemChanged()">
-                      <option value="">Select billing service</option>
-                      @for (service of billingServices; track service.id) {
-                        <option [value]="service.id">{{ service.service_code }} - {{ service.name }}</option>
-                      }
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Quantity</span>
-                    <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
-                  </label>
-                </div>
-                <div class="item-footer">
-                  <span>{{ getServiceName(item.get('billing_service_id')?.value ?? '') }}</span>
-                  <strong>{{ getServiceAmount(item.get('billing_service_id')?.value ?? '', item.get('quantity')?.value ?? 0) }}</strong>
-                </div>
-                <button class="danger-btn" type="button" (click)="removeItem($index)">Remove</button>
-              </div>
-            }
+        <label class="field">
+          <div class="field-label-row">
+            <span>Gender</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
           </div>
-        </div>
+          <select formControlName="gender" [attr.disabled]="hasExistingPatientSelection ? true : null">
+            <option value="">Select gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Others">Others</option>
+          </select>
+        </label>
 
-        <div class="submit-row" style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
-        </div>
-      </form>
+        <label class="field patient-address">
+          <div class="field-label-row">
+            <span>Address</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <textarea rows="3" formControlName="address" [readonly]="hasExistingPatientSelection" placeholder="Address"></textarea>
+        </label>
+      </div>
     </section>
+    }
 
-    <section class="soft-panel preview-panel">
+    <section class="soft-panel">
       <div class="section-header">
         <div>
-          <h2 class="section-title">Invoice Preview</h2>
-          <div class="section-copy">Check the financial impact before posting. Discounts and referral calculations update live.</div>
+          <h2 class="section-title">Billing Items</h2>
+          <div class="section-copy">Allowed for your role: {{ allowedBillingItemLabels }}</div>
+        </div>
+        <button class="secondary-btn" type="button" (click)="addItem()">Add More</button>
+      </div>
+
+      @if (!hasAnyBillingItemPermission) {
+        <div class="billing-prefill-banner">
+          <strong>No billing item category permission</strong>
+          <span>Ask an administrator to enable service, medicine, or investigation billing from Role Management.</span>
+        </div>
+      }
+
+      <div class="discount-cap-note">
+        Default item discount: <strong>{{ maxItemDiscountPercentage }}%</strong> · Max invoice discount: <strong>{{ maxInvoiceDiscountPercentage }}%</strong>
+      </div>
+
+      @if (quickCatalogOptions.length) {
+        <div class="quick-add-strip">
+          <span>Quick add</span>
+          @for (option of quickCatalogOptions; track option.key) {
+            <button class="quick-add-btn" type="button" (click)="addQuickCatalogOption(option)">
+              <strong>{{ option.group }}</strong>
+              {{ option.name }}
+            </button>
+          }
+        </div>
+      }
+
+      <div class="invoice-table-shell" formArrayName="items">
+        <div class="invoice-table-head">
+          <span>Service</span>
+          <span>Code</span>
+          <span>Rate</span>
+          <span>Quantity</span>
+          <span>Item Discount %</span>
+          <span>Discount Amt</span>
+          <span>Amount</span>
+          <span></span>
+        </div>
+
+        @for (item of items.controls; track $index; let itemIndex = $index) {
+          <div class="invoice-row" [ngClass]="itemCategoryClass(itemIndex)" [formGroupName]="itemIndex">
+            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('billing_service_id'), submitted)">
+              <span class="item-type-badge">{{ itemCategoryLabel(itemIndex) }}</span>
+              <input
+                type="text"
+                formControlName="catalog_search"
+                [placeholder]="billingItemPlaceholder"
+                [disabled]="!hasAnyBillingItemPermission"
+                (focus)="activeItemSearchIndex = itemIndex"
+                (input)="activeItemSearchIndex = itemIndex"
+              />
+              @if (showItemSearch(itemIndex)) {
+                <div class="search-dropdown catalog-dropdown">
+                  @for (option of filteredCatalogOptions(itemIndex); track option.key) {
+                    <button class="result-card" type="button" (click)="selectCatalogOption(itemIndex, option)">
+                      <div class="result-main">
+                        <strong>{{ option.group }} - {{ option.name }}</strong>
+                        <span>{{ option.code }} · {{ formatCurrency(option.unitPrice) }} · {{ option.meta }}</span>
+                      </div>
+                    </button>
+                  }
+                </div>
+              }
+              @if (submitted && !item.get('source_item_id')?.value && !item.get('billing_service_id')?.value) {
+                <div class="field-error">Billing item is required.</div>
+              }
+              @if (item.get('source_label')?.value) {
+                <div class="field-hint">{{ item.get('source_label')?.value }}</div>
+                @if (getSelectedCatalogOption(itemIndex)?.roomNumber) {
+                  <div class="field-hint">Room {{ getSelectedCatalogOption(itemIndex)?.roomNumber }}</div>
+                }
+              }
+            </label>
+
+            <div class="row-readonly">{{ getCatalogCode(itemIndex) }}</div>
+            <div class="row-readonly">{{ getCatalogUnitPrice(itemIndex) }}</div>
+
+            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('quantity'), submitted)">
+              <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
+              @if (validation.isInvalid(item.get('quantity'), submitted)) {
+                <div class="field-error">{{ validation.errorMessage(item.get('quantity'), 'Quantity') }}</div>
+              }
+            </label>
+
+            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('discount_percentage'), submitted)">
+              <input
+                type="number"
+                min="0"
+                [max]="getItemMaxDiscountPercentage(itemIndex)"
+                step="0.01"
+                formControlName="discount_percentage"
+                (input)="onBillingItemChanged()"
+              />
+              <div class="field-hint">
+                Cap {{ getItemMaxDiscountPercentage(itemIndex) }}%
+                @if (getItemMaxDiscountAmount(itemIndex) !== null) {
+                  / {{ formatCurrency(getItemMaxDiscountAmount(itemIndex) ?? 0) }}
+                }
+              </div>
+              @if (validation.isInvalid(item.get('discount_percentage'), submitted)) {
+                <div class="field-error">{{ validation.errorMessage(item.get('discount_percentage'), 'Item discount') }}</div>
+              }
+            </label>
+
+            <div class="row-readonly">
+              {{ getCatalogDiscountAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}
+            </div>
+
+            <div class="row-readonly strong">{{ getCatalogAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}</div>
+
+            <button class="danger-btn compact-btn" type="button" (click)="removeItem(itemIndex)">Delete</button>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Context</h2>
+        </div>
+      </div>
+
+      <div class="context-grid">
+        <label class="field">
+          <div class="field-label-row">
+            <span>Referring Doctor</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <select formControlName="internal_referral_user_id" (change)="onInternalReferralChanged()">
+            <option value="">Select flagged doctor user</option>
+            @for (doctor of internalReferralDoctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field note-field">
+          <div class="field-label-row">
+            <span>Internal Note</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <textarea rows="4" formControlName="note" placeholder="Billing note or handoff context"></textarea>
+        </label>
+      </div>
+    </section>
+    </div>
+
+    <aside class="soft-panel preview-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Totals</h2>
+        </div>
+      </div>
+
+      <div class="preview-topline">
+        <div>
+          <div class="preview-label">Patient</div>
+          <strong>{{ selectedPatientName }}</strong>
+        </div>
+        <div>
+          <div class="preview-label">Mode</div>
+          <strong>{{ hasExistingPatientSelection ? 'Existing' : 'New' }}</strong>
+        </div>
+        <div>
+          <div class="preview-label">Source</div>
+          <strong>{{ sourceContextLabel }}</strong>
         </div>
       </div>
 
@@ -196,7 +432,15 @@
             <div class="value">{{ formatCurrency(preview.sub_total) }}</div>
           </div>
           <div class="metric-card">
-            <div class="label">Discount</div>
+            <div class="label">Item Discount</div>
+            <div class="value">{{ formatCurrency(preview.item_discount_amount) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Invoice Discount</div>
+            <div class="value">{{ formatCurrency(preview.invoice_discount_amount) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Total Discount</div>
             <div class="value">{{ formatCurrency(preview.discount_amount) }}</div>
           </div>
           <div class="metric-card">
@@ -209,8 +453,66 @@
           </div>
         </div>
       } @else {
-        <div class="empty-state">{{ previewMessage || 'Select patient services to see a live invoice preview.' }}</div>
+        <div class="empty-state">{{ previewMessage || 'No billable item selected.' }}</div>
       }
-    </section>
-  </section>
+
+      <div class="right-pane-form">
+        <label class="field">
+          <div class="field-label-row">
+            <span>Invoice Discount %</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="number" min="0" [max]="maxInvoiceDiscountPercentage" formControlName="discount_percentage" (input)="recalculatePreview()" />
+          <div class="field-help">Cap {{ maxInvoiceDiscountPercentage }}%</div>
+        </label>
+
+        <div class="payment-grid">
+          <label class="field">
+            <div class="field-label-row">
+              <span>Collect Now</span>
+              <span class="field-label-meta">
+                <span class="field-badge field-badge--optional">Optional</span>
+              </span>
+            </div>
+            <input type="number" min="0" [max]="paymentDuePreview" step="0.01" formControlName="payment_amount" />
+          </label>
+
+          <label class="field">
+            <div class="field-label-row">
+              <span>Method</span>
+            </div>
+            <select formControlName="payment_method">
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="mobile_banking">Mobile Banking</option>
+              <option value="bank_transfer">Bank Transfer</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="pane-actions">
+          <button class="secondary-btn compact-btn" type="button" (click)="fillFullPayment()" [disabled]="!preview">Full Paid</button>
+          @if (stickerItemCount) {
+            <span class="sticker-hint">{{ stickerItemCount }} investigation sticker(s) after post</span>
+          }
+        </div>
+
+        <label class="field">
+          <div class="field-label-row">
+            <span>Payment Note</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="text" formControlName="payment_note" placeholder="Receipt note" />
+        </label>
+      </div>
+
+      <div class="submit-row">
+        <button class="primary-btn" type="submit" [disabled]="saving || !readyToPost">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
+      </div>
+    </aside>
+  </form>
 </div>

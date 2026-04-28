@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.billing import BillingInvoice, BillingPayment, BillingRefund, BillingService, ReferredDoctor
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund, BillingService, ReferredDoctor, BillingSetting
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.billing import BillingInvoiceFilterParams
@@ -30,6 +30,12 @@ class BillingRepository:
         if branch_id:
             stmt = stmt.where((BillingService.branch_id == branch_id) | (BillingService.branch_id.is_(None)))
         return list(self.db.scalars(stmt))
+
+    def get_service(self, service_id: UUID, branch_id: UUID | None) -> BillingService | None:
+        stmt = select(BillingService).where(BillingService.id == service_id)
+        if branch_id:
+            stmt = stmt.where((BillingService.branch_id == branch_id) | (BillingService.branch_id.is_(None)))
+        return self.db.scalar(stmt)
 
     def create_service(self, service: BillingService) -> BillingService:
         self.db.add(service)
@@ -102,6 +108,25 @@ class BillingRepository:
         )
         return self.db.scalar(stmt)
 
+    def get_invoice_by_source(self, *, source_opd_visit_id: UUID | None = None, source_ipd_admission_id: UUID | None = None, billing_stage: str | None = None) -> BillingInvoice | None:
+        stmt = select(BillingInvoice).where(BillingInvoice.is_active.is_(True), BillingInvoice.status != "void")
+        if source_opd_visit_id:
+            stmt = stmt.where(BillingInvoice.source_opd_visit_id == source_opd_visit_id)
+        if source_ipd_admission_id:
+            stmt = stmt.where(BillingInvoice.source_ipd_admission_id == source_ipd_admission_id)
+        if billing_stage:
+            stmt = stmt.where(BillingInvoice.billing_stage == billing_stage)
+        return self.db.scalar(stmt.order_by(BillingInvoice.created_at.desc()))
+
+    def has_item_for_opd_order(self, order_id: UUID) -> bool:
+        stmt = select(BillingInvoiceItem.id).join(BillingInvoiceItem.invoice).where(
+            BillingInvoiceItem.source_opd_visit_order_id == order_id,
+            BillingInvoiceItem.is_active.is_(True),
+            BillingInvoice.is_active.is_(True),
+            BillingInvoice.status != "void",
+        )
+        return self.db.scalar(stmt.limit(1)) is not None
+
     def create_invoice(self, invoice: BillingInvoice) -> BillingInvoice:
         self.db.add(invoice)
         self.db.flush()
@@ -116,6 +141,19 @@ class BillingRepository:
         self.db.add(refund)
         self.db.flush()
         return refund
+
+    def get_settings(self, branch_id: UUID | None) -> BillingSetting | None:
+        stmt = select(BillingSetting)
+        if branch_id:
+            stmt = stmt.where(BillingSetting.branch_id == branch_id)
+        else:
+            stmt = stmt.where(BillingSetting.branch_id.is_(None))
+        return self.db.scalar(stmt)
+
+    def create_settings(self, settings: BillingSetting) -> BillingSetting:
+        self.db.add(settings)
+        self.db.flush()
+        return settings
 
     def get_payment(self, payment_id: UUID) -> BillingPayment | None:
         return self.db.get(BillingPayment, payment_id)

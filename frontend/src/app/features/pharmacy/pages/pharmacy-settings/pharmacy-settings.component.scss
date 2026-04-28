@@ -1,0 +1,92 @@
+:host {
+  display: block;
+}
+
+.settings-page,
+.editor-form,
+.editor-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero-main,
+.settings-head,
+.modal-header,
+.editor-section__head,
+.editor-actions,
+.pager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings-table th,
+.settings-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.pharmacy-editor-card {
+  width: min(1120px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+}
+
+.editor-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+.toolbar-row--search {
+  flex-wrap: nowrap;
+}
+
+.action-cell {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .hero-main,
+  .settings-head,
+  .modal-header,
+  .editor-section__head,
+  .editor-actions,
+  .pager-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+}

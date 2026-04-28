@@ -11,6 +11,7 @@ DEFAULT_FRONTEND_ORIGINS = [
     "http://127.0.0.1:4200",
     "https://sahidul2866.github.io",
 ]
+DEFAULT_FRONTEND_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 
 class Settings(BaseSettings):
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     database_url: str = Field(alias="DATABASE_URL")
     frontend_origins: str | list[str] = Field(default_factory=lambda: DEFAULT_FRONTEND_ORIGINS.copy(), alias="FRONTEND_ORIGINS")
+    frontend_origin_regex: str = Field(default=DEFAULT_FRONTEND_ORIGIN_REGEX, alias="FRONTEND_ORIGIN_REGEX")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     auto_db_bootstrap: bool | str = Field(default=True, alias="AUTO_DB_BOOTSTRAP")
     auto_seed_sample_data: bool | str = Field(default=False, alias="AUTO_SEED_SAMPLE_DATA")
@@ -40,6 +42,7 @@ class Settings(BaseSettings):
         if isinstance(self.frontend_origins, str):
             normalized = self.frontend_origins.strip().strip("\"'")
             self.frontend_origins = [item.strip().strip("\"'") for item in normalized.split(",") if item.strip()]
+        self.frontend_origin_regex = self.frontend_origin_regex.strip().strip("\"'")
 
     @staticmethod
     def _normalize_bool(value: bool | str, *, default: bool) -> bool:

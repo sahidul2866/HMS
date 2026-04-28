@@ -9,6 +9,7 @@ class AuditAction(StrEnum):
     PATIENT_CREATE = "patient.create"
     BILLING_SERVICE_CREATE = "billing.service.create"
     BILLING_DOCTOR_CREATE = "billing.doctor.create"
+    BILLING_SETTINGS_UPDATE = "billing.settings.update"
     BILLING_INVOICE_CREATE = "billing.invoice.create"
     BILLING_INVOICE_VOID = "billing.invoice.void"
     BILLING_PAYMENT_CREATE = "billing.payment.create"

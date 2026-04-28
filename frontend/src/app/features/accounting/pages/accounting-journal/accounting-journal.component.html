@@ -1,56 +1,110 @@
-<section class="page-card">
-  <h1 class="page-title">Post Accounting Journal</h1>
-  <div class="page-subtitle">Protected by `accounting.journal.post`. Backend enforces balanced journal values.</div>
-
-  <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-    <label class="field">
-      <span>Reference</span>
-      <input type="text" formControlName="reference" />
-    </label>
-    <label class="field" style="grid-column:1/-1;">
-      <span>Description</span>
-      <textarea rows="4" formControlName="description"></textarea>
-    </label>
-    <label class="field">
-      <span>Debit Amount</span>
-      <input type="number" formControlName="debit_amount" />
-    </label>
-    <label class="field">
-      <span>Credit Amount</span>
-      <input type="number" formControlName="credit_amount" />
-    </label>
-    <div style="grid-column:1/-1;">
-      <button class="primary-btn" type="submit">Post Journal</button>
+<section class="workspace-shell accounting-page">
+  <section class="page-card module-hero accounting-hero">
+    <div class="hero-main">
+      <div>
+        <div class="hero-kicker">Accounting</div>
+        <h1 class="page-title">Post Accounting Journal</h1>
+        <div class="page-subtitle">Create balanced journal entries in a cleaner finance workspace. Backend still enforces balanced debit and credit values.</div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="label">Posted Journals</div>
+          <div class="value">{{ journals.length }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Validation</div>
+          <div class="value">Balanced</div>
+        </div>
+      </div>
     </div>
-  </form>
+  </section>
 
-  @if (resultMessage) {
-    <p class="pill">{{ resultMessage }}</p>
-  }
-</section>
+  <div class="accounting-layout">
+    <section class="page-card form-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Journal Entry</h2>
+          <div class="section-copy">Post the reference, description, and the debit-credit values from one focused form.</div>
+        </div>
+      </div>
 
-<section class="page-card">
-  <h2 class="page-title">Journal Grid</h2>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Journal No</th>
-        <th>Description</th>
-        <th>Debit</th>
-        <th>Credit</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (journal of journals; track journal.id) {
-        <tr>
-          <td>{{ journal.journal_number }}</td>
-          <td>{{ journal.description }}</td>
-          <td>{{ journal.debit_amount }}</td>
-          <td>{{ journal.credit_amount }}</td>
-          <td>{{ journal.status }}</td>
-        </tr>
+      <form class="form-grid accounting-form" [formGroup]="form" (ngSubmit)="submit()">
+        <label class="field">
+          <div class="field-label-row">
+            <span>Reference</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="text" formControlName="reference" placeholder="JV-2026-001" />
+        </label>
+        <label class="field field-wide">
+          <div class="field-label-row">
+            <span>Description</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--required">Mandatory</span>
+            </span>
+          </div>
+          <textarea rows="4" formControlName="description" placeholder="What this journal entry represents"></textarea>
+        </label>
+        <label class="field">
+          <div class="field-label-row">
+            <span>Debit Amount</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--required">Mandatory</span>
+            </span>
+          </div>
+          <input type="number" formControlName="debit_amount" />
+        </label>
+        <label class="field">
+          <div class="field-label-row">
+            <span>Credit Amount</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--required">Mandatory</span>
+            </span>
+          </div>
+          <input type="number" formControlName="credit_amount" />
+        </label>
+        <div class="form-actions field-wide">
+          <button class="primary-btn" type="submit">Post Journal</button>
+        </div>
+      </form>
+
+      @if (resultMessage) {
+        <div class="pill result-pill">{{ resultMessage }}</div>
       }
-    </tbody>
-  </table>
+    </section>
+
+    <section class="page-card data-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Journal Grid</h2>
+          <div class="section-copy">Recently posted journals stay visible here for quick ledger review.</div>
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Journal No</th>
+            <th>Description</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (journal of journals; track journal.id) {
+            <tr>
+              <td><strong>{{ journal.journal_number }}</strong></td>
+              <td>{{ journal.description }}</td>
+              <td>{{ journal.debit_amount }}</td>
+              <td>{{ journal.credit_amount }}</td>
+              <td>{{ journal.status }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  </div>
 </section>

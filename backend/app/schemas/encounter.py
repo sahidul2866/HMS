@@ -1,10 +1,16 @@
 from datetime import date, datetime
 from decimal import Decimal
+from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.patient import PatientRead
+
+
+class VisitType(str, Enum):
+    NEW = "new"
+    FOLLOW_UP = "follow_up"
 
 
 class OPDVisitCreate(BaseModel):
@@ -13,8 +19,9 @@ class OPDVisitCreate(BaseModel):
     department_name: str = Field(min_length=2, max_length=120)
     doctor_user_id: UUID | None = None
     consulting_doctor_name: str = Field(min_length=2, max_length=150)
-    chief_complaint: str | None = None
     consultation_fee: Decimal = Field(default=0, ge=0)
+    visit_type: VisitType = VisitType.NEW
+    chief_complaint: str | None = None
     note: str | None = None
 
 
@@ -31,6 +38,27 @@ class OPDVisitConsultationUpdate(BaseModel):
     note: str | None = None
 
 
+class OPDVisitUpdate(BaseModel):
+    visit_date: date
+    department_name: str = Field(min_length=2, max_length=120)
+    doctor_user_id: UUID | None = None
+    consulting_doctor_name: str = Field(min_length=2, max_length=150)
+    chief_complaint: str | None = None
+    consultation_fee: Decimal = Field(default=0, ge=0)
+    note: str | None = None
+
+
+class OPDVisitPaymentUpdate(BaseModel):
+    amount: Decimal = Field(ge=0)
+    discount: Decimal = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def validate_discount(self) -> "OPDVisitPaymentUpdate":
+        if self.discount > self.amount:
+            raise ValueError("Discount cannot exceed amount")
+        return self
+
+
 class OPDVisitStatusUpdate(BaseModel):
     status: str = Field(pattern="^(waiting|in_consultation|prescribed|billed|completed|cancelled)$")
 
@@ -39,6 +67,7 @@ class OPDVisitOrderCreate(BaseModel):
     order_type: str = Field(pattern="^(prescription|investigation|procedure)$")
     service_area: str | None = Field(default=None, pattern="^(laboratory|radiology)$")
     item_name: str = Field(min_length=2, max_length=180)
+    room_number: str | None = Field(default=None, max_length=60)
     instructions: str | None = None
     quantity: Decimal = Field(default=1, ge=0.01)
 
@@ -84,6 +113,10 @@ class OPDVisitRead(OPDVisitCreate):
     final_diagnosis: str | None = None
     follow_up_date: date | None = None
     follow_up_note: str | None = None
+    consultation_discount: Decimal = 0
+    consultation_total: Decimal = 0
+    consultation_payment_status: str = "unpaid"
+    consultation_paid_at: datetime | None = None
     patient: PatientRead
     orders: list[OPDVisitOrderRead] = []
     created_at: datetime
@@ -205,6 +238,7 @@ class ClinicalInvestigationWorkItemRead(BaseModel):
     consulting_doctor_name: str
     service_area: str
     item_name: str
+    room_number: str | None = None
     quantity: Decimal
     instructions: str | None = None
     chief_complaint: str | None = None

@@ -2,7 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { PERMISSIONS } from '../../../../core/constants/permissions';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionService } from '../../../../core/services/session.service';
 import { PatientClinicalHistory, PatientHistoryOPDVisit } from '../../models/patient.models';
 import { PatientService } from '../../services/patient.service';
 
@@ -18,6 +20,8 @@ export class PatientDetailComponent {
   private readonly router = inject(Router);
   private readonly patientService = inject(PatientService);
   private readonly notificationService = inject(NotificationService);
+  readonly sessionService = inject(SessionService);
+  readonly permissions = PERMISSIONS;
 
   historyLoading = true;
   history: PatientClinicalHistory | null = null;
@@ -37,10 +41,34 @@ export class PatientDetailComponent {
     void this.router.navigate(['/patients']);
   }
 
+  openBilling(): void {
+    if (this.history) {
+      void this.router.navigate(['/billing/create'], { queryParams: { patientId: this.history.patient.id } });
+    }
+  }
+
+  openIpdAdmission(): void {
+    if (this.history) {
+      void this.router.navigate(['/ipd/admit'], { queryParams: { patientId: this.history.patient.id } });
+    }
+  }
+
+  openOpdRegistration(): void {
+    if (this.history) {
+      void this.router.navigate(['/opd/register'], { queryParams: { patientId: this.history.patient.id } });
+    }
+  }
+
+  openVisitBilling(visit: PatientHistoryOPDVisit): void {
+    if (this.history) {
+      void this.router.navigate(['/billing/create'], { queryParams: { patientId: this.history.patient.id, opdVisitId: visit.id } });
+    }
+  }
+
   formatCurrency(value: string | number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-BD', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 2,
     }).format(Number(value));
   }

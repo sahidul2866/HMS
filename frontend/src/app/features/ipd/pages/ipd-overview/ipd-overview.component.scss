@@ -1,0 +1,322 @@
+:host {
+  display: block;
+}
+
+.ipd-dashboard {
+  display: grid;
+  gap: 1.25rem;
+  --accent-blue: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.ipd-hero {
+  background:
+    radial-gradient(circle at top left, rgba(125, 211, 252, 0.22), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(96, 165, 250, 0.18), transparent 26rem),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.99), rgba(30, 64, 175, 0.92));
+  color: #f8fbff;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.analytics-card {
+  display: grid;
+  gap: 1rem;
+  grid-column: span 4;
+  background:
+    radial-gradient(circle at top right, rgba(148, 163, 184, 0.12), transparent 18rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 255, 0.95));
+}
+
+.analytics-card--wide {
+  grid-column: span 8;
+}
+
+.analytics-card__header {
+  margin-bottom: 0;
+}
+
+.occupancy-pill {
+  min-width: 82px;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(29, 78, 216, 0.08);
+  color: #1d4ed8;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.occupancy-track {
+  height: 0.85rem;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+  overflow: hidden;
+}
+
+.occupancy-track span,
+.metric-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-blue);
+}
+
+.capacity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.capacity-card,
+.bed-card,
+.admission-card,
+.movement-card,
+.control-card,
+.discharge-summary {
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.capacity-card {
+  padding: 1rem;
+}
+
+.capacity-card span,
+.bed-card__meta,
+.bed-card__note,
+.metric-row__copy span,
+.summary-list span,
+.movement-card__note,
+.empty-state {
+  color: #64748b;
+}
+
+.capacity-card strong {
+  display: block;
+  margin-top: 0.35rem;
+  color: #10233c;
+  font-size: 1.35rem;
+}
+
+.chart-stack,
+.main-stack,
+.control-stack,
+.movement-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 48px minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.metric-row__copy strong {
+  display: block;
+  color: #10233c;
+}
+
+.metric-row__value {
+  text-align: right;
+  color: #10233c;
+  font-weight: 800;
+}
+
+.metric-bar {
+  height: 0.7rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(226, 232, 240, 0.9);
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.bed-grid,
+.admission-grid {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.bed-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.bed-card,
+.admission-card,
+.movement-card {
+  padding: 1rem;
+}
+
+.bed-card--occupied {
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.12), transparent 11rem),
+    rgba(255, 255, 255, 0.9);
+}
+
+.bed-card__head,
+.admission-card__head,
+.movement-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.admission-card--active {
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.1);
+}
+
+.admission-card__number {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admission-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+
+.admission-card__grid span {
+  display: block;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admission-card__grid strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: #10233c;
+}
+
+.admission-card__actions,
+.control-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.summary-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.summary-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.summary-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.summary-list strong {
+  color: #10233c;
+  text-align: right;
+}
+
+.control-block + .control-block {
+  margin-top: 1rem;
+}
+
+.control-block__title {
+  margin-bottom: 0.85rem;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.discharge-summary {
+  padding: 1rem;
+}
+
+.discharge-summary > div + div {
+  margin-top: 0.65rem;
+}
+
+.movement-card__route {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.8rem;
+  color: #10233c;
+}
+
+.empty-state {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+@media (max-width: 1180px) {
+  .analytics-card,
+  .analytics-card--wide {
+    grid-column: span 12;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .capacity-grid,
+  .admission-card__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-row__value {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .capacity-grid,
+  .admission-card__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bed-card__head,
+  .admission-card__head,
+  .movement-card__head,
+  .summary-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

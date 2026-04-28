@@ -73,11 +73,16 @@
 .permission-editor {
   border-radius: 24px;
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 255, 0.95));
 }
 
 .role-form {
   display: grid;
   gap: 0.9rem;
+  padding: 0.85rem;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .field {
@@ -262,7 +267,7 @@
   border-radius: 24px;
   background:
     radial-gradient(circle at top right, rgba(14, 116, 144, 0.1), transparent 28%),
-    var(--surface);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(243, 248, 255, 0.97));
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
   padding: 1.4rem;
   display: grid;

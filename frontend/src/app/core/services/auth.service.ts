@@ -10,6 +10,7 @@ import { TabService } from './tab.service';
 import { TokenStorageService } from './token-storage.service';
 import { CurrentUserService } from './current-user.service';
 import { UiStateService } from './ui-state.service';
+import { ApiCacheService } from './api-cache.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
   private readonly sessionService = inject(SessionService);
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly currentUserService = inject(CurrentUserService);
+  private readonly apiCache = inject(ApiCacheService);
   private readonly tabService = inject(TabService);
   private readonly uiStateService = inject(UiStateService);
   private refreshInFlight$: Observable<LoginResponse> | null = null;
@@ -63,7 +65,9 @@ export class AuthService {
       })
       .pipe(
         tap((response) => {
+          this.apiCache.clearAll();
           this.persistTokens(response.tokens);
+          this.currentUserService.setCachedUser(response.user);
           this.sessionService.setUser(response.user);
         }),
         map((response) => response.user)
@@ -90,7 +94,9 @@ export class AuthService {
       })
       .pipe(
         tap((response) => {
+          this.apiCache.clearAll();
           this.persistTokens(response.tokens);
+          this.currentUserService.setCachedUser(response.user);
           this.sessionService.setUser(response.user);
         }),
         map((response) => response.user)
@@ -120,6 +126,7 @@ export class AuthService {
       .pipe(
         tap((response) => {
           this.persistTokens(response.tokens);
+          this.currentUserService.setCachedUser(response.user);
           this.sessionService.setUser(response.user);
         }),
         finalize(() => {
@@ -185,6 +192,8 @@ export class AuthService {
 
   clearSession(navigate = false): void {
     this.tokenStorage.clear();
+    this.currentUserService.clearCache();
+    this.apiCache.clearAll();
     this.sessionService.clear();
     this.tabService.clear();
     this.uiStateService.clearAll();
@@ -205,6 +214,6 @@ export class AuthService {
   }
 
   getLandingRoute(user: User): string {
-    return user.effective_permissions.includes('patient.portal.view') ? '/portal' : '/dashboard';
+    return user.effective_permissions.includes('patient.portal.view') && !!user.patient_id ? '/portal' : '/dashboard';
   }
 }

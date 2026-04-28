@@ -6,6 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
 import { AppointmentsService } from '../../services/appointments.service';
@@ -25,12 +26,15 @@ export class AppointmentCreateComponent {
   private readonly notificationService = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  readonly validation = FormValidationUi;
 
   patients: Patient[] = [];
   patientSearchResults: PatientLookupResult[] = [];
   doctors: User[] = [];
   selectedPatient: Patient | null = null;
+  patientLookupModalOpen = false;
   saving = false;
+  submitted = false;
 
   readonly patientLookupControl = this.fb.nonNullable.control('');
 
@@ -72,7 +76,10 @@ export class AppointmentCreateComponent {
       this.patientSearchResults = [];
       return;
     }
-    this.patientService.search(query).subscribe((results) => (this.patientSearchResults = results));
+    this.patientService.search(query).subscribe((results) => {
+      this.patientSearchResults = results;
+      this.patientLookupModalOpen = results.length > 0;
+    });
   }
 
   applyPatient(result: PatientLookupResult): void {
@@ -84,6 +91,7 @@ export class AppointmentCreateComponent {
       } as Patient);
     this.patientLookupControl.setValue(`${result.patient_number} - ${result.full_name}`);
     this.patientSearchResults = [];
+    this.patientLookupModalOpen = false;
   }
 
   clearPatientSelection(): void {
@@ -91,6 +99,18 @@ export class AppointmentCreateComponent {
     this.selectedPatient = null;
     this.patientLookupControl.setValue('');
     this.patientSearchResults = [];
+    this.patientLookupModalOpen = false;
+  }
+
+  openPatientLookupModal(): void {
+    if (!this.patientSearchResults.length) {
+      return;
+    }
+    this.patientLookupModalOpen = true;
+  }
+
+  closePatientLookupModal(): void {
+    this.patientLookupModalOpen = false;
   }
 
   navigateToNewPatient(): void {
@@ -102,7 +122,9 @@ export class AppointmentCreateComponent {
   }
 
   submit(): void {
+    this.submitted = true;
     if (this.form.invalid || this.saving) {
+      this.form.markAllAsTouched();
       return;
     }
 
@@ -119,6 +141,7 @@ export class AppointmentCreateComponent {
       .subscribe({
         next: (appointment) => {
           this.saving = false;
+          this.submitted = false;
           this.notificationService.success(`Appointment ${appointment.appointment_number} created successfully.`);
           void this.router.navigate(['/appointments']);
         },
@@ -130,6 +153,11 @@ export class AppointmentCreateComponent {
 
   formatPatient(patient: Patient): string {
     return `${patient.patient_number} - ${patient.first_name} ${patient.last_name}`;
+  }
+
+  get selectedDoctorName(): string {
+    const doctorId = this.form.getRawValue().doctor_user_id;
+    return this.doctors.find((item) => item.id === doctorId)?.full_name || 'Pending';
   }
 
   private syncSelectedPatient(): void {

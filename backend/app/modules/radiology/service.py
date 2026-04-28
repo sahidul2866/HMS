@@ -82,6 +82,7 @@ class RadiologyService:
             consulting_doctor_name=order.visit.consulting_doctor_name,
             service_area=order.service_area or "radiology",
             item_name=order.item_name,
+            room_number=order.room_number,
             quantity=order.quantity,
             instructions=order.instructions,
             chief_complaint=order.visit.chief_complaint,

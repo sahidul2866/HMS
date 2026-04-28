@@ -81,6 +81,7 @@
               <th>Role Profile</th>
               <th>Branch / Dept</th>
               <th>Status</th>
+              <th>OPD Settings</th>
             </tr>
           </thead>
           <tbody>
@@ -120,6 +121,21 @@
                     }
                   </div>
                   <span class="muted-line">{{ getPatientLabel(user.patient_id) }}</span>
+                </td>
+                <td>
+                  @if (isDoctorUser(user)) {
+                    <div class="doctor-settings-cell">
+                      <div class="role-pill-group">
+                        <span class="role-pill">Consultation {{ getDoctorFee(user) }}</span>
+                        <span class="role-pill">Follow-up {{ getDoctorFollowUpFee(user) }}</span>
+                      </div>
+                      <strong class="doctor-settings-title">{{ getOPDHeaderTitle(user) }}</strong>
+                      <span class="muted-line">{{ getOPDHeaderMeta(user) }}</span>
+                      <button class="secondary-btn" type="button" (click)="openOPDSettingsModal(user)">Open OPD Settings</button>
+                    </div>
+                  } @else {
+                    <span class="muted-line">Not a doctor user</span>
+                  }
                 </td>
               </tr>
             }
@@ -238,4 +254,5 @@
       </section>
     </div>
   }
+
 </section>

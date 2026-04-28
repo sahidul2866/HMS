@@ -134,11 +134,6 @@
             <div class="toolbar-row">
               <button class="secondary-btn" type="button" (click)="openWorkbench(undefined, undefined, dispense.id)">Process Return</button>
             </div>
-            @if (+dispense.remaining_quantity > 0) {
-              <div class="toolbar-row">
-                <button class="secondary-btn" type="button" (click)="openWorkbench(undefined, undefined, dispense.id)">Open Return Target</button>
-              </div>
-            }
           </div>
         }
       </div>

@@ -1,0 +1,82 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Reverse Transactions</div>
+        <h1 class="page-title">Medicine Return List</h1>
+        <div class="page-subtitle">Review every return entry, adjust quantities when needed, and keep stock restoration auditable.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="layout-shell">
+    <section class="page-card">
+      <div class="filter-grid">
+        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search return, sale, customer, medicine" />
+        <button class="secondary-btn" type="button" (click)="searchNow()">Search</button>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Return No</th>
+            <th>Sale No</th>
+            <th>Customer</th>
+            <th>Medicine</th>
+            <th>Batch</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of returns; track item.id) {
+            <tr>
+              <td><strong>{{ item.return_number }}</strong><div class="muted-line">{{ item.returned_at }}</div></td>
+              <td>{{ item.sale_number }}</td>
+              <td>{{ item.customer_name }}</td>
+              <td>{{ item.medicine_name }}</td>
+              <td><strong>{{ item.batch_no || '-' }}</strong><div class="muted-line">{{ item.expiry_date || 'No expiry' }}</div></td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ formatCurrency(item.total_amount) }}</td>
+              <td class="action-cell">
+                <button class="secondary-btn" type="button" (click)="selectReturn(item)">Edit</button>
+                <button class="danger-btn" type="button" (click)="deleteReturn(item)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+    </section>
+
+    <aside class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">{{ selectedReturn ? selectedReturn.return_number : 'Return Details' }}</h2>
+          <div class="section-copy">{{ selectedReturn ? selectedReturn.medicine_name : 'Select a return record to edit it.' }}</div>
+        </div>
+      </div>
+
+      @if (selectedReturn) {
+        <form class="form-grid" [formGroup]="form" (ngSubmit)="updateReturn()">
+          <div class="field" style="grid-column:1/-1;">
+            <span>Batch Trail</span>
+            <div class="empty-note" style="margin:0;">{{ selectedReturn.batch_no || 'No batch captured' }} · Expiry {{ selectedReturn.expiry_date || 'N/A' }}</div>
+          </div>
+          <label class="field"><span>Return Date</span><input type="date" formControlName="returned_at" /></label>
+          <label class="field"><span>Quantity</span><input type="number" min="0.01" step="0.01" formControlName="quantity" /></label>
+          <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="3" formControlName="note"></textarea></label>
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Update Return</button></div>
+        </form>
+      } @else {
+        <div class="empty-note">No return selected.</div>
+      }
+    </aside>
+  </div>
+</section>

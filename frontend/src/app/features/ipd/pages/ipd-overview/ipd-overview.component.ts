@@ -3,9 +3,11 @@ import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { PERMISSIONS } from '../../../../core/constants/permissions';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionService } from '../../../../core/services/session.service';
 import { IPDAdmission, IPDBed, IPDSummary } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
@@ -14,12 +16,15 @@ import { IPDService } from '../../services/ipd.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './ipd-overview.component.html',
+  styleUrls: ['./ipd-overview.component.scss'],
 })
 export class IPDOverviewComponent {
   private readonly fb = inject(FormBuilder);
   private readonly ipdService = inject(IPDService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly notificationService = inject(NotificationService);
+  readonly sessionService = inject(SessionService);
+  readonly permissions = PERMISSIONS;
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -122,11 +127,12 @@ export class IPDOverviewComponent {
     });
   }
 
-  openBillingForAdmission(admission: IPDAdmission): void {
+  openBillingForAdmission(admission: IPDAdmission, stage: 'interim' | 'final' = 'interim'): void {
     void this.router.navigate(['/billing/create'], {
       queryParams: {
         patientId: admission.patient.id,
         ipdAdmissionId: admission.id,
+        billingStage: stage,
       },
     });
   }
@@ -150,6 +156,39 @@ export class IPDOverviewComponent {
 
   get availableBeds(): IPDBed[] {
     return this.beds.filter((bed) => bed.status === 'available');
+  }
+
+  get occupiedBeds(): IPDBed[] {
+    return this.beds.filter((bed) => bed.status === 'occupied');
+  }
+
+  get activeAdmissions(): IPDAdmission[] {
+    return this.admissions.filter((admission) => admission.status !== 'discharged');
+  }
+
+  get dischargedAdmissions(): IPDAdmission[] {
+    return this.admissions.filter((admission) => admission.status === 'discharged');
+  }
+
+  get admissionsByWard(): Array<{ ward: string; count: number; width: string }> {
+    const counts = new Map<string, number>();
+    for (const admission of this.activeAdmissions) {
+      counts.set(admission.ward_name, (counts.get(admission.ward_name) ?? 0) + 1);
+    }
+    const rows = [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+    const max = Math.max(...rows.map(([, count]) => count), 1);
+    return rows.map(([ward, count]) => ({
+      ward,
+      count,
+      width: `${Math.max((count / max) * 100, count > 0 ? 16 : 0)}%`,
+    }));
+  }
+
+  get bedOccupancyPercent(): number {
+    if (!this.beds.length) {
+      return 0;
+    }
+    return Math.round((this.occupiedBeds.length / this.beds.length) * 100);
   }
 
   onTransferBedChanged(): void {

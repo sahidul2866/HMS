@@ -6,7 +6,22 @@ from app.models.department import Department
 from app.models.encounter import IPDAdmission, IPDAdmissionMovement, IPDBed, OPDVisit, OPDVisitOrder
 from app.models.permission import Permission
 from app.models.patient import Patient
-from app.models.pharmacy import PharmacyDispense
+from app.models.pharmacy import (
+    PharmacyCompany,
+    PharmacyCustomer,
+    PharmacyDispense,
+    PharmacyGeneric,
+    PharmacyInvestigation,
+    PharmacyInvestigationItem,
+    PharmacyInvestigationSetting,
+    PharmacyMedicine,
+    PharmacyMedicineType,
+    PharmacyPurchase,
+    PharmacySale,
+    PharmacySaleItem,
+    PharmacySaleReturn,
+    PharmacyStockMovement,
+)
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.user import User, role_permissions, user_permissions, user_roles
@@ -29,7 +44,20 @@ __all__ = [
     "OPDVisitOrder",
     "Permission",
     "Patient",
+    "PharmacyCompany",
+    "PharmacyCustomer",
     "PharmacyDispense",
+    "PharmacyGeneric",
+    "PharmacyInvestigation",
+    "PharmacyInvestigationItem",
+    "PharmacyInvestigationSetting",
+    "PharmacyMedicine",
+    "PharmacyMedicineType",
+    "PharmacyPurchase",
+    "PharmacySale",
+    "PharmacySaleItem",
+    "PharmacySaleReturn",
+    "PharmacyStockMovement",
     "RefreshToken",
     "Role",
     "User",

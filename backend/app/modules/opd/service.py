@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.encounter import OPDVisit, OPDVisitOrder
 from app.models.user import User
+from app.modules.auth.service import AuthService
 from app.modules.audit.service import AuditService
 from app.modules.ipd.service import IPDService
 from app.modules.opd.repository import OPDRepository
@@ -16,32 +18,38 @@ from app.schemas.encounter import (
     OPDSummary,
     OPDVisitConsultationUpdate,
     OPDVisitCreate,
+    OPDVisitPaymentUpdate,
     OPDVisitOrderCreate,
     OPDVisitOrderUpdate,
+    OPDVisitUpdate,
 )
 from app.utils.enums import AuditAction
 
 
 class OPDService:
+    DOCTOR_WISE_VIEW_PERMISSION = "opd.view.doctor_wise"
+    TWOPLACES = Decimal("0.01")
+
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repository = OPDRepository(db)
         self.patients = PatientsRepository(db)
         self.users = UsersRepository(db)
+        self.auth = AuthService(db)
 
-    def list_visits(self, actor: User) -> list[OPDVisit]:
-        return self.repository.list_visits(actor.branch_id)
+    def list_visits(self, actor: User, doctor_user_id=None) -> list[OPDVisit]:
+        doctor_scope = self._resolve_doctor_scope(actor, doctor_user_id)
+        return self.repository.list_visits(actor.branch_id, doctor_scope)
 
     def get_visit(self, visit_id, actor: User) -> OPDVisit:
         visit = self.repository.get_visit(visit_id)
         if not visit:
             raise AppException(404, "opd_visit_not_found", "OPD visit not found")
-        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
-            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
-        return visit
+        return self._validate_visit_access(visit, actor)
 
-    def get_summary(self, actor: User) -> OPDSummary:
-        totals = self.repository.get_summary(actor.branch_id, datetime.now(UTC).date())
+    def get_summary(self, actor: User, doctor_user_id=None) -> OPDSummary:
+        doctor_scope = self._resolve_doctor_scope(actor, doctor_user_id)
+        totals = self.repository.get_summary(actor.branch_id, datetime.now(UTC).date(), doctor_scope)
         return OPDSummary(
             total_visits=totals[0],
             waiting_visits=totals[1],
@@ -56,13 +64,37 @@ class OPDService:
         if actor.branch_id and patient.branch_id and actor.branch_id != patient.branch_id:
             raise AppException(403, "forbidden", "Patient belongs to a different branch")
 
+        # Auto-fill consultation fee based on doctor and visit type
+        consultation_fee = Decimal("0")
+        if payload.doctor_user_id:
+            doctor = self._get_doctor(payload.doctor_user_id, actor)
+            if doctor:
+                if payload.visit_type == "follow_up":
+                    # Check if follow-up is allowed
+                    last_visit = self.db.query(OPDVisit).filter(
+                        OPDVisit.patient_id == payload.patient_id,
+                        OPDVisit.consulting_doctor_user_id == payload.doctor_user_id,
+                        OPDVisit.status.in_(['completed', 'waiting', 'in_consultation', 'billed', 'prescribed']),
+                    ).order_by(OPDVisit.visit_date.desc()).first()
+                    if last_visit:
+                        days_since_last_visit = (payload.visit_date - last_visit.visit_date).days
+                        if days_since_last_visit > doctor.opd_follow_up_days:
+                            raise AppException(400, "follow_up_not_allowed", f"Follow-up not allowed. Last visit was {days_since_last_visit} days ago, but follow-up period is {doctor.opd_follow_up_days} days.")
+                    else:
+                        raise AppException(400, "no_previous_visit", "No previous visit found for follow-up.")
+                    consultation_fee = doctor.opd_follow_up_fee
+                else:
+                    consultation_fee = doctor.opd_consultation_fee
+
         visit_number = f"OPD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
         consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
         visit = OPDVisit(
-            **payload.model_dump(exclude={"doctor_user_id"}),
+            **payload.model_dump(exclude={"doctor_user_id", "consultation_fee"}),
             visit_number=visit_number,
             branch_id=patient.branch_id or actor.branch_id,
             consulting_doctor_user_id=consulting_doctor.id if consulting_doctor else None,
+            consultation_fee=consultation_fee,
+            consultation_total=self._money(consultation_fee),
             registered_by_user_id=actor.id,
             created_by=actor.id,
             updated_by=actor.id,
@@ -74,19 +106,68 @@ class OPDService:
             module="opd",
             entity_type="opd_visit",
             entity_id=str(visit.id),
-            detail={"visit_number": visit.visit_number, "patient_id": str(visit.patient_id)},
+            detail={"visit_number": visit.visit_number, "patient_id": str(visit.patient_id), "visit_type": payload.visit_type.value},
             context=context,
         )
         self.db.commit()
         self.db.refresh(visit)
         return self.repository.get_visit(visit.id) or visit
 
+    def update_visit(self, visit_id, payload: OPDVisitUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.get_visit(visit_id, actor)
+        consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
+        visit.visit_date = payload.visit_date
+        visit.department_name = payload.department_name
+        visit.consulting_doctor_user_id = consulting_doctor.id if consulting_doctor else None
+        visit.consulting_doctor_name = payload.consulting_doctor_name
+        visit.chief_complaint = payload.chief_complaint
+        visit.consultation_fee = payload.consultation_fee
+        visit.consultation_total = self._money(max(payload.consultation_fee - (visit.consultation_discount or Decimal("0")), Decimal("0")))
+        visit.note = payload.note
+        visit.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.OPD_VISIT_STATUS_UPDATE,
+            module="opd",
+            entity_type="opd_visit",
+            entity_id=str(visit.id),
+            detail={"visit_number": visit.visit_number, "visit_updated": True},
+            context=context,
+        )
+        self.db.commit()
+        self.db.refresh(visit)
+        return visit
+
+    def update_payment(self, visit_id, payload: OPDVisitPaymentUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.get_visit(visit_id, actor)
+        visit.consultation_fee = self._money(payload.amount)
+        visit.consultation_discount = self._money(payload.discount)
+        visit.consultation_total = self._money(payload.amount - payload.discount)
+        visit.consultation_payment_status = "paid"
+        visit.consultation_paid_at = datetime.now(UTC)
+        if visit.status in {"waiting", "in_consultation", "prescribed"}:
+            visit.status = "billed"
+        visit.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.BILLING_PAYMENT_CREATE,
+            module="opd",
+            entity_type="opd_visit",
+            entity_id=str(visit.id),
+            detail={
+                "visit_number": visit.visit_number,
+                "amount": str(visit.consultation_fee),
+                "discount": str(visit.consultation_discount),
+                "total": str(visit.consultation_total),
+            },
+            context=context,
+        )
+        self.db.commit()
+        self.db.refresh(visit)
+        return visit
+
     def update_status(self, visit_id, status: str, actor: User, context: dict[str, str | None]) -> OPDVisit:
-        visit = self.repository.get_visit(visit_id)
-        if not visit:
-            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
-        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
-            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+        visit = self.get_visit(visit_id, actor)
         visit.status = status
         visit.updated_by = actor.id
         AuditService(self.db).log(
@@ -121,11 +202,7 @@ class OPDService:
         return visit
 
     def create_order(self, visit_id, payload: OPDVisitOrderCreate, actor: User, context: dict[str, str | None]) -> OPDVisit:
-        visit = self.repository.get_visit(visit_id)
-        if not visit:
-            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
-        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
-            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+        visit = self.get_visit(visit_id, actor)
 
         order = OPDVisitOrder(
             visit_id=visit.id,
@@ -147,11 +224,7 @@ class OPDService:
         return self.repository.get_visit(visit.id) or visit
 
     def update_order(self, visit_id, order_id, payload: OPDVisitOrderUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
-        visit = self.repository.get_visit(visit_id)
-        if not visit:
-            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
-        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
-            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+        visit = self.get_visit(visit_id, actor)
 
         order = self.repository.get_order(order_id)
         if not order or order.visit_id != visit.id:
@@ -181,13 +254,9 @@ class OPDService:
         return self.repository.get_visit(visit.id) or visit
 
     def convert_to_ipd(self, visit_id, payload: OPDConvertToIPD, actor: User, context: dict[str, str | None]):
-        visit = self.repository.get_visit(visit_id)
-        if not visit:
-            raise AppException(404, "opd_visit_not_found", "OPD visit not found")
+        visit = self.get_visit(visit_id, actor)
         if visit.converted_ipd_admission_id:
             raise AppException(409, "opd_already_converted", "OPD visit already converted to IPD")
-        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
-            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
 
         ipd_payload = IPDAdmissionCreate(
             patient_id=visit.patient_id,
@@ -228,3 +297,42 @@ class OPDService:
         if not any(role.is_doctor_role for role in doctor.roles):
             raise AppException(400, "invalid_doctor_user", "Selected user is not configured as a doctor")
         return doctor
+
+    def _validate_visit_access(self, visit: OPDVisit, actor: User) -> OPDVisit:
+        if actor.branch_id and visit.branch_id and actor.branch_id != visit.branch_id:
+            raise AppException(403, "forbidden", "OPD visit belongs to a different branch")
+
+        if self._can_view_all_doctors(actor):
+            return visit
+
+        if self._is_doctor(actor) and visit.consulting_doctor_user_id == actor.id:
+            return visit
+
+        raise AppException(403, "forbidden", "You do not have access to this OPD visit")
+
+    def _resolve_doctor_scope(self, actor: User, doctor_user_id):
+        if doctor_user_id:
+            doctor = self._get_doctor(doctor_user_id, actor)
+            if self._can_view_all_doctors(actor):
+                return doctor.id
+            if self._is_doctor(actor) and doctor.id == actor.id:
+                return actor.id
+            raise AppException(403, "forbidden", "You do not have access to another doctor's OPD queue")
+
+        if self._can_view_all_doctors(actor):
+            return None
+
+        if self._is_doctor(actor):
+            return actor.id
+
+        raise AppException(403, "forbidden", "Doctor-wise OPD access must be granted from administration")
+
+    def _can_view_all_doctors(self, actor: User) -> bool:
+        return self.DOCTOR_WISE_VIEW_PERMISSION in self.auth.get_effective_permissions(actor)
+
+    @staticmethod
+    def _is_doctor(actor: User) -> bool:
+        return any(role.is_doctor_role for role in actor.roles)
+
+    def _money(self, value: Decimal) -> Decimal:
+        return value.quantize(self.TWOPLACES)

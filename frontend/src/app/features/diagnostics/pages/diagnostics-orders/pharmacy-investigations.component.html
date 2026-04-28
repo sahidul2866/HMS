@@ -1,0 +1,210 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Diagnostics Intake</div>
+        <h1 class="page-title">Investigation</h1>
+        <div class="page-subtitle">Manage laboratory and radiology investigation orders with patient, billing, room, and report context.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openCreate()">New Order</button>
+      </div>
+      <div class="hero-summary">
+        <div class="hero-stat">
+          <div class="label">Orders</div>
+          <div class="value">{{ total }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Draft Tests</div>
+          <div class="value">{{ selectedItemCount }}</div>
+        </div>
+        <div class="hero-stat">
+          <div class="label">Net Total</div>
+          <div class="value">{{ netTotal | number:'1.2-2' }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="layout-shell">
+    <section class="page-card investigation-ledger">
+      <div class="filter-grid">
+        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search number, code, customer, test" />
+        <select [(ngModel)]="customerFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All customers</option>
+          @for (item of customers; track item.id) {
+            <option [value]="item.id">{{ item.name }}</option>
+          }
+        </select>
+        <select [(ngModel)]="statusFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All statuses</option>
+          <option value="ordered">Ordered</option>
+          <option value="collected">Collected</option>
+          <option value="processing">Processing</option>
+          <option value="completed">Completed</option>
+          <option value="verified">Verified</option>
+        </select>
+        <select [(ngModel)]="serviceAreaFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All service areas</option>
+          <option value="laboratory">Laboratory</option>
+          <option value="radiology">Radiology</option>
+        </select>
+        <input [(ngModel)]="dateFrom" [ngModelOptions]="{ standalone: true }" type="date" />
+        <input [(ngModel)]="dateTo" [ngModelOptions]="{ standalone: true }" type="date" />
+        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+      </div>
+
+      <div class="status-strip">
+        <div class="status-chip">
+          <strong>{{ total }}</strong>
+          <span>Total orders</span>
+        </div>
+        <div class="status-chip">
+          <strong>{{ statusFilter || 'all' }}</strong>
+          <span>Status filter</span>
+        </div>
+        <div class="status-chip">
+          <strong>{{ serviceAreaFilter || 'all' }}</strong>
+          <span>Service area</span>
+        </div>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Tests</th>
+            <th>Customer/Patient</th>
+            <th>Status</th>
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of investigations; track item.id) {
+            <tr>
+              <td><strong>{{ item.investigation_number }}</strong><div class="muted-line">{{ item.ordered_at }}</div></td>
+              <td>{{ item.setting_name || 'Investigation order' }}<div class="muted-line">{{ item.test_count }} test(s) · {{ item.service_area || '-' }}</div></td>
+              <td>{{ patientOrCustomerLabel(item) }}<div class="muted-line">{{ item.patient_number || 'No patient code' }}</div></td>
+              <td><span class="pill">{{ item.status }}</span></td>
+              <td>{{ item.total_amount }}</td>
+              <td class="action-cell">
+                <button class="secondary-btn" type="button" (click)="selectInvestigation(item)">Edit</button>
+                <button class="danger-btn" type="button" (click)="remove(item)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+
+      @if (selectedInvestigation) {
+        <div class="result-panel">
+          <div class="result-panel__head">
+            <div>
+              <h3>{{ selectedInvestigation.investigation_number }}</h3>
+              <div class="muted-line">{{ patientOrCustomerLabel(selectedInvestigation) }} · {{ selectedInvestigation.test_count }} tests</div>
+            </div>
+            <span class="pill">{{ selectedInvestigation.status }}</span>
+          </div>
+          <div class="detail-stack">
+          @for (item of selectedInvestigation.items; track item.id) {
+            <article class="detail-card">
+              <strong>{{ item.test_name }}</strong>
+              <span>{{ item.setting_code }} · {{ item.category_name }} · {{ item.status }}</span>
+              <span>Range {{ item.normal_range || 'N/A' }} {{ item.unit || '' }}</span>
+              <span>{{ item.result_text || 'No result entered' }}</span>
+            </article>
+          }
+          </div>
+        </div>
+      }
+    </section>
+  </div>
+
+  @if (editorOpen) {
+    <div class="modal-backdrop" (click)="closeEditor()">
+      <section class="modal-card investigation-editor-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Diagnostics Order</p>
+            <h3>{{ selectedInvestigation ? 'Edit Investigation Order' : 'Create Investigation Order' }}</h3>
+            <p class="page-subtitle">Create one order with multiple lab/radiology tests and update per-test result status.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditor()">×</button>
+        </div>
+
+        @if (draftMessage) {
+          <div class="billing-prefill-banner" style="margin-bottom:1rem;">
+            <div><strong>Linked OPD Draft</strong></div>
+            <div class="page-subtitle">{{ draftMessage }}</div>
+          </div>
+        }
+
+        <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field"><span>Customer</span><select formControlName="customer_id"><option value="">Optional customer</option>@for (item of customers; track item.id) {<option [value]="item.id">{{ item.customer_number }} · {{ item.name }}</option>}</select></label>
+          <label class="field"><span>Patient</span><select formControlName="patient_id"><option value="">Optional patient</option>@for (item of patients; track item.id) {<option [value]="item.id">{{ item.patient_number }} · {{ item.first_name }} {{ item.last_name }}</option>}</select></label>
+          <label class="field"><span>Ordered At</span><input type="date" formControlName="ordered_at" /></label>
+          <label class="field"><span>Status</span><select formControlName="status"><option value="ordered">Ordered</option><option value="collected">Collected</option><option value="processing">Processing</option><option value="completed">Completed</option><option value="verified">Verified</option></select></label>
+          <label class="field"><span>Discount Amount</span><input type="number" min="0" step="0.01" formControlName="discount_amount" /></label>
+          <label class="field"><span>Report Title</span><input type="text" formControlName="report_title" /></label>
+          <label class="field field--wide"><span>Printable Schema</span><textarea rows="2" formControlName="printable_schema" placeholder="Reserved for future printable report JSON/layout metadata"></textarea></label>
+          <label class="field field--wide"><span>Report Note</span><textarea rows="2" formControlName="report_note"></textarea></label>
+          <label class="field field--wide"><span>Report Footer Note</span><textarea rows="2" formControlName="report_footer_note"></textarea></label>
+          <label class="field field--wide"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+
+          <div class="line-items field--wide" formArrayName="items">
+            <div class="line-items__head">
+              <h3>Selected Tests</h3>
+              <button class="secondary-btn" type="button" (click)="addItem()">Add Test</button>
+            </div>
+            @for (group of items.controls; track $index; let index = $index) {
+              <div class="line-item-card" [formGroupName]="index">
+                <div class="line-item-card__head">
+                  <strong>Test {{ index + 1 }}</strong>
+                  <button class="danger-btn" type="button" (click)="removeItem(index)">Remove</button>
+                </div>
+                <div class="line-item">
+                  <select formControlName="setting_id" (change)="onSettingChanged(index)">
+                    <option value="">Select test</option>
+                    @for (item of settings; track item.id) {
+                      <option [value]="item.id">{{ item.code }} · {{ item.test_name }} · {{ item.category_name }}</option>
+                    }
+                  </select>
+                  <select formControlName="status">
+                    <option value="ordered">Ordered</option>
+                    <option value="collected">Collected</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="verified">Verified</option>
+                  </select>
+                  <input type="number" min="0" step="0.01" formControlName="fee" placeholder="Fee" />
+                </div>
+                <div class="line-item line-item--detail">
+                  <textarea rows="2" formControlName="result_text" placeholder="Result entry"></textarea>
+                  <textarea rows="2" formControlName="note" placeholder="Technician note"></textarea>
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="sale-summary field--wide">
+            <div><span>Tests</span><strong>{{ items.length }}</strong></div>
+            <div><span>Subtotal</span><strong>{{ subtotal | number:'1.2-2' }}</strong></div>
+            <div><span>Net Total</span><strong>{{ netTotal | number:'1.2-2' }}</strong></div>
+          </div>
+
+          <div class="toolbar-row field--wide">
+            <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
+            <button class="primary-btn" type="submit">{{ selectedInvestigation ? 'Update Investigation Order' : 'Save Investigation Order' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</section>

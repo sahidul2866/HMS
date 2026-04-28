@@ -1,10 +1,10 @@
-<section class="workspace-shell">
-  <div class="page-card module-hero">
+<section class="workspace-shell ipd-dashboard">
+  <div class="page-card module-hero ipd-hero">
     <div class="hero-row">
       <div>
         <div class="hero-kicker">IPD Module</div>
         <h1 class="page-title">IPD Control Room</h1>
-        <div class="page-subtitle">Keep admissions separate from the live inpatient workspace so transfers, discharge, and billing handoff stay clean and focused.</div>
+        <div class="page-subtitle">Monitor bed occupancy, current admissions, transfers, discharge readiness, and billing handoff from one inpatient operations board.</div>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
@@ -21,144 +21,233 @@
     }
   </div>
 
-  <section class="page-card">
-    <h2 class="section-title">Bed Master</h2>
-    <form class="form-grid" [formGroup]="bedForm" (ngSubmit)="submitBed()">
-      <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
-      <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
-      <label class="field"><span>Bed Type</span><input type="text" formControlName="bed_type" /></label>
-      <label class="field"><span>Daily Rate</span><input type="number" formControlName="daily_rate" /></label>
-      <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
-      <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Add Bed</button></div>
-    </form>
-    <table class="table" style="margin-top:1rem;">
-      <thead>
-        <tr>
-          <th>Ward</th>
-          <th>Bed</th>
-          <th>Type</th>
-          <th>Rate</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (bed of beds; track bed.id) {
-          <tr>
-            <td>{{ bed.ward_name }}</td>
-            <td>{{ bed.bed_number }}</td>
-            <td>{{ bed.bed_type }}</td>
-            <td>{{ bed.daily_rate }}</td>
-            <td><span class="pill">{{ bed.status }}</span></td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </section>
-
-  <section class="page-card">
-    <h2 class="section-title">Current Admissions</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Admission No</th>
-          <th>Patient</th>
-          <th>Ward/Bed</th>
-          <th>Doctor</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (admission of admissions; track admission.id) {
-          <tr>
-            <td>{{ admission.admission_number }}</td>
-            <td>{{ admission.patient.first_name }} {{ admission.patient.last_name }}</td>
-            <td>{{ admission.ward_name }} / {{ admission.bed_number }}</td>
-            <td>{{ admission.attending_doctor_name }}</td>
-            <td><span class="pill">{{ admission.status }}</span></td>
-            <td>
-              <button class="secondary-btn" type="button" (click)="selectAdmission(admission)">Open</button>
-              <button class="secondary-btn" type="button" (click)="openBillingForAdmission(admission)">Billing</button>
-              @if (admission.status !== 'discharged') {
-                <button class="danger-btn" type="button" (click)="selectAdmission(admission)">Discharge</button>
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </section>
-
-  @if (selectedAdmission) {
-    <section class="page-card">
-      <div class="section-header">
+  <section class="analytics-grid">
+    <div class="page-card analytics-card analytics-card--wide">
+      <div class="section-header analytics-card__header">
         <div>
-          <h2 class="section-title">Admission Control For {{ selectedAdmission.admission_number }}</h2>
-          <div class="section-copy">{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }} · {{ selectedAdmission.attending_doctor_name }}</div>
+          <div class="hero-kicker">Capacity View</div>
+          <h2 class="section-title">Bed Occupancy</h2>
+          <div class="section-copy">{{ occupiedBeds.length }} of {{ beds.length }} beds currently occupied.</div>
         </div>
+        <div class="occupancy-pill">{{ bedOccupancyPercent }}%</div>
       </div>
+      <div class="occupancy-track">
+        <span [style.width.%]="bedOccupancyPercent"></span>
+      </div>
+      <div class="capacity-grid">
+        <article class="capacity-card">
+          <span>Available Beds</span>
+          <strong>{{ availableBeds.length }}</strong>
+        </article>
+        <article class="capacity-card">
+          <span>Occupied Beds</span>
+          <strong>{{ occupiedBeds.length }}</strong>
+        </article>
+        <article class="capacity-card">
+          <span>Active Admissions</span>
+          <strong>{{ activeAdmissions.length }}</strong>
+        </article>
+        <article class="capacity-card">
+          <span>Discharged Cases</span>
+          <strong>{{ dischargedAdmissions.length }}</strong>
+        </article>
+      </div>
+    </div>
 
-      @if (selectedAdmission.status !== 'discharged') {
-        <form class="form-grid" [formGroup]="transferForm" (ngSubmit)="transferAdmission()">
-          <label class="field">
-            <span>Transfer Bed</span>
-            <select formControlName="bed_id" (change)="onTransferBedChanged()">
-              <option value="">Manual ward / bed transfer</option>
-              @for (bed of availableBeds; track bed.id) {
-                <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} - {{ bed.bed_type }}</option>
-              }
-            </select>
-          </label>
-          <label class="field"><span>To Ward</span><input type="text" formControlName="ward_name" /></label>
-          <label class="field"><span>To Bed</span><input type="text" formControlName="bed_number" /></label>
-          <label class="field" style="grid-column:1/-1;"><span>Transfer Note</span><textarea rows="2" formControlName="note"></textarea></label>
-          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Transfer Admission</button></div>
-        </form>
-
-        <form class="form-grid" [formGroup]="dischargeForm" (ngSubmit)="discharge(selectedAdmission)" style="margin-top:1rem;">
-          <label class="field"><span>Discharge Condition</span><input type="text" formControlName="discharge_condition" /></label>
-          <label class="field"><span>Discharge Diagnosis</span><input type="text" formControlName="discharge_diagnosis" /></label>
-          <label class="field" style="grid-column:1/-1;"><span>Discharge Summary</span><textarea rows="3" formControlName="discharge_summary"></textarea></label>
-          <label class="field" style="grid-column:1/-1;"><span>Discharge Note</span><textarea rows="2" formControlName="discharge_note"></textarea></label>
-          <div style="grid-column:1/-1; display:flex; gap:0.75rem; flex-wrap:wrap;">
-            <button class="danger-btn" type="submit">Finalize Discharge</button>
-            <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission)">Send To Billing</button>
-          </div>
-        </form>
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Ward Mix</div>
+      <h2 class="section-title">Active By Ward</h2>
+      @if (admissionsByWard.length) {
+        <div class="chart-stack">
+          @for (item of admissionsByWard; track item.ward) {
+            <div class="metric-row">
+              <div class="metric-row__copy">
+                <strong>{{ item.ward }}</strong>
+                <span>{{ item.count }} active admissions</span>
+              </div>
+              <div class="metric-row__value">{{ item.count }}</div>
+              <div class="metric-bar"><span class="metric-bar__fill" [style.width]="item.width"></span></div>
+            </div>
+          }
+        </div>
       } @else {
-        <div class="page-card" style="margin-top:1rem; padding:1rem;">
-          <div><strong>Condition:</strong> {{ selectedAdmission.discharge_condition || '-' }}</div>
-          <div><strong>Diagnosis:</strong> {{ selectedAdmission.discharge_diagnosis || '-' }}</div>
-          <div><strong>Summary:</strong> {{ selectedAdmission.discharge_summary || '-' }}</div>
-          <div><strong>Note:</strong> {{ selectedAdmission.discharge_note || '-' }}</div>
-          <div style="margin-top:0.75rem;">
-            <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission)">Open Billing Handoff</button>
+        <div class="empty-state">Ward allocation will appear once active admissions exist.</div>
+      }
+    </div>
+  </section>
+
+  <section class="dashboard-layout">
+    <div class="main-stack">
+      <section class="page-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Bed Master</h2>
+            <div class="section-copy">Create and monitor bed inventory without leaving the live control room.</div>
           </div>
         </div>
-      }
 
-      <table class="table" style="margin-top:1rem;">
-        <thead>
-          <tr>
-            <th>Movement</th>
-            <th>Time</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (movement of selectedAdmission.movements; track movement.id) {
-            <tr>
-              <td><span class="pill">{{ movement.movement_type }}</span></td>
-              <td>{{ movement.moved_at | date:'medium' }}</td>
-              <td>{{ movement.from_ward_name || '-' }}{{ movement.from_bed_number ? ' / ' + movement.from_bed_number : '' }}</td>
-              <td>{{ movement.to_ward_name || '-' }}{{ movement.to_bed_number ? ' / ' + movement.to_bed_number : '' }}</td>
-              <td>{{ movement.note || '-' }}</td>
-            </tr>
+        <form class="form-grid" [formGroup]="bedForm" (ngSubmit)="submitBed()">
+          <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
+          <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
+          <label class="field"><span>Bed Type</span><input type="text" formControlName="bed_type" /></label>
+          <label class="field"><span>Daily Rate</span><input type="number" formControlName="daily_rate" /></label>
+          <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+          <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Add Bed</button></div>
+        </form>
+
+        <div class="bed-grid">
+          @for (bed of beds; track bed.id) {
+            <article class="bed-card" [class.bed-card--occupied]="bed.status === 'occupied'">
+              <div class="bed-card__head">
+                <strong>{{ bed.ward_name }} / {{ bed.bed_number }}</strong>
+                <span class="pill">{{ bed.status }}</span>
+              </div>
+              <div class="bed-card__meta">{{ bed.bed_type }} · Daily {{ bed.daily_rate }}</div>
+              <div class="bed-card__note">{{ bed.note || 'No note' }}</div>
+            </article>
           }
-        </tbody>
-      </table>
-    </section>
-  }
+        </div>
+      </section>
+
+      <section class="page-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Admissions Board</h2>
+            <div class="section-copy">Open a case to transfer beds, discharge, or pass the patient to billing.</div>
+          </div>
+        </div>
+
+        <div class="admission-grid">
+          @for (admission of admissions; track admission.id) {
+            <article class="admission-card" [class.admission-card--active]="selectedAdmission?.id === admission.id">
+              <div class="admission-card__head">
+                <div>
+                  <div class="admission-card__number">{{ admission.admission_number }}</div>
+                  <strong>{{ admission.patient.first_name }} {{ admission.patient.last_name }}</strong>
+                </div>
+                <span class="pill">{{ admission.status }}</span>
+              </div>
+              <div class="admission-card__grid">
+                <div><span>Ward / Bed</span><strong>{{ admission.ward_name }} / {{ admission.bed_number }}</strong></div>
+                <div><span>Doctor</span><strong>{{ admission.attending_doctor_name }}</strong></div>
+                <div><span>Admitted</span><strong>{{ admission.admitted_at | date:'mediumDate' }}</strong></div>
+                <div><span>Advance</span><strong>{{ admission.advance_amount }}</strong></div>
+              </div>
+              <div class="admission-card__actions">
+                <button class="secondary-btn" type="button" (click)="selectAdmission(admission)">Open</button>
+                @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+                  <button class="secondary-btn" type="button" (click)="openBillingForAdmission(admission, 'interim')">Interim Bill</button>
+                }
+                @if (admission.status !== 'discharged') {
+                  <button class="danger-btn" type="button" (click)="selectAdmission(admission)">Discharge</button>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+    </div>
+
+    <aside class="control-stack">
+      <section class="page-card control-card">
+        <div class="section-eyebrow">Selected Case</div>
+        <h3>{{ selectedAdmission ? selectedAdmission.admission_number : 'No admission selected' }}</h3>
+        @if (selectedAdmission) {
+          <ul class="summary-list">
+            <li><span>Patient</span><strong>{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }}</strong></li>
+            <li><span>Doctor</span><strong>{{ selectedAdmission.attending_doctor_name }}</strong></li>
+            <li><span>Ward / Bed</span><strong>{{ selectedAdmission.ward_name }} / {{ selectedAdmission.bed_number }}</strong></li>
+            <li><span>Status</span><strong>{{ selectedAdmission.status }}</strong></li>
+          </ul>
+        } @else {
+          <div class="empty-state">Choose an admission card to open transfer and discharge controls.</div>
+        }
+      </section>
+
+      @if (selectedAdmission) {
+        <section class="page-card control-card">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Admission Control</h2>
+              <div class="section-copy">{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }} · {{ selectedAdmission.attending_doctor_name }}</div>
+            </div>
+          </div>
+
+          @if (selectedAdmission.status !== 'discharged') {
+            <div class="control-block">
+              <div class="control-block__title">Transfer Admission</div>
+              <form class="form-grid" [formGroup]="transferForm" (ngSubmit)="transferAdmission()">
+                <label class="field">
+                  <span>Transfer Bed</span>
+                  <select formControlName="bed_id" (change)="onTransferBedChanged()">
+                    <option value="">Manual ward / bed transfer</option>
+                    @for (bed of availableBeds; track bed.id) {
+                      <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} - {{ bed.bed_type }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="field"><span>To Ward</span><input type="text" formControlName="ward_name" /></label>
+                <label class="field"><span>To Bed</span><input type="text" formControlName="bed_number" /></label>
+                <label class="field" style="grid-column:1/-1;"><span>Transfer Note</span><textarea rows="2" formControlName="note"></textarea></label>
+                <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Transfer Admission</button></div>
+              </form>
+            </div>
+
+            <div class="control-block">
+              <div class="control-block__title">Finalize Discharge</div>
+              <form class="form-grid" [formGroup]="dischargeForm" (ngSubmit)="discharge(selectedAdmission)">
+                <label class="field"><span>Discharge Condition</span><input type="text" formControlName="discharge_condition" /></label>
+                <label class="field"><span>Discharge Diagnosis</span><input type="text" formControlName="discharge_diagnosis" /></label>
+                <label class="field" style="grid-column:1/-1;"><span>Discharge Summary</span><textarea rows="3" formControlName="discharge_summary"></textarea></label>
+                <label class="field" style="grid-column:1/-1;"><span>Discharge Note</span><textarea rows="2" formControlName="discharge_note"></textarea></label>
+                <div class="control-actions" style="grid-column:1/-1;">
+                  <button class="danger-btn" type="submit">Finalize Discharge</button>
+                  @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+                    <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Final Bill</button>
+                  }
+                </div>
+              </form>
+            </div>
+          } @else {
+            <div class="discharge-summary">
+              <div><strong>Condition:</strong> {{ selectedAdmission.discharge_condition || '-' }}</div>
+              <div><strong>Diagnosis:</strong> {{ selectedAdmission.discharge_diagnosis || '-' }}</div>
+              <div><strong>Summary:</strong> {{ selectedAdmission.discharge_summary || '-' }}</div>
+              <div><strong>Note:</strong> {{ selectedAdmission.discharge_note || '-' }}</div>
+              <div class="control-actions">
+                @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+                  <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Open Final Billing</button>
+                }
+              </div>
+            </div>
+          }
+        </section>
+
+        <section class="page-card control-card">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Movement Timeline</h2>
+              <div class="section-copy">Track every transfer and workflow change for the selected admission.</div>
+            </div>
+          </div>
+          <div class="movement-list">
+            @for (movement of selectedAdmission.movements; track movement.id) {
+              <article class="movement-card">
+                <div class="movement-card__head">
+                  <span class="pill">{{ movement.movement_type }}</span>
+                  <strong>{{ movement.moved_at | date:'medium' }}</strong>
+                </div>
+                <div class="movement-card__route">
+                  <span>{{ movement.from_ward_name || '-' }}{{ movement.from_bed_number ? ' / ' + movement.from_bed_number : '' }}</span>
+                  <strong>to</strong>
+                  <span>{{ movement.to_ward_name || '-' }}{{ movement.to_bed_number ? ' / ' + movement.to_bed_number : '' }}</span>
+                </div>
+                <div class="movement-card__note">{{ movement.note || 'No note' }}</div>
+              </article>
+            }
+          </div>
+        </section>
+      }
+    </aside>
+  </section>
 </section>

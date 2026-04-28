@@ -1,0 +1,133 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-main">
+      <div>
+        <div class="hero-kicker">Pharmacy Settings</div>
+        <h1 class="page-title">Pharmacy Configuration Desk</h1>
+        <p class="page-subtitle">Manage medicine master data, suppliers, and pharmacy customer records from one settings list.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openEditor(configs[0])">Configure</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="page-card settings-page">
+    <div class="settings-head">
+      <div>
+        <h2 class="section-title">Configurable Items</h2>
+        <p class="page-subtitle">Open each item in a focused popup editor, matching OPD and Billing settings.</p>
+      </div>
+    </div>
+
+    <div class="table-shell">
+      <table class="settings-table">
+        <thead>
+          <tr>
+            <th>Setting Item</th>
+            <th>Description</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (config of configs; track config.key) {
+            <tr>
+              <td><strong>{{ config.label }}</strong></td>
+              <td>{{ config.description }}</td>
+              <td><button class="secondary-btn" type="button" (click)="openEditor(config)">Configure</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  @if (editorOpen && activeConfig) {
+    <div class="modal-backdrop" (click)="closeEditor()">
+      <section class="modal-card pharmacy-editor-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Pharmacy Configuration</p>
+            <h3>{{ activeConfig.label }}</h3>
+            <p class="page-subtitle">{{ activeConfig.description }}</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditor()">×</button>
+        </div>
+
+        <form class="editor-form" [formGroup]="form" (ngSubmit)="submit()">
+          <section class="editor-section">
+            <div class="editor-section__head">
+              <div>
+                <p class="section-kicker">{{ editingId ? 'Edit' : 'Create' }}</p>
+                <h4>{{ editingId ? 'Update Record' : 'New Record' }}</h4>
+              </div>
+            </div>
+
+            <div class="editor-grid">
+              @for (field of activeConfig.fields; track field.key) {
+                <label class="field" [class.field--wide]="field.type === 'textarea'">
+                  <span>{{ field.label }}</span>
+                  @if (field.type === 'textarea') {
+                    <textarea rows="3" [formControlName]="field.key"></textarea>
+                  } @else {
+                    <input [type]="field.type" [formControlName]="field.key" />
+                  }
+                </label>
+              }
+            </div>
+
+            <div class="editor-actions">
+              @if (editingId) {
+                <button class="secondary-btn" type="button" (click)="resetForm()">Cancel Edit</button>
+              }
+              <button class="primary-btn" type="submit" [disabled]="saving || form.invalid">{{ saving ? 'Saving...' : (editingId ? 'Update' : 'Save') }}</button>
+            </div>
+          </section>
+        </form>
+
+        <section class="editor-section">
+          <div class="editor-section__head">
+            <div>
+              <p class="section-kicker">Records</p>
+              <h4>Existing Configuration</h4>
+            </div>
+            <div class="toolbar-row toolbar-row--search">
+              <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" [placeholder]="activeConfig.searchPlaceholder" />
+              <button class="secondary-btn" type="button" (click)="searchNow()">Search</button>
+            </div>
+          </div>
+
+          <table class="settings-table">
+            <thead>
+              <tr>
+                @for (column of activeConfig.columns; track column.key) {
+                  <th>{{ column.label }}</th>
+                }
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows; track row.id) {
+                <tr>
+                  @for (column of activeConfig.columns; track column.key) {
+                    <td>{{ displayCell(row, column.key) }}</td>
+                  }
+                  <td class="action-cell">
+                    <button class="secondary-btn" type="button" (click)="startEdit(row)">Edit</button>
+                    <button class="danger-btn" type="button" (click)="deleteRow(row)">Delete</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          <div class="pager-row">
+            <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+            <span>Page {{ page }} of {{ totalPages }}</span>
+            <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+          </div>
+        </section>
+      </section>
+    </div>
+  }
+</section>

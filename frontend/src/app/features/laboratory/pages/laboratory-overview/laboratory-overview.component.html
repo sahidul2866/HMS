@@ -31,6 +31,16 @@
 
       <div class="queue-toolbar">
         <input type="text" [(ngModel)]="queueSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search visit, patient, doctor, test, diagnosis" />
+        <div class="sort-controls">
+          <select [(ngModel)]="sortField" [ngModelOptions]="{ standalone: true }" aria-label="Sort laboratory queue">
+            <option value="visit_date">Date</option>
+            <option value="patient_name">Patient</option>
+            <option value="item_name">Test</option>
+            <option value="status">Status</option>
+            <option value="room_number">Room</option>
+          </select>
+          <button class="secondary-btn" type="button" (click)="toggleSortDirection()">{{ sortDirection === 'asc' ? 'Asc' : 'Desc' }}</button>
+        </div>
         <div class="pill-row">
           <span class="pill">Orders {{ worklist.length }}</span>
           @if (summary) {
@@ -39,21 +49,27 @@
         </div>
       </div>
 
-      @if (filteredWorklist.length) {
+      @if (sortedWorklist.length) {
         <div class="worklist-stack">
-          @for (item of filteredWorklist; track item.order_id) {
-            <div class="work-item-card">
+          @for (item of sortedWorklist; track item.order_id) {
+            <div class="work-item-card" [ngClass]="statusClass(item)">
               <div class="work-item-head">
                 <div>
                   <strong>{{ item.item_name }}</strong>
                   <div class="page-subtitle">{{ item.visit_number }} · {{ item.patient_number }} · {{ item.patient_name }}</div>
                 </div>
-                <button class="secondary-btn" type="button" (click)="openWorkbench(item)">Open Workbench</button>
+                <div class="card-actions">
+                  <button class="secondary-btn" type="button" (click)="printSticker(item)">Sticker</button>
+                  <button class="secondary-btn" type="button" (click)="openWorkbench(item)">Open Workbench</button>
+                </div>
               </div>
               <div class="pill-row">
                 <span class="pill">{{ item.status }}</span>
                 <span class="pill">{{ item.visit_date | date:'mediumDate' }}</span>
                 <span class="pill">{{ item.consulting_doctor_name }}</span>
+                @if (item.room_number) {
+                  <span class="pill">Room {{ item.room_number }}</span>
+                }
               </div>
               <div class="work-copy">
                 Complaint: {{ item.chief_complaint || 'Not recorded' }}<br />

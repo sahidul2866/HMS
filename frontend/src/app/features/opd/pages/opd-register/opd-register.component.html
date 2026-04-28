@@ -1,90 +1,335 @@
-<section class="workspace-shell">
-  <div class="page-card module-hero">
-    <div class="hero-row">
+<section class="workspace-shell opd-entry-page">
+  <div class="page-card module-hero opd-hero">
+    <div class="hero-main">
       <div>
-        <div class="hero-kicker">OPD Registration</div>
         <h1 class="page-title">Register Outpatient Visit</h1>
-        <div class="page-subtitle">Keep registration separate from the consultation queue so front-desk staff can work faster with less visual noise.</div>
       </div>
-      <div class="toolbar-row">
+      <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="backToQueue()">Back To Queue</button>
       </div>
     </div>
   </div>
 
-  <section class="page-card">
-    <div class="section-header">
-      <div>
-        <h2 class="section-title">Patient And Visit Details</h2>
-        <div class="section-copy">Use existing-patient autofill first, then complete only the visit-specific details.</div>
-      </div>
-    </div>
-
-    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="field" style="grid-column:1/-1;">
-        <span>Existing Patient Lookup</span>
-        <div class="toolbar-row" style="align-items:flex-start; gap:0.75rem; flex-wrap:wrap;">
-          <input
-            [formControl]="patientLookupControl"
-            type="text"
-            placeholder="Search by patient number, phone, email, or name"
-            style="flex:1 1 320px;"
-          />
-          <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
-          @if (selectedPatient) {
-            <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
-          }
+  <div class="entry-layout">
+    <section class="page-card entry-card">
+      <div class="section-intro">
+        <div>
+          <h2 class="section-title">Patient Search</h2>
         </div>
-        @if (patientSearchResults.length) {
-          <div class="page-card" style="padding:0.75rem;">
-            <div class="page-subtitle" style="margin-bottom:0.75rem;">Matching patients</div>
-            <div class="grid-2">
-              @for (patient of patientSearchResults; track patient.id) {
-                <button class="secondary-btn" type="button" (click)="applyPatient(patient)" style="text-align:left;">
-                  {{ patient.patient_number }} - {{ patient.full_name }}
-                  @if (patient.phone) { · {{ patient.phone }} }
-                </button>
-              }
-            </div>
-          </div>
-        }
         @if (selectedPatient) {
-          <div class="page-card" style="padding:0.85rem;">
-            <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
-            <div class="page-subtitle" style="margin:0.35rem 0 0;">
-              Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
-            </div>
+          <div class="selection-badge">
+            <strong>{{ selectedPatient.patient_number }}</strong>
+            <span>{{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</span>
           </div>
         }
       </div>
-      <label class="field">
-        <span>Patient</span>
-        <select formControlName="patient_id" (change)="onPatientChanged()">
-          <option value="">Select patient</option>
-          @for (patient of patients; track patient.id) {
-            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="lookup-banner">
+          <div class="search-stack">
+            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, patient ID, name, phone, mobile, or email" />
+            @if (showSearchContext('lookup')) {
+              <div class="inline-search-card">
+                @for (patient of patientSearchResults; track patient.id) {
+                  <button class="inline-result" type="button" (click)="applyPatient(patient)">
+                    <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                    <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+          <div class="lookup-actions">
+            @if (selectedPatient) {
+              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear Selection</button>
+            }
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <h3>Patient Information</h3>
+          </div>
+          @if (hasExistingPatientSelection) {
+            <div class="context-note">Existing patient selected.</div>
+          } @else {
+            <div class="context-note">Fill fields to create new patient.</div>
           }
-        </select>
-      </label>
-      <label class="field"><span>Visit Date</span><input type="date" formControlName="visit_date" /></label>
-      <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
-      <label class="field">
-        <span>Doctor Directory</span>
-        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
-          <option value="">Select from doctor directory</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ doctor.full_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field"><span>Consulting Doctor</span><input type="text" formControlName="consulting_doctor_name" /></label>
-      <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
-      <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="3" formControlName="chief_complaint"></textarea></label>
-      <label class="field" style="grid-column:1/-1;"><span>Front Desk Note</span><textarea rows="2" formControlName="note"></textarea></label>
-      <div style="grid-column:1/-1;">
-        <button class="primary-btn" type="submit">Register OPD Visit</button>
-      </div>
-    </form>
-  </section>
+          <div class="form-grid opd-grid compact-grid">
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.first_name, submitted)">
+              <div class="field-label-row">
+                <span>First Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.first_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.first_name)">{{ validation.fieldStateLabel(form.controls.first_name) }}</span>
+                </span>
+              </div>
+              <input type="text" formControlName="first_name" [readonly]="hasExistingPatientSelection" />
+              @if (validation.isInvalid(form.controls.first_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.first_name, 'First name') }}</div>
+              }
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.last_name, submitted)">
+              <div class="field-label-row">
+                <span>Last Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.last_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.last_name)">{{ validation.fieldStateLabel(form.controls.last_name) }}</span>
+                </span>
+              </div>
+              <input type="text" formControlName="last_name" [readonly]="hasExistingPatientSelection" />
+              @if (validation.isInvalid(form.controls.last_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.last_name, 'Last name') }}</div>
+              }
+            </label>
+            <label class="field field-search">
+              <div class="field-label-row">
+                <span>Mobile Number</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="phone" [readonly]="hasExistingPatientSelection" />
+              @if (showSearchContext('phone')) {
+                <div class="inline-search-card">
+                  @for (patient of patientSearchResults; track patient.id) {
+                    <button class="inline-result" type="button" (click)="applyPatient(patient)">
+                      <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                      <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </label>
+            <label class="field field-search" [class.field--invalid]="validation.isInvalid(form.controls.email, submitted)">
+              <div class="field-label-row">
+                <span>Email</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="email" formControlName="email" [readonly]="hasExistingPatientSelection" />
+              @if (showSearchContext('email')) {
+                <div class="inline-search-card">
+                  @for (patient of patientSearchResults; track patient.id) {
+                    <button class="inline-result" type="button" (click)="applyPatient(patient)">
+                      <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                      <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
+                    </button>
+                  }
+                </div>
+              }
+              @if (validation.isInvalid(form.controls.email, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.email, 'Email') }}</div>
+              }
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Gender</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <select formControlName="gender" [disabled]="hasExistingPatientSelection">
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Date Of Birth</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="date" formControlName="date_of_birth" [readonly]="hasExistingPatientSelection" />
+            </label>
+          </div>
+          <div class="form-grid opd-grid">
+            <label class="field field-wide">
+              <div class="field-label-row">
+                <span>Address</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <textarea rows="2" formControlName="address" [readonly]="hasExistingPatientSelection"></textarea>
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Emergency Contact Name</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="emergency_contact_name" [readonly]="hasExistingPatientSelection" />
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Emergency Contact Mobile</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <input type="text" formControlName="emergency_contact_phone" [readonly]="hasExistingPatientSelection" />
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+
+            <h3>Visit Setup</h3>
+          </div>
+          <div class="form-grid opd-grid">
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.visit_date, submitted)">
+              <div class="field-label-row">
+                <span>Visit Date</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.visit_date)" [class.field-badge--optional]="!validation.isRequired(form.controls.visit_date)">{{ validation.fieldStateLabel(form.controls.visit_date) }}</span>
+                </span>
+              </div>
+              <input type="date" formControlName="visit_date" />
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.department_name, submitted)">
+              <div class="field-label-row">
+                <span>Department</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.department_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.department_name)">{{ validation.fieldStateLabel(form.controls.department_name) }}</span>
+                </span>
+              </div>
+              <input type="text" formControlName="department_name" />
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <h3>Doctor Assignment</h3>
+          </div>
+          <div class="form-grid opd-grid">
+            <label class="field">
+              <div class="field-label-row">
+                <span>Doctor Directory</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
+                <option value="">Select from doctor directory</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.consulting_doctor_name, submitted)">
+              <div class="field-label-row">
+                <span>Consulting Doctor</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.consulting_doctor_name)" [class.field-badge--optional]="!validation.isRequired(form.controls.consulting_doctor_name)">{{ validation.fieldStateLabel(form.controls.consulting_doctor_name) }}</span>
+                </span>
+              </div>
+              <input type="text" formControlName="consulting_doctor_name" placeholder="Manual name if doctor is not in directory" />
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.consultation_fee, submitted)">
+              <div class="field-label-row">
+                <span>Consultation Fee</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.consultation_fee)" [class.field-badge--optional]="!validation.isRequired(form.controls.consultation_fee)">{{ validation.fieldStateLabel(form.controls.consultation_fee) }}</span>
+                </span>
+              </div>
+              <input type="number" min="0" step="0.01" formControlName="consultation_fee" />
+              @if (validation.isInvalid(form.controls.consultation_fee, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.consultation_fee, 'Consultation fee') }}</div>
+              }
+            </label>
+            <label class="field">
+              <div class="field-label-row">
+                <span>Visit Type</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--required">Required</span>
+                </span>
+              </div>
+              <select formControlName="visit_type" (change)="onVisitTypeChanged()">
+                <option value="new">New Visit</option>
+                <option [disabled]="!isFollowUpAllowed" value="follow_up">Follow-up Visit</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <h3>Visit Notes</h3>
+          </div>
+          <div class="form-grid opd-grid">
+            <label class="field field-wide">
+              <div class="field-label-row">
+                <span>Chief Complaint</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <textarea rows="3" formControlName="chief_complaint" placeholder="Primary complaint or reason for visit"></textarea>
+            </label>
+            <label class="field field-wide">
+              <div class="field-label-row">
+                <span>Front Desk Note</span>
+                <span class="field-label-meta">
+                  <span class="field-badge field-badge--optional">Optional</span>
+                </span>
+              </div>
+              <textarea rows="2" formControlName="note" placeholder="Registration note, urgency, or desk instruction"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="ghost-btn" type="button" (click)="backToQueue()">Cancel</button>
+          <button class="primary-btn" type="submit" [disabled]="saving">{{ hasExistingPatientSelection ? 'Register OPD Visit' : 'Create Patient And Register Visit' }}</button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="side-stack">
+      <section class="page-card summary-card">
+        <div class="summary-card__top">
+          <div>
+            <div class="section-eyebrow">Visit Snapshot</div>
+            <h3>{{ form.getRawValue().first_name || selectedPatient?.first_name || 'No patient selected' }} {{ form.getRawValue().last_name || selectedPatient?.last_name || '' }}</h3>
+          </div>
+          <span class="status-chip" [class.status-chip--existing]="hasExistingPatientSelection">
+            {{ hasExistingPatientSelection ? 'Existing Patient' : 'New Intake' }}
+          </span>
+        </div>
+        <ul class="summary-list">
+          <li><span>Patient</span><strong>{{ selectedPatient?.patient_number || 'New intake' }}</strong></li>
+          <li><span>Doctor</span><strong>{{ selectedDoctorName }}</strong></li>
+          <li><span>Fee</span><strong>{{ form.getRawValue().consultation_fee || 0 }}</strong></li>
+          <li><span>Department</span><strong>{{ form.getRawValue().department_name || 'Pending' }}</strong></li>
+          <li><span>Visit Date</span><strong>{{ form.getRawValue().visit_date || 'Pending' }}</strong></li>
+        </ul>
+        <div class="summary-meter">
+          <div class="summary-meter__label">Registration readiness</div>
+          <div class="summary-meter__bar">
+            <span [style.width]="(form.getRawValue().consulting_doctor_name && form.getRawValue().department_name && (hasExistingPatientSelection || (form.getRawValue().first_name && form.getRawValue().last_name))) ? '100%' : '58%'"></span>
+          </div>
+        </div>
+      </section>
+
+      @if (selectedPatient) {
+        <section class="page-card patient-focus-card">
+          <div class="section-eyebrow">Matched Record</div>
+          <h3>{{ selectedPatient.patient_number }}</h3>
+          <div class="focus-name">{{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</div>
+          <div class="focus-meta">
+            <span>{{ selectedPatient.phone || 'No mobile' }}</span>
+            <span>{{ selectedPatient.email || 'No email' }}</span>
+            <span>{{ selectedPatient.gender || 'Gender not set' }}</span>
+          </div>
+        </section>
+      }
+    </aside>
+  </div>
 </section>

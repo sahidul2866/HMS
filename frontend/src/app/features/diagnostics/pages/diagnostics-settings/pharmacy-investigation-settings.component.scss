@@ -1,0 +1,116 @@
+:host {
+  display: block;
+}
+
+.grid-shell {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-catalog {
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-catalog::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #0f766e, #38bdf8);
+}
+
+.hero-summary {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.hero-stat,
+.status-chip {
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, white);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 90%, #ecfeff), color-mix(in srgb, white 98%, #f8fafc));
+  border-radius: 1rem;
+  padding: 0.95rem 1rem;
+}
+
+.hero-stat .label,
+.status-chip span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hero-stat .value,
+.status-chip strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.filter-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(160px, 1fr)) auto;
+  margin-bottom: 1rem;
+}
+
+.status-strip {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.action-cell {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.muted-line {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.85rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.diagnostics-editor-card {
+  width: min(980px, calc(100vw - 2rem));
+}
+
+.diagnostics-editor-card .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1180px) {
+  .diagnostics-editor-card .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-summary,
+  .status-strip,
+  .filter-grid,
+  .diagnostics-editor-card .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

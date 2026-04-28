@@ -1,0 +1,26 @@
+:host {
+  display: block;
+}
+
+.grid-shell {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.toolbar-row--search {
+  margin-bottom: 0.9rem;
+}
+
+.action-cell {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.85rem;
+  align-items: center;
+  margin-top: 1rem;
+}

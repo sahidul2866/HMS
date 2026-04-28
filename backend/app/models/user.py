@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Table
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Table
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +40,16 @@ class User(Base, BaseModelMixin):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    opd_consultation_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    opd_follow_up_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    opd_follow_up_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    opd_prescription_header_name: Mapped[str | None] = mapped_column(String(180))
+    opd_prescription_header_degrees: Mapped[str | None] = mapped_column(String(300))
+    opd_prescription_header_specialty: Mapped[str | None] = mapped_column(String(220))
+    opd_prescription_header_workplace: Mapped[str | None] = mapped_column(String(220))
+    opd_prescription_header_chamber: Mapped[str | None] = mapped_column(String(220))
+    opd_prescription_header_phone: Mapped[str | None] = mapped_column(String(80))
+    opd_prescription_header_address: Mapped[str | None] = mapped_column(String(300))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     branch = relationship("Branch", back_populates="users")

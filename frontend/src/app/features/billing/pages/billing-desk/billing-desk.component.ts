@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, ElementRef, ViewChild, inject } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -7,6 +8,7 @@ import { DoctorDirectoryService } from '../../../../core/services/doctor-directo
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { UiStateService } from '../../../../core/services/ui-state.service';
+import { buildBarcodeSvg, escapePrintHtml } from '../../../../shared/utils/print-layout.utils';
 import {
   BillingInvoice,
   BillingInvoiceFilters,
@@ -28,6 +30,7 @@ export class BillingDeskComponent {
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly notificationService = inject(NotificationService);
   private readonly uiStateService = inject(UiStateService);
   readonly sessionService = inject(SessionService);
@@ -35,8 +38,15 @@ export class BillingDeskComponent {
   internalReferralDoctors: { id: string; full_name: string }[] = [];
   recentInvoices: BillingInvoiceListItem[] = [];
   latestInvoice: BillingInvoice | null = null;
+  invoicePreviewInvoice: BillingInvoice | null = null;
+  invoicePreviewHtml: string | null = null;
+  invoicePreviewUrl: SafeResourceUrl | null = null;
   collectingPayment = false;
   refunding = false;
+  viewMode: 'all' | 'due' = 'all';
+  private invoicePreviewObjectUrl: string | null = null;
+
+  @ViewChild('invoiceFrame') invoiceFrame?: ElementRef<HTMLIFrameElement>;
 
   readonly invoiceFilterForm = this.fb.group({
     q: [''],
@@ -61,11 +71,15 @@ export class BillingDeskComponent {
   constructor() {
     this.restoreState();
     this.loadDoctors();
-    this.loadInvoices();
+    this.route.data.subscribe((data) => {
+      this.viewMode = data['billingView'] === 'due' ? 'due' : 'all';
+      this.loadInvoices();
+    });
     this.route.queryParamMap.subscribe((params) => {
       const invoiceId = params.get('invoiceId');
+      const shouldPrint = params.get('printInvoice') === '1';
       if (invoiceId) {
-        this.loadInvoiceDetail(invoiceId);
+        this.loadInvoiceDetail(invoiceId, shouldPrint);
       }
     });
     this.invoiceFilterForm.valueChanges.subscribe(() => this.persistState());
@@ -77,9 +91,12 @@ export class BillingDeskComponent {
 
   loadInvoices(): void {
     this.billingService.listInvoices(this.getInvoiceFilters()).subscribe((invoices) => {
-      this.recentInvoices = invoices;
-      if (!this.latestInvoice && invoices.length) {
-        this.loadInvoiceDetail(invoices[0].id);
+      this.recentInvoices = this.viewMode === 'due' ? invoices.filter((invoice) => this.isDueInvoice(invoice)) : invoices;
+      if (this.latestInvoice && !this.recentInvoices.find((invoice) => invoice.id === this.latestInvoice?.id)) {
+        this.latestInvoice = null;
+      }
+      if (!this.latestInvoice && this.recentInvoices.length) {
+        this.loadInvoiceDetail(this.recentInvoices[0].id);
       }
     });
   }
@@ -92,94 +109,226 @@ export class BillingDeskComponent {
     void this.router.navigate(['/billing/create']);
   }
 
+  get pageTitle(): string {
+    return this.viewMode === 'due' ? 'Due Payment List' : 'Billing List';
+  }
+
+  get pageSubtitle(): string {
+    return this.viewMode === 'due'
+      ? 'Work the unpaid and partially paid invoice queue, collect dues, and keep outstanding balances under control.'
+      : 'Review posted invoices, inspect billing detail, print invoices, and trace payment activity from one searchable list.';
+  }
+
+  get queueLabel(): string {
+    return this.viewMode === 'due' ? 'Due Queue' : 'Invoice Queue';
+  }
+
+  get detailTitle(): string {
+    return this.viewMode === 'due' ? 'Due Payment Detail' : 'Invoice Detail';
+  }
+
+  get listTitle(): string {
+    return this.viewMode === 'due' ? 'Due Payment List' : 'Billing List';
+  }
+
+  get listCopy(): string {
+    return this.viewMode === 'due'
+      ? 'This queue shows only posted invoices with outstanding due amount so the desk can collect balance quickly.'
+      : 'Filter the billing stream, inspect older invoices, and jump back into print-ready invoice details.';
+  }
+
+  get isDueMode(): boolean {
+    return this.viewMode === 'due';
+  }
+
   printInvoice(): void {
     if (!this.latestInvoice) {
       return;
     }
+    this.openInvoicePreview(this.latestInvoice);
+  }
 
-    const invoice = this.latestInvoice;
-    const popup = window.open('', '_blank', 'width=900,height=700');
-    if (!popup) {
-      return;
-    }
-
-    popup.document.write(`
-      <html>
-        <head>
-          <title>${invoice.invoice_number}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 32px; color: #102132; }
-            h1, h2, h3, p { margin: 0 0 12px; }
-            .row { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
-            .card { border: 1px solid #d9e3ee; border-radius: 12px; padding: 16px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { border-bottom: 1px solid #d9e3ee; padding: 10px; text-align: left; }
-            .summary { margin-top: 20px; width: 320px; margin-left: auto; }
-            .summary div { display: flex; justify-content: space-between; margin-bottom: 8px; }
-          </style>
-        </head>
-        <body>
-          <h1>Billing Invoice</h1>
-          <div class="row">
-            <div class="card">
-              <h3>${invoice.invoice_number}</h3>
-              <p>Date: ${new Date(invoice.created_at).toLocaleString()}</p>
-              <p>Status: ${this.formatStatus(invoice.status)}</p>
-              <p>Payment: ${this.formatStatus(invoice.payment_status)}</p>
-              <p>Patient: ${invoice.patient.first_name} ${invoice.patient.last_name}</p>
-              <p>Patient No: ${invoice.patient.patient_number}</p>
-              <p>Phone: ${invoice.patient.phone ?? '-'}</p>
-            </div>
-            <div class="card">
-              <h3>Referral</h3>
-              <p>Doctor: ${invoice.referred_doctor_name ?? '-'}</p>
-              <p>Referral Amount: ${this.formatCurrency(invoice.referred_doctor_amount)}</p>
+  private buildInvoicePrintHtml(invoice: BillingInvoice): string {
+    const patientName = `${invoice.patient.first_name} ${invoice.patient.last_name}`.trim();
+    const combinedBarcode = buildBarcodeSvg(`${invoice.patient.patient_number} | ${invoice.invoice_number}`, 'Patient + Invoice ID');
+    const printTime = new Date().toLocaleString();
+    const patientAge = this.getPatientAgeLabel(invoice.patient.date_of_birth);
+    const itemDiscountAmount = Number(invoice.item_discount_amount ?? 0);
+    const invoiceDiscountAmount = Number(invoice.invoice_discount_amount ?? 0);
+    const grossAmount = Number(invoice.sub_total ?? 0) + itemDiscountAmount;
+    const dueAmount = Number(invoice.due_amount ?? 0);
+    const paidAmount = Number(invoice.paid_amount ?? 0);
+    const preparedBy = this.sessionService.snapshot.user?.full_name || 'Billing Desk';
+    const rows = invoice.items
+      .map(
+        (item, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapePrintHtml(item.service_name)}</td>
+            <td>${this.formatCurrency(item.unit_price)}</td>
+            <td>${escapePrintHtml(item.discount_percentage)}</td>
+            <td>${this.formatCurrency(item.line_total)}</td>
+          </tr>`
+      )
+      .join('');
+    const summaryDiscountRows = `
+      ${itemDiscountAmount > 0 ? `<tr><td colspan="4" style="text-align:right;"><b>Item Discount</b></td><td>${this.formatCurrency(itemDiscountAmount)}</td></tr>` : ''}
+      ${invoiceDiscountAmount > 0 ? `<tr><td colspan="4" style="text-align:right;"><b>Extra Discount</b></td><td>${this.formatCurrency(invoiceDiscountAmount)}</td></tr>` : ''}
+    `;
+    const renderCopy = (copyLabel: string) => `
+      <section class="invoice-copy">
+        <div class="copy-header">
+          <div class="brand-block">
+            <div class="brand-mark">HMS</div>
+            <div class="brand-copy">
+              <p class="clinic-name">Hospital Management System</p>
+              <p>Address : 461, Firmview Super Market, Firmgate, Dhaka-1205</p>
+              <p>Contact : +8801720981682</p>
             </div>
           </div>
+          <div class="copy-tag">${escapePrintHtml(copyLabel)}</div>
+        </div>
+
+        <div class="title-band"><strong>Invoice</strong></div>
+
+        <div class="detail-grid">
+          <section class="info-card">
+            <label><u>Patient Information</u></label>
+            <div class="meta-list">
+              <div><span>Patient ID</span><strong>${escapePrintHtml(invoice.patient.patient_number)}</strong></div>
+              <div><span>Name</span><strong>${escapePrintHtml(patientName)}</strong></div>
+              <div><span>Mobile</span><strong>${escapePrintHtml(invoice.patient.phone ?? '-')}</strong></div>
+              <div><span>Age</span><strong>${escapePrintHtml(patientAge)}</strong></div>
+            </div>
+          </section>
+
+          <section class="barcode-card">
+            ${combinedBarcode}
+            <div class="meta-list compact-list">
+              <div><span>ID No.</span><strong>${escapePrintHtml(invoice.invoice_number)}</strong></div>
+              <div><span>Print Time</span><strong>${escapePrintHtml(printTime)}</strong></div>
+              <div><span>Consultant</span><strong>${escapePrintHtml(invoice.referred_doctor_name || '-')}</strong></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="table-card">
           <table>
             <thead>
               <tr>
+                <th>SL</th>
                 <th>Service</th>
-                <th>Qty</th>
-                <th>Unit Price</th>
-                <th>Total</th>
+                <th>Rate</th>
+                <th>Discount (%)</th>
+                <th>Amount</th>
               </tr>
             </thead>
             <tbody>
-              ${invoice.items
-                .map(
-                  (item) => `
-                    <tr>
-                      <td>${item.service_name}</td>
-                      <td>${item.quantity}</td>
-                      <td>${this.formatCurrency(item.unit_price)}</td>
-                      <td>${this.formatCurrency(item.line_total)}</td>
-                    </tr>`
-                )
-                .join('')}
+              ${rows}
+              <tr>
+                <td colspan="4" style="text-align:right;"><b>Total Amount</b></td>
+                <td>${this.formatCurrency(grossAmount)}</td>
+              </tr>
+              ${summaryDiscountRows}
+              <tr>
+                <td colspan="4" style="text-align:right;"><b>Payment Amount</b></td>
+                <td>${this.formatCurrency(paidAmount)}</td>
+              </tr>
+              <tr>
+                <td colspan="4" style="text-align:right;"><b>Due Amount</b></td>
+                <td>${this.formatCurrency(dueAmount)}</td>
+              </tr>
+              <tr>
+                <td colspan="5"><b>Inward :</b> ${escapePrintHtml(this.amountInWords(paidAmount || Number(invoice.total_amount ?? 0)))} Only.</td>
+              </tr>
             </tbody>
           </table>
-          <div class="summary">
-            <div><strong>Sub Total</strong><span>${this.formatCurrency(invoice.sub_total)}</span></div>
-            <div><strong>Discount (${invoice.discount_percentage}%)</strong><span>${this.formatCurrency(invoice.discount_amount)}</span></div>
-            <div><strong>Total</strong><span>${this.formatCurrency(invoice.total_amount)}</span></div>
-            <div><strong>Paid</strong><span>${this.formatCurrency(invoice.paid_amount)}</span></div>
-            <div><strong>Due</strong><span>${this.formatCurrency(invoice.due_amount)}</span></div>
-            ${invoice.void_reason ? `<div><strong>Void Reason</strong><span>${invoice.void_reason}</span></div>` : ''}
+        </section>
+
+        <div class="footer-row">
+          <div class="stamp-wrap">
+            ${dueAmount > 0 ? '<div class="due-stamp">Due</div>' : '<div class="paid-stamp">Paid</div>'}
+          </div>
+          <div class="prepared-by">
+            <p><b>Prepared by</b></p>
+            <p>${escapePrintHtml(preparedBy)}</p>
+            <p>Billing Desk</p>
+          </div>
+        </div>
+      </section>
+    `;
+
+    return `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${escapePrintHtml(invoice.invoice_number)}</title>
+          <style>
+            :root { --ink:#17304a; --muted:#65758a; --line:#d7dee7; --panel:#f6f8fb; --brand:#0d5c63; --brand-deep:#123b56; }
+            * { box-sizing:border-box; }
+            body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: var(--ink); background: #eff4f8; }
+            h1, h2, h3, p { margin: 0; }
+            .preview-shell { max-width: 1020px; margin: 0 auto; display: grid; gap: 20px; }
+            .invoice-copy { display:grid; gap:16px; padding: 24px 26px 28px; background:white; border:1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08); }
+            .copy-header, .footer-row { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start; }
+            .brand-block { display:flex; gap:14px; align-items:center; }
+            .brand-mark { width:72px; height:72px; border-radius:18px; display:grid; place-items:center; background:linear-gradient(135deg, var(--brand-deep), var(--brand)); color:white; font-size:24px; font-weight:800; letter-spacing:.08em; }
+            .brand-copy { display:grid; gap:4px; }
+            .clinic-name { font-size:23px; font-weight:800; }
+            .copy-tag { padding:10px 14px; border-radius:999px; border:1px solid var(--line); background:#f8fafc; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
+            .title-band { padding: 12px 16px; text-align:center; border:1px solid var(--line); border-radius:18px; background:linear-gradient(180deg, #f7fafc, #eef4f8); font-size:30px; }
+            .detail-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+            .barcode-card, .info-card, .table-card { padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--panel); }
+            .id-barcode-svg { width:100%; height:92px; display:block; }
+            .meta-list { display:grid; gap:10px; margin-top: 10px; }
+            .meta-list div { display:flex; justify-content:space-between; gap:12px; padding-bottom:8px; border-bottom:1px dashed #ccd7e2; }
+            .meta-list div:last-child { border-bottom:0; padding-bottom:0; }
+            .meta-list span { color: var(--muted); }
+            .compact-list { margin-top: 14px; }
+            table { width:100%; border-collapse:collapse; table-layout:fixed; background:white; }
+            th, td { border-bottom:1px solid #d9e3ee; padding:10px; text-align:left; overflow-wrap:anywhere; }
+            th:last-child, td:last-child { text-align:right; }
+            th { color: var(--muted); background:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+            .stamp-wrap { display:flex; align-items:flex-end; }
+            .due-stamp, .paid-stamp { padding: 10px 26px; border: 3px solid currentColor; border-radius: 12px; font-size: 42px; font-weight: 800; text-transform: uppercase; }
+            .due-stamp { color: #b91c1c; }
+            .paid-stamp { color: #166534; }
+            .prepared-by { text-align:right; display:grid; gap:4px; }
+            .page-break { page-break-before: always; }
+            @media (max-width: 920px) {
+              body { padding: 12px; }
+              .detail-grid { grid-template-columns:1fr; }
+            }
+            @media print {
+              body { margin:0; padding:0; background:white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .preview-shell { max-width:none; padding:0; }
+              .invoice-copy { box-shadow:none; border-radius:0; border:0; padding:0; }
+              .page-break { page-break-before: always; }
+              @page { size:A4 portrait; margin:12mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="preview-shell">
+            ${renderCopy('Patient Copy')}
+            <div class="page-break"></div>
+            ${renderCopy('Office Copy')}
           </div>
         </body>
       </html>
-    `);
-    popup.document.close();
-    popup.focus();
-    popup.print();
+    `;
   }
 
-  loadInvoiceDetail(invoiceId: string): void {
+  loadInvoiceDetail(invoiceId: string, openPreview = false): void {
     this.billingService.getInvoice(invoiceId).subscribe((invoice) => {
       this.latestInvoice = invoice;
       this.syncPaymentForm(invoice);
       this.syncRefundForm(invoice);
+      if (openPreview) {
+        this.openInvoicePreview(invoice);
+      }
       this.notificationService.info(`Loaded invoice ${invoice.invoice_number}.`);
     });
   }
@@ -275,10 +424,35 @@ export class BillingDeskComponent {
     return invoice.status !== 'void' && Number(invoice.paid_amount) > 0;
   }
 
+  private isDueInvoice(invoice: BillingInvoiceListItem): boolean {
+    return invoice.status !== 'void' && Number(invoice.due_amount) > 0;
+  }
+
+  closeInvoicePreview(): void {
+    this.invoicePreviewInvoice = null;
+    this.invoicePreviewHtml = null;
+    this.invoicePreviewUrl = null;
+    this.releasePreviewUrl();
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { printInvoice: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  printInvoicePreview(): void {
+    const frameWindow = this.invoiceFrame?.nativeElement.contentWindow;
+    if (!frameWindow) {
+      return;
+    }
+    frameWindow.focus();
+    frameWindow.print();
+  }
+
   formatCurrency(value: string | number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-BD', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 2,
     }).format(Number(value));
   }
@@ -329,5 +503,82 @@ export class BillingDeskComponent {
       payment_id: '',
       reason: '',
     });
+  }
+
+  private openInvoicePreview(invoice: BillingInvoice): void {
+    this.invoicePreviewInvoice = invoice;
+    this.invoicePreviewHtml = this.buildInvoicePrintHtml(invoice);
+    this.invoicePreviewUrl = this.buildPreviewUrl(this.invoicePreviewHtml);
+  }
+
+  private buildPreviewUrl(html: string): SafeResourceUrl {
+    this.releasePreviewUrl();
+    const objectUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    this.invoicePreviewObjectUrl = objectUrl;
+    return this.sanitizer.bypassSecurityTrustResourceUrl(objectUrl);
+  }
+
+  private releasePreviewUrl(): void {
+    if (!this.invoicePreviewObjectUrl) {
+      return;
+    }
+    URL.revokeObjectURL(this.invoicePreviewObjectUrl);
+    this.invoicePreviewObjectUrl = null;
+  }
+
+  private getPatientAgeLabel(dateOfBirth?: string | null): string {
+    if (!dateOfBirth) {
+      return '-';
+    }
+    const birthDate = new Date(dateOfBirth);
+    if (Number.isNaN(birthDate.getTime())) {
+      return '-';
+    }
+    const now = new Date();
+    let years = now.getFullYear() - birthDate.getFullYear();
+    const monthDelta = now.getMonth() - birthDate.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < birthDate.getDate())) {
+      years -= 1;
+    }
+    return years >= 0 ? `${years}` : '-';
+  }
+
+  private amountInWords(value: number): string {
+    const whole = Math.floor(Math.abs(value));
+    if (whole === 0) {
+      return 'Zero';
+    }
+    const ones = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const scales = ['', 'thousand', 'million', 'billion'];
+    const chunkToWords = (chunk: number): string => {
+      const parts: string[] = [];
+      const hundreds = Math.floor(chunk / 100);
+      const remainder = chunk % 100;
+      if (hundreds) {
+        parts.push(`${ones[hundreds]} hundred`);
+      }
+      if (remainder >= 20) {
+        const ten = Math.floor(remainder / 10);
+        const unit = remainder % 10;
+        parts.push(unit ? `${tens[ten]}-${ones[unit]}` : tens[ten]);
+      } else if (remainder > 0) {
+        parts.push(ones[remainder]);
+      }
+      return parts.join(' ');
+    };
+    const words: string[] = [];
+    let remaining = whole;
+    let scaleIndex = 0;
+    while (remaining > 0 && scaleIndex < scales.length) {
+      const chunk = remaining % 1000;
+      if (chunk) {
+        const chunkWords = chunkToWords(chunk);
+        words.unshift(scales[scaleIndex] ? `${chunkWords} ${scales[scaleIndex]}` : chunkWords);
+      }
+      remaining = Math.floor(remaining / 1000);
+      scaleIndex += 1;
+    }
+    return words.join(' ').replace(/\b\w/g, (character) => character.toUpperCase());
   }
 }

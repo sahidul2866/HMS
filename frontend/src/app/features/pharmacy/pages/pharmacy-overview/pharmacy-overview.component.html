@@ -1,0 +1,111 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Pharmacy</div>
+        <h1 class="page-title">Pharmacy Command Center</h1>
+        <div class="page-subtitle">Inventory, purchase, sales, dispense, and return workflows from one connected desk.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="open('/pharmacy/sales')">New Sale</button>
+        <button class="secondary-btn" type="button" (click)="open('/pharmacy/purchases')">Record Purchase</button>
+        <button class="secondary-btn" type="button" (click)="open('/pharmacy/dispense')">Dispense Queue</button>
+      </div>
+    </div>
+
+    @if (summary) {
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Medicines</div><div class="value">{{ summary.total_medicines }}</div></div>
+        <div class="hero-stat"><div class="label">Low Stock</div><div class="value">{{ summary.low_stock_medicines }}</div></div>
+        <div class="hero-stat"><div class="label">Customers</div><div class="value">{{ summary.total_customers }}</div></div>
+        <div class="hero-stat"><div class="label">Sales</div><div class="value">{{ summary.total_sales }}</div></div>
+        <div class="hero-stat"><div class="label">Returns</div><div class="value">{{ summary.total_returns }}</div></div>
+      </div>
+    }
+  </section>
+
+  <section class="quick-grid">
+    <button class="quick-card" type="button" (click)="open('/pharmacy/medicines')"><strong>Catalog</strong><span>Medicines, stock, reorder level</span></button>
+    <button class="quick-card" type="button" (click)="open('/pharmacy/purchases')"><strong>Purchase</strong><span>Receive stock and update price</span></button>
+    <button class="quick-card" type="button" (click)="open('/pharmacy/sales')"><strong>Sale</strong><span>Counter bill with stock validation</span></button>
+    <button class="quick-card" type="button" (click)="open('/pharmacy/sales/list')"><strong>Returns</strong><span>Review sales and post returns</span></button>
+    <button class="quick-card" type="button" (click)="open('/pharmacy/settings')"><strong>Settings</strong><span>Medicine types, generics, companies, customers</span></button>
+  </section>
+
+  <section class="dashboard-grid">
+    <section class="page-card soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Low Stock</h2>
+          <div class="section-copy">Purchase directly from an item that reached its reorder level.</div>
+        </div>
+      </div>
+      @if (lowStockMedicines.length) {
+        <div class="stack-list">
+          @for (item of lowStockMedicines; track item.id) {
+            <div class="linked-row">
+              <div>
+                <strong>{{ item.name }}</strong>
+                <div class="muted-line">{{ item.generic_name }} · Stock {{ item.stock_quantity }} · Reorder {{ item.reorder_level }}</div>
+              </div>
+              <div class="row-actions">
+                <button class="secondary-btn" type="button" (click)="open('/pharmacy/purchases', { medicineId: item.id })">Purchase</button>
+                <button class="secondary-btn" type="button" (click)="open('/pharmacy/sales', { medicineId: item.id })">Sell</button>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-state">No low-stock medicine found.</div>
+      }
+    </section>
+
+    <section class="page-card soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Prescription Queue</h2>
+          <div class="section-copy">Open a prescription directly in the dispense workbench.</div>
+        </div>
+      </div>
+      @if (pendingPrescriptions.length) {
+        <div class="stack-list">
+          @for (item of pendingPrescriptions; track item.order_id) {
+            <div class="linked-row">
+              <div>
+                <strong>{{ item.item_name }}</strong>
+                <div class="muted-line">{{ item.visit_number }} · {{ item.patient_name }} · Remaining {{ item.remaining_quantity }}</div>
+              </div>
+              <button class="secondary-btn" type="button" (click)="open('/pharmacy/dispense/workbench', { orderId: item.order_id })">Dispense</button>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-state">No pending prescriptions.</div>
+      }
+    </section>
+
+    <section class="page-card soft-panel">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Recent Sales</h2>
+          <div class="section-copy">Continue sale editing or move into return workflow.</div>
+        </div>
+      </div>
+      <div class="stack-list">
+        @for (sale of recentSales; track sale.id) {
+          <div class="linked-row">
+            <div>
+              <strong>{{ sale.sale_number }}</strong>
+              <div class="muted-line">{{ sale.customer_name }} · {{ formatCurrency(sale.net_payable) }} · {{ sale.status }}</div>
+            </div>
+            <div class="row-actions">
+              <button class="secondary-btn" type="button" (click)="open('/pharmacy/sales', { saleId: sale.id })">Edit</button>
+              <button class="secondary-btn" type="button" (click)="open('/pharmacy/sales/list', { saleId: sale.id })">Return</button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+
+  </section>
+</section>

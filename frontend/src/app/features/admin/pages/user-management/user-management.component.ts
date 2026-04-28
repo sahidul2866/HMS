@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { Patient } from '../../../patients/models/patient.models';
@@ -22,6 +23,7 @@ export class UserManagementComponent {
   private readonly roleService = inject(RoleService);
   private readonly patientService = inject(PatientService);
   private readonly notificationService = inject(NotificationService);
+  private readonly router = inject(Router);
 
   users: AdminUser[] = [];
   roles: AdminRole[] = [];
@@ -69,6 +71,10 @@ export class UserManagementComponent {
   closeCreateModal(): void {
     this.createModalOpen = false;
     this.form.reset({ password: 'ChangeMe123!', role_code: 'ADMIN', patient_id: '' });
+  }
+
+  openOPDSettingsModal(user: AdminUser): void {
+    void this.router.navigate(['/opd/settings'], { queryParams: { doctor: user.id } });
   }
 
   get selectedRoleCode(): string {
@@ -158,6 +164,27 @@ export class UserManagementComponent {
     return this.selectedRoleCode === 'PATIENT';
   }
 
+  getDoctorFee(user: AdminUser): string {
+    return Number(user.opd_consultation_fee ?? 0).toFixed(2);
+  }
+
+  getDoctorFollowUpFee(user: AdminUser): string {
+    return Number(user.opd_follow_up_fee ?? 0).toFixed(2);
+  }
+
+  getOPDHeaderTitle(user: AdminUser): string {
+    return user.opd_prescription_header_name?.trim() || user.full_name || 'Header not configured';
+  }
+
+  getOPDHeaderMeta(user: AdminUser): string {
+    const parts = [
+      user.opd_prescription_header_degrees?.trim(),
+      user.opd_prescription_header_specialty?.trim(),
+      user.opd_prescription_header_workplace?.trim(),
+    ].filter(Boolean);
+    return parts.length ? parts.join(' • ') : 'Header details not configured';
+  }
+
   resetFilters(): void {
     this.filterForm.reset({ query: '', role_code: 'ALL', account_type: 'ALL' });
   }
@@ -178,6 +205,7 @@ export class UserManagementComponent {
         direct_permission_codes: [],
         patient_id: value.patient_id || null,
         is_active: true,
+        opd_consultation_fee: 0,
       })
       .subscribe({
         next: () => {
@@ -191,4 +219,5 @@ export class UserManagementComponent {
         },
       });
   }
+
 }

@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
+import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { CreatePatientPayload, PatientLookupResult, PatientMobileLookup } from '../../models/patient.models';
 import { PatientService } from '../../services/patient.service';
 
@@ -20,8 +21,11 @@ export class PatientCreateComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly notificationService = inject(NotificationService);
+  readonly validation = FormValidationUi;
 
   saving = false;
+  submitted = false;
+  lookupModalOpen = false;
   mobileLookup: PatientMobileLookup | null = null;
   mobileSearchResults: PatientLookupResult[] = [];
   mobileLookupMessage = '';
@@ -53,11 +57,13 @@ export class PatientCreateComponent {
         this.mobileLookupMessage = lookup.patients.length
           ? `${lookup.current_patient_count} of ${lookup.max_patients_allowed} patient slots already used for this mobile.`
           : `No patient found for this mobile yet. Limit is ${lookup.max_patients_allowed}.`;
+        this.lookupModalOpen = lookup.patients.length > 0;
       },
       error: () => {
         this.mobileLookup = null;
         this.mobileSearchResults = [];
         this.mobileLookupMessage = '';
+        this.lookupModalOpen = false;
       },
     });
   }
@@ -70,10 +76,42 @@ export class PatientCreateComponent {
       emergency_contact_phone: patient.emergency_contact_phone || '',
     });
     this.mobileLookupMessage = `Loaded shared contact details from ${patient.full_name}.`;
+    this.lookupModalOpen = false;
+  }
+
+  openLookupModal(): void {
+    if (!this.mobileSearchResults.length) {
+      return;
+    }
+    this.lookupModalOpen = true;
+  }
+
+  closeLookupModal(): void {
+    this.lookupModalOpen = false;
+  }
+
+  cancel(): void {
+    void this.router.navigate(['/patients']);
+  }
+
+  get patientDisplayName(): string {
+    return `${this.form.getRawValue().first_name || ''} ${this.form.getRawValue().last_name || ''}`.trim() || 'New patient';
+  }
+
+  get mobileUsageTone(): 'ok' | 'warn' | 'full' {
+    if (!this.mobileLookup) {
+      return 'ok';
+    }
+    if (!this.mobileLookup.can_add_more) {
+      return 'full';
+    }
+    return this.mobileLookup.current_patient_count > 0 ? 'warn' : 'ok';
   }
 
   submit(): void {
+    this.submitted = true;
     if (this.form.invalid || this.saving) {
+      this.form.markAllAsTouched();
       return;
     }
 
@@ -92,6 +130,7 @@ export class PatientCreateComponent {
     this.patientService.create(payload).subscribe({
       next: (patient) => {
         this.saving = false;
+        this.submitted = false;
         this.notificationService.success(`Patient ${patient.patient_number} created successfully.`);
         const returnTo = this.route.snapshot.queryParamMap.get('returnTo');
         if (returnTo) {

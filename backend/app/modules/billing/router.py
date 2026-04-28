@@ -9,12 +9,16 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.billing.service import BillingServiceManager
 from app.schemas.billing import (
+    BillingDraftRead,
     BillingInvoiceCreate,
     BillingInvoiceFilterParams,
     BillingInvoiceListItem,
     BillingInvoicePreview,
     BillingInvoicePreviewRequest,
     BillingInvoiceRead,
+    BillingSettingsRead,
+    BillingSettingsUpdate,
+    BillingServiceControlsUpdate,
     BillingInvoiceVoidRequest,
     BillingPaymentCreate,
     BillingRefundCreate,
@@ -25,6 +29,21 @@ from app.schemas.billing import (
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+
+
+@router.get("/settings", response_model=BillingSettingsRead, dependencies=[Depends(require_permissions("billing.invoice.create"))])
+def get_billing_settings(user=Depends(get_current_user), db: Session = Depends(get_db)) -> BillingSettingsRead:
+    return BillingServiceManager(db).get_settings(user)
+
+
+@router.patch("/settings", response_model=BillingSettingsRead, dependencies=[Depends(require_permissions("billing.service.manage"))])
+def update_billing_settings(
+    payload: BillingSettingsUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingSettingsRead:
+    return BillingServiceManager(db).update_settings(payload, user, context)
 
 
 @router.get("/services", response_model=list[BillingServiceRead], dependencies=[Depends(require_permissions("billing.view"))])
@@ -44,6 +63,22 @@ def create_billing_service(
     db: Session = Depends(get_db),
 ) -> BillingServiceRead:
     service = BillingServiceManager(db).create_service(payload, user, context)
+    return BillingServiceRead.model_validate(service, from_attributes=True)
+
+
+@router.patch(
+    "/services/{service_id}/controls",
+    response_model=BillingServiceRead,
+    dependencies=[Depends(require_permissions("billing.service.manage"))],
+)
+def update_billing_service_controls(
+    service_id: UUID,
+    payload: BillingServiceControlsUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingServiceRead:
+    service = BillingServiceManager(db).update_service_controls(service_id, payload, user, context)
     return BillingServiceRead.model_validate(service, from_attributes=True)
 
 
@@ -103,6 +138,21 @@ def preview_billing_invoice(
     db: Session = Depends(get_db),
 ) -> BillingInvoicePreview:
     return BillingServiceManager(db).preview_invoice(payload, user)
+
+
+@router.get("/drafts/opd-visit/{visit_id}", response_model=BillingDraftRead, dependencies=[Depends(require_permissions("billing.view"))])
+def get_opd_billing_draft(visit_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> BillingDraftRead:
+    return BillingServiceManager(db).build_opd_visit_draft(visit_id, user)
+
+
+@router.get("/drafts/ipd-admission/{admission_id}", response_model=BillingDraftRead, dependencies=[Depends(require_permissions("billing.view"))])
+def get_ipd_billing_draft(
+    admission_id: UUID,
+    stage: str = "interim",
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingDraftRead:
+    return BillingServiceManager(db).build_ipd_admission_draft(admission_id, user, stage=stage)
 
 
 @router.post(

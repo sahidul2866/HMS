@@ -11,6 +11,7 @@ import { AccountingService } from '../../services/accounting.service';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './accounting-journal.component.html',
+  styleUrls: ['./accounting-journal.component.scss'],
 })
 export class AccountingJournalComponent {
   private readonly fb = inject(FormBuilder);

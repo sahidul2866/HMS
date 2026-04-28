@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.database import warm_up_database
 from app.core.exceptions import install_exception_handlers
 from app.core.logging import configure_logging
 from app.middleware.request_logging import RequestLoggingMiddleware
@@ -16,6 +17,7 @@ configure_logging()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    warm_up_database()
     if settings.auto_db_bootstrap:
         bootstrap_database()
     yield
@@ -26,6 +28,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.frontend_origins,
+    allow_origin_regex=settings.frontend_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,

@@ -38,6 +38,25 @@
         </div>
       </header>
 
+      @if (visibleQuickActions().length) {
+        <nav class="quick-flow" aria-label="Fast module actions">
+          <span class="quick-flow__label">Fast flow</span>
+          <div class="quick-flow__actions">
+            @for (action of visibleQuickActions(); track action.route) {
+              <button
+                class="quick-flow__action"
+                [class.quick-flow__action--primary]="action.tone === 'primary'"
+                [class.active]="isQuickActionActive(action.route)"
+                type="button"
+                (click)="navigate(action.route)"
+              >
+                {{ action.label }}
+              </button>
+            }
+          </div>
+        </nav>
+      }
+
       <app-tab-strip></app-tab-strip>
 
       <section class="page-body">

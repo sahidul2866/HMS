@@ -1,0 +1,176 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-main">
+      <div>
+        <div class="hero-kicker">OPD Settings</div>
+        <h1 class="page-title">Doctor Configuration Desk</h1>
+        <p class="page-subtitle">The base page lists all configurable OPD items. Editing happens inside one popup where the doctor is selected and values are managed together.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openEditor('fee', selectedDoctorId || (doctors.length ? doctors[0].id : ''))" [disabled]="loading || !doctors.length">
+          Configure
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <section class="page-card settings-page">
+    <div class="settings-head">
+      <div>
+        <h2 class="section-title">Configurable Items</h2>
+        <p class="page-subtitle">These are the OPD values managed for each doctor from the popup editor.</p>
+      </div>
+    </div>
+
+    <div class="table-shell">
+      <table class="settings-table">
+        <thead>
+          <tr>
+            <th>Setting Item</th>
+            <th>Description</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of getConfigRows(); track item.label) {
+            <tr>
+              <td><strong>{{ item.label }}</strong></td>
+              <td>{{ item.description }}</td>
+              <td>
+                <button class="secondary-btn" type="button" (click)="openEditor(item.key, selectedDoctorId || (doctors.length ? doctors[0].id : ''))" [disabled]="loading || !doctors.length">
+                  Configure
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  @if (editorOpen) {
+    <div class="modal-backdrop" (click)="closeEditor()">
+      <section class="modal-card opd-editor-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">OPD Configuration</p>
+            <h3>Doctor OPD Setup</h3>
+            <p class="page-subtitle">
+              @if (isFeeEditor) {
+                Choose a doctor and update only the fee-related OPD values.
+              } @else {
+                Choose a doctor and update only the printable prescription header values.
+              }
+            </p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditor()">×</button>
+        </div>
+
+        <form class="editor-form" [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+          <section class="editor-section">
+            <div class="editor-section__head">
+              <div>
+                <p class="section-kicker">Doctor</p>
+                <h4>Select Doctor</h4>
+              </div>
+            </div>
+
+            <label class="field field--wide">
+              <span>Doctor</span>
+              <select [ngModel]="selectedDoctorId" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onDoctorSelectionChanged($any($event))">
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }} · {{ doctor.username }}</option>
+                }
+              </select>
+            </label>
+          </section>
+
+          @if (selectedDoctor && isFeeEditor) {
+            <section class="editor-section">
+              <div class="editor-section__head">
+                <div>
+                  <p class="section-kicker">Fee Setup</p>
+                  <h4>Consultation Charges</h4>
+                </div>
+                <p class="page-subtitle">These values are used during OPD registration and follow-up decisions.</p>
+              </div>
+
+              <div class="editor-grid editor-grid--fees">
+                <label class="field">
+                  <span>Consultation Fee</span>
+                  <input type="number" min="0" step="0.01" formControlName="opd_consultation_fee" />
+                </label>
+
+                <label class="field">
+                  <span>Follow-up Fee</span>
+                  <input type="number" min="0" step="0.01" formControlName="opd_follow_up_fee" />
+                </label>
+
+                <label class="field">
+                  <span>Follow-up Days</span>
+                  <input type="number" min="1" formControlName="opd_follow_up_days" />
+                </label>
+              </div>
+            </section>
+          }
+
+          @if (selectedDoctor && isHeaderEditor) {
+            <section class="editor-section">
+              <div class="editor-section__head">
+                <div>
+                  <p class="section-kicker">Print Header</p>
+                  <h4>Prescription Header Details</h4>
+                </div>
+                <p class="page-subtitle">This block prints at the top of the prescription for the selected doctor.</p>
+              </div>
+
+              <div class="editor-grid">
+                <label class="field field--wide">
+                  <span>Header Name</span>
+                  <input type="text" formControlName="opd_prescription_header_name" placeholder="Doctor name for prescription header" />
+                </label>
+
+                <label class="field">
+                  <span>Degrees / Credentials</span>
+                  <textarea rows="3" formControlName="opd_prescription_header_degrees" placeholder="MBBS, FCPS, FRCS"></textarea>
+                </label>
+
+                <label class="field">
+                  <span>Specialty / Designation</span>
+                  <textarea rows="3" formControlName="opd_prescription_header_specialty" placeholder="Professor & Head, Retina Specialist"></textarea>
+                </label>
+
+                <label class="field">
+                  <span>Workplace / Institution</span>
+                  <textarea rows="3" formControlName="opd_prescription_header_workplace" placeholder="Hospital, department, institution"></textarea>
+                </label>
+
+                <label class="field">
+                  <span>Chamber / Room / Visiting Hour</span>
+                  <textarea rows="3" formControlName="opd_prescription_header_chamber" placeholder="Room no, floor, chamber, visiting hour"></textarea>
+                </label>
+
+                <label class="field">
+                  <span>Phone / Contact</span>
+                  <input type="text" formControlName="opd_prescription_header_phone" placeholder="+8801..." />
+                </label>
+
+                <label class="field field--wide">
+                  <span>Address</span>
+                  <textarea rows="3" formControlName="opd_prescription_header_address" placeholder="Clinic or chamber address"></textarea>
+                </label>
+              </div>
+            </section>
+          }
+
+          <div class="editor-actions">
+            <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
+            <button class="primary-btn" type="submit" [disabled]="saving || settingsForm.invalid || !selectedDoctor">
+              {{ saving ? 'Saving...' : 'Save OPD Settings' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</section>

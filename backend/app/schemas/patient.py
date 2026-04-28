@@ -17,9 +17,19 @@ class PatientCreate(BaseModel):
     emergency_contact_phone: str | None = None
 
 
-class PatientRead(PatientCreate):
+class PatientRead(BaseModel):
     id: UUID
+    branch_id: UUID | None = None
     patient_number: str
+    first_name: str
+    last_name: str
+    phone: str | None = None
+    email: str | None = None
+    gender: str | None = None
+    date_of_birth: date | None = None
+    address: str | None = None
+    emergency_contact_name: str | None = None
+    emergency_contact_phone: str | None = None
 
     model_config = {"from_attributes": True}
 

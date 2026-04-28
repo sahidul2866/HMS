@@ -13,7 +13,8 @@ def run_migrations() -> None:
     alembic_ini = Path(BASE_DIR) / "alembic.ini"
     config = Config(str(alembic_ini))
     config.set_main_option("script_location", str(Path(BASE_DIR) / "alembic"))
-    config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    database_url = get_settings().database_url.replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", database_url)
     command.upgrade(config, "head")
 
 

@@ -21,8 +21,146 @@
     }
   </div>
 
+  <section class="analytics-grid">
+    <div class="page-card analytics-card analytics-card--wide">
+      <div class="section-header analytics-card__header">
+        <div>
+          <div class="hero-kicker">Dashboard KPIs</div>
+          <h2 class="section-title">Front Desk Snapshot</h2>
+          <div class="section-copy">Live OPD registration, billing, and consultation movement from the current queue.</div>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        @for (kpi of dashboardKpis; track kpi.label) {
+          <article class="kpi-card" [attr.data-tone]="kpi.tone">
+            <span class="kpi-label">{{ kpi.label }}</span>
+            <strong class="kpi-value">{{ kpi.value }}</strong>
+            <span class="kpi-detail">{{ kpi.detail }}</span>
+          </article>
+        }
+      </div>
+    </div>
+
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Status Mix</div>
+      <h2 class="section-title">Queue Distribution</h2>
+      <div class="chart-stack">
+        @for (item of statusChartItems; track item.label) {
+          <div class="metric-row">
+            <div class="metric-row__copy">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.detail }}</span>
+            </div>
+            <div class="metric-row__value">{{ item.value }}</div>
+            <div class="metric-bar">
+              <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Revenue</div>
+      <h2 class="section-title">Collection Snapshot</h2>
+      <div class="revenue-hero">
+        <strong>{{ revenueHeadline }}</strong>
+        <span>Discount-aware OPD billing rollup</span>
+      </div>
+      <div class="revenue-highlight-grid">
+        @for (item of revenueHighlights; track item.label) {
+          <div class="revenue-tile">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Trend</div>
+      <h2 class="section-title">7-Day Visits</h2>
+      <div class="mini-column-chart">
+        @for (item of weeklyTrendItems; track item.detail) {
+          <div class="mini-column">
+            <div class="mini-column__value">{{ item.value }}</div>
+            <div class="mini-column__track">
+              <span class="mini-column__fill" [style.height]="item.width" [style.background]="item.tone"></span>
+            </div>
+            <div class="mini-column__label">{{ item.label }}</div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Doctor Load</div>
+      <h2 class="section-title">Consultant Coverage</h2>
+      @if (doctorLoadItems.length) {
+        <div class="chart-stack">
+          @for (item of doctorLoadItems; track item.label) {
+            <div class="metric-row metric-row--tight">
+              <div class="metric-row__copy">
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.detail }}</span>
+              </div>
+              <div class="metric-row__value">{{ item.value }}</div>
+              <div class="metric-bar">
+                <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
+              </div>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-analytics-state">Doctor-wise load will appear once visits are assigned.</div>
+      }
+    </div>
+
+    <div class="page-card analytics-card">
+      <div class="hero-kicker">Clinical Orders</div>
+      <h2 class="section-title">Order Mix</h2>
+      <div class="chart-stack">
+        @for (item of orderMixItems; track item.label) {
+          <div class="metric-row metric-row--tight">
+            <div class="metric-row__copy">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.detail }}</span>
+            </div>
+            <div class="metric-row__value">{{ item.value }}</div>
+            <div class="metric-bar">
+              <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
   <section class="page-card">
-    <h2 class="section-title">Visit Queue</h2>
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Visit Queue</h2>
+        <div class="section-copy">
+          @if (canFilterByDoctor) {
+            Use the doctor filter to focus the queue when needed.
+          } @else {
+            Doctors only see their own assigned OPD queue.
+          }
+        </div>
+      </div>
+      @if (canFilterByDoctor) {
+        <label class="field" style="min-width: 280px;">
+          <span>Doctor Filter</span>
+          <select [(ngModel)]="selectedDoctorUserId" [ngModelOptions]="{ standalone: true }" (change)="onDoctorQueueChanged()">
+            <option value="">All doctors</option>
+            @for (doctor of doctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
     <table class="table">
       <thead>
         <tr>
@@ -30,6 +168,8 @@
           <th>Patient</th>
           <th>Department</th>
           <th>Doctor</th>
+          <th>Fee</th>
+          <th>Payment</th>
           <th>Status</th>
           <th>Actions</th>
         </tr>
@@ -41,14 +181,22 @@
             <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
             <td>{{ visit.department_name }}</td>
             <td>{{ visit.consulting_doctor_name }}</td>
+            <td>{{ formatCurrency(visit.consultation_fee) }}</td>
+            <td>
+              <div>{{ formatCurrency(visit.consultation_total || visit.consultation_fee) }}</div>
+              <span class="page-subtitle">{{ visit.consultation_payment_status || 'unpaid' }}</span>
+            </td>
             <td><span class="pill">{{ visit.status.replace('_', ' ') }}</span></td>
             <td>
-              <button class="secondary-btn" type="button" (click)="selectVisit(visit)">Orders</button>
-              <button class="secondary-btn" type="button" (click)="printPrescription(visit)">E-Prescription</button>
-              <button class="secondary-btn" type="button" (click)="openBilling(visit)">Billing</button>
-              <button class="secondary-btn" type="button" (click)="setStatus(visit, 'in_consultation')">Start</button>
-              <button class="secondary-btn" type="button" (click)="setStatus(visit, 'prescribed')">Prescribed</button>
-              <button class="primary-btn" type="button" (click)="setStatus(visit, 'completed')">Complete</button>
+              @if (isPaymentDone(visit)) {
+                <button class="primary-btn" type="button" (click)="startVisitWorkflow(visit)">Start</button>
+                <button class="secondary-btn" type="button" (click)="openEditVisit(visit)">Edit</button>
+                <button class="secondary-btn" type="button" (click)="printPrescription(visit)">Print</button>
+                <button class="secondary-btn" type="button" (click)="printPaymentInvoice(visit)">Invoice</button>
+              } @else {
+                <button class="secondary-btn" type="button" (click)="openEditVisit(visit)">Edit</button>
+                <button class="primary-btn" type="button" (click)="openPayment(visit)">Pay</button>
+              }
             </td>
           </tr>
         }
@@ -57,120 +205,258 @@
   </section>
 
   @if (selectedVisit) {
-    <section class="page-card">
-      <div class="section-header">
+    <section class="page-card visit-focus-card">
+      <div class="visit-focus-header">
         <div>
-          <h2 class="section-title">Consultation Notes for {{ selectedVisit.visit_number }}</h2>
+          <div class="hero-kicker">Active OPD Visit</div>
+          <h2 class="section-title">{{ selectedVisit.visit_number }}</h2>
           <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
         </div>
-      </div>
-
-      <form class="form-grid" [formGroup]="consultationForm" (ngSubmit)="saveConsultation()">
-        <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="2" formControlName="chief_complaint"></textarea></label>
-        <label class="field" style="grid-column:1/-1;"><span>History Of Present Illness</span><textarea rows="3" formControlName="history_of_present_illness"></textarea></label>
-        <label class="field" style="grid-column:1/-1;"><span>Past History</span><textarea rows="3" formControlName="past_history"></textarea></label>
-        <label class="field"><span>Vital Signs</span><textarea rows="3" formControlName="vital_signs" placeholder="BP, pulse, temperature, SpO2"></textarea></label>
-        <label class="field"><span>Examination</span><textarea rows="3" formControlName="examination_note"></textarea></label>
-        <label class="field"><span>Provisional Diagnosis</span><textarea rows="3" formControlName="provisional_diagnosis"></textarea></label>
-        <label class="field"><span>Final Diagnosis</span><textarea rows="3" formControlName="final_diagnosis"></textarea></label>
-        <label class="field"><span>Follow Up Date</span><input type="date" formControlName="follow_up_date" /></label>
-        <label class="field" style="grid-column:1/-1;"><span>Follow Up Advice</span><textarea rows="3" formControlName="follow_up_note"></textarea></label>
-        <label class="field" style="grid-column:1/-1;"><span>Consultation Note</span><textarea rows="3" formControlName="note"></textarea></label>
-        <div style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit">Save Consultation</button>
+        <div class="visit-focus-stats">
+          <div class="focus-stat">
+            <span>Payment</span>
+            <strong>{{ selectedVisit.consultation_payment_status || 'unpaid' }}</strong>
+          </div>
+          <div class="focus-stat">
+            <span>Visit Fee</span>
+            <strong>{{ formatCurrency(selectedVisit.consultation_total || selectedVisit.consultation_fee) }}</strong>
+          </div>
+          <div class="focus-stat">
+            <span>Status</span>
+            <strong>{{ selectedVisit.status.replace('_', ' ') }}</strong>
+          </div>
         </div>
-      </form>
+      </div>
+      <div class="visit-focus-grid">
+        <div class="focus-card">
+          <span class="focus-label">Patient</span>
+          <strong>{{ selectedVisit.patient.patient_number }}</strong>
+          <p>{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }}</p>
+          <p>{{ selectedVisit.patient.gender || 'Gender not set' }} · {{ selectedVisit.patient.phone || 'No phone' }}</p>
+        </div>
+        <div class="focus-card">
+          <span class="focus-label">Clinical Context</span>
+          <strong>{{ selectedVisit.department_name }}</strong>
+          <p>Chief complaint: {{ selectedVisit.chief_complaint || 'Not recorded' }}</p>
+          <p>Follow up: {{ selectedVisit.follow_up_date || 'Not scheduled' }}</p>
+        </div>
+        <div class="focus-card">
+          <span class="focus-label">Prescription Ready</span>
+          <strong>{{ getOrderTypeCount('prescription') }} medicines</strong>
+          <p>{{ getOrderTypeCount('investigation') }} investigations · {{ getOrderTypeCount('procedure') }} procedures</p>
+          <p>Use Print when the doctor finalizes the order set.</p>
+        </div>
+      </div>
     </section>
 
-    <section class="page-card">
+    <section class="page-card prescription-workspace" #prescriptionWorkspace>
       <div class="section-header">
         <div>
-          <h2 class="section-title">Clinical Orders for {{ selectedVisit.visit_number }}</h2>
-          <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
+          <div class="hero-kicker">Prescription Start</div>
+          <h2 class="section-title">{{ selectedVisit.consulting_doctor_name }}</h2>
+          <div class="section-copy">{{ selectedVisit.department_name }} · {{ selectedVisit.visit_number }}</div>
         </div>
         <div class="toolbar-row">
-          <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Print E-Prescription</button>
-          <button class="primary-btn" type="button" (click)="openBilling(selectedVisit)">Send To Billing</button>
+          <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Print Prescription</button>
+          <button class="primary-btn" type="button" (click)="saveConsultation()">Save Prescription</button>
         </div>
       </div>
 
-      <form class="form-grid" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
-        <label class="field">
-          <span>Order Type</span>
-          <select formControlName="order_type" (change)="onOrderTypeChanged()">
-            <option value="prescription">Prescription</option>
-            <option value="investigation">Investigation</option>
-            <option value="procedure">Procedure</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Service Area</span>
-          <select formControlName="service_area">
-            <option value="">Select area when investigation</option>
-            <option value="laboratory">Laboratory</option>
-            <option value="radiology">Radiology</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Item Name</span>
-          <input type="text" formControlName="item_name" />
-        </label>
-        <label class="field">
-          <span>Quantity</span>
-          <input type="number" formControlName="quantity" />
-        </label>
-        <label class="field" style="grid-column:1/-1;">
-          <span>Instructions</span>
-          <textarea rows="2" formControlName="instructions"></textarea>
-        </label>
-        <div style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit">Add Order</button>
+      <div class="prescription-doctor-banner">
+        <div class="doctor-copy">
+          <p class="doctor-name">{{ selectedVisit.consulting_doctor_name }}</p>
+          <p class="doctor-meta">{{ selectedVisit.department_name }} · Outpatient Consultant</p>
+          <p class="doctor-meta">Consultation workspace</p>
         </div>
-      </form>
-
-      <div class="hero-summary" style="margin-top:1rem;">
-        <div class="hero-stat"><div class="label">Prescriptions</div><div class="value">{{ getOrderTypeCount('prescription') }}</div></div>
-        <div class="hero-stat"><div class="label">Investigations</div><div class="value">{{ getOrderTypeCount('investigation') }}</div></div>
-        <div class="hero-stat"><div class="label">Procedures</div><div class="value">{{ getOrderTypeCount('procedure') }}</div></div>
+        <div class="doctor-copy doctor-copy--right">
+          <p class="doctor-name">{{ selectedVisit.consulting_doctor_name }}</p>
+          <p class="doctor-meta">{{ selectedVisit.department_name }} · Outpatient Consultant</p>
+          <p class="doctor-meta">Visit date {{ selectedVisit.visit_date }}</p>
+        </div>
       </div>
 
-      <table class="table" style="margin-top:1rem;">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Item</th>
-            <th>Area</th>
-            <th>Quantity</th>
-            <th>Status</th>
-            <th>Instructions</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (order of selectedVisit.orders; track order.id) {
-            <tr>
-              <td><span class="pill">{{ order.order_type }}</span></td>
-              <td>{{ order.item_name }}</td>
-              <td>{{ order.service_area || '-' }}</td>
-              <td>{{ order.quantity }}</td>
-              <td><span class="pill">{{ order.status }}</span></td>
-              <td>{{ order.instructions || order.result_text || '-' }}</td>
-              <td>
-                @if (order.order_type === 'procedure') {
-                  <div class="toolbar-row" style="gap:0.5rem; flex-wrap:wrap;">
+      <div class="prescription-patient-strip">
+        <div><strong>Name:</strong> {{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }}</div>
+        <div><strong>Age:</strong> {{ getPatientAgeLabel(selectedVisit.patient.date_of_birth) }}</div>
+        <div><strong>Patient ID:</strong> {{ selectedVisit.patient.patient_number }}</div>
+        <div><strong>Bill No:</strong> {{ selectedVisit.visit_number }}</div>
+        <div><strong>Date:</strong> {{ selectedVisit.visit_date }}</div>
+      </div>
+
+      <div class="prescription-layout">
+        <div class="prescription-column prescription-column--left">
+          <section class="prescription-panel">
+            <div class="panel-title">Chief Complaint</div>
+            <textarea rows="4" [formControl]="consultationForm.controls.chief_complaint"></textarea>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">Past History</div>
+            <textarea rows="4" [formControl]="consultationForm.controls.past_history"></textarea>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">Treatment History</div>
+            <textarea rows="4" [formControl]="consultationForm.controls.history_of_present_illness"></textarea>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">On Examination</div>
+            <div class="eye-exam-table-wrap">
+              <table class="eye-exam-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>R/E</th>
+                    <th>L/E</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>VA</td><td><input type="text" [formControl]="eyeExamForm.controls.va_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.va_le" /></td></tr>
+                  <tr><td>EOM</td><td><input type="text" [formControl]="eyeExamForm.controls.eom_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.eom_le" /></td></tr>
+                  <tr><td>Lids</td><td><input type="text" [formControl]="eyeExamForm.controls.lids_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.lids_le" /></td></tr>
+                  <tr><td>Cornea</td><td><input type="text" [formControl]="eyeExamForm.controls.cornea_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.cornea_le" /></td></tr>
+                  <tr><td>Conjunctiva</td><td><input type="text" [formControl]="eyeExamForm.controls.conjunctiva_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.conjunctiva_le" /></td></tr>
+                  <tr><td>IOP</td><td><input type="text" [formControl]="eyeExamForm.controls.iop_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.iop_le" /></td></tr>
+                  <tr><td>Pupil</td><td><input type="text" [formControl]="eyeExamForm.controls.pupil_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.pupil_le" /></td></tr>
+                  <tr><td>Lens</td><td><input type="text" [formControl]="eyeExamForm.controls.lens_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.lens_le" /></td></tr>
+                  <tr><td>Fundus</td><td><input type="text" [formControl]="eyeExamForm.controls.fundus_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.fundus_le" /></td></tr>
+                  <tr><td>C D R</td><td><input type="text" [formControl]="eyeExamForm.controls.cdr_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.cdr_le" /></td></tr>
+                  <tr><td>Angle</td><td><input type="text" [formControl]="eyeExamForm.controls.angle_re" /></td><td><input type="text" [formControl]="eyeExamForm.controls.angle_le" /></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <label class="field field-compact">
+              <span>General Examination</span>
+              <textarea rows="3" [formControl]="eyeExamForm.controls.general_exam"></textarea>
+            </label>
+          </section>
+        </div>
+
+        <div class="prescription-column prescription-column--right">
+          <section class="prescription-panel">
+            <div class="panel-title">Diagnosis</div>
+            <label class="field field-compact">
+              <span>Provisional Diagnosis</span>
+              <textarea rows="3" [formControl]="consultationForm.controls.provisional_diagnosis"></textarea>
+            </label>
+            <label class="field field-compact">
+              <span>Final Diagnosis</span>
+              <textarea rows="3" [formControl]="consultationForm.controls.final_diagnosis"></textarea>
+            </label>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">Investigations</div>
+            <form class="mini-order-grid" [formGroup]="investigationForm" (ngSubmit)="submitInvestigationOrder()">
+              <input type="text" formControlName="item_name" list="investigation-suggestions" placeholder="Investigation name" />
+              <select formControlName="service_area">
+                <option value="laboratory">Laboratory</option>
+                <option value="radiology">Radiology</option>
+              </select>
+              <input type="number" formControlName="quantity" min="1" placeholder="Qty" />
+              <input type="text" formControlName="instructions" placeholder="Instructions" />
+              <button class="secondary-btn" type="submit">Add Investigation</button>
+            </form>
+            <datalist id="investigation-suggestions">
+              @for (item of investigationSuggestions; track item.id) {
+                <option [value]="item.test_name">{{ item.code }} · {{ item.category_name }} · {{ item.fee }}</option>
+              }
+            </datalist>
+            <div class="section-copy">Suggested tests follow the selected service area and active investigation settings.</div>
+            <div class="order-chip-list">
+              @for (order of getOrdersByType('investigation'); track order.id) {
+                <div class="order-chip">
+                  <strong>{{ order.item_name }}</strong>
+                  <span>{{ order.service_area || '-' }} · {{ order.instructions || 'No note' }}</span>
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="prescription-panel prescription-panel--rx">
+            <div class="panel-title panel-title--rx">R<sub>X</sub></div>
+            <form class="mini-order-grid rx-grid" [formGroup]="prescriptionForm" (ngSubmit)="submitPrescriptionOrder()">
+              <input type="text" formControlName="item_name" list="medicine-suggestions" placeholder="Medicine name or generic" />
+              <input type="text" formControlName="instructions" placeholder="Dose, duration, comments" />
+              <input type="number" formControlName="quantity" min="1" placeholder="Qty" />
+              <button class="primary-btn" type="submit">Add Medicine</button>
+            </form>
+            <datalist id="medicine-suggestions">
+              @for (item of medicineSuggestions; track item.id) {
+                <option [value]="item.name">{{ item.generic_name }} · {{ item.company_name }} · Stock {{ item.stock_quantity }}</option>
+              }
+            </datalist>
+            <div class="section-copy">Medicine suggestions prioritize in-stock brands and matching generics.</div>
+            <div class="rx-list">
+              @for (order of getOrdersByType('prescription'); track order.id; let index = $index) {
+                <div class="rx-item">
+                  <div class="rx-index">{{ index + 1 }}</div>
+                  <div>
+                    <strong>{{ order.item_name }}</strong>
+                    <p>{{ order.instructions || 'No instruction added' }}</p>
+                  </div>
+                  <span class="rx-qty">x{{ order.quantity }}</span>
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">Procedure</div>
+            <form class="mini-order-grid" [formGroup]="procedureForm" (ngSubmit)="submitProcedureOrder()">
+              <input type="text" formControlName="item_name" placeholder="Procedure" />
+              <input type="text" formControlName="instructions" placeholder="Procedure note" />
+              <input type="number" formControlName="quantity" min="1" placeholder="Qty" />
+              <button class="secondary-btn" type="submit">Add Procedure</button>
+            </form>
+            <div class="order-chip-list">
+              @for (order of getOrdersByType('procedure'); track order.id) {
+                <div class="order-chip order-chip--procedure">
+                  <div>
+                    <strong>{{ order.item_name }}</strong>
+                    <span>{{ order.instructions || 'No note' }}</span>
+                  </div>
+                  <div class="toolbar-row" style="gap:0.4rem; flex-wrap:wrap;">
                     <button class="secondary-btn" type="button" (click)="updateProcedureOrder(order, 'scheduled')">Schedule</button>
                     <button class="secondary-btn" type="button" (click)="updateProcedureOrder(order, 'in_progress')">Start</button>
                     <button class="primary-btn" type="button" (click)="updateProcedureOrder(order, 'completed')">Complete</button>
-                    <button class="danger-btn" type="button" (click)="updateProcedureOrder(order, 'cancelled')">Cancel</button>
                   </div>
-                } @else {
-                  <span class="page-subtitle">Managed from linked module</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+                </div>
+              }
+            </div>
+          </section>
+
+          <section class="prescription-panel">
+            <div class="panel-title">Advice And Follow Up</div>
+            <label class="field field-compact">
+              <span>Advice</span>
+              <textarea rows="3" [formControl]="consultationForm.controls.follow_up_note"></textarea>
+            </label>
+            <label class="field field-compact">
+              <span>Consultation Note</span>
+              <textarea rows="3" [formControl]="consultationForm.controls.note"></textarea>
+            </label>
+            <label class="field field-compact">
+              <span>Follow Up Date</span>
+              <input type="date" [formControl]="consultationForm.controls.follow_up_date" />
+            </label>
+          </section>
+
+          <div class="prescription-actions">
+            @if (canCreateBilling) {
+              <button class="secondary-btn" type="button" (click)="openBilling(selectedVisit)">Send To Billing</button>
+            }
+            @if (canManageDiagnostics) {
+              <button class="secondary-btn" type="button" (click)="openInvestigationDraft(selectedVisit)">Send To Investigation</button>
+            }
+            @if (canUsePharmacy) {
+              <button class="secondary-btn" type="button" (click)="openPharmacySalesDraft(selectedVisit)">Send To Pharmacy</button>
+            }
+            <button class="primary-btn" type="button" (click)="saveConsultation()">Save Prescription</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="page-card">
@@ -254,3 +540,111 @@
     </section>
   }
 </section>
+
+@if (editingVisit) {
+    <div class="modal-backdrop" (click)="closeEditVisit()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Edit {{ editingVisit.visit_number }}</h2>
+            <div class="section-copy">{{ editingVisit.patient.first_name }} {{ editingVisit.patient.last_name }}</div>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditVisit()">×</button>
+        </div>
+
+        <form class="form-grid" [formGroup]="editVisitForm" (ngSubmit)="saveVisitEdit()">
+          <label class="field"><span>Visit Date</span><input type="date" formControlName="visit_date" /></label>
+          <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
+          <label class="field">
+            <span>Doctor Directory</span>
+            <select formControlName="doctor_user_id" (change)="onEditDoctorChanged()">
+              <option value="">Select doctor</option>
+              @for (doctor of doctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field"><span>Consulting Doctor</span><input type="text" formControlName="consulting_doctor_name" /></label>
+          <label class="field"><span>Consultation Fee</span><input type="number" formControlName="consultation_fee" /></label>
+          <label class="field" style="grid-column:1/-1;"><span>Chief Complaint</span><textarea rows="2" formControlName="chief_complaint"></textarea></label>
+          <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+          <div style="grid-column:1/-1;" class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closeEditVisit()">Cancel</button>
+            <button class="primary-btn" type="submit">Save Visit</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+
+  @if (payingVisit) {
+    <div class="modal-backdrop" (click)="closePayment()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Collect Payment For {{ payingVisit.visit_number }}</h2>
+            <div class="section-copy">
+              {{ payingVisit.patient.first_name }} {{ payingVisit.patient.last_name }} · {{ payingVisit.consulting_doctor_name }}
+            </div>
+          </div>
+          <button class="icon-btn" type="button" (click)="closePayment()">×</button>
+        </div>
+
+        <form class="form-grid" [formGroup]="paymentForm" (ngSubmit)="savePayment()">
+          <label class="field"><span>Amount</span><input type="number" min="0" step="0.01" formControlName="amount" /></label>
+          <label class="field"><span>Discount</span><input type="number" min="0" step="0.01" formControlName="discount" /></label>
+          <div class="payment-summary" style="grid-column:1/-1;">
+            <div><span>Patient</span><strong>{{ payingVisit.patient.patient_number }}</strong></div>
+            <div><span>Doctor</span><strong>{{ payingVisit.consulting_doctor_name }}</strong></div>
+            <div><span>Total After Discount</span><strong>{{ formatCurrency(getPaymentTotal()) }}</strong></div>
+          </div>
+          <div style="grid-column:1/-1;" class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closePayment()">Cancel</button>
+            <button class="primary-btn" type="submit">Save Payment</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+
+  @if (invoicePreviewVisit && invoicePreviewHtml && invoicePreviewUrl) {
+    <div class="modal-backdrop invoice-preview-backdrop" (click)="closeInvoicePreview()">
+      <section class="modal-card invoice-preview-card" (click)="$event.stopPropagation()">
+        <div class="section-header invoice-preview-header">
+          <div>
+            <h2 class="section-title">Invoice Preview</h2>
+            <div class="section-copy">
+              {{ invoicePreviewVisit.visit_number }} · {{ invoicePreviewVisit.patient.first_name }} {{ invoicePreviewVisit.patient.last_name }}
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closeInvoicePreview()">Close</button>
+            <button class="primary-btn" type="button" (click)="printInvoicePreview()">Print Invoice</button>
+          </div>
+        </div>
+
+        <iframe #invoiceFrame class="invoice-preview-frame" [src]="invoicePreviewUrl"></iframe>
+      </section>
+    </div>
+  }
+
+  @if (prescriptionPreviewVisit && prescriptionPreviewHtml && prescriptionPreviewUrl) {
+    <div class="modal-backdrop invoice-preview-backdrop" (click)="closePrescriptionPreview()">
+      <section class="modal-card invoice-preview-card prescription-preview-card" (click)="$event.stopPropagation()">
+        <div class="section-header invoice-preview-header">
+          <div>
+            <h2 class="section-title">Prescription Preview</h2>
+            <div class="section-copy">
+              {{ prescriptionPreviewVisit.visit_number }} · {{ prescriptionPreviewVisit.patient.first_name }} {{ prescriptionPreviewVisit.patient.last_name }}
+            </div>
+          </div>
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closePrescriptionPreview()">Close</button>
+            <button class="primary-btn" type="button" (click)="printPrescriptionPreview()">Print Prescription</button>
+          </div>
+        </div>
+
+        <iframe #prescriptionFrame class="invoice-preview-frame prescription-preview-frame" [src]="prescriptionPreviewUrl"></iframe>
+      </section>
+    </div>
+  }

@@ -27,6 +27,9 @@
           <div class="pill-row">
             <span class="pill">{{ formatStatus(selectedItem.status) }}</span>
             <span class="pill">{{ selectedItem.consulting_doctor_name }}</span>
+            @if (selectedItem.room_number) {
+              <span class="pill">Room {{ selectedItem.room_number }}</span>
+            }
           </div>
         </div>
 

@@ -2,7 +2,7 @@
   background: linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
   color: var(--sidebar-ink);
   height: 100vh;
-  padding: 1.5rem 1rem;
+  padding: 1rem 0.8rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -60,16 +60,16 @@
 }
 
 .brand p {
-  margin: 0.3rem 0 1.5rem;
+  margin: 0.2rem 0 0.75rem;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.3rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -81,8 +81,8 @@
 .group-toggle {
   color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
-  padding: 0.8rem 0.9rem;
-  border-radius: 12px;
+  padding: 0.62rem 0.72rem;
+  border-radius: 10px;
   border: 0;
   background: transparent;
   text-align: left;
@@ -96,11 +96,12 @@
 .nav-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   min-width: 0;
 }
 
 .nav-text {
+  font-size: 0.92rem;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -154,14 +155,14 @@
 .group-links {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding-left: 0.75rem;
-  margin-top: 0.35rem;
+  gap: 0.25rem;
+  padding-left: 0.55rem;
+  margin-top: 0.25rem;
   animation: reveal-group 0.22s ease;
 }
 
 .group-links a {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   background: rgba(255, 255, 255, 0.06);
 }
 

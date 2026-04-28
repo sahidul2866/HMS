@@ -8,6 +8,7 @@ from app.models.patient import Patient
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.patients.repository import PatientsRepository
+from app.schemas.encounter import OPDVisitRead
 from app.schemas.patient import (
     PatientClinicalHistoryRead,
     PatientCreate,
@@ -187,6 +188,10 @@ class PatientsService:
             ],
         )
 
+    def get_patient_opd_visits(self, patient_id, actor: User) -> list:
+        patient = self.get_patient(patient_id, actor)
+        return self.repository.list_opd_visits(patient.id)
+
     def create_patient(self, payload: PatientCreate, actor: User, context: dict[str, str | None]) -> Patient:
         normalized_phone = normalize_phone(payload.phone)
         branch_scope = payload.branch_id or actor.branch_id
@@ -202,7 +207,7 @@ class PatientsService:
 
         sequence = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         patient = Patient(
-            **payload.model_dump(exclude={"phone"}),
+            **payload.model_dump(exclude={"phone", "branch_id"}),
             phone=normalized_phone,
             patient_number=f"PAT-{sequence}",
             branch_id=branch_scope,

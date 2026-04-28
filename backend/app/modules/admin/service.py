@@ -4,7 +4,7 @@ from app.modules.admin.repository import AdminRepository
 from app.modules.roles.service import RolesService
 from app.modules.users.service import UsersService
 from app.schemas.role import RoleCreate, RoleUpdatePermissions
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserOPDSettingsUpdate
 
 
 class AdminService:
@@ -18,6 +18,9 @@ class AdminService:
 
     def create_user(self, payload: UserCreate, actor_id, context):
         return self.users.create_user(payload, actor_id, context)
+
+    def update_user_opd_settings(self, user_id, payload: UserOPDSettingsUpdate, actor_id, context):
+        return self.users.update_opd_settings(user_id, payload, actor_id, context)
 
     def list_roles(self):
         return self.roles.list_roles()

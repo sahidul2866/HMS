@@ -13,18 +13,20 @@ from app.schemas.encounter import (
     OPDSummary,
     OPDVisitConsultationUpdate,
     OPDVisitCreate,
+    OPDVisitPaymentUpdate,
     OPDVisitOrderCreate,
     OPDVisitOrderUpdate,
     OPDVisitRead,
     OPDVisitStatusUpdate,
+    OPDVisitUpdate,
 )
 
 router = APIRouter(prefix="/opd", tags=["OPD"])
 
 
 @router.get("/visits", response_model=list[OPDVisitRead], dependencies=[Depends(require_permissions("opd.view"))])
-def list_opd_visits(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[OPDVisitRead]:
-    return [OPDVisitRead.model_validate(item, from_attributes=True) for item in OPDService(db).list_visits(user)]
+def list_opd_visits(doctor_user_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[OPDVisitRead]:
+    return [OPDVisitRead.model_validate(item, from_attributes=True) for item in OPDService(db).list_visits(user, doctor_user_id)]
 
 
 @router.get("/visits/{visit_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.view"))])
@@ -34,8 +36,8 @@ def get_opd_visit(visit_id: UUID, user=Depends(get_current_user), db: Session = 
 
 
 @router.get("/summary", response_model=OPDSummary, dependencies=[Depends(require_permissions("opd.view"))])
-def get_opd_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> OPDSummary:
-    return OPDService(db).get_summary(user)
+def get_opd_summary(doctor_user_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> OPDSummary:
+    return OPDService(db).get_summary(user, doctor_user_id)
 
 
 @router.post("/visits", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
@@ -46,6 +48,18 @@ def create_opd_visit(
     db: Session = Depends(get_db),
 ) -> OPDVisitRead:
     visit = OPDService(db).create_visit(payload, user, context)
+    return OPDVisitRead.model_validate(visit, from_attributes=True)
+
+
+@router.put("/visits/{visit_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+def update_opd_visit(
+    visit_id: UUID,
+    payload: OPDVisitUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OPDVisitRead:
+    visit = OPDService(db).update_visit(visit_id, payload, user, context)
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
@@ -62,6 +76,18 @@ def update_opd_status(
     db: Session = Depends(get_db),
 ) -> OPDVisitRead:
     visit = OPDService(db).update_status(visit_id, payload.status, user, context)
+    return OPDVisitRead.model_validate(visit, from_attributes=True)
+
+
+@router.put("/visits/{visit_id}/payment", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+def update_opd_payment(
+    visit_id: UUID,
+    payload: OPDVisitPaymentUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OPDVisitRead:
+    visit = OPDService(db).update_payment(visit_id, payload, user, context)
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 

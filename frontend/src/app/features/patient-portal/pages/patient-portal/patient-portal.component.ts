@@ -1,8 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionService } from '../../../../core/services/session.service';
 import { User } from '../../../../core/models/auth.models';
 import { PatientClinicalHistory } from '../../../patients/models/patient.models';
 import { PatientAppointment } from '../../models/patient-portal.models';
@@ -19,6 +21,8 @@ export class PatientPortalComponent {
   private readonly portalService = inject(PatientPortalService);
   private readonly notificationService = inject(NotificationService);
   private readonly fb = inject(FormBuilder);
+  private readonly router = inject(Router);
+  private readonly sessionService = inject(SessionService);
 
   history: PatientClinicalHistory | null = null;
   appointments: PatientAppointment[] = [];
@@ -32,6 +36,12 @@ export class PatientPortalComponent {
   });
 
   constructor() {
+    const user = this.sessionService.snapshot.user;
+    if (!user?.patient_id) {
+      this.notificationService.warning('This account is not linked to a patient portal profile.');
+      void this.router.navigate(['/dashboard']);
+      return;
+    }
     this.loadPortal();
   }
 
@@ -103,9 +113,9 @@ export class PatientPortalComponent {
   }
 
   formatCurrency(value: string | number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-BD', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   }

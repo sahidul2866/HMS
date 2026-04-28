@@ -1,0 +1,122 @@
+<section class="workspace-shell">
+  <div class="page-card module-hero">
+    <div class="hero-main">
+      <div>
+        <div class="hero-kicker">Billing Settings</div>
+        <h1 class="page-title">Billing Configuration Desk</h1>
+        <p class="page-subtitle">Manage invoice limits, referral percentage, per-item discount caps, and investigation rooms.</p>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openEditor('global')" [disabled]="loading">Configure</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="page-card settings-page">
+    <div class="settings-head">
+      <div>
+        <h2 class="section-title">Configurable Items</h2>
+        <p class="page-subtitle">Billing controls are grouped like OPD settings and edited from one popup.</p>
+      </div>
+    </div>
+
+    <div class="table-shell">
+      <table class="settings-table">
+        <thead>
+          <tr>
+            <th>Setting Item</th>
+            <th>Description</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of getConfigRows(); track item.key) {
+            <tr>
+              <td><strong>{{ item.label }}</strong></td>
+              <td>{{ item.description }}</td>
+              <td><button class="secondary-btn" type="button" (click)="openEditor(item.key)" [disabled]="loading">Configure</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  @if (editorOpen) {
+    <div class="modal-backdrop" (click)="closeEditor()">
+      <section class="modal-card billing-editor-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Billing Configuration</p>
+            <h3>{{ isGlobalEditor ? 'Global Invoice Controls' : 'Item Level Controls' }}</h3>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeEditor()">×</button>
+        </div>
+
+        @if (isGlobalEditor) {
+          <form class="editor-form" [formGroup]="form" (ngSubmit)="save()">
+            <div class="editor-grid">
+              <label class="field">
+                <span>Default Item Discount %</span>
+                <input type="number" min="0" max="100" step="0.01" formControlName="max_item_discount_percentage" />
+              </label>
+              <label class="field">
+                <span>Default Item Discount Amount</span>
+                <input type="number" min="0" step="0.01" formControlName="max_item_discount_amount" placeholder="No amount cap" />
+              </label>
+              <label class="field">
+                <span>Max Invoice Discount %</span>
+                <input type="number" min="0" max="100" step="0.01" formControlName="max_invoice_discount_percentage" />
+              </label>
+              <label class="field">
+                <span>Max Invoice Discount Amount</span>
+                <input type="number" min="0" step="0.01" formControlName="max_invoice_discount_amount" placeholder="No amount cap" />
+              </label>
+              <label class="field">
+                <span>Default Referral %</span>
+                <input type="number" min="0" max="100" step="0.01" formControlName="default_referral_percentage" />
+              </label>
+            </div>
+            <div class="editor-actions">
+              <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
+              <button class="primary-btn" type="submit" [disabled]="saving || form.invalid">{{ saving ? 'Saving...' : 'Save Settings' }}</button>
+            </div>
+          </form>
+        } @else {
+          <div class="service-control-table">
+            <div class="control-head">
+              <span>Item</span>
+              <span>Rate</span>
+              <span>Discount Cap %</span>
+              <span>Discount Cap BDT</span>
+              <span>Referral %</span>
+              <span>Room</span>
+              <span>Status</span>
+              <span></span>
+            </div>
+            @for (service of services; track service.id) {
+              @if (serviceControls[service.id]; as controls) {
+                <div class="control-row">
+                  <div>
+                    <strong>{{ service.name }}</strong>
+                    <div class="muted-line">{{ service.service_code }}</div>
+                  </div>
+                  <div>{{ formatCurrency(service.unit_price) }}</div>
+                  <input type="number" min="0" max="100" step="0.01" [(ngModel)]="controls.max_discount_percentage" [ngModelOptions]="{ standalone: true }" placeholder="Default" />
+                  <input type="number" min="0" step="0.01" [(ngModel)]="controls.max_discount_amount" [ngModelOptions]="{ standalone: true }" placeholder="Default" />
+                  <input type="number" min="0" max="100" step="0.01" [(ngModel)]="controls.doctor_share_percentage" [ngModelOptions]="{ standalone: true }" />
+                  <input type="text" [(ngModel)]="controls.room_number" [ngModelOptions]="{ standalone: true }" placeholder="Room no" />
+                  <select [(ngModel)]="controls.is_active" [ngModelOptions]="{ standalone: true }">
+                    <option [ngValue]="true">Active</option>
+                    <option [ngValue]="false">Inactive</option>
+                  </select>
+                  <button class="secondary-btn" type="button" (click)="saveServiceControls(service)" [disabled]="saving">Save</button>
+                </div>
+              }
+            }
+          </div>
+        }
+      </section>
+    </div>
+  }
+</section>

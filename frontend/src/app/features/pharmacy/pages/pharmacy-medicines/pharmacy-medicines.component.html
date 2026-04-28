@@ -1,0 +1,113 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Pharmacy Catalog</div>
+        <h1 class="page-title">Medicine Information</h1>
+        <div class="page-subtitle">Manage product identity, pricing, company, generic mapping, and low-stock thresholds from one clean page.</div>
+      </div>
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Medicines</div><div class="value">{{ total }}</div></div>
+        <div class="hero-stat"><div class="label">Types</div><div class="value">{{ medicineTypes.length }}</div></div>
+        <div class="hero-stat"><div class="label">Companies</div><div class="value">{{ companies.length }}</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid-shell">
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">{{ editingId ? 'Edit Medicine' : 'Create Medicine' }}</h2>
+          <div class="section-copy">All stock movement flows point back to this record.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
+        <label class="field"><span>Medicine Type</span><select formControlName="medicine_type_id"><option value="">Select type</option>@for (item of medicineTypes; track item.id) {<option [value]="item.id">{{ item.name }}</option>}</select></label>
+        <label class="field"><span>Generic</span><select formControlName="generic_id"><option value="">Select generic</option>@for (item of generics; track item.id) {<option [value]="item.id">{{ item.name }}</option>}</select></label>
+        <label class="field"><span>Company</span><select formControlName="company_id"><option value="">Select company</option>@for (item of companies; track item.id) {<option [value]="item.id">{{ item.name }}</option>}</select></label>
+        <label class="field"><span>Medicine Name</span><input type="text" formControlName="name" /></label>
+        <label class="field"><span>Strength</span><input type="text" formControlName="strength" /></label>
+        <label class="field"><span>Dosage Form</span><input type="text" formControlName="dosage_form" /></label>
+        <label class="field"><span>SKU</span><input type="text" formControlName="sku" /></label>
+        <label class="field"><span>Barcode</span><input type="text" formControlName="barcode" /></label>
+        <label class="field"><span>Purchase Price</span><input type="number" formControlName="purchase_price" /></label>
+        <label class="field"><span>Sale Price</span><input type="number" formControlName="sale_price" /></label>
+        <label class="field"><span>Reorder Level</span><input type="number" formControlName="reorder_level" /></label>
+        <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea rows="3" formControlName="description"></textarea></label>
+        <div class="toolbar-row" style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit">{{ editingId ? 'Update Medicine' : 'Save Medicine' }}</button>
+          @if (editingId) {
+            <button class="secondary-btn" type="button" (click)="resetForm()">Cancel Edit</button>
+          }
+        </div>
+      </form>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Medicine List</h2>
+          <div class="section-copy">Search, filter, and monitor live stock with reorder cues.</div>
+        </div>
+      </div>
+
+      <div class="filter-grid">
+        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search name, strength, SKU" />
+        <select [(ngModel)]="typeFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All types</option>
+          @for (item of medicineTypes; track item.id) {
+            <option [value]="item.id">{{ item.name }}</option>
+          }
+        </select>
+        <select [(ngModel)]="companyFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All companies</option>
+          @for (item of companies; track item.id) {
+            <option [value]="item.id">{{ item.name }}</option>
+          }
+        </select>
+        <label class="checkbox-line"><input type="checkbox" [(ngModel)]="lowStockOnly" [ngModelOptions]="{ standalone: true }" /> Low stock only</label>
+        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Generic</th>
+            <th>Company</th>
+            <th>Stock</th>
+            <th>Sale Price</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of medicines; track item.id) {
+            <tr>
+              <td><strong>{{ item.name }}</strong><div class="muted-line">{{ item.strength || '-' }} · {{ item.dosage_form || '-' }}</div></td>
+              <td>{{ item.medicine_type_name }}</td>
+              <td>{{ item.generic_name }}</td>
+              <td>{{ item.company_name }}</td>
+              <td><span [class.low-stock]="isLowStock(item)">{{ item.stock_quantity }}</span></td>
+              <td>{{ formatCurrency(item.sale_price) }}</td>
+              <td class="action-cell">
+                <button class="secondary-btn" type="button" (click)="edit(item)">Edit</button>
+                <button class="secondary-btn" type="button" (click)="openPurchase(item)">Purchase</button>
+                <button class="secondary-btn" type="button" (click)="openSale(item)">Sell</button>
+                <button class="danger-btn" type="button" (click)="remove(item)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+    </section>
+  </div>
+</section>

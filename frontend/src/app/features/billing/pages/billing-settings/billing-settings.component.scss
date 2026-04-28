@@ -1,0 +1,102 @@
+:host {
+  display: block;
+}
+
+.settings-page,
+.editor-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-head,
+.hero-main,
+.modal-header,
+.editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings-table th,
+.settings-table td {
+  padding: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.billing-editor-card {
+  width: min(1120px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+}
+
+.editor-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.service-control-table {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.control-head,
+.control-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) 120px 130px 140px 110px 120px 110px 90px;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.control-head {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.control-row {
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.muted-line {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 960px) {
+  .editor-grid,
+  .control-head,
+  .control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .control-head {
+    display: none;
+  }
+}

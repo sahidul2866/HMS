@@ -28,6 +28,7 @@ export interface OPDVisit {
   doctor_user_id?: string | null;
   consulting_doctor_user_id?: string | null;
   consulting_doctor_name: string;
+  visit_type: string;
   chief_complaint?: string | null;
   history_of_present_illness?: string | null;
   past_history?: string | null;
@@ -40,6 +41,10 @@ export interface OPDVisit {
   status: string;
   converted_ipd_admission_id?: string | null;
   consultation_fee: number;
+  consultation_discount?: number;
+  consultation_total?: number;
+  consultation_payment_status?: string;
+  consultation_paid_at?: string | null;
   note?: string | null;
   patient: Patient;
   orders: OPDVisitOrder[];
@@ -52,8 +57,9 @@ export interface CreateOPDVisitPayload {
   department_name: string;
   doctor_user_id?: string | null;
   consulting_doctor_name: string;
-  chief_complaint?: string | null;
   consultation_fee: number;
+  visit_type: string;
+  chief_complaint?: string | null;
   note?: string | null;
 }
 
@@ -81,6 +87,21 @@ export interface CreateOPDVisitOrderPayload {
 export interface UpdateOPDVisitOrderPayload {
   status: string;
   result_text?: string | null;
+}
+
+export interface UpdateOPDVisitPayload {
+  visit_date: string;
+  department_name: string;
+  doctor_user_id?: string | null;
+  consulting_doctor_name: string;
+  chief_complaint?: string | null;
+  consultation_fee: number;
+  note?: string | null;
+}
+
+export interface UpdateOPDPaymentPayload {
+  amount: number;
+  discount: number;
 }
 
 export interface ConvertOPDToIPDPayload {

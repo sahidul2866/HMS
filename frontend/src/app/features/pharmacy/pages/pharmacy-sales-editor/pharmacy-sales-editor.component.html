@@ -1,0 +1,84 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Counter Sales</div>
+        <h1 class="page-title">Medicine Sales</h1>
+        <div class="page-subtitle">Build a bill from medicine items, validate stock before posting, and keep discount plus payable totals visible while you work.</div>
+      </div>
+      <div class="hero-summary">
+        <div class="hero-stat"><div class="label">Customers</div><div class="value">{{ customers.length }}</div></div>
+        <div class="hero-stat"><div class="label">Medicines</div><div class="value">{{ medicines.length }}</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid-shell">
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">{{ editingSale ? 'Edit Sale' : 'Create Sale' }}</h2>
+          <div class="section-copy">Use the sales list page to review posted invoices and returned quantities.</div>
+        </div>
+      </div>
+
+      @if (draft) {
+        <div class="billing-prefill-banner" style="margin-bottom:1rem;">
+          <div><strong>Linked OPD Visit:</strong> {{ draft.source_visit_number }} · {{ draft.patient_name }}</div>
+          <div class="page-subtitle">{{ draft.message || 'Prescription draft loaded.' }}</div>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="form-grid">
+        <label class="field"><span>Customer</span><select formControlName="customer_id"><option value="">Select customer</option>@for (item of customers; track item.id) {<option [value]="item.id">{{ item.customer_number }} · {{ item.name }}</option>}</select></label>
+        @if (draft && !form.get('customer_id')?.value) {
+          <div class="section-copy" style="grid-column:1/-1;">No pharmacy customer was linked yet. The sale will auto-create or reuse a customer from this patient record.</div>
+        }
+        <label class="field"><span>Sale Date</span><input type="date" formControlName="sale_date" /></label>
+        <label class="field"><span>Discount Amount</span><input type="number" formControlName="discount_amount" /></label>
+        <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+        </div>
+
+        <div class="line-items" formArrayName="items">
+          <div class="line-items__head">
+            <h3>Sale Items</h3>
+            <button class="secondary-btn" type="button" (click)="addItem()">Add Item</button>
+          </div>
+          @for (group of items.controls; track $index; let index = $index) {
+            <div class="line-item" [formGroupName]="index">
+              <select formControlName="medicine_id" (change)="onMedicineChanged(index)">
+                <option value="">Select medicine</option>
+                @for (item of medicines; track item.id) {
+                  <option [value]="item.id">{{ item.name }} · Stock {{ item.stock_quantity }}</option>
+                }
+              </select>
+              <input type="text" formControlName="batch_no" placeholder="Batch no" />
+              <input type="date" formControlName="expiry_date" placeholder="Expiry" />
+              <input type="number" min="0.01" step="0.01" formControlName="quantity" placeholder="Qty" />
+              <input type="number" min="0" step="0.01" formControlName="unit_price" placeholder="Unit price" />
+              <input type="text" formControlName="note" placeholder="Item note" />
+              <button class="danger-btn" type="button" (click)="removeItem(index)">Remove</button>
+              @if (items.at(index).get('source_visit_order_id')?.value) {
+                <div class="section-copy" style="grid-column:1/-1;">Linked prescription line {{ items.at(index).get('source_visit_order_id')?.value }}</div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="sale-summary">
+          <div><span>Subtotal</span><strong>{{ subtotal | number:'1.2-2' }}</strong></div>
+          <div><span>Discount</span><strong>{{ form.getRawValue().discount_amount || 0 | number:'1.2-2' }}</strong></div>
+          <div><span>Net Payable</span><strong>{{ netPayable | number:'1.2-2' }}</strong></div>
+        </div>
+
+        <div class="toolbar-row">
+          <button class="primary-btn" type="submit">{{ editingSale ? 'Update Sale' : 'Post Sale' }}</button>
+          @if (editingSale || draft) {
+            <button class="secondary-btn" type="button" (click)="resetForm()">Cancel</button>
+          }
+        </div>
+      </form>
+    </section>
+  </div>
+</section>

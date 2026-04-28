@@ -4,8 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
 import { SessionService } from '../../../../core/services/session.service';
+import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import { InvestigationWorkItem, LaboratorySummary } from '../../models/laboratory.models';
 import { LaboratoryServiceApi } from '../../services/laboratory.service';
+
+type WorklistSortField = 'visit_date' | 'patient_name' | 'item_name' | 'status' | 'room_number';
 
 @Component({
   selector: 'app-laboratory-overview',
@@ -22,6 +25,8 @@ export class LaboratoryOverviewComponent {
   summary: LaboratorySummary | null = null;
   worklist: InvestigationWorkItem[] = [];
   queueSearch = '';
+  sortField: WorklistSortField = 'visit_date';
+  sortDirection: 'asc' | 'desc' = 'desc';
 
   constructor() {
     this.loadAll();
@@ -44,6 +49,24 @@ export class LaboratoryOverviewComponent {
     void this.router.navigate(['/laboratory/workbench', item.order_id]);
   }
 
+  printSticker(item: InvestigationWorkItem): void {
+    printInvestigationStickers(
+      [
+        {
+          module: 'LABORATORY',
+          token: item.order_id.slice(0, 8).toUpperCase(),
+          patientNumber: item.patient_number,
+          patientName: item.patient_name,
+          invoiceNumber: this.extractInvoiceNumber(item.instructions),
+          testName: item.item_name,
+          roomNumber: item.room_number,
+          quantity: item.quantity,
+        },
+      ],
+      `Lab Sticker - ${item.patient_number}`
+    );
+  }
+
   get filteredWorklist(): InvestigationWorkItem[] {
     const query = this.queueSearch.trim().toLowerCase();
     if (!query) {
@@ -56,12 +79,30 @@ export class LaboratoryOverviewComponent {
         item.patient_name,
         item.consulting_doctor_name,
         item.item_name,
+        item.room_number,
         item.chief_complaint,
         item.diagnosis,
       ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query))
     );
+  }
+
+  get sortedWorklist(): InvestigationWorkItem[] {
+    const multiplier = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.filteredWorklist].sort((left, right) => {
+      const leftValue = this.sortValue(left, this.sortField);
+      const rightValue = this.sortValue(right, this.sortField);
+      return leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' }) * multiplier;
+    });
+  }
+
+  toggleSortDirection(): void {
+    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+  }
+
+  statusClass(item: InvestigationWorkItem): string {
+    return `work-item-card--${String(item.status || 'pending').replace(/_/g, '-')}`;
   }
 
   get summaryCards(): { label: string; value: number }[] {
@@ -75,5 +116,14 @@ export class LaboratoryOverviewComponent {
       { label: 'Completed', value: this.summary.completed_orders },
       { label: 'Verified', value: this.summary.verified_orders },
     ];
+  }
+
+  private extractInvoiceNumber(instructions?: string | null): string | null {
+    const match = String(instructions || '').match(/INV-\d+/);
+    return match?.[0] ?? null;
+  }
+
+  private sortValue(item: InvestigationWorkItem, field: WorklistSortField): string {
+    return String(item[field] || '');
   }
 }

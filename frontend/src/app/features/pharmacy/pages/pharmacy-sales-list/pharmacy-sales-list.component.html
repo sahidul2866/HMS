@@ -1,0 +1,106 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Sales Ledger</div>
+        <h1 class="page-title">Medicine Sales List</h1>
+        <div class="page-subtitle">Review posted invoices, inspect sold items, trigger returns, or reopen a sale in the editor before any return activity starts.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="layout-shell">
+    <section class="page-card">
+      <div class="filter-grid">
+        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search sale number or customer" />
+        <select [(ngModel)]="customerFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All customers</option>
+          @for (item of customers; track item.id) {
+            <option [value]="item.id">{{ item.name }}</option>
+          }
+        </select>
+        <select [(ngModel)]="statusFilter" [ngModelOptions]="{ standalone: true }">
+          <option value="">All statuses</option>
+          <option value="sold">Sold</option>
+          <option value="partially_returned">Partially Returned</option>
+          <option value="returned">Returned</option>
+        </select>
+        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+      </div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Sale No</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th>Subtotal</th>
+            <th>Net</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sale of sales; track sale.id) {
+            <tr>
+              <td><strong>{{ sale.sale_number }}</strong><div class="muted-line">{{ sale.sale_date }}</div></td>
+              <td>{{ sale.customer_name }}</td>
+              <td><span class="pill">{{ sale.status }}</span></td>
+              <td>{{ formatCurrency(sale.subtotal) }}</td>
+              <td>{{ formatCurrency(sale.net_payable) }}</td>
+              <td class="action-cell">
+                <button class="secondary-btn" type="button" (click)="openSale(sale)">Details</button>
+                <button class="secondary-btn" type="button" (click)="navigateToEdit(sale)">Edit</button>
+                <button class="danger-btn" type="button" (click)="deleteSale(sale)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+    </section>
+
+    <aside class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">{{ selectedSale ? selectedSale.sale_number : 'Sale Details' }}</h2>
+          <div class="section-copy">{{ selectedSale ? selectedSale.customer_name : 'Select a sale to inspect line items and post returns.' }}</div>
+        </div>
+      </div>
+
+      @if (selectedSale) {
+        <div class="detail-stack">
+          @for (item of selectedSale.items; track item.id) {
+            <article class="detail-card">
+              <strong>{{ item.medicine_name }}</strong>
+              <span>Batch {{ item.batch_no || 'N/A' }} · Exp {{ item.expiry_date || 'N/A' }}</span>
+              <span>Sold {{ item.quantity }} · Returned {{ item.returned_quantity }} · Rate {{ formatCurrency(item.unit_price) }}</span>
+              <span>{{ formatCurrency(item.line_total) }}</span>
+            </article>
+          }
+        </div>
+
+        <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="submitReturn()">
+          <label class="field">
+            <span>Return Item</span>
+            <select formControlName="sale_item_id">
+              @for (item of selectedSale.items; track item.id) {
+                <option [value]="item.id">{{ item.medicine_name }} · Batch {{ item.batch_no || 'N/A' }} · Returnable {{ item.available_return_quantity }}</option>
+              }
+            </select>
+          </label>
+          <label class="field"><span>Return Date</span><input type="date" formControlName="returned_at" /></label>
+          <label class="field"><span>Quantity</span><input type="number" formControlName="quantity" /></label>
+          <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Create Return</button></div>
+        </form>
+      } @else {
+        <div class="empty-note">No sale selected.</div>
+      }
+    </aside>
+  </div>
+</section>

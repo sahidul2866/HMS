@@ -7,6 +7,13 @@
   gap: 1.5rem;
 }
 
+.module-hero {
+  background:
+    radial-gradient(circle at top left, rgba(74, 222, 128, 0.18), transparent 26rem),
+    linear-gradient(135deg, rgba(20, 83, 45, 0.98), rgba(21, 128, 61, 0.92));
+  color: #f8fbff;
+}
+
 .spotlight-grid {
   display: grid;
   gap: 1.5rem;
@@ -16,6 +23,8 @@
 .soft-panel {
   position: relative;
   overflow: hidden;
+  border-radius: 22px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
 
 .soft-panel::before {
@@ -56,6 +65,13 @@
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
+.form-grid {
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
 .context-card.active {
   border-color: rgba(22, 163, 74, 0.36);
   background: linear-gradient(180deg, rgba(220, 252, 231, 0.85), rgba(240, 253, 244, 0.96));
@@ -64,6 +80,34 @@
 .context-copy {
   color: #475569;
   line-height: 1.55;
+}
+
+.invoice-item-stack {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.invoice-item-btn {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  text-align: left;
+}
+
+.invoice-item-btn span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.invoice-item-btn.active {
+  border-color: rgba(22, 163, 74, 0.46);
+  background: rgba(220, 252, 231, 0.74);
 }
 
 .pill-row {

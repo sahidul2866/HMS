@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,9 @@ class BillingService(Base, BaseModelMixin):
     description: Mapped[str | None] = mapped_column(Text)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     doctor_share_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    max_discount_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    max_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    room_number: Mapped[str | None] = mapped_column(String(60))
 
     branch = relationship("Branch")
     invoice_items = relationship("BillingInvoiceItem", back_populates="billing_service")
@@ -42,12 +45,18 @@ class BillingInvoice(Base, BaseModelMixin):
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    source_opd_visit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visits.id"))
+    source_ipd_admission_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"))
+    source_module: Mapped[str | None] = mapped_column(String(40))
+    billing_stage: Mapped[str | None] = mapped_column(String(40))
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     internal_referral_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     referred_doctor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("referred_doctors.id"))
     referred_doctor_name: Mapped[str | None] = mapped_column(String(150))
     sub_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    item_discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    invoice_discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     paid_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -64,6 +73,8 @@ class BillingInvoice(Base, BaseModelMixin):
 
     branch = relationship("Branch")
     patient = relationship("Patient")
+    source_opd_visit = relationship("OPDVisit", foreign_keys=[source_opd_visit_id])
+    source_ipd_admission = relationship("IPDAdmission", foreign_keys=[source_ipd_admission_id])
     internal_referral_user = relationship("User", foreign_keys=[internal_referral_user_id])
     referred_doctor = relationship("ReferredDoctor", back_populates="invoices")
     billed_by = relationship("User", foreign_keys=[billed_by_user_id], back_populates="billed_invoices")
@@ -78,15 +89,24 @@ class BillingInvoiceItem(Base, BaseModelMixin):
 
     invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
     billing_service_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_services.id"), nullable=False)
+    source_opd_visit_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visit_orders.id"))
+    source_label: Mapped[str | None] = mapped_column(String(180))
+    source_module: Mapped[str | None] = mapped_column(String(40))
     service_name: Mapped[str] = mapped_column(String(150), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     line_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    max_discount_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    max_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    room_number: Mapped[str | None] = mapped_column(String(60))
     doctor_share_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     doctor_share_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
     invoice = relationship("BillingInvoice", back_populates="items")
     billing_service = relationship("BillingService", back_populates="invoice_items")
+    source_opd_visit_order = relationship("OPDVisitOrder", foreign_keys=[source_opd_visit_order_id])
 
 
 class BillingPayment(Base, BaseModelMixin):
@@ -127,3 +147,17 @@ class BillingRefund(Base, BaseModelMixin):
     patient = relationship("Patient")
     branch = relationship("Branch")
     refunded_by = relationship("User", foreign_keys=[refunded_by_user_id])
+
+
+class BillingSetting(Base, BaseModelMixin):
+    __tablename__ = "billing_settings"
+    __table_args__ = (UniqueConstraint("branch_id", name="uq_billing_settings_branch_id"),)
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    max_item_discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=100)
+    max_item_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    max_invoice_discount_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=100)
+    max_invoice_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    default_referral_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+
+    branch = relationship("Branch")

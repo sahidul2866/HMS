@@ -24,6 +24,7 @@ class PatientsRepository:
             return []
 
         pattern = f"%{normalized.lower()}%"
+        normalized_phone = "".join(char for char in normalized if char.isdigit())
         full_name = func.lower(
             func.concat(
                 Patient.first_name,
@@ -35,12 +36,14 @@ class PatientsRepository:
             select(Patient)
             .where(
                 or_(
+                    cast(Patient.id, String).ilike(pattern),
                     func.lower(Patient.patient_number).like(pattern),
                     func.lower(Patient.first_name).like(pattern),
                     func.lower(Patient.last_name).like(pattern),
                     full_name.like(pattern),
                     func.lower(func.coalesce(Patient.phone, "")).like(pattern),
                     func.lower(func.coalesce(Patient.email, "")).like(pattern),
+                    normalize_phone_expr(Patient.phone).like(f"%{normalized_phone}%") if normalized_phone else False,
                 )
             )
             .order_by(Patient.updated_at.desc(), Patient.created_at.desc())

@@ -24,6 +24,16 @@ export interface User {
   branch_id?: string | null;
   department_id?: string | null;
   patient_id?: string | null;
+  opd_consultation_fee?: string | number | null;
+  opd_follow_up_fee?: string | number | null;
+  opd_follow_up_days?: number | null;
+  opd_prescription_header_name?: string | null;
+  opd_prescription_header_degrees?: string | null;
+  opd_prescription_header_specialty?: string | null;
+  opd_prescription_header_workplace?: string | null;
+  opd_prescription_header_chamber?: string | null;
+  opd_prescription_header_phone?: string | null;
+  opd_prescription_header_address?: string | null;
   is_active: boolean;
   roles: Role[];
   direct_permissions: Permission[];

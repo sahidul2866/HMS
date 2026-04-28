@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
-import { BillingInvoiceListItem } from '../../../billing/models/billing.models';
+import { BillingInvoice, BillingInvoiceItem, BillingInvoiceListItem } from '../../../billing/models/billing.models';
 import { BillingServiceApi } from '../../../billing/services/billing.service';
 import { PharmacyDispense, PharmacyPendingPrescription } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -29,6 +29,8 @@ export class PharmacyWorkbenchComponent {
   pendingPrescriptions: PharmacyPendingPrescription[] = [];
   selectedPrescription: PharmacyPendingPrescription | null = null;
   selectedInvoice: BillingInvoiceListItem | null = null;
+  selectedInvoiceDetail: BillingInvoice | null = null;
+  selectedInvoiceItem: BillingInvoiceItem | null = null;
   returnTarget: PharmacyDispense | null = null;
   resultMessage = '';
   loading = true;
@@ -107,6 +109,8 @@ export class PharmacyWorkbenchComponent {
 
   applyInvoice(invoice: BillingInvoiceListItem): void {
     this.selectedInvoice = invoice;
+    this.selectedInvoiceDetail = null;
+    this.selectedInvoiceItem = null;
     this.selectedPrescription = null;
     this.form.patchValue({
       billing_invoice_id: invoice.id,
@@ -116,7 +120,27 @@ export class PharmacyWorkbenchComponent {
       prescription_ref: invoice.invoice_number,
       medicine_name: '',
       quantity: 1,
+      unit_price: 0,
       note: `Linked to billing invoice ${invoice.invoice_number} for ${invoice.patient.first_name} ${invoice.patient.last_name}`,
+    });
+    this.billingService.getInvoice(invoice.id).subscribe((detail) => this.applyInvoiceDetail(detail));
+  }
+
+  applyInvoiceMedicineItem(item: BillingInvoiceItem): void {
+    if (!this.selectedInvoiceDetail) {
+      return;
+    }
+    this.selectedInvoiceItem = item;
+    this.form.patchValue({
+      billing_invoice_id: this.selectedInvoiceDetail.id,
+      source_visit_id: this.selectedInvoiceDetail.source_opd_visit_id || '',
+      source_visit_order_id: item.source_opd_visit_order_id || '',
+      patient_id: this.selectedInvoiceDetail.patient_id,
+      prescription_ref: this.selectedInvoiceDetail.invoice_number,
+      medicine_name: item.service_name,
+      quantity: Number(item.quantity || 1),
+      unit_price: Number(item.unit_price || 0),
+      note: `Dispense from billing invoice ${this.selectedInvoiceDetail.invoice_number}${item.source_label ? ` · ${item.source_label}` : ''}`,
     });
   }
 
@@ -166,6 +190,8 @@ export class PharmacyWorkbenchComponent {
   resetForm(): void {
     this.selectedPrescription = null;
     this.selectedInvoice = null;
+    this.selectedInvoiceDetail = null;
+    this.selectedInvoiceItem = null;
     this.returnTarget = null;
     this.form.reset({
       billing_invoice_id: '',
@@ -189,9 +215,9 @@ export class PharmacyWorkbenchComponent {
   }
 
   formatCurrency(value: string | number): string {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-BD', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 2,
     }).format(Number(value || 0));
   }
@@ -219,5 +245,19 @@ export class PharmacyWorkbenchComponent {
         }
       }
     });
+  }
+
+  get invoicePharmacyItems(): BillingInvoiceItem[] {
+    return (this.selectedInvoiceDetail?.items ?? []).filter((item) => (item.source_module || '').toLowerCase() === 'pharmacy');
+  }
+
+  private applyInvoiceDetail(detail: BillingInvoice): void {
+    this.selectedInvoiceDetail = detail;
+    const pharmacyItem = this.invoicePharmacyItems[0];
+    if (pharmacyItem) {
+      this.applyInvoiceMedicineItem(pharmacyItem);
+    } else {
+      this.resultMessage = `Invoice ${detail.invoice_number} has no medicine line to dispense.`;
+    }
   }
 }

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -6,7 +8,7 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.admin.service import AdminService
 from app.schemas.role import RoleCreate, RoleRead, RoleUpdatePermissions
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import UserCreate, UserOPDSettingsUpdate, UserRead
 
 router = APIRouter(prefix="/admin", tags=["Administration"])
 
@@ -25,6 +27,18 @@ def create_user(
 ) -> UserRead:
     created = AdminService(db).create_user(payload, user.id, context)
     return UserRead.model_validate(created, from_attributes=True)
+
+
+@router.put("/users/{user_id}/opd-settings", response_model=UserRead, dependencies=[Depends(require_permissions("settings.user.manage"))])
+def update_user_opd_settings(
+    user_id: UUID,
+    payload: UserOPDSettingsUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    updated = AdminService(db).update_user_opd_settings(user_id, payload, user.id, context)
+    return UserRead.model_validate(updated, from_attributes=True)
 
 
 @router.get("/roles", response_model=list[RoleRead], dependencies=[Depends(require_permissions("settings.role.manage"))])

@@ -1,100 +1,330 @@
-<section class="workspace-shell">
-  <div class="page-card module-hero">
-    <div class="hero-row">
+<section class="workspace-shell ipd-entry-page">
+  <section class="page-card module-hero ipd-hero">
+    <div class="hero-main">
       <div>
         <div class="hero-kicker">IPD Admission</div>
-        <h1 class="page-title">Create Inpatient Admission</h1>
-        <div class="page-subtitle">Keep admission entry separate from the live IPD control room so admission staff can complete data entry cleanly and quickly.</div>
+        <h1 class="page-title">Admit Inpatient Patient</h1>
+        <p class="page-subtitle">Structured admission intake for patient identity, grantor details, bed allocation, and financial readiness before moving into the live IPD workspace.</p>
       </div>
-      <div class="toolbar-row">
+      <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="backToOverview()">Back To IPD Overview</button>
       </div>
     </div>
+
+    <div class="hero-metrics">
+      <article class="hero-metric">
+        <span>Admission Progress</span>
+        <strong>{{ admissionProgress }}%</strong>
+        <div class="progress-track">
+          <span [style.width.%]="admissionProgress"></span>
+        </div>
+      </article>
+      <article class="hero-metric">
+        <span>Patient</span>
+        <strong>{{ patientDisplayName }}</strong>
+        <small>{{ selectedPatient?.patient_number || 'Search or select a patient' }}</small>
+      </article>
+      <article class="hero-metric">
+        <span>Bed Plan</span>
+        <strong>{{ selectedBedSummary }}</strong>
+        <small>{{ filteredBeds.length }} available in current filter</small>
+      </article>
+    </div>
+  </section>
+
+  <div class="entry-layout">
+    <section class="page-card entry-card">
+      <div class="section-intro">
+        <div>
+          <div class="section-eyebrow">Step 1</div>
+          <h2 class="section-title">Patient Lookup And Intake</h2>
+          <p class="section-copy">Search the existing patient registry first. The remaining fields organize the admission intake around the selected patient and current bed availability.</p>
+        </div>
+        @if (selectedPatient) {
+          <div class="selection-badge">
+            <strong>{{ selectedPatient.patient_number }}</strong>
+            <span>{{ patientDisplayName }}</span>
+          </div>
+        }
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="lookup-banner">
+          <div class="lookup-head">
+            <div class="lookup-copy">
+              <div class="lookup-title">Existing Patient Search</div>
+              <p>Use patient number, name, phone, or email. Admission creation stays tied to the current backend-safe IPD payload.</p>
+            </div>
+            <div class="lookup-hint-card">
+              <strong>Legacy intake aligned</strong>
+              <span>The layout mirrors department, doctor, patient, grantor, and bed sections from the old workflow.</span>
+            </div>
+          </div>
+
+          <div class="lookup-row">
+            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
+            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
+            <button class="ghost-btn" type="button" [disabled]="!patientSearchResults.length" (click)="openPatientLookupModal()">View Matches</button>
+            @if (selectedPatient) {
+              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+            }
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 2</div>
+            <h3>Admission Header</h3>
+          </div>
+          <div class="form-grid ipd-grid">
+            <label class="field">
+              <span>Department</span>
+              <input type="text" formControlName="department_name" placeholder="General Medicine" />
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.admitted_at, submitted)">
+              <span>Admission Date And Time</span>
+              <input type="datetime-local" formControlName="admitted_at" />
+              @if (validation.isInvalid(form.controls.admitted_at, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.admitted_at, 'Admission date and time') }}</div>
+              }
+            </label>
+            <label class="field">
+              <span>Reference Name</span>
+              <input type="text" formControlName="reference_name" placeholder="Referral or reference source" />
+            </label>
+            <label class="field">
+              <span>Doctor Directory</span>
+              <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
+                <option value="">Select from doctor directory</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 3</div>
+            <h3>Patient Profile</h3>
+          </div>
+          <div class="patient-info-grid">
+            <article class="patient-info-card">
+              <span>Patient Number</span>
+              <strong>{{ selectedPatient?.patient_number || 'Pending' }}</strong>
+            </article>
+            <article class="patient-info-card">
+              <span>Name</span>
+              <strong>{{ patientDisplayName }}</strong>
+            </article>
+            <article class="patient-info-card">
+              <span>Phone</span>
+              <strong>{{ selectedPatient?.phone || 'Not recorded' }}</strong>
+            </article>
+            <article class="patient-info-card">
+              <span>Age</span>
+              <strong>{{ patientAgeLabel }}</strong>
+            </article>
+            <article class="patient-info-card">
+              <span>Gender</span>
+              <strong>{{ selectedPatient?.gender || 'Not recorded' }}</strong>
+            </article>
+            <article class="patient-info-card">
+              <span>Email</span>
+              <strong>{{ selectedPatient?.email || 'Not recorded' }}</strong>
+            </article>
+          </div>
+
+          <div class="form-grid ipd-grid compact-grid">
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.patient_id, submitted)">
+              <span>Selected Patient</span>
+              <select formControlName="patient_id" (change)="onPatientChanged()">
+                <option value="">Select patient</option>
+                @for (patient of patients; track patient.id) {
+                  <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+                }
+              </select>
+              @if (validation.isInvalid(form.controls.patient_id, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.patient_id, 'Patient') }}</div>
+              }
+            </label>
+            <label class="field">
+              <span>Booking Date</span>
+              <input type="date" formControlName="booking_date" />
+            </label>
+            <label class="field">
+              <span>Booking Time</span>
+              <input type="time" formControlName="booking_time" />
+            </label>
+            <label class="field">
+              <span>Admission Type</span>
+              <input type="text" formControlName="admission_type" />
+            </label>
+            <label class="field field-wide">
+              <span>Address</span>
+              <textarea rows="2" [value]="selectedPatient?.address || ''" readonly placeholder="Patient address appears here after selection"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 4</div>
+            <h3>Grantor And Clinical Notes</h3>
+          </div>
+          <div class="form-grid ipd-grid">
+            <label class="field">
+              <span>Grantor Name</span>
+              <input type="text" formControlName="emergency_contact_name" placeholder="Emergency or guarantor name" />
+            </label>
+            <label class="field">
+              <span>Relation</span>
+              <input type="text" formControlName="emergency_contact_relation" placeholder="Father, spouse, guardian" />
+            </label>
+            <label class="field">
+              <span>Phone</span>
+              <input type="text" formControlName="emergency_contact_phone" placeholder="Emergency contact phone" />
+            </label>
+            <label class="field field-wide">
+              <span>Diagnosis / Admission Reason</span>
+              <textarea rows="3" formControlName="diagnosis" placeholder="Chief diagnosis, provisional diagnosis, or admission reason"></textarea>
+            </label>
+            <label class="field field-wide">
+              <span>Intake Note</span>
+              <textarea rows="3" formControlName="intake_note" placeholder="Optional non-billing intake context, package notes, reference context, or bedside instructions"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="section-block">
+          <div class="section-headline">
+            <div class="section-eyebrow">Step 5</div>
+            <h3>Bed And Finance</h3>
+          </div>
+          <div class="form-grid ipd-grid">
+            <label class="field">
+              <span>Floor / Ward Filter</span>
+              <select formControlName="ward_filter" (change)="onWardFilterChanged()">
+                <option value="">All wards</option>
+                @for (ward of wardOptions; track ward) {
+                  <option [value]="ward">{{ ward }}</option>
+                }
+              </select>
+            </label>
+            <label class="field">
+              <span>Bed Information</span>
+              <select formControlName="bed_id" (change)="onBedChanged()">
+                <option value="">Select managed bed</option>
+                @for (bed of filteredBeds; track bed.id) {
+                  <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} - {{ bed.bed_type }}</option>
+                }
+              </select>
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.ward_name, submitted)">
+              <span>Ward</span>
+              <input type="text" formControlName="ward_name" />
+              @if (validation.isInvalid(form.controls.ward_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.ward_name, 'Ward') }}</div>
+              }
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.bed_number, submitted)">
+              <span>Bed Number</span>
+              <input type="text" formControlName="bed_number" />
+              @if (validation.isInvalid(form.controls.bed_number, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.bed_number, 'Bed number') }}</div>
+              }
+            </label>
+            <label class="field">
+              <span>Package Name</span>
+              <input type="text" formControlName="package_name" placeholder="Optional package or room plan" />
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.attending_doctor_name, submitted)">
+              <span>Attending Doctor</span>
+              <input type="text" formControlName="attending_doctor_name" />
+              @if (validation.isInvalid(form.controls.attending_doctor_name, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.attending_doctor_name, 'Attending doctor') }}</div>
+              }
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.daily_charge, submitted)">
+              <span>Daily Charge</span>
+              <input type="number" formControlName="daily_charge" />
+              @if (validation.isInvalid(form.controls.daily_charge, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.daily_charge, 'Daily charge') }}</div>
+              }
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.advance_amount, submitted)">
+              <span>Advance Amount</span>
+              <input type="number" formControlName="advance_amount" />
+              @if (validation.isInvalid(form.controls.advance_amount, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.advance_amount, 'Advance amount') }}</div>
+              }
+            </label>
+            <label class="field">
+              <span>Expected Discharge</span>
+              <input type="date" formControlName="expected_discharge_date" />
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="ghost-btn" type="button" (click)="backToOverview()">Cancel</button>
+          <button class="primary-btn" type="submit">Create Admission</button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="side-stack">
+      <section class="page-card summary-card">
+        <div class="section-eyebrow">Admission Snapshot</div>
+        <h3>{{ patientDisplayName }}</h3>
+        <ul class="summary-list">
+          <li><span>Patient ID</span><strong>{{ selectedPatient?.patient_number || 'Pending' }}</strong></li>
+          <li><span>Doctor</span><strong>{{ selectedDoctorName }}</strong></li>
+          <li><span>Department</span><strong>{{ form.getRawValue().department_name || 'Pending' }}</strong></li>
+          <li><span>Ward / Bed</span><strong>{{ selectedBedSummary }}</strong></li>
+          <li><span>Advance</span><strong>{{ form.getRawValue().advance_amount || 0 }}</strong></li>
+        </ul>
+      </section>
+
+      <section class="page-card tip-card">
+        <div class="section-eyebrow">Intake Notes</div>
+        <ul class="tip-list">
+          <li>Select a managed bed to auto-fill ward, bed number, and daily charge.</li>
+          <li>Grantor fields help front desk staff mirror the legacy admission worksheet.</li>
+          <li>Unsupported legacy-only fields stay in the UI intake layer and do not alter the current IPD API contract.</li>
+        </ul>
+      </section>
+    </aside>
   </div>
 
-  <section class="page-card">
-    <div class="section-header">
-      <div>
-        <h2 class="section-title">Patient And Admission Details</h2>
-        <div class="section-copy">Start with patient autofill, then complete only the admission-specific details and bed assignment.</div>
-      </div>
-    </div>
+  @if (patientLookupModalOpen) {
+    <div class="modal-backdrop" (click)="closePatientLookupModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Patient Matches</p>
+            <h3>Select Patient For Admission</h3>
+          </div>
+          <button class="icon-btn" type="button" (click)="closePatientLookupModal()">×</button>
+        </div>
 
-    <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="field" style="grid-column:1/-1;">
-        <span>Existing Patient Lookup</span>
-        <div class="toolbar-row" style="align-items:flex-start; gap:0.75rem; flex-wrap:wrap;">
-          <input
-            [formControl]="patientLookupControl"
-            type="text"
-            placeholder="Search by patient number, phone, email, or name"
-            style="flex:1 1 320px;"
-          />
-          <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
-          @if (selectedPatient) {
-            <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+        <div class="modal-results">
+          @for (patient of patientSearchResults; track patient.id) {
+            <button class="result-card" type="button" (click)="applyPatient(patient)">
+              <div class="result-main">
+                <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                <span>{{ patient.phone || 'No mobile' }}</span>
+              </div>
+              <div class="result-meta">
+                <span>{{ patient.email || 'No email' }}</span>
+                <span>{{ patient.gender || 'No gender' }}</span>
+              </div>
+            </button>
           }
         </div>
-        @if (patientSearchResults.length) {
-          <div class="page-card" style="padding:0.75rem;">
-            <div class="page-subtitle" style="margin-bottom:0.75rem;">Matching patients</div>
-            <div class="grid-2">
-              @for (patient of patientSearchResults; track patient.id) {
-                <button class="secondary-btn" type="button" (click)="applyPatient(patient)" style="text-align:left;">
-                  {{ patient.patient_number }} - {{ patient.full_name }}
-                  @if (patient.phone) { · {{ patient.phone }} }
-                </button>
-              }
-            </div>
-          </div>
-        }
-        @if (selectedPatient) {
-          <div class="page-card" style="padding:0.85rem;">
-            <strong>{{ selectedPatient.patient_number }} - {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
-            <div class="page-subtitle" style="margin:0.35rem 0 0;">
-              Phone: {{ selectedPatient.phone || '-' }} · Email: {{ selectedPatient.email || '-' }} · Gender: {{ selectedPatient.gender || '-' }}
-            </div>
-          </div>
-        }
-      </div>
-      <label class="field">
-        <span>Patient</span>
-        <select formControlName="patient_id" (change)="onPatientChanged()">
-          <option value="">Select patient</option>
-          @for (patient of patients; track patient.id) {
-            <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field">
-        <span>Available Bed</span>
-        <select formControlName="bed_id" (change)="onBedChanged()">
-          <option value="">Select managed bed</option>
-          @for (bed of availableBeds; track bed.id) {
-            <option [value]="bed.id">{{ bed.ward_name }} / {{ bed.bed_number }} - {{ bed.bed_type }}</option>
-          }
-        </select>
-      </label>
-      <label class="field"><span>Admitted At</span><input type="datetime-local" formControlName="admitted_at" /></label>
-      <label class="field"><span>Admission Type</span><input type="text" formControlName="admission_type" /></label>
-      <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
-      <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
-      <label class="field">
-        <span>Attending Doctor Directory</span>
-        <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
-          <option value="">Select from doctor directory</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ doctor.full_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field"><span>Attending Doctor</span><input type="text" formControlName="attending_doctor_name" /></label>
-      <label class="field"><span>Daily Charge</span><input type="number" formControlName="daily_charge" /></label>
-      <label class="field"><span>Advance Amount</span><input type="number" formControlName="advance_amount" /></label>
-      <label class="field"><span>Expected Discharge</span><input type="date" formControlName="expected_discharge_date" /></label>
-      <label class="field" style="grid-column:1/-1;"><span>Diagnosis</span><textarea rows="3" formControlName="diagnosis"></textarea></label>
-      <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Create Admission</button></div>
-    </form>
-  </section>
+      </section>
+    </div>
+  }
 </section>
