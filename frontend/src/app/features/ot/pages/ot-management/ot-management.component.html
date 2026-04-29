@@ -1,0 +1,201 @@
+<section class="ot-shell">
+  <header class="ot-hero">
+    <div>
+      <div class="eyebrow">Operation Theatre</div>
+      <h1>OT Command Center</h1>
+      <p>Schedule, checklist, anesthesia, recovery and billing.</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" (click)="openModal('booking')">Book OT</button>
+      <button type="button" (click)="openModal('schedule')">Schedule</button>
+      <button type="button" (click)="openModal('room')">Room</button>
+      <button type="button" (click)="printCaseSheet()">Print</button>
+    </div>
+  </header>
+
+  <nav class="tab-strip">
+    @for (item of tabs; track item.key) {
+      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
+    }
+  </nav>
+
+  @if (error) { <div class="alert error">{{ error }}</div> }
+  @if (success) { <div class="alert success">{{ success }}</div> }
+
+  @if (tab() === 'dashboard' && dashboard) {
+    <section class="metric-grid">
+      <div class="metric"><span>Today</span><strong>{{ dashboard.today_surgeries }}</strong></div>
+      <div class="metric info"><span>Upcoming</span><strong>{{ dashboard.upcoming_surgeries }}</strong></div>
+      <div class="metric warn"><span>Ongoing</span><strong>{{ dashboard.ongoing_surgeries }}</strong></div>
+      <div class="metric good"><span>Completed</span><strong>{{ dashboard.completed_surgeries }}</strong></div>
+      <div class="metric danger"><span>Emergency</span><strong>{{ dashboard.emergency_surgeries }}</strong></div>
+      <div class="metric"><span>Rooms</span><strong>{{ dashboard.available_rooms }}/{{ dashboard.available_rooms + dashboard.occupied_rooms }}</strong></div>
+      <div class="metric warn"><span>Pre-Op Pending</span><strong>{{ dashboard.pending_pre_op }}</strong></div>
+      <div class="metric warn"><span>Anesthesia Pending</span><strong>{{ dashboard.pending_anesthesia }}</strong></div>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel">
+        <div class="panel-head"><h2>Room Board</h2><span>Real-time OT status</span></div>
+        <div class="room-board">
+          @for (room of rooms; track room.id) {
+            <div [class]="statusClass(room.status)"><strong>{{ room.room_number }}</strong><span>{{ room.name }}</span><small>{{ room.status }}</small></div>
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Surgeon Load</h2><span>Today</span></div>
+        <div class="bar-list">
+          @for (item of dashboard.surgeon_schedule | keyvalue; track item.key) {
+            <div class="bar-row"><span>{{ item.key }}</span><i [style.width.%]="(item.value / maxRecord(dashboard.surgeon_schedule)) * 100"></i><b>{{ item.value }}</b></div>
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Smart Alerts</h2><span>Safety and workflow</span></div>
+        <div class="stack">
+          @for (alert of dashboard.alerts; track alert) { <div class="alert-row">{{ alert }}</div> }
+          @if (!dashboard.alerts.length) { <div class="empty">No OT alerts right now.</div> }
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (tab() === 'bookings') {
+    <section class="panel">
+      <div class="list-toolbar"><input [(ngModel)]="q" (input)="load()" placeholder="Search booking, patient, procedure" /><button type="button" (click)="openModal('booking')">New Booking</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Booking</th><th>Patient</th><th>Procedure</th><th>Type</th><th>Priority</th><th>Preferred</th><th>Status</th></tr></thead><tbody>
+        @for (booking of bookings; track booking.id) {
+          <tr><td><strong>{{ booking.booking_number }}</strong></td><td>{{ booking.patient_name }}<small>{{ booking.patient_number }}</small></td><td>{{ booking.procedure_name }}</td><td>{{ booking.surgery_type }}</td><td><span [class]="statusClass(booking.priority_level)">{{ booking.priority_level }}</span></td><td>{{ booking.preferred_start_at | date:'short' }}</td><td><span [class]="statusClass(booking.status)">{{ booking.status }}</span></td></tr>
+        }
+      </tbody></table></div>
+    </section>
+  }
+
+  @if (tab() === 'calendar' || tab() === 'checklist' || tab() === 'anesthesia' || tab() === 'notes' || tab() === 'recovery' || tab() === 'consumables' || tab() === 'billing' || tab() === 'documents' || tab() === 'reports') {
+    <section class="workflow-layout">
+      <section class="panel">
+        <div class="list-toolbar">
+          <input type="date" [(ngModel)]="calendarDay" (change)="loadSchedules()" />
+          <select [(ngModel)]="statusFilter" (change)="loadSchedules()"><option value="">All status</option><option>scheduled</option><option>ready_for_ot</option><option>in_progress</option><option>completed</option><option>cancelled</option></select>
+          <button type="button" (click)="openModal('schedule')">Schedule</button>
+        </div>
+        <div class="schedule-list">
+          @for (schedule of schedules; track schedule.id) {
+            <button type="button" class="schedule-card" [class.active]="selectedSchedule?.id === schedule.id" (click)="selectSchedule(schedule)">
+              <strong>{{ schedule.procedure_name }}</strong>
+              <span>{{ schedule.patient_name }} · {{ schedule.room_number }} · {{ schedule.scheduled_start_at | date:'shortTime' }}</span>
+              <i [class]="statusClass(schedule.status)">{{ schedule.status }}</i>
+            </button>
+          }
+        </div>
+      </section>
+
+      <aside class="panel case-panel">
+        <div class="panel-head"><h2>OT Case Sheet</h2><span>{{ selectedSchedule?.booking_number || 'Select case' }}</span></div>
+        @if (selectedSchedule) {
+          <div class="case-title">
+            <strong>{{ selectedSchedule.procedure_name }}</strong>
+            <span>{{ selectedSchedule.patient_name }} · {{ selectedSchedule.patient_number }}</span>
+          </div>
+          <div class="action-grid">
+            <button type="button" (click)="openModal('preop')">Pre-Op</button>
+            <button type="button" (click)="openModal('anesthesia')">Anesthesia</button>
+            <button type="button" (click)="openModal('note')">Notes</button>
+            <button type="button" (click)="openModal('recovery')">Recovery</button>
+            <button type="button" (click)="openModal('consumable')">Consumable</button>
+            <button type="button" (click)="openModal('equipment')">Equipment</button>
+            <button type="button" (click)="openModal('billing')">Billing</button>
+            <button type="button" (click)="openModal('document')">Document</button>
+          </div>
+          <div class="status-actions">
+            <button type="button" (click)="updateStatus(selectedSchedule, 'ready_for_ot')">Ready</button>
+            <button type="button" (click)="updateStatus(selectedSchedule, 'in_progress')">Start</button>
+            <button type="button" (click)="updateStatus(selectedSchedule, 'completed')">Complete</button>
+            <button type="button" (click)="updateStatus(selectedSchedule, 'cancelled')">Cancel</button>
+          </div>
+          @if (caseSheet) {
+            <div class="case-sections">
+              <div><b>Pre-Op</b><span>Ready: {{ caseSheet.pre_op?.['ready_for_ot'] ? 'Yes' : 'No' }}</span></div>
+              <div><b>Anesthesia</b><span>{{ caseSheet.anesthesia?.['clearance_status'] || 'Pending' }}</span></div>
+              <div><b>Outcome</b><span>{{ caseSheet.surgery_note?.['surgery_outcome'] || '-' }}</span></div>
+              <div><b>Recovery</b><span>{{ caseSheet.recovery?.['transfer_to'] || '-' }}</span></div>
+              <div><b>Consumables</b><span>{{ caseSheet.consumables.length }} item(s)</span></div>
+              <div><b>Billing</b><span>{{ caseSheet.billing.length }} charge(s)</span></div>
+            </div>
+          }
+        } @else {
+          <div class="empty">Select a surgery to view the case sheet.</div>
+        }
+      </aside>
+    </section>
+  }
+
+  @if (tab() === 'rooms') {
+    <section class="panel">
+      <div class="list-toolbar"><button type="button" (click)="openModal('room')">Add Room</button></div>
+      <div class="room-board large">
+        @for (room of rooms; track room.id) {
+          <div [class]="statusClass(room.status)"><strong>{{ room.room_number }}</strong><span>{{ room.name }}</span><small>{{ room.room_type }} · {{ formatMoney(room.hourly_charge) }}/hr</small><em>{{ room.equipment_summary }}</em></div>
+        }
+      </div>
+    </section>
+  }
+</section>
+
+@if (modal) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <form class="modal-card" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
+      <div class="modal-head"><h2>{{ modal | titlecase }}</h2><button type="button" (click)="closeModal()">Close</button></div>
+
+      @if (modal === 'room') {
+        <div class="form-grid"><label>No<input [(ngModel)]="roomForm['room_number']" name="rno" /></label><label>Name<input [(ngModel)]="roomForm['name']" name="rname" /></label><label>Type<select [(ngModel)]="roomForm['room_type']" name="rtype"><option>major</option><option>minor</option><option>emergency</option><option>daycare</option></select></label><label>Status<select [(ngModel)]="roomForm['status']" name="rstatus"><option>available</option><option>booked</option><option>in_use</option><option>cleaning</option><option>maintenance</option><option>closed</option></select></label><label>Charge<input type="number" [(ngModel)]="roomForm['hourly_charge']" name="charge" /></label><label class="wide">Equipment<input [(ngModel)]="roomForm['equipment_summary']" name="equip" /></label></div>
+        <button class="primary" type="button" (click)="saveRoom()">Save Room</button>
+      }
+
+      @if (modal === 'booking') {
+        <div class="form-grid"><label class="wide">Patient Search<input [(ngModel)]="bookingForm['patient_label']" name="patient" (input)="patientSearchChanged($any($event.target).value)" /></label>
+          @if (patientMatches.length) { <div class="dropdown wide">@for (patient of patientMatches; track patient.id) { <button type="button" (click)="selectPatient(patient)">{{ patient.patient_number }} - {{ patient.full_name }}</button> }</div> }
+          <label>Procedure<input [(ngModel)]="bookingForm['procedure_name']" name="proc" /></label><label>Type<select [(ngModel)]="bookingForm['surgery_type']" name="stype"><option>elective</option><option>emergency</option><option>minor</option><option>major</option><option>daycare</option></select></label><label>Priority<select [(ngModel)]="bookingForm['priority_level']" name="priority"><option>critical</option><option>high</option><option>normal</option><option>low</option></select></label><label>Preferred<input type="datetime-local" [(ngModel)]="bookingForm['preferred_start_at']" name="pref" /></label><label>Duration<input type="number" [(ngModel)]="bookingForm['estimated_duration_minutes']" name="duration" /></label><label>Department<input [(ngModel)]="bookingForm['department_name']" name="dept" /></label><label class="wide">Diagnosis<input [(ngModel)]="bookingForm['diagnosis']" name="diag" /></label></div>
+        <button class="primary" type="button" (click)="saveBooking()">Create Booking</button>
+      }
+
+      @if (modal === 'schedule') {
+        <div class="form-grid"><label>Booking<select [(ngModel)]="scheduleForm['booking_id']" name="book">@for (booking of bookings; track booking.id) { <option [value]="booking.id">{{ booking.booking_number }} - {{ booking.procedure_name }}</option> }</select></label><label>Room<select [(ngModel)]="scheduleForm['room_id']" name="room">@for (room of rooms; track room.id) { <option [value]="room.id">{{ room.room_number }} - {{ room.name }}</option> }</select></label><label>Start<input type="datetime-local" [(ngModel)]="scheduleForm['scheduled_start_at']" name="start" /></label><label>End<input type="datetime-local" [(ngModel)]="scheduleForm['scheduled_end_at']" name="end" /></label><label>Status<select [(ngModel)]="scheduleForm['status']" name="status"><option>approved</option><option>scheduled</option><option>ready_for_ot</option></select></label></div>
+        <button class="primary" type="button" (click)="saveSchedule()">Schedule Surgery</button>
+      }
+
+      @if (modal === 'preop') {
+        <div class="check-grid">@for (key of ['consent_signed','anesthesia_cleared','lab_verified','radiology_verified','blood_arranged','npo_confirmed','site_marked','equipment_confirmed','implant_confirmed','ready_for_ot']; track key) { <label><input type="checkbox" [(ngModel)]="preOpForm[key]" [name]="key" /> {{ key.replaceAll('_', ' ') }}</label> }</div>
+        <label>Risk Notes<input [(ngModel)]="preOpForm['risk_assessment_notes']" name="risk" /></label><button class="primary" type="button" (click)="savePreOp()">Save Checklist</button>
+      }
+
+      @if (modal === 'anesthesia') {
+        <div class="form-grid"><label>Type<select [(ngModel)]="anesthesiaForm['anesthesia_type']" name="atype"><option>general</option><option>local</option><option>regional</option><option>spinal</option><option>epidural</option><option>sedation</option></select></label><label>Status<select [(ngModel)]="anesthesiaForm['clearance_status']" name="clear"><option>pending</option><option>cleared</option><option>hold</option></select></label><label class="wide">Assessment<input [(ngModel)]="anesthesiaForm['pre_assessment']" name="assessment" /></label><label class="wide">Vitals<input [(ngModel)]="anesthesiaForm['vitals_summary']" name="vitals" /></label></div><button class="primary" type="button" (click)="saveAnesthesia()">Save Anesthesia</button>
+      }
+
+      @if (modal === 'note') {
+        <div class="form-grid"><label class="wide">Procedure<input [(ngModel)]="noteForm['procedure_performed']" name="done" /></label><label class="wide">Findings<input [(ngModel)]="noteForm['operative_findings']" name="findings" /></label><label class="wide">Surgeon Notes<input [(ngModel)]="noteForm['surgeon_notes']" name="surgeon" /></label><label><input type="checkbox" [(ngModel)]="noteForm['instrument_count_confirmed']" name="inst" /> Instrument count</label><label><input type="checkbox" [(ngModel)]="noteForm['sponge_count_confirmed']" name="sponge" /> Sponge count</label><label>Outcome<select [(ngModel)]="noteForm['surgery_outcome']" name="outcome"><option>successful</option><option>completed_with_observation</option><option>referred</option><option>cancelled</option><option>postponed</option></select></label></div><button class="primary" type="button" (click)="saveNote()">Save Notes</button>
+      }
+
+      @if (modal === 'recovery') {
+        <div class="form-grid"><label>Transfer<select [(ngModel)]="recoveryForm['transfer_to']" name="transfer"><option>recovery</option><option>icu</option><option>ward</option><option>discharge</option></select></label><label>Pain<input type="number" [(ngModel)]="recoveryForm['pain_score']" name="pain" /></label><label>Status<input [(ngModel)]="recoveryForm['consciousness_status']" name="conc" /></label><label class="wide">Handover<input [(ngModel)]="recoveryForm['handover_notes']" name="handover" /></label></div><button class="primary" type="button" (click)="saveRecovery()">Save Recovery</button>
+      }
+
+      @if (modal === 'consumable') {
+        <div class="form-grid"><label>Item<input [(ngModel)]="consumableForm['item_name']" name="citem" /></label><label>Batch<input [(ngModel)]="consumableForm['batch_no']" name="batch" /></label><label>Qty<input type="number" [(ngModel)]="consumableForm['quantity_used']" name="qty" /></label><label>Charge<input type="number" [(ngModel)]="consumableForm['charged_amount']" name="ccharge" /></label></div><button class="primary" type="button" (click)="saveConsumable()">Save Consumable</button>
+      }
+
+      @if (modal === 'equipment') {
+        <div class="form-grid"><label>Name<input [(ngModel)]="equipmentForm['equipment_name']" name="ename" /></label><label>Charge<input type="number" [(ngModel)]="equipmentForm['charge_amount']" name="echarge" /></label><label class="wide">Notes<input [(ngModel)]="equipmentForm['usage_notes']" name="enote" /></label></div><button class="primary" type="button" (click)="saveEquipment()">Save Equipment</button>
+      }
+
+      @if (modal === 'billing') {
+        <div class="form-grid"><label>Type<select [(ngModel)]="billingForm['charge_type']" name="btype"><option>procedure</option><option>room</option><option>surgeon_fee</option><option>anesthesia</option><option>consumable</option><option>implant</option><option>equipment</option><option>emergency_surcharge</option></select></label><label>Amount<input type="number" [(ngModel)]="billingForm['amount']" name="amount" /></label><label class="wide">Description<input [(ngModel)]="billingForm['description']" name="desc" /></label></div><button class="primary" type="button" (click)="saveBilling()">Save Charge</button>
+      }
+
+      @if (modal === 'document') {
+        <div class="form-grid"><label>Type<select [(ngModel)]="documentForm['document_type']" name="dtype"><option>consent</option><option>anesthesia_form</option><option>operative_note</option><option>lab_report</option><option>radiology_report</option><option>case_sheet</option></select></label><label>Title<input [(ngModel)]="documentForm['title']" name="title" /></label><label class="wide">Body<input [(ngModel)]="documentForm['body']" name="body" /></label></div><button class="primary" type="button" (click)="saveDocument()">Save Document</button>
+      }
+    </form>
+  </div>
+}

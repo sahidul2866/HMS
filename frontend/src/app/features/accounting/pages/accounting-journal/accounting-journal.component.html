@@ -1,110 +1,183 @@
-<section class="workspace-shell accounting-page">
-  <section class="page-card module-hero accounting-hero">
-    <div class="hero-main">
-      <div>
-        <div class="hero-kicker">Accounting</div>
-        <h1 class="page-title">Post Accounting Journal</h1>
-        <div class="page-subtitle">Create balanced journal entries in a cleaner finance workspace. Backend still enforces balanced debit and credit values.</div>
-      </div>
-      <div class="hero-stats">
-        <div class="hero-stat">
-          <div class="label">Posted Journals</div>
-          <div class="value">{{ journals.length }}</div>
-        </div>
-        <div class="hero-stat">
-          <div class="label">Validation</div>
-          <div class="value">Balanced</div>
-        </div>
-      </div>
+<section class="accounting-shell">
+  <header class="accounting-hero">
+    <div>
+      <div class="eyebrow">Accounting</div>
+      <h1>Finance Control Center</h1>
+      <p>Revenue, dues, payables, payroll, cash, bank and journals.</p>
     </div>
-  </section>
+    <div class="hero-actions">
+      <button type="button" (click)="openModal('advance')">Advance</button>
+      <button type="button" (click)="openModal('expense')">Expense</button>
+      <button type="button" (click)="openModal('journal')">Journal</button>
+      <button type="button" (click)="load()">Refresh</button>
+    </div>
+  </header>
 
-  <div class="accounting-layout">
-    <section class="page-card form-card">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Journal Entry</h2>
-          <div class="section-copy">Post the reference, description, and the debit-credit values from one focused form.</div>
-        </div>
-      </div>
+  <nav class="tab-strip">
+    @for (item of tabs; track item.key) {
+      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
+    }
+  </nav>
 
-      <form class="form-grid accounting-form" [formGroup]="form" (ngSubmit)="submit()">
-        <label class="field">
-          <div class="field-label-row">
-            <span>Reference</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--optional">Optional</span>
-            </span>
-          </div>
-          <input type="text" formControlName="reference" placeholder="JV-2026-001" />
-        </label>
-        <label class="field field-wide">
-          <div class="field-label-row">
-            <span>Description</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--required">Mandatory</span>
-            </span>
-          </div>
-          <textarea rows="4" formControlName="description" placeholder="What this journal entry represents"></textarea>
-        </label>
-        <label class="field">
-          <div class="field-label-row">
-            <span>Debit Amount</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--required">Mandatory</span>
-            </span>
-          </div>
-          <input type="number" formControlName="debit_amount" />
-        </label>
-        <label class="field">
-          <div class="field-label-row">
-            <span>Credit Amount</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--required">Mandatory</span>
-            </span>
-          </div>
-          <input type="number" formControlName="credit_amount" />
-        </label>
-        <div class="form-actions field-wide">
-          <button class="primary-btn" type="submit">Post Journal</button>
-        </div>
-      </form>
+  @if (error) { <div class="alert error">{{ error }}</div> }
 
-      @if (resultMessage) {
-        <div class="pill result-pill">{{ resultMessage }}</div>
+  @if (dashboard) {
+    <section class="kpi-grid">
+      @for (kpi of dashboard.kpis; track kpi.label) {
+        <article [class]="'kpi ' + kpi.tone">
+          <span>{{ kpi.label }}</span>
+          <strong>{{ money(kpi.value) }}</strong>
+        </article>
       }
     </section>
+  }
 
-    <section class="page-card data-card">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Journal Grid</h2>
-          <div class="section-copy">Recently posted journals stay visible here for quick ledger review.</div>
-        </div>
-      </div>
-
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Journal No</th>
-            <th>Description</th>
-            <th>Debit</th>
-            <th>Credit</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (journal of journals; track journal.id) {
-            <tr>
-              <td><strong>{{ journal.journal_number }}</strong></td>
-              <td>{{ journal.description }}</td>
-              <td>{{ journal.debit_amount }}</td>
-              <td>{{ journal.credit_amount }}</td>
-              <td>{{ journal.status }}</td>
-            </tr>
+  @if (tab() === 'dashboard' && dashboard) {
+    <section class="dashboard-grid">
+      <article class="panel span-2">
+        <div class="panel-head"><h2>Revenue vs Expense</h2><span>This month</span></div>
+        <div class="bar-list">
+          @for (point of dashboard.revenue_vs_expense; track point.label) {
+            <div class="bar-row"><span>{{ point.label }}</span><i [style.width.%]="(num(point.value) / max(dashboard.revenue_vs_expense)) * 100"></i><b>{{ money(point.value) }}</b></div>
           }
-        </tbody>
-      </table>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Payment Mix</h2><span>Collections</span></div>
+        <div class="compact-list">
+          @for (point of dashboard.payment_methods; track point.label) {
+            <div><span>{{ point.label }}</span><b>{{ money(point.value) }}</b></div>
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Smart Alerts</h2><span>Finance risk</span></div>
+        <div class="alert-list">
+          @for (alert of dashboard.alerts; track alert.title) {
+            <div [class]="'smart-alert ' + alert.severity"><strong>{{ alert.title }}</strong><span>{{ alert.message }}</span></div>
+          }
+          @if (!dashboard.alerts.length) { <div class="empty">No finance alerts.</div> }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Department Revenue</h2><span>Source module</span></div>
+        <div class="bar-list">
+          @for (point of dashboard.department_revenue; track point.label) {
+            <div class="bar-row"><span>{{ point.label }}</span><i [style.width.%]="(num(point.value) / max(dashboard.department_revenue)) * 100"></i><b>{{ money(point.value) }}</b></div>
+          }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Due Aging</h2><span>Patients</span></div>
+        <div class="compact-list">
+          @for (point of dashboard.due_aging; track point.label) {
+            <div><span>{{ point.label }} days</span><b>{{ money(point.value) }}</b></div>
+          }
+        </div>
+      </article>
     </section>
-  </div>
+  }
+
+  @if (tab() === 'accounts' && workspace) {
+    <section class="panel">
+      <div class="list-toolbar"><button type="button" (click)="openModal('account')">Add Account</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Code</th><th>Account</th><th>Category</th><th>Module</th><th>Balance</th><th>Status</th></tr></thead><tbody>
+        @for (account of workspace.accounts; track account.id) {
+          <tr><td><strong>{{ account.account_code }}</strong></td><td>{{ account.name }}</td><td>{{ account.category }}</td><td>{{ account.module_key || '-' }}</td><td>{{ money(account.current_balance) }}</td><td><span [class]="account.is_active ? 'badge good' : 'badge danger'">{{ account.is_active ? 'active' : 'inactive' }}</span></td></tr>
+        }
+      </tbody></table></div>
+    </section>
+  }
+
+  @if (tab() !== 'dashboard' && tab() !== 'accounts' && tab() !== 'journals' && tab() !== 'reports' && tab() !== 'audit') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <button type="button" (click)="openModal('advance')" *ngIf="tab() === 'collections'">Collect Advance</button>
+        <button type="button" (click)="openModal('insurance')" *ngIf="tab() === 'receivables'">Insurance Claim</button>
+        <button type="button" (click)="openModal('supplier')" *ngIf="tab() === 'payables'">Supplier Bill</button>
+        <button type="button" (click)="openModal('expense')" *ngIf="tab() === 'expenses'">New Expense</button>
+        <button type="button" (click)="openModal('refund')" *ngIf="tab() === 'receivables'">Refund</button>
+        <button type="button" (click)="openModal('discount')" *ngIf="tab() === 'receivables'">Discount</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Name</th><th>Category</th><th>Amount</th><th>Paid</th><th>Due/Diff</th><th>Status</th></tr></thead><tbody>
+        @for (record of recordsForTab(); track record.id) {
+          <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td></tr>
+        }
+        @if (!recordsForTab().length) { <tr><td colspan="7"><div class="empty">No records yet.</div></td></tr> }
+      </tbody></table></div>
+    </section>
+  }
+
+  @if (tab() === 'journals' && workspace) {
+    <section class="panel">
+      <div class="list-toolbar"><button type="button" (click)="openModal('journal')">Post Journal</button></div>
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Date</th><th>Narration</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead><tbody>
+        @for (entry of workspace.journal_entries; track entry.id) {
+          <tr><td><strong>{{ entry.journal_number }}</strong></td><td>{{ entry.journal_date }}</td><td>{{ entry.narration }}</td><td>{{ money(entry.total_debit) }}</td><td>{{ money(entry.total_credit) }}</td><td><span [class]="statusClass(entry.status)">{{ entry.status }}</span></td></tr>
+        }
+      </tbody></table></div>
+    </section>
+  }
+
+  @if (tab() === 'reports') {
+    <section class="report-grid">
+      @for (item of ['Daily Collection', 'Profit & Loss', 'Cash Flow', 'Balance Sheet', 'Patient Due Aging', 'Supplier Aging', 'Insurance Receivable', 'Payroll Cost', 'Doctor Commission', 'Tax/VAT']; track item) {
+        <a class="report-link" routerLink="/reporting">{{ item }}</a>
+      }
+    </section>
+  }
+
+  @if (tab() === 'audit') {
+    <section class="panel"><div class="empty">Sensitive finance changes are stored in accounting audit logs and system audit logs.</div></section>
+  }
 </section>
+
+@if (modal) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <form class="modal-card" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
+      <div class="modal-head"><h2>{{ modal | titlecase }}</h2><button type="button" (click)="closeModal()">Close</button></div>
+
+      @if (modal === 'account') {
+        <div class="form-grid">
+          <label>Code<input [(ngModel)]="accountForm['account_code']" name="account_code" /></label>
+          <label>Name<input [(ngModel)]="accountForm['name']" name="account_name" /></label>
+          <label>Category<select [(ngModel)]="accountForm['category']" name="category"><option>assets</option><option>liabilities</option><option>equity</option><option>revenue</option><option>expenses</option></select></label>
+          <label>Normal<select [(ngModel)]="accountForm['normal_balance']" name="normal"><option>debit</option><option>credit</option></select></label>
+          <label>Module<input [(ngModel)]="accountForm['module_key']" name="module" /></label>
+          <label>Balance<input type="number" [(ngModel)]="accountForm['current_balance']" name="balance" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveAccount()">Save Account</button>
+      }
+
+      @if (modal === 'journal') {
+        <div class="form-grid">
+          <label>Date<input type="date" [(ngModel)]="journalForm['journal_date']" name="jdate" /></label>
+          <label>Source<input [(ngModel)]="journalForm['source_module']" name="source" /></label>
+          <label class="wide">Narration<input [(ngModel)]="journalForm['narration']" name="narration" /></label>
+        </div>
+        @for (line of $any(journalForm['lines']); track $index) {
+          <div class="form-grid line-grid">
+            <label>Code<input [(ngModel)]="line.account_code" [name]="'code' + $index" /></label>
+            <label>Account<input [(ngModel)]="line.account_name" [name]="'acc' + $index" /></label>
+            <label>Debit<input type="number" [(ngModel)]="line.debit_amount" [name]="'debit' + $index" /></label>
+            <label>Credit<input type="number" [(ngModel)]="line.credit_amount" [name]="'credit' + $index" /></label>
+          </div>
+        }
+        <button class="primary" type="button" (click)="saveJournal()">Post Journal</button>
+      }
+
+      @if (modal !== 'account' && modal !== 'journal') {
+        <div class="form-grid">
+          <label>Reference<input [(ngModel)]="workflowForm['reference']" name="reference" /></label>
+          <label>Name<input [(ngModel)]="workflowForm['name']" name="name" /></label>
+          <label>Amount<input type="number" [(ngModel)]="workflowForm['amount']" name="amount" /></label>
+          <label>Category<input [(ngModel)]="workflowForm['category']" name="category" /></label>
+          <label>Status<select [(ngModel)]="workflowForm['status']" name="status"><option>pending</option><option>approved</option><option>active</option><option>open</option><option>partial</option><option>paid</option></select></label>
+          <label>Method<select [(ngModel)]="workflowForm['payment_method']" name="method"><option>cash</option><option>bank</option><option>card</option><option>mobile_banking</option><option>cheque</option><option>insurance</option><option>corporate</option></select></label>
+          <label class="wide">Note<input [(ngModel)]="workflowForm['note']" name="note" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveWorkflow(modal)">Save</button>
+      }
+    </form>
+  </div>
+}

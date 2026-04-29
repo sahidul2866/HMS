@@ -1,0 +1,358 @@
+<section class="hr-shell">
+  <header class="hr-topbar">
+    <div>
+      <div class="eyebrow">HR & Payroll</div>
+      <h1>Hospital Workforce Desk</h1>
+    </div>
+    <div class="top-actions">
+      <button type="button" (click)="openModal('employee')">Add Employee</button>
+      <button type="button" (click)="openModal('attendance')">Mark Attendance</button>
+      <button type="button" (click)="openModal('payroll')">Run Payroll</button>
+    </div>
+  </header>
+
+  <nav class="tab-strip" aria-label="HR sections">
+    @for (item of tabs; track item.key) {
+      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item)">{{ item.label }}</button>
+    }
+  </nav>
+
+  @if (error) { <div class="alert error">{{ error }}</div> }
+  @if (success) { <div class="alert success">{{ success }}</div> }
+
+  @if (tab() === 'dashboard') {
+    <section class="metric-grid">
+      <div class="metric"><span>Total</span><strong>{{ summary?.total_employees || 0 }}</strong></div>
+      <div class="metric good"><span>Active</span><strong>{{ summary?.active_employees || 0 }}</strong></div>
+      <div class="metric warn"><span>Late</span><strong>{{ summary?.attendance?.['late'] || 0 }}</strong></div>
+      <div class="metric danger"><span>Absent</span><strong>{{ summary?.attendance?.['absent'] || 0 }}</strong></div>
+      <div class="metric"><span>Pending Leave</span><strong>{{ summary?.pending_leave_requests || 0 }}</strong></div>
+      <div class="metric money"><span>Salary Payable</span><strong>{{ formatMoney(summary?.monthly_salary_payable) }}</strong></div>
+    </section>
+
+    <section class="content-grid">
+      <div class="panel wide">
+        <div class="panel-head">
+          <h2>Today</h2>
+          <button type="button" (click)="openModal('attendance')">Mark</button>
+        </div>
+        <div class="attendance-badges">
+          <span class="status status-present">Present {{ summary?.attendance?.['present'] || 0 }}</span>
+          <span class="status status-late">Late {{ summary?.attendance?.['late'] || 0 }}</span>
+          <span class="status status-absent">Absent {{ summary?.attendance?.['absent'] || 0 }}</span>
+          <span class="status status-on-leave">Leave {{ summary?.attendance?.['on_leave'] || 0 }}</span>
+          <span class="status status-half-day">Half {{ summary?.attendance?.['half_day'] || 0 }}</span>
+        </div>
+        <div class="bar-list">
+          @for (dept of (summary?.department_counts | keyvalue); track dept.key) {
+            <div class="bar-row">
+              <span>{{ dept.key }}</span>
+              <div><i [style.width.%]="(dept.value / (summary?.total_employees || 1)) * 100"></i></div>
+              <b>{{ dept.value }}</b>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Alerts</h2></div>
+        @if (summary?.alerts?.length) {
+          <div class="stack">
+            @for (alert of summary?.alerts; track alert) { <div class="alert-row">{{ alert }}</div> }
+          </div>
+        } @else {
+          <div class="empty">No certificate or contract alerts.</div>
+        }
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'employees') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <input type="search" [(ngModel)]="query" placeholder="Search staff code, name, phone, department" />
+        <select [(ngModel)]="employeeStatus">
+          <option value="">All status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="resigned">Resigned</option>
+          <option value="terminated">Terminated</option>
+        </select>
+        <button type="button" (click)="exportEmployees()">Export</button>
+        <button type="button" (click)="openModal('employee')">Add</button>
+      </div>
+      <div class="responsive-table">
+        <table>
+          <thead><tr><th>Employee</th><th>Department</th><th>Category</th><th>Join</th><th>Salary</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @for (employee of filteredEmployees(); track employee.id) {
+              <tr [class.row-alert]="employee.license_expiry_date || employee.contract_end_date">
+                <td><strong>{{ employee.full_name }}</strong><small>{{ employee.staff_code }} · {{ employee.phone || 'No phone' }}</small></td>
+                <td>{{ employee.department_name || 'Unassigned' }}<small>{{ employee.designation_name || '-' }}</small></td>
+                <td>{{ employee.employee_category }}</td>
+                <td>{{ employee.joining_date }}</td>
+                <td>{{ formatMoney(employee.salary_gross) }}</td>
+                <td><span [class]="statusClass(employee.employment_status)">{{ employee.employment_status }}</span></td>
+                <td class="actions">
+                  <button type="button" (click)="openModal('employee', employee)">Edit</button>
+                  <button type="button" (click)="openModal('salary', employee)">Salary</button>
+                  <button type="button" (click)="openModal('leave', employee)">Leave</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'attendance') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <input type="date" [(ngModel)]="attendanceDate" (change)="loadAttendance()" />
+        <button type="button" (click)="openModal('attendance')">Mark Attendance</button>
+        <span class="status status-present">Present {{ attendanceTotal('present') }}</span>
+        <span class="status status-late">Late {{ attendanceTotal('late') }}</span>
+        <span class="status status-absent">Absent {{ attendanceTotal('absent') }}</span>
+      </div>
+      <div class="calendar-grid">
+        @for (item of attendance; track item.id) {
+          <button type="button" class="calendar-cell" [class]="item.status">
+            <strong>{{ item.employee_name }}</strong>
+            <span>{{ item.staff_code }} · {{ item.working_hours }}h</span>
+            <i>{{ item.status }}</i>
+          </button>
+        }
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'roster') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <button type="button" (click)="openModal('shift')">Create Shift</button>
+        <button type="button" (click)="openModal('roster')">Assign Duty</button>
+      </div>
+      <div class="roster-grid">
+        @for (item of roster; track item.id) {
+          <div class="roster-card">
+            <strong>{{ item.employee_name }}</strong>
+            <span>{{ item.roster_date }} · {{ item.shift_name || 'Open shift' }}</span>
+            <small>{{ item.duty_area || 'General' }} · {{ item.duty_type }}</small>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'leave') {
+    <section class="panel">
+      <div class="list-toolbar"><button type="button" (click)="openModal('leave')">Apply Leave</button></div>
+      <div class="responsive-table">
+        <table>
+          <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @for (request of leaveRequests; track request.id) {
+              <tr>
+                <td>{{ request.employee_name }}</td><td>{{ request.leave_type_name }}</td><td>{{ request.start_date }} to {{ request.end_date }}</td><td>{{ request.number_of_days }}</td>
+                <td><span [class]="statusClass(request.status)">{{ request.status }}</span></td>
+                <td class="actions">
+                  <button type="button" (click)="decideLeave(request, 'approve')">Approve</button>
+                  <button type="button" (click)="decideLeave(request, 'reject')">Reject</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'payroll') {
+    <section class="payroll-layout">
+      <div class="panel">
+        <div class="list-toolbar"><button type="button" (click)="openModal('payroll')">Run Payroll</button></div>
+        @for (run of payrollRuns; track run.id) {
+          <div class="payroll-row" (click)="viewPayslip(run)">
+            <div><strong>{{ run.payroll_month }}</strong><small>{{ run.total_employees }} employees · {{ run.status }}</small></div>
+            <b>{{ formatMoney(run.total_net_salary) }}</b>
+            <div class="actions">
+              <button type="button" (click)="decidePayroll(run, 'approved'); $event.stopPropagation()">Approve</button>
+              <button type="button" (click)="decidePayroll(run, 'paid'); $event.stopPropagation()">Paid</button>
+            </div>
+          </div>
+        }
+      </div>
+      <aside class="panel payslip-panel">
+        <div class="panel-head"><h2>Payslip Preview</h2><button type="button" (click)="printPayslip()">Print</button></div>
+        @if (selectedPayroll?.items?.length) {
+          @for (item of (selectedPayroll?.items || []); track item.id) {
+            <div class="payslip">
+              <h3>{{ item.employee_name }}</h3>
+              <p>{{ item.staff_code }} · {{ selectedPayroll?.payroll_month }}</p>
+              <dl>
+                <dt>Gross</dt><dd>{{ formatMoney(item.gross_salary) }}</dd>
+                <dt>Deductions</dt><dd>{{ formatMoney(item.total_deductions) }}</dd>
+                <dt>Net Payable</dt><dd>{{ formatMoney(item.net_salary) }}</dd>
+                <dt>Attendance</dt><dd>{{ item.calculation_note }}</dd>
+              </dl>
+            </div>
+          }
+        } @else {
+          <div class="empty">Select a payroll run.</div>
+        }
+      </aside>
+    </section>
+  }
+
+  @if (tab() === 'recruitment') {
+    <section class="quick-grid">
+      <button type="button" (click)="openModal('job')"><strong>Job Opening</strong><span>Create department vacancy</span></button>
+      <button type="button" (click)="openModal('candidate')"><strong>Candidate</strong><span>Track application and interview</span></button>
+      <button type="button" (click)="openModal('employee')"><strong>Hire</strong><span>Convert selected candidate to employee</span></button>
+    </section>
+  }
+
+  @if (tab() === 'performance') {
+    <section class="quick-grid">
+      <button type="button" (click)="openModal('performance')"><strong>Appraisal</strong><span>KPI, rating, feedback</span></button>
+      <button type="button" (click)="openModal('resignation')"><strong>Exit</strong><span>Resignation and clearance</span></button>
+      <button type="button" (click)="openModal('employee')"><strong>Promotion</strong><span>Update designation and salary</span></button>
+    </section>
+  }
+
+  @if (tab() === 'reports') {
+    <section class="metric-grid">
+      <div class="metric"><span>Employees</span><strong>{{ employees.length }}</strong></div>
+      <div class="metric"><span>Attendance Rows</span><strong>{{ attendance.length }}</strong></div>
+      <div class="metric"><span>Leave Requests</span><strong>{{ leaveRequests.length }}</strong></div>
+      <div class="metric money"><span>Payroll Runs</span><strong>{{ payrollRuns.length }}</strong></div>
+    </section>
+  }
+
+  @if (tab() === 'settings') {
+    <section class="panel">
+      <div class="settings-list">
+        @for (setting of settings; track setting.id) {
+          <button type="button" class="setting-row" (click)="openModal('setting', undefined, setting)">
+            <strong>{{ setting.setting_key }}</strong>
+            <span>{{ setting.setting_value }}</span>
+            <small>{{ setting.description }}</small>
+          </button>
+        }
+      </div>
+    </section>
+  }
+</section>
+
+@if (modal) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <form class="modal-card" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
+      <div class="modal-head">
+        <h2>{{ modal | titlecase }}</h2>
+        <button type="button" (click)="closeModal()">Close</button>
+      </div>
+
+      @if (modal === 'employee') {
+        <div class="form-grid">
+          <label>Name<input [(ngModel)]="employeeForm.full_name" name="full_name" required /></label>
+          <label>Phone<input [(ngModel)]="employeeForm.phone" name="phone" /></label>
+          <label>Email<input [(ngModel)]="employeeForm.email" name="email" type="email" /></label>
+          <label>Category<select [(ngModel)]="employeeForm.employee_category" name="category"><option>doctor</option><option>nurse</option><option>lab_technician</option><option>pharmacist</option><option>receptionist</option><option>admin_staff</option><option>accountant</option><option>cleaner</option><option>security</option><option>driver</option><option>other</option></select></label>
+          <label>Type<select [(ngModel)]="employeeForm.employee_type" name="type"><option>full_time</option><option>part_time</option><option>contract</option><option>visiting</option></select></label>
+          <label>Joining<input [(ngModel)]="employeeForm.joining_date" name="joining" type="date" /></label>
+          <label>Status<select [(ngModel)]="employeeForm.employment_status" name="status"><option>active</option><option>inactive</option><option>resigned</option><option>terminated</option></select></label>
+          <label>License<input [(ngModel)]="employeeForm.license_number" name="license" /></label>
+          <label>Bank Account<input [(ngModel)]="employeeForm.bank_account_number" name="bank" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveEmployee()" [disabled]="saving">Save Employee</button>
+      }
+
+      @if (modal === 'attendance') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="attendanceForm['employee_id']" name="att_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Date<input type="date" [(ngModel)]="attendanceForm['attendance_date']" name="att_date" /></label>
+          <label>Status<select [(ngModel)]="attendanceForm['status']" name="att_status"><option>present</option><option>late</option><option>absent</option><option>on_leave</option><option>half_day</option></select></label>
+          <label>Hours<input type="number" [(ngModel)]="attendanceForm['working_hours']" name="hours" /></label>
+          <label>Late Min<input type="number" [(ngModel)]="attendanceForm['late_minutes']" name="late" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveAttendance()">Save Attendance</button>
+      }
+
+      @if (modal === 'shift') {
+        <div class="form-grid">
+          <label>Name<input [(ngModel)]="shiftForm['name']" name="shift_name" /></label>
+          <label>Code<input [(ngModel)]="shiftForm['code']" name="shift_code" /></label>
+          <label>Type<select [(ngModel)]="shiftForm['shift_type']" name="shift_type"><option>morning</option><option>evening</option><option>night</option><option>emergency</option><option>on_call</option><option>weekend</option></select></label>
+          <label>Start<input [(ngModel)]="shiftForm['start_time']" name="start" /></label>
+          <label>End<input [(ngModel)]="shiftForm['end_time']" name="end" /></label>
+          <label>Allowance<input type="number" [(ngModel)]="shiftForm['allowance_amount']" name="allowance" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveShift()">Create Shift</button>
+      }
+
+      @if (modal === 'roster') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="rosterForm['employee_id']" name="rost_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Shift<select [(ngModel)]="rosterForm['shift_id']" name="rost_shift">@for (shift of shifts; track shift.id) { <option [value]="shift.id">{{ shift.name }}</option> }</select></label>
+          <label>Date<input type="date" [(ngModel)]="rosterForm['roster_date']" name="rost_date" /></label>
+          <label>Area<input [(ngModel)]="rosterForm['duty_area']" name="area" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveRoster()">Assign Duty</button>
+      }
+
+      @if (modal === 'leave') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="leaveForm['employee_id']" name="leave_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Type<select [(ngModel)]="leaveForm['leave_type_id']" name="leave_type">@for (type of leaveTypes; track type.id) { <option [value]="type.id">{{ type.name }}</option> }</select></label>
+          <label>Start<input type="date" [(ngModel)]="leaveForm['start_date']" name="leave_start" /></label>
+          <label>End<input type="date" [(ngModel)]="leaveForm['end_date']" name="leave_end" /></label>
+          <label>Days<input type="number" [(ngModel)]="leaveForm['number_of_days']" name="leave_days" /></label>
+          <label class="wide">Reason<input [(ngModel)]="leaveForm['reason']" name="leave_reason" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveLeave()">Save Leave</button>
+      }
+
+      @if (modal === 'salary') {
+        <div class="form-grid">
+          <label>Basic<input type="number" [(ngModel)]="salaryForm['basic_salary']" name="basic" /></label>
+          <label>House Rent<input type="number" [(ngModel)]="salaryForm['house_rent_allowance']" name="hra" /></label>
+          <label>Medical<input type="number" [(ngModel)]="salaryForm['medical_allowance']" name="medical" /></label>
+          <label>Transport<input type="number" [(ngModel)]="salaryForm['transport_allowance']" name="transport" /></label>
+          <label>OT Rate<input type="number" [(ngModel)]="salaryForm['overtime_hourly_rate']" name="ot" /></label>
+          <label>PF<input type="number" [(ngModel)]="salaryForm['provident_fund_deduction']" name="pf" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveSalary()">Save Salary</button>
+      }
+
+      @if (modal === 'payroll') {
+        <div class="form-grid"><label>Month<input type="month" [(ngModel)]="payrollForm.payroll_month" name="pay_month" /></label><label class="wide">Note<input [(ngModel)]="payrollForm.note" name="pay_note" /></label></div>
+        <button class="primary" type="button" (click)="savePayroll()">Generate Preview</button>
+      }
+
+      @if (modal === 'job') {
+        <div class="form-grid"><label>Title<input [(ngModel)]="jobForm['title']" name="job_title" /></label><label>Positions<input type="number" [(ngModel)]="jobForm['number_of_positions']" name="job_no" /></label><label>Closing<input type="date" [(ngModel)]="jobForm['closing_date']" name="job_close" /></label><label class="wide">Description<input [(ngModel)]="jobForm['description']" name="job_desc" /></label></div>
+        <button class="primary" type="button" (click)="saveJob()">Save Job</button>
+      }
+
+      @if (modal === 'candidate') {
+        <div class="form-grid"><label>Name<input [(ngModel)]="candidateForm['full_name']" name="cand_name" /></label><label>Phone<input [(ngModel)]="candidateForm['phone']" name="cand_phone" /></label><label>Email<input [(ngModel)]="candidateForm['email']" name="cand_email" /></label><label>Status<select [(ngModel)]="candidateForm['status']" name="cand_status"><option>applied</option><option>shortlisted</option><option>interviewed</option><option>selected</option><option>rejected</option><option>hired</option></select></label></div>
+        <button class="primary" type="button" (click)="saveCandidate()">Save Candidate</button>
+      }
+
+      @if (modal === 'performance') {
+        <div class="form-grid"><label>Employee<select [(ngModel)]="performanceForm['employee_id']" name="perf_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label><label>Period<input [(ngModel)]="performanceForm['review_period']" name="perf_period" /></label><label>Rating<input type="number" [(ngModel)]="performanceForm['rating']" name="rating" /></label><label class="wide">Feedback<input [(ngModel)]="performanceForm['feedback']" name="feedback" /></label></div>
+        <button class="primary" type="button" (click)="savePerformance()">Save Review</button>
+      }
+
+      @if (modal === 'resignation') {
+        <div class="form-grid"><label>Employee<select [(ngModel)]="resignationForm['employee_id']" name="exit_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label><label>Date<input type="date" [(ngModel)]="resignationForm['resignation_date']" name="exit_date" /></label><label>Last Day<input type="date" [(ngModel)]="resignationForm['last_working_date']" name="last_day" /></label><label class="wide">Reason<input [(ngModel)]="resignationForm['reason']" name="exit_reason" /></label></div>
+        <button class="primary" type="button" (click)="saveResignation()">Start Exit</button>
+      }
+
+      @if (modal === 'setting') {
+        <div class="form-grid"><label>Key<input [(ngModel)]="settingForm.setting_key" name="setting_key" readonly /></label><label>Value<input [(ngModel)]="settingForm.setting_value" name="setting_value" /></label><label class="wide">Description<input [(ngModel)]="settingForm.description" name="setting_desc" /></label></div>
+        <button class="primary" type="button" (click)="saveSetting()">Update Setting</button>
+      }
+    </form>
+  </div>
+}

@@ -1,16 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { BillingReferralSummary, BillingSummary } from '../../../billing/models/billing.models';
 import { BillingServiceApi } from '../../../billing/services/billing.service';
-import { ClinicalOperationsSummary } from '../../models/reporting.models';
+import { ClinicalOperationsSummary, ReportCatalog, ReportCatalogItem } from '../../models/reporting.models';
 import { ReportingServiceApi } from '../../services/reporting.service';
 
 @Component({
   selector: 'app-reporting-overview',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
   templateUrl: './reporting-overview.component.html',
   styleUrls: ['./reporting-overview.component.scss'],
 })
@@ -22,6 +23,8 @@ export class ReportingOverviewComponent {
   summary: BillingSummary | null = null;
   referralSummary: BillingReferralSummary[] = [];
   clinicalSummary: ClinicalOperationsSummary | null = null;
+  catalog: ReportCatalog | null = null;
+  selectedCategory = 'Accounting & Finance';
 
   readonly form = this.fb.group({
     date_from: [''],
@@ -40,6 +43,7 @@ export class ReportingOverviewComponent {
     this.billingService.getSummary(filters).subscribe((summary) => (this.summary = summary));
     this.billingService.getReferralSummary(filters).subscribe((summary) => (this.referralSummary = summary));
     this.reportingService.getClinicalSummary().subscribe((summary) => (this.clinicalSummary = summary));
+    this.reportingService.getCatalog().subscribe((catalog) => (this.catalog = catalog));
   }
 
   formatCurrency(value: string | number): string {
@@ -80,5 +84,9 @@ export class ReportingOverviewComponent {
         verified: '-',
       },
     ];
+  }
+
+  get filteredReports(): ReportCatalogItem[] {
+    return (this.catalog?.reports || []).filter((item) => item.category === this.selectedCategory);
   }
 }

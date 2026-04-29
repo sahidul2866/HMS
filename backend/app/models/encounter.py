@@ -142,6 +142,57 @@ class IPDAdmissionMovement(Base, BaseModelMixin):
     moved_by = relationship("User", foreign_keys=[moved_by_user_id])
 
 
+class ERVisit(Base, BaseModelMixin):
+    __tablename__ = "er_visits"
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    visit_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    arrival_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="walk_in")
+    arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_reference: Mapped[str | None] = mapped_column(String(120))
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(120))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(20))
+    triage_category: Mapped[str] = mapped_column(String(30), nullable=False, default="yellow")
+    triage_level: Mapped[int] = mapped_column(nullable=False, default=3)
+    vitals: Mapped[str | None] = mapped_column(Text)
+    chief_complaint: Mapped[str | None] = mapped_column(Text)
+    initial_diagnosis: Mapped[str | None] = mapped_column(Text)
+    assigned_doctor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_nurse_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_location: Mapped[str | None] = mapped_column(String(120))
+    treatment_status: Mapped[str | None] = mapped_column(String(40), default="pending")
+    treatment_notes: Mapped[str | None] = mapped_column(Text)
+    disposition: Mapped[str | None] = mapped_column(String(255))
+    referral_hospital: Mapped[str | None] = mapped_column(String(150))
+    referral_doctor_name: Mapped[str | None] = mapped_column(String(150))
+    disposition_note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="waiting")
+    admitted_to_ipd_admission_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"))
+    discharged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    branch = relationship("Branch")
+    patient = relationship("Patient")
+    assigned_doctor = relationship("User", foreign_keys=[assigned_doctor_user_id])
+    assigned_nurse = relationship("User", foreign_keys=[assigned_nurse_user_id])
+    admitted_to_ipd_admission = relationship("IPDAdmission", foreign_keys=[admitted_to_ipd_admission_id])
+    ambulance_records = relationship("ERAmbulanceRecord", back_populates="er_visit", cascade="all, delete-orphan")
+
+
+class ERAmbulanceRecord(Base, BaseModelMixin):
+    __tablename__ = "er_ambulance_records"
+
+    er_visit_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("er_visits.id"), nullable=False)
+    ambulance_service: Mapped[str] = mapped_column(String(120), nullable=False)
+    driver_name: Mapped[str | None] = mapped_column(String(120))
+    pickup_location: Mapped[str | None] = mapped_column(String(255))
+    drop_off_location: Mapped[str | None] = mapped_column(String(255))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+
+    er_visit = relationship("ERVisit", back_populates="ambulance_records")
+
+
 class Appointment(Base, BaseModelMixin):
     __tablename__ = "appointments"
 

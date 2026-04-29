@@ -1,0 +1,147 @@
+<section class="inventory-shell">
+  <header class="inventory-hero">
+    <div>
+      <div class="eyebrow">Inventory</div>
+      <h1>Stock Control</h1>
+      <p>Items, reagents, requests and alerts.</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" (click)="lowStockOnly = !lowStockOnly; load()">{{ lowStockOnly ? 'All Stock' : 'Low Stock' }}</button>
+      <button type="button" (click)="load()">Refresh</button>
+    </div>
+  </header>
+
+  <nav class="tab-strip">
+    @for (item of tabs; track item.key) {
+      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
+    }
+  </nav>
+
+  @if (error) { <div class="alert error">{{ error }}</div> }
+
+  @if (dashboard) {
+    <section class="metric-grid">
+      <div class="metric"><span>Stock Value</span><strong>{{ formatMoney(dashboard.total_stock_value) }}</strong></div>
+      <div class="metric info"><span>Items</span><strong>{{ dashboard.total_items }}</strong></div>
+      <div class="metric warn"><span>Low Stock</span><strong>{{ dashboard.low_stock_items }}</strong></div>
+      <div class="metric danger"><span>Out</span><strong>{{ dashboard.out_of_stock_items }}</strong></div>
+      <div class="metric warn"><span>Expiry</span><strong>{{ dashboard.near_expiry_items }}</strong></div>
+      <div class="metric good"><span>Received</span><strong>{{ dashboard.recent_receivings }}</strong></div>
+      <div class="metric"><span>Issued</span><strong>{{ dashboard.recent_issues }}</strong></div>
+      <div class="metric"><span>Suppliers</span><strong>{{ suppliers.length }}</strong></div>
+    </section>
+  }
+
+  @if (tab() === 'dashboard') {
+    <section class="dashboard-grid">
+      <article class="panel span-2">
+        <div class="panel-head"><h2>Stock Mix</h2><span>By item type</span></div>
+        <div class="bar-list">
+          @for (item of categoryEntries(); track item.label) {
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="(item.value / maxCategory()) * 100"></i><b>{{ item.value }}</b></div>
+          }
+          @if (!categoryEntries().length) { <div class="empty">No inventory categories yet.</div> }
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Alerts</h2><span>Needs action</span></div>
+        <div class="alert-list">
+          <div [class]="dashboard?.low_stock_items ? 'smart-alert warn' : 'smart-alert good'"><strong>Low stock</strong><span>{{ dashboard?.low_stock_items || 0 }} item(s)</span></div>
+          <div [class]="dashboard?.out_of_stock_items ? 'smart-alert danger' : 'smart-alert good'"><strong>Out of stock</strong><span>{{ dashboard?.out_of_stock_items || 0 }} item(s)</span></div>
+          <div [class]="dashboard?.near_expiry_items ? 'smart-alert warn' : 'smart-alert good'"><strong>Near expiry</strong><span>{{ dashboard?.near_expiry_items || 0 }} batch(es)</span></div>
+        </div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2>Open Requests</h2><span>Purchase queue</span></div>
+        <div class="compact-list">
+          @for (request of requests.slice(0, 6); track request.id) {
+            <div><span>{{ request.item_name || 'Item' }}</span><b>{{ request.status }}</b></div>
+          }
+          @if (!requests.length) { <div class="empty">No open requests.</div> }
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (tab() === 'items' || tab() === 'dashboard') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <input [(ngModel)]="query" (input)="load()" placeholder="Search item, code, supplier" />
+        <label><input type="checkbox" [(ngModel)]="lowStockOnly" (change)="load()" /> Low stock</label>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Type</th><th>Stock</th><th>Reorder</th><th>Value</th><th>Location</th><th>Supplier</th></tr></thead>
+          <tbody>
+            @for (item of items; track item.id) {
+              <tr [class]="stockClass(item)">
+                <td><strong>{{ item.name }}</strong><small>{{ item.item_code || item.barcode || '-' }}</small></td>
+                <td>{{ item.item_type }}</td>
+                <td>{{ num(item.stock_quantity) }} {{ item.unit_of_measurement }}</td>
+                <td>{{ num(item.reorder_level) }}</td>
+                <td>{{ formatMoney(item.stock_value) }}</td>
+                <td>{{ item.storage_location || '-' }}</td>
+                <td>{{ item.supplier_name || '-' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'reagents') {
+    <section class="panel">
+      <div class="list-toolbar"><input [(ngModel)]="query" (input)="load()" placeholder="Search reagent or analyzer" /></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Reagent</th><th>Category</th><th>Balance</th><th>Storage</th><th>Supplier</th><th>Status</th></tr></thead>
+          <tbody>
+            @for (reagent of reagents; track reagent.id) {
+              <tr>
+                <td><strong>{{ reagent.name }}</strong><small>{{ reagent.reagent_code }}</small></td>
+                <td>{{ reagent.category }}</td>
+                <td>{{ num(reagent.closed_balance) }}</td>
+                <td>{{ reagent.storage_condition || '-' }}</td>
+                <td>{{ reagent.supplier_name || '-' }}</td>
+                <td><span [class]="statusClass(reagent.status)">{{ reagent.status }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'requests') {
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Department</th><th>Qty</th><th>Priority</th><th>Expected</th><th>Status</th></tr></thead>
+          <tbody>
+            @for (request of requests; track request.id) {
+              <tr>
+                <td><strong>{{ request.item_name || 'Item' }}</strong><small>{{ request.supplier_name || '-' }}</small></td>
+                <td>{{ request.department || '-' }}</td>
+                <td>{{ request.requested_quantity }}</td>
+                <td><span [class]="statusClass(request.priority)">{{ request.priority }}</span></td>
+                <td>{{ request.expected_date || '-' }}</td>
+                <td><span [class]="statusClass(request.status)">{{ request.status }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'reports' && report) {
+    <section class="report-grid">
+      <div class="metric warn"><span>Low Stock</span><strong>{{ report.low_stock_items }}</strong></div>
+      <div class="metric warn"><span>Near Expiry</span><strong>{{ report.near_expiry_batches }}</strong></div>
+      <div class="metric danger"><span>Expired</span><strong>{{ report.expired_batches }}</strong></div>
+      <div class="metric info"><span>Reagent Usage</span><strong>{{ report.reagent_usage_last_7_days }}</strong></div>
+      <div class="metric"><span>Open PR</span><strong>{{ report.purchase_requests_open }}</strong></div>
+    </section>
+  }
+</section>

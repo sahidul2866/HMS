@@ -1,0 +1,454 @@
+.hr-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.hr-topbar,
+.panel,
+.metric,
+.quick-grid > button {
+  background: #ffffff;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.hr-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.eyebrow {
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: #102033;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 16px;
+}
+
+button,
+input,
+select {
+  border-radius: 7px;
+  font: inherit;
+}
+
+button {
+  border: 1px solid #cbd7e2;
+  background: #f8fafc;
+  color: #172033;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 9px 12px;
+}
+
+button:hover {
+  border-color: #0f766e;
+}
+
+.primary,
+.top-actions button:first-child {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.top-actions,
+.list-toolbar,
+.actions,
+.attendance-badges,
+.panel-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.panel-head,
+.list-toolbar {
+  justify-content: space-between;
+}
+
+.tab-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tab-strip button {
+  background: #eaf1f7;
+  border-color: transparent;
+  white-space: nowrap;
+}
+
+.tab-strip button.active {
+  background: #102033;
+  color: #fff;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(130px, 1fr));
+}
+
+.metric {
+  border-left: 4px solid #64748b;
+  padding: 14px;
+}
+
+.metric span {
+  color: #64748b;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric strong {
+  display: block;
+  font-size: 25px;
+  margin-top: 4px;
+}
+
+.metric.good { border-left-color: #16a34a; }
+.metric.warn { border-left-color: #f59e0b; }
+.metric.danger { border-left-color: #dc2626; }
+.metric.money { border-left-color: #2563eb; }
+
+.content-grid,
+.payroll-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
+}
+
+.panel {
+  padding: 14px;
+}
+
+.wide {
+  grid-column: span 2;
+}
+
+.bar-list,
+.stack,
+.settings-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bar-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 150px 1fr 34px;
+}
+
+.bar-row div {
+  background: #edf2f7;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.bar-row i {
+  background: #0f766e;
+  display: block;
+  height: 100%;
+}
+
+.alert,
+.alert-row,
+.empty {
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.alert.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.alert.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.alert-row {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.empty {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.list-toolbar {
+  margin-bottom: 12px;
+}
+
+.list-toolbar input,
+.list-toolbar select,
+.form-grid input,
+.form-grid select {
+  border: 1px solid #cbd7e2;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.list-toolbar input {
+  min-width: min(100%, 360px);
+}
+
+.responsive-table {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 880px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e5edf5;
+  padding: 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+td small,
+.payroll-row small,
+.roster-card small {
+  color: #64748b;
+  display: block;
+  margin-top: 3px;
+}
+
+.row-alert {
+  background: #ffffbf;
+}
+
+.status {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 8px;
+  text-transform: capitalize;
+}
+
+.status-active,
+.status-present,
+.status-approved,
+.status-paid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-late,
+.status-pending,
+.status-half-day {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-absent,
+.status-rejected,
+.status-unpaid,
+.status-terminated {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-on-leave,
+.status-resigned,
+.status-draft {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.calendar-grid,
+.roster-grid,
+.quick-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.calendar-cell,
+.roster-card,
+.quick-grid > button {
+  min-height: 88px;
+  padding: 12px;
+  text-align: left;
+}
+
+.calendar-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-cell.present { background: #f0fdf4; }
+.calendar-cell.late { background: #fffbeb; }
+.calendar-cell.absent { background: #fef2f2; }
+.calendar-cell.on_leave { background: #eff6ff; }
+
+.roster-card,
+.payroll-row,
+.setting-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.payroll-row {
+  align-items: center;
+  cursor: pointer;
+  grid-template-columns: 1fr auto auto;
+  margin-bottom: 8px;
+}
+
+.payslip {
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.payslip dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  margin: 8px 0 0;
+}
+
+.payslip dt,
+.payslip dd {
+  border-top: 1px solid #edf2f7;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.setting-row {
+  background: #fff;
+  text-align: left;
+}
+
+.setting-row span {
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 1000;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+  max-height: 90vh;
+  max-width: 760px;
+  overflow: auto;
+  padding: 16px;
+  width: 100%;
+}
+
+.modal-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+label {
+  color: #475569;
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 5px;
+}
+
+@media (max-width: 900px) {
+  .hr-topbar,
+  .content-grid,
+  .payroll-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wide {
+    grid-column: span 1;
+  }
+}
+
+@media print {
+  .hr-topbar,
+  .tab-strip,
+  .metric-grid,
+  .payroll-layout > .panel:first-child,
+  .modal-backdrop,
+  .alert {
+    display: none !important;
+  }
+
+  .payroll-layout,
+  .payslip-panel {
+    display: block;
+  }
+}

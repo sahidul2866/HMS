@@ -18,11 +18,15 @@ import { AppointmentCreateComponent } from './features/appointments/pages/appoin
 import { AppointmentsOverviewComponent } from './features/appointments/pages/appointments-overview/appointments-overview.component';
 import { IPDOverviewComponent } from './features/ipd/pages/ipd-overview/ipd-overview.component';
 import { IPDAdmitComponent } from './features/ipd/pages/ipd-admit/ipd-admit.component';
+import { EROverviewComponent } from './features/er/pages/er-overview/er-overview.component';
+import { ERRegisterComponent } from './features/er/pages/er-register/er-register.component';
 import { LaboratoryOverviewComponent } from './features/laboratory/pages/laboratory-overview/laboratory-overview.component';
 import { LaboratoryWorkbenchComponent } from './features/laboratory/pages/laboratory-workbench/laboratory-workbench.component';
+import { InventoryManagementComponent } from './features/inventory/pages/inventory-management/inventory-management.component';
 import { OPDOverviewComponent } from './features/opd/pages/opd-overview/opd-overview.component';
 import { OPDRegisterComponent } from './features/opd/pages/opd-register/opd-register.component';
 import { OPDSettingsComponent } from './features/opd/pages/opd-settings/opd-settings.component';
+import { OTManagementComponent } from './features/ot/pages/ot-management/ot-management.component';
 import { RadiologyOverviewComponent } from './features/radiology/pages/radiology-overview/radiology-overview.component';
 import { RadiologyWorkbenchComponent } from './features/radiology/pages/radiology-workbench/radiology-workbench.component';
 import { ReportingOverviewComponent } from './features/reporting/pages/reporting-overview/reporting-overview.component';
@@ -40,6 +44,7 @@ import { PharmacyReturnsComponent } from './features/pharmacy/pages/pharmacy-ret
 import { PharmacyInvestigationSettingsComponent } from './features/diagnostics/pages/diagnostics-settings/pharmacy-investigation-settings.component';
 import { PharmacyInvestigationsComponent } from './features/diagnostics/pages/diagnostics-orders/pharmacy-investigations.component';
 import { AccountingJournalComponent } from './features/accounting/pages/accounting-journal/accounting-journal.component';
+import { HRPayrollComponent } from './features/hr/pages/hr-payroll/hr-payroll.component';
 import { UserManagementComponent } from './features/admin/pages/user-management/user-management.component';
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
 
@@ -160,6 +165,49 @@ export const appRoutes: Routes = [
         canActivate: [permissionGuard],
         data: { permissions: ['ipd.view'], tabLabel: 'New Admission' },
       },
+      {
+        path: 'er',
+        component: EROverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['er.view'], tabLabel: 'ER' },
+      },
+      {
+        path: 'er/register',
+        component: ERRegisterComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['er.visit.manage'], tabLabel: 'Register ER Arrival' },
+      },
+      ...[
+        ['inventory', 'Inventory', 'dashboard'],
+        ['inventory/items', 'Inventory Items', 'items'],
+        ['inventory/reagents', 'Inventory Reagents', 'reagents'],
+        ['inventory/requests', 'Purchase Requests', 'requests'],
+        ['inventory/reports', 'Inventory Reports', 'reports'],
+      ].map(([path, tabLabel, inventoryTab]) => ({
+        path,
+        component: InventoryManagementComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['inventory.view'], tabLabel, inventoryTab },
+      })),
+      ...[
+        ['ot', 'OT Dashboard', 'dashboard', 'ot.view'],
+        ['ot/bookings', 'OT Bookings', 'bookings', 'ot.view'],
+        ['ot/calendar', 'OT Calendar', 'calendar', 'ot.view'],
+        ['ot/rooms', 'OT Rooms', 'rooms', 'ot.room.manage'],
+        ['ot/checklist', 'Pre-Op Checklist', 'checklist', 'ot.preop.manage'],
+        ['ot/anesthesia', 'Anesthesia', 'anesthesia', 'ot.anesthesia.manage'],
+        ['ot/case-sheet', 'OT Case Sheet', 'notes', 'ot.view'],
+        ['ot/recovery', 'Post-Op Recovery', 'recovery', 'ot.recovery.manage'],
+        ['ot/consumables', 'OT Consumables', 'consumables', 'ot.inventory.manage'],
+        ['ot/billing', 'OT Billing', 'billing', 'ot.billing.manage'],
+        ['ot/documents', 'OT Documents', 'documents', 'ot.documents.manage'],
+        ['ot/reports', 'OT Reports', 'reports', 'ot.reports.view'],
+      ].map(([path, tabLabel, otTab, permission]) => ({
+        path,
+        component: OTManagementComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: [permission], tabLabel, otTab },
+      })),
       {
         path: 'laboratory',
         component: LaboratoryOverviewComponent,
@@ -378,11 +426,86 @@ export const appRoutes: Routes = [
         pathMatch: 'full',
       },
       {
-        path: 'accounting/journal',
+        path: 'hr',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.view'], tabLabel: 'HR & Payroll', hrTab: 'dashboard' },
+      },
+      {
+        path: 'hr/employees',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.view'], tabLabel: 'Employees', hrTab: 'employees' },
+      },
+      {
+        path: 'hr/attendance',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.attendance.manage'], tabLabel: 'Attendance', hrTab: 'attendance' },
+      },
+      {
+        path: 'hr/roster',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.shift.manage'], tabLabel: 'Duty Roster', hrTab: 'roster' },
+      },
+      {
+        path: 'hr/leave',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.leave.manage'], tabLabel: 'Leave', hrTab: 'leave' },
+      },
+      {
+        path: 'hr/payroll',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.payroll.manage'], tabLabel: 'Payroll', hrTab: 'payroll' },
+      },
+      {
+        path: 'hr/recruitment',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.recruitment.manage'], tabLabel: 'Recruitment', hrTab: 'recruitment' },
+      },
+      {
+        path: 'hr/performance',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.performance.manage'], tabLabel: 'Performance', hrTab: 'performance' },
+      },
+      {
+        path: 'hr/reports',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.reports.view'], tabLabel: 'HR Reports', hrTab: 'reports' },
+      },
+      {
+        path: 'hr/settings',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.settings.manage'], tabLabel: 'HR Settings', hrTab: 'settings' },
+      },
+      ...[
+        ['accounting', 'Accounting', 'dashboard', 'accounting.view'],
+        ['accounting/accounts', 'Chart of Accounts', 'accounts', 'accounting.view'],
+        ['accounting/collections', 'Payment Collection', 'collections', 'accounting.view'],
+        ['accounting/receivables', 'Receivables', 'receivables', 'accounting.view'],
+        ['accounting/payables', 'Payables', 'payables', 'accounting.view'],
+        ['accounting/expenses', 'Expenses', 'expenses', 'accounting.view'],
+        ['accounting/payroll', 'Payroll Accounting', 'payroll', 'accounting.view'],
+        ['accounting/doctor-commission', 'Doctor Commission', 'doctor', 'accounting.view'],
+        ['accounting/cash-closing', 'Cash Closing', 'cash', 'accounting.view'],
+        ['accounting/bank', 'Bank Reconciliation', 'bank', 'accounting.view'],
+        ['accounting/journals', 'Journal Entries', 'journals', 'accounting.journal.post'],
+        ['accounting/reports', 'Finance Reports', 'reports', 'accounting.reports.view'],
+        ['accounting/audit', 'Finance Audit', 'audit', 'accounting.approve'],
+        ['accounting/journal', 'Journal Entries', 'journals', 'accounting.journal.post'],
+      ].map(([path, tabLabel, accountingTab, permission]) => ({
+        path,
         component: AccountingJournalComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['accounting.journal.post'], tabLabel: 'Accounting Journal' },
-      },
+        data: { permissions: [permission], tabLabel, accountingTab },
+      })),
       {
         path: 'admin/users',
         component: UserManagementComponent,

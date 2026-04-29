@@ -3,8 +3,8 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">Executive View</div>
-        <h1 class="page-title">Revenue Reporting</h1>
-        <p class="page-subtitle">A sharper operations view over posted revenue, void pressure, and doctor referral exposure across the selected period.</p>
+        <h1 class="page-title">Report Center</h1>
+        <p class="page-subtitle">Hospital-wide reports with filters, print and export shortcuts.</p>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="loadReports()">Refresh Reports</button>
@@ -173,6 +173,30 @@
           <div class="value">{{ clinicalSummary.partial_invoices }}</div>
         </div>
       </section>
+    </section>
+  }
+
+  @if (catalog) {
+    <section class="soft-panel data-panel">
+      <div class="panel-head">
+        <div>
+          <h2 class="section-title">Report Library</h2>
+          <div class="section-copy">Finance, patient, appointment, IPD, ER, OT, lab, pharmacy, inventory, HR and management reports.</div>
+        </div>
+        <select [(ngModel)]="selectedCategory">
+          @for (category of catalog.categories; track category) {
+            <option [value]="category">{{ category }}</option>
+          }
+        </select>
+      </div>
+      <div class="report-library">
+        @for (report of filteredReports; track report.name) {
+          <a class="report-card" [routerLink]="report.route">
+            <strong>{{ report.name }}</strong>
+            <span>{{ report.description }}</span>
+          </a>
+        }
+      </div>
     </section>
   }
 

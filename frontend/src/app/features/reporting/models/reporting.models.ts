@@ -24,3 +24,16 @@ export interface ClinicalOperationsSummary {
   outstanding_due_amount: number;
   refunded_amount: number;
 }
+
+export interface ReportCatalogItem {
+  category: string;
+  name: string;
+  route: string;
+  description: string;
+  permission: string;
+}
+
+export interface ReportCatalog {
+  categories: string[];
+  reports: ReportCatalogItem[];
+}

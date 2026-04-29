@@ -105,3 +105,34 @@ class RevenueSummaryRead(BaseModel):
     total_revenue: float
     collected_revenue: float
     outstanding_revenue: float
+
+
+class DashboardAnalyticsRead(BaseModel):
+    generated_at: str
+    filters: dict
+    kpis: list[dict]
+    patient_analytics: dict
+    appointment_analytics: dict
+    bed_analytics: dict
+    emergency_analytics: dict
+    revenue_analytics: dict
+    lab_radiology_analytics: dict
+    pharmacy_inventory_analytics: dict
+    ot_analytics: dict
+    hr_analytics: dict
+    alerts: list[dict]
+    activity_feed: list[dict]
+    report_shortcuts: list[dict]
+
+
+class ReportCatalogItemRead(BaseModel):
+    category: str
+    name: str
+    route: str
+    description: str
+    permission: str = "reporting.view"
+
+
+class ReportCatalogRead(BaseModel):
+    categories: list[str]
+    reports: list[ReportCatalogItemRead]

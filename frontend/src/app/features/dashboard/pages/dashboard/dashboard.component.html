@@ -1,43 +1,223 @@
-<section class="page-card">
-  <h1 class="page-title">Operational Dashboard</h1>
-  <p class="page-subtitle">Permission-aware landing page for branch-scoped hospital operations.</p>
-
-  <div class="grid-2">
-    <div class="page-card">
-      <div class="muted">Current User</div>
-      <h3>{{ session.snapshot.user?.full_name }}</h3>
-      <div>{{ session.snapshot.user?.roles?.length }} role(s)</div>
+<section class="analytics-dashboard">
+  <header class="executive-hero">
+    <div>
+      <div class="eyebrow">Executive Analytics</div>
+      <h1>Hospital Command Dashboard</h1>
+      <p>Live operations, revenue, stock, HR and OT.</p>
     </div>
-    <div class="page-card">
-      <div class="muted">Effective Permissions</div>
-      <h3>{{ session.snapshot.user?.effective_permissions?.length }}</h3>
-      <div>Loaded during session bootstrap</div>
+    <div class="hero-actions">
+      <button type="button" (click)="printDashboard()">Print</button>
+      <button type="button" (click)="exportDashboard()">Export CSV</button>
+      <a routerLink="/reporting">Reports</a>
     </div>
-  </div>
-</section>
+  </header>
 
-<section class="page-card">
-  <h2 class="page-title">Module Access</h2>
-  <div class="grid-2">
-    <a *appHasPermission="'billing.invoice.create'" class="page-card" routerLink="/billing">
-      <div class="muted">Revenue Cycle</div>
-      <h3>Billing</h3>
-      <div>Invoices, settlements, and payment tracking workspace.</div>
-    </a>
-    <a *appHasPermission="'laboratory.view'" class="page-card" routerLink="/laboratory">
-      <div class="muted">Diagnostics</div>
-      <h3>Laboratory</h3>
-      <div>Sample workflow, queue monitoring, and result release checkpoints.</div>
-    </a>
-    <a *appHasPermission="'radiology.view'" class="page-card" routerLink="/radiology">
-      <div class="muted">Imaging</div>
-      <h3>Radiology</h3>
-      <div>Modality scheduling, reporting handoff, and imaging turnaround visibility.</div>
-    </a>
-    <a *appHasPermission="'reporting.view'" class="page-card" routerLink="/reporting">
-      <div class="muted">Analytics</div>
-      <h3>Reporting</h3>
-      <div>Operational snapshots for finance, diagnostics, and executive review.</div>
-    </a>
-  </div>
+  <section class="filter-bar">
+    <label>Date From<input type="date" [(ngModel)]="filters.date_from" /></label>
+    <label>Date To<input type="date" [(ngModel)]="filters.date_to" /></label>
+    <label>Department<input placeholder="All departments" [(ngModel)]="filters.department" /></label>
+    <label>Patient Type<select [(ngModel)]="filters.patient_type"><option value="">All</option><option value="opd">OPD</option><option value="ipd">IPD</option><option value="er">Emergency</option></select></label>
+    <label>Payment<select [(ngModel)]="filters.payment_status"><option value="">All</option><option value="paid">Paid</option><option value="partial">Partial</option><option value="unpaid">Unpaid</option></select></label>
+    <label>Module<select [(ngModel)]="filters.module_type"><option value="">All</option><option value="billing">Billing</option><option value="lab">Lab</option><option value="pharmacy">Pharmacy</option><option value="hr">HR</option></select></label>
+    <button type="button" (click)="loadAnalytics()">Apply</button>
+  </section>
+
+  @if (error) {
+    <div class="dashboard-alert error">{{ error }}</div>
+  }
+
+  @if (loading) {
+    <section class="kpi-grid">
+      @for (item of [1,2,3,4,5,6,7,8]; track item) {
+        <div class="skeleton-card"></div>
+      }
+    </section>
+  } @else if (analytics) {
+    <section class="summary-band">
+      <div class="summary-copy">
+        <strong>Today at a Glance</strong>
+        <span>{{ analytics.kpis[1].value }} appointments, {{ analytics.kpis[5].value }} emergency cases, {{ formatMoney(analytics.kpis[9].value) }} collected today.</span>
+      </div>
+      <div class="score-card">
+        <span>Operational Efficiency</span>
+        <strong>{{ ((100 - analytics.bed_analytics.occupancy_pct / 3 + analytics.hr_analytics.attendance_pct / 3) | number:'1.0-0') }}%</strong>
+      </div>
+      <div class="score-card">
+        <span>Bed Occupancy</span>
+        <strong>{{ analytics.bed_analytics.occupancy_pct }}%</strong>
+      </div>
+      <div class="score-card">
+        <span>Staff Attendance</span>
+        <strong>{{ analytics.hr_analytics.attendance_pct }}%</strong>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      @for (kpi of analytics.kpis; track kpi.title) {
+        <article class="kpi-card" [class]="kpi.tone">
+          <div class="kpi-top">
+            <span class="kpi-icon">{{ kpi.icon }}</span>
+            <span class="trend" [class]="trendClass(kpi.trend)">{{ kpi.trend > 0 ? '+' : '' }}{{ kpi.trend }}%</span>
+          </div>
+          <strong>{{ formatKpi(kpi) }}</strong>
+          <h3>{{ kpi.title }}</h3>
+          <p>{{ kpi.description }}</p>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <polyline [attr.points]="sparkline(kpi.sparkline)"></polyline>
+          </svg>
+        </article>
+      }
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="chart-card span-2">
+        <div class="card-head"><h2>Patient Visit Trend</h2><span>OPD/IPD comparison</span></div>
+        <div class="line-chart">
+          @for (point of analytics.patient_analytics.daily_visits; track point.date) {
+            <i [style.height.%]="(point.value / max(analytics.patient_analytics.daily_visits)) * 100" [title]="point.date + ': ' + point.value"></i>
+          }
+        </div>
+        <div class="legend-row">
+          @for (item of analytics.patient_analytics.opd_vs_ipd; track item.label) {
+            <span><b>{{ item.value }}</b>{{ item.label }}</span>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Revenue Collection</h2><span>Daily BDT</span></div>
+        <div class="area-chart">
+          @for (point of analytics.revenue_analytics.daily_revenue; track point.date) {
+            <i [style.height.%]="(point.value / max(analytics.revenue_analytics.daily_revenue)) * 100"></i>
+          }
+        </div>
+        <strong>{{ formatMoney(total(analytics.revenue_analytics.daily_revenue)) }}</strong>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Appointment Status</h2><span>Operational queue</span></div>
+        <div class="donut" [style.background]="donutStyle(analytics.appointment_analytics.status_breakdown)"></div>
+        <div class="compact-list">
+          @for (item of analytics.appointment_analytics.status_breakdown; track item.label) {
+            <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Bed Occupancy</h2><span>Ward status</span></div>
+        <div class="progress-shell"><i [style.width.%]="analytics.bed_analytics.occupancy_pct"></i></div>
+        <div class="bed-numbers">
+          <div><strong>{{ analytics.bed_analytics.available }}</strong><span>Available</span></div>
+          <div><strong>{{ analytics.bed_analytics.occupied }}</strong><span>Occupied</span></div>
+        </div>
+        <div class="bar-list">
+          @for (item of analytics.bed_analytics.ward_occupancy; track item.label) {
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="(item.value / max(analytics.bed_analytics.ward_occupancy)) * 100"></i><b>{{ item.value }}</b></div>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Lab & Radiology</h2><span>Pending report pressure</span></div>
+        <div class="compact-list large">
+          @for (item of analytics.lab_radiology_analytics.status; track item.label) {
+            <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
+          }
+        </div>
+        <div class="metric-pill">Avg TAT {{ analytics.lab_radiology_analytics.average_turnaround_minutes }} min</div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Emergency Load</h2><span>Triage mix</span></div>
+        <div class="donut emergency" [style.background]="donutStyle(analytics.emergency_analytics.priority)"></div>
+        <div class="compact-list">
+          @for (item of analytics.emergency_analytics.priority; track item.label) {
+            <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Pharmacy & Inventory</h2><span>Stock performance</span></div>
+        <div class="bar-list">
+          @for (item of analytics.pharmacy_inventory_analytics.top_medicines; track item.label) {
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="(item.value / max(analytics.pharmacy_inventory_analytics.top_medicines)) * 100"></i><b>{{ item.value }}</b></div>
+          }
+        </div>
+        <div class="inventory-row">
+          <span>Low stock {{ analytics.pharmacy_inventory_analytics.low_stock_medicines + analytics.pharmacy_inventory_analytics.low_stock_items }}</span>
+          <span>Near expiry {{ analytics.pharmacy_inventory_analytics.near_expiry }}</span>
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>HR & Staff</h2><span>Attendance and payroll</span></div>
+        <div class="progress-shell staff"><i [style.width.%]="analytics.hr_analytics.attendance_pct"></i></div>
+        <div class="bed-numbers">
+          <div><strong>{{ analytics.hr_analytics.present }}</strong><span>Present</span></div>
+          <div><strong>{{ analytics.hr_analytics.absent }}</strong><span>Absent</span></div>
+          <div><strong>{{ analytics.hr_analytics.on_leave }}</strong><span>Leave</span></div>
+        </div>
+        <div class="metric-pill">{{ formatMoney(analytics.hr_analytics.payroll_summary) }} payroll</div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>OT Snapshot</h2><span>Prepared for OT module</span></div>
+        <div class="ot-board">
+          <div><strong>{{ analytics.ot_analytics.today_surgeries }}</strong><span>Today</span></div>
+          <div><strong>{{ analytics.ot_analytics.upcoming }}</strong><span>Upcoming</span></div>
+          <div><strong>{{ analytics.ot_analytics.completed }}</strong><span>Completed</span></div>
+        </div>
+        <p class="muted">{{ analytics.ot_analytics.status }}</p>
+      </article>
+    </section>
+
+    <section class="side-grid">
+      <article class="chart-card">
+        <div class="card-head"><h2>Smart Alerts</h2><span>Action needed</span></div>
+        <div class="alert-list">
+          @for (alert of analytics.alerts; track alert.title) {
+            <div class="smart-alert" [class]="alert.severity">
+              <strong>{{ alert.title }}</strong>
+              <span>{{ alert.message }}</span>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <div class="card-head"><h2>Recent Activity</h2><span>Latest system movement</span></div>
+        <div class="timeline">
+          @for (activity of analytics.activity_feed; track activity.time + activity.text) {
+            <div [class]="activity.tone">
+              <b>{{ activity.module }}</b>
+              <span>{{ activity.text }}</span>
+              <small>{{ activity.time | date:'short' }}</small>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card shortcuts">
+        <div class="card-head"><h2>Reports</h2><span>Fast access</span></div>
+        <div class="shortcut-grid">
+          @for (shortcut of analytics.report_shortcuts; track shortcut.label) {
+            <a [routerLink]="shortcut.route">{{ shortcut.label }}</a>
+          }
+        </div>
+      </article>
+    </section>
+
+    <section class="module-access">
+      <a *appHasPermission="'billing.invoice.create'" routerLink="/billing">Billing</a>
+      <a *appHasPermission="'laboratory.view'" routerLink="/laboratory">Laboratory</a>
+      <a *appHasPermission="'radiology.view'" routerLink="/radiology">Radiology</a>
+      <a *appHasPermission="'pharmacy.view'" routerLink="/pharmacy">Pharmacy</a>
+      <a *appHasPermission="'inventory.view'" routerLink="/inventory">Inventory</a>
+      <a *appHasPermission="'hr.view'" routerLink="/hr">HR & Payroll</a>
+      <a *appHasPermission="'ot.view'" routerLink="/ot">OT</a>
+      <a *appHasPermission="'er.view'" routerLink="/er">ER</a>
+    </section>
+  }
 </section>

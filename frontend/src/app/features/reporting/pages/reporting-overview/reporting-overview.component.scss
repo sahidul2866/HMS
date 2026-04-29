@@ -1,3 +1,38 @@
 :host {
   display: block;
 }
+
+.report-library {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.report-card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  color: inherit;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem;
+  text-decoration: none;
+  background: #fff;
+}
+
+.report-card strong {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.report-card span {
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+select {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 0.45rem 0.7rem;
+}
