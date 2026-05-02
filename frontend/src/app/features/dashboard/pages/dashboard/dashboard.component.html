@@ -22,6 +22,25 @@
     <button type="button" (click)="loadAnalytics()">Apply</button>
   </section>
 
+  <section class="demo-flow-card">
+    <div class="demo-flow-header">
+      <div>
+        <div class="eyebrow">Client Demo Flow</div>
+        <h2>OPD → IPD → Settlement</h2>
+      </div>
+      <a class="demo-start" routerLink="/opd/register">Start Registration</a>
+    </div>
+    <div class="demo-flow">
+      @for (step of demoJourneySteps; track step.label; let index = $index) {
+        <button class="demo-step" type="button" (click)="openDemoStep(step.route)">
+          <span>{{ index + 1 }}</span>
+          <strong>{{ step.label }}</strong>
+          <small>{{ step.detail }}</small>
+        </button>
+      }
+    </div>
+  </section>
+
   @if (error) {
     <div class="dashboard-alert error">{{ error }}</div>
   }
@@ -36,7 +55,11 @@
     <section class="summary-band">
       <div class="summary-copy">
         <strong>Today at a Glance</strong>
-        <span>{{ analytics.kpis[1].value }} appointments, {{ analytics.kpis[5].value }} emergency cases, {{ formatMoney(analytics.kpis[9].value) }} collected today.</span>
+        <span>
+          {{ kpiValue("Today's Appointments") }} appointments,
+          {{ kpiValue('Emergency Cases') }} emergency cases,
+          {{ formatMoney(kpiValue("Today's Revenue")) }} collected today.
+        </span>
       </div>
       <div class="score-card">
         <span>Operational Efficiency</span>
@@ -54,7 +77,7 @@
 
     <section class="kpi-grid">
       @for (kpi of analytics.kpis; track kpi.title) {
-        <article class="kpi-card" [class]="kpi.tone">
+        <article class="kpi-card clickable" [ngClass]="kpi.tone" [routerLink]="kpiRoute(kpi)" role="link" tabindex="0">
           <div class="kpi-top">
             <span class="kpi-icon">{{ kpi.icon }}</span>
             <span class="trend" [class]="trendClass(kpi.trend)">{{ kpi.trend > 0 ? '+' : '' }}{{ kpi.trend }}%</span>
@@ -70,7 +93,7 @@
     </section>
 
     <section class="dashboard-grid">
-      <article class="chart-card span-2">
+      <article class="chart-card span-2 clickable" routerLink="/opd" role="link" tabindex="0">
         <div class="card-head"><h2>Patient Visit Trend</h2><span>OPD/IPD comparison</span></div>
         <div class="line-chart">
           @for (point of analytics.patient_analytics.daily_visits; track point.date) {
@@ -82,9 +105,14 @@
             <span><b>{{ item.value }}</b>{{ item.label }}</span>
           }
         </div>
+        <div class="legend-row">
+          @for (item of analytics.patient_analytics.new_vs_returning; track item.label) {
+            <span><b>{{ item.value }}</b>{{ item.label }}</span>
+          }
+        </div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/accounting/collections" role="link" tabindex="0">
         <div class="card-head"><h2>Revenue Collection</h2><span>Daily BDT</span></div>
         <div class="area-chart">
           @for (point of analytics.revenue_analytics.daily_revenue; track point.date) {
@@ -92,9 +120,65 @@
           }
         </div>
         <strong>{{ formatMoney(total(analytics.revenue_analytics.daily_revenue)) }}</strong>
+        <div class="metric-pill">Outstanding due {{ formatMoney(analytics.revenue_analytics.outstanding_due) }}</div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card span-2 clickable" routerLink="/accounting" role="link" tabindex="0">
+        <div class="card-head">
+          <h2>Revenue vs Cost</h2>
+          <span>Goal vs current</span>
+        </div>
+
+        <div class="toggle-row" (click)="$event.stopPropagation()">
+          <div class="toggle-group">
+            <label><input type="radio" name="financeRange" value="daily" [(ngModel)]="financeRange" /> Daily</label>
+            <label><input type="radio" name="financeRange" value="monthly" [(ngModel)]="financeRange" /> Monthly</label>
+            <label><input type="radio" name="financeRange" value="yearly" [(ngModel)]="financeRange" /> Yearly</label>
+          </div>
+          <div class="toggle-group">
+            <label><input type="radio" name="financeMetric" value="all" [(ngModel)]="financeMetric" /> All</label>
+            <label><input type="radio" name="financeMetric" value="revenue" [(ngModel)]="financeMetric" /> Revenue</label>
+            <label><input type="radio" name="financeMetric" value="cost" [(ngModel)]="financeMetric" /> Cost</label>
+          </div>
+          <div class="toggle-group">
+            <label><input type="radio" name="financeCompare" value="both" [(ngModel)]="financeCompare" /> Both</label>
+            <label><input type="radio" name="financeCompare" value="current" [(ngModel)]="financeCompare" /> Current</label>
+            <label><input type="radio" name="financeCompare" value="goal" [(ngModel)]="financeCompare" /> Goal</label>
+          </div>
+        </div>
+
+        <svg class="finance-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+          @if (financeMetric !== 'cost' && financeCompare !== 'goal') {
+            <polyline class="line revenue" [attr.points]="financeLinePoints(financeSeries('revenue', 'current'))"></polyline>
+          }
+          @if (financeMetric !== 'cost' && financeCompare !== 'current') {
+            <polyline class="line revenue goal" [attr.points]="financeLinePoints(financeSeries('revenue', 'goal'))"></polyline>
+          }
+          @if (financeMetric !== 'revenue' && financeCompare !== 'goal') {
+            <polyline class="line cost" [attr.points]="financeLinePoints(financeSeries('cost', 'current'))"></polyline>
+          }
+          @if (financeMetric !== 'revenue' && financeCompare !== 'current') {
+            <polyline class="line cost goal" [attr.points]="financeLinePoints(financeSeries('cost', 'goal'))"></polyline>
+          }
+        </svg>
+
+        <div class="legend-row finance-legend">
+          @if (financeMetric !== 'cost') {
+            <span><b>{{ formatMoney(financeSummary('revenue','current')) }}</b>Revenue (current)</span>
+          }
+          @if (financeMetric !== 'cost') {
+            <span><b>{{ formatMoney(financeSummary('revenue','goal')) }}</b>Revenue (goal)</span>
+          }
+          @if (financeMetric !== 'revenue') {
+            <span><b>{{ formatMoney(financeSummary('cost','current')) }}</b>Cost (current)</span>
+          }
+          @if (financeMetric !== 'revenue') {
+            <span><b>{{ formatMoney(financeSummary('cost','goal')) }}</b>Cost (goal)</span>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card clickable" routerLink="/appointments" role="link" tabindex="0">
         <div class="card-head"><h2>Appointment Status</h2><span>Operational queue</span></div>
         <div class="donut" [style.background]="donutStyle(analytics.appointment_analytics.status_breakdown)"></div>
         <div class="compact-list">
@@ -102,9 +186,16 @@
             <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
           }
         </div>
+        @if (analytics.appointment_analytics.upcoming?.length) {
+          <div class="mini-list">
+            @for (row of analytics.appointment_analytics.upcoming.slice(0, 3); track row.label + row.time) {
+              <div><span>{{ row.label }}</span><small>{{ row.time }}</small></div>
+            }
+          </div>
+        }
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/ipd" role="link" tabindex="0">
         <div class="card-head"><h2>Bed Occupancy</h2><span>Ward status</span></div>
         <div class="progress-shell"><i [style.width.%]="analytics.bed_analytics.occupancy_pct"></i></div>
         <div class="bed-numbers">
@@ -118,17 +209,21 @@
         </div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/laboratory" role="link" tabindex="0">
         <div class="card-head"><h2>Lab & Radiology</h2><span>Pending report pressure</span></div>
         <div class="compact-list large">
           @for (item of analytics.lab_radiology_analytics.status; track item.label) {
             <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
           }
         </div>
+        <div class="inventory-row">
+          <span>Lab today {{ analytics.lab_radiology_analytics.lab_today }}</span>
+          <span>Radiology today {{ analytics.lab_radiology_analytics.radiology_today }}</span>
+        </div>
         <div class="metric-pill">Avg TAT {{ analytics.lab_radiology_analytics.average_turnaround_minutes }} min</div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/er" role="link" tabindex="0">
         <div class="card-head"><h2>Emergency Load</h2><span>Triage mix</span></div>
         <div class="donut emergency" [style.background]="donutStyle(analytics.emergency_analytics.priority)"></div>
         <div class="compact-list">
@@ -136,9 +231,13 @@
             <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
           }
         </div>
+        <div class="inventory-row">
+          <span>Avg triage {{ analytics.emergency_analytics.average_triage_time_minutes }} min</span>
+          <span>Avg doctor {{ analytics.emergency_analytics.average_doctor_response_minutes }} min</span>
+        </div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/inventory" role="link" tabindex="0">
         <div class="card-head"><h2>Pharmacy & Inventory</h2><span>Stock performance</span></div>
         <div class="bar-list">
           @for (item of analytics.pharmacy_inventory_analytics.top_medicines; track item.label) {
@@ -149,9 +248,10 @@
           <span>Low stock {{ analytics.pharmacy_inventory_analytics.low_stock_medicines + analytics.pharmacy_inventory_analytics.low_stock_items }}</span>
           <span>Near expiry {{ analytics.pharmacy_inventory_analytics.near_expiry }}</span>
         </div>
+        <div class="metric-pill">Inventory value {{ formatMoney(analytics.pharmacy_inventory_analytics.inventory_value) }}</div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/hr/attendance" role="link" tabindex="0">
         <div class="card-head"><h2>HR & Staff</h2><span>Attendance and payroll</span></div>
         <div class="progress-shell staff"><i [style.width.%]="analytics.hr_analytics.attendance_pct"></i></div>
         <div class="bed-numbers">
@@ -160,21 +260,23 @@
           <div><strong>{{ analytics.hr_analytics.on_leave }}</strong><span>Leave</span></div>
         </div>
         <div class="metric-pill">{{ formatMoney(analytics.hr_analytics.payroll_summary) }} payroll</div>
+        <div class="metric-pill">Pending leave {{ analytics.hr_analytics.pending_leave }}</div>
       </article>
 
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/ot" role="link" tabindex="0">
         <div class="card-head"><h2>OT Snapshot</h2><span>Prepared for OT module</span></div>
         <div class="ot-board">
           <div><strong>{{ analytics.ot_analytics.today_surgeries }}</strong><span>Today</span></div>
           <div><strong>{{ analytics.ot_analytics.upcoming }}</strong><span>Upcoming</span></div>
           <div><strong>{{ analytics.ot_analytics.completed }}</strong><span>Completed</span></div>
         </div>
+        <div class="metric-pill">Cancelled {{ analytics.ot_analytics.cancelled }}</div>
         <p class="muted">{{ analytics.ot_analytics.status }}</p>
       </article>
     </section>
 
     <section class="side-grid">
-      <article class="chart-card">
+      <article class="chart-card clickable" routerLink="/reporting" role="link" tabindex="0">
         <div class="card-head"><h2>Smart Alerts</h2><span>Action needed</span></div>
         <div class="alert-list">
           @for (alert of analytics.alerts; track alert.title) {
@@ -190,7 +292,13 @@
         <div class="card-head"><h2>Recent Activity</h2><span>Latest system movement</span></div>
         <div class="timeline">
           @for (activity of analytics.activity_feed; track activity.time + activity.text) {
-            <div [class]="activity.tone">
+            <div
+              class="clickable"
+              [class]="activity.tone"
+              [routerLink]="moduleRoute(activity.module) || '/reporting'"
+              role="link"
+              tabindex="0"
+            >
               <b>{{ activity.module }}</b>
               <span>{{ activity.text }}</span>
               <small>{{ activity.time | date:'short' }}</small>
@@ -210,14 +318,16 @@
     </section>
 
     <section class="module-access">
-      <a *appHasPermission="'billing.invoice.create'" routerLink="/billing">Billing</a>
-      <a *appHasPermission="'laboratory.view'" routerLink="/laboratory">Laboratory</a>
-      <a *appHasPermission="'radiology.view'" routerLink="/radiology">Radiology</a>
-      <a *appHasPermission="'pharmacy.view'" routerLink="/pharmacy">Pharmacy</a>
-      <a *appHasPermission="'inventory.view'" routerLink="/inventory">Inventory</a>
-      <a *appHasPermission="'hr.view'" routerLink="/hr">HR & Payroll</a>
-      <a *appHasPermission="'ot.view'" routerLink="/ot">OT</a>
-      <a *appHasPermission="'er.view'" routerLink="/er">ER</a>
+      <a *appHasPermission="'billing.invoice.create'" routerLink="/billing">Billing <small>{{ kpiValue('Pending Bills') }} pending</small></a>
+      <a *appHasPermission="'laboratory.view'" routerLink="/laboratory">Laboratory <small>{{ kpiValue('Lab Tests Today') }} today</small></a>
+      <a *appHasPermission="'radiology.view'" routerLink="/radiology">Radiology <small>{{ analytics.lab_radiology_analytics.radiology_today }} today</small></a>
+      <a *appHasPermission="'pharmacy.view'" routerLink="/pharmacy">Pharmacy <small>{{ formatMoney(analytics.pharmacy_inventory_analytics.sales_today) }}</small></a>
+      <a *appHasPermission="'inventory.view'" routerLink="/inventory">Inventory <small>{{ analytics.pharmacy_inventory_analytics.low_stock_medicines + analytics.pharmacy_inventory_analytics.low_stock_items }} low</small></a>
+      <a *appHasPermission="'hr.view'" routerLink="/hr">HR & Payroll <small>{{ analytics.hr_analytics.attendance_pct }}% today</small></a>
+      <a *appHasPermission="'ot.view'" routerLink="/ot">OT <small>{{ analytics.ot_analytics.today_surgeries }} today</small></a>
+      <a *appHasPermission="'er.view'" routerLink="/er">ER <small>{{ analytics.emergency_analytics.today }} today</small></a>
     </section>
   }
 </section>
+
+<app-floating-assistant title="Staff Assistant" context="staff-dashboard"></app-floating-assistant>

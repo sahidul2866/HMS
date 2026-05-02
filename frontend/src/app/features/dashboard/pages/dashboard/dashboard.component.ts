@@ -1,27 +1,32 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { SessionService } from '../../../../core/services/session.service';
 import { DashboardAnalytics, DashboardKpi, DashboardPoint } from '../../models/dashboard-analytics.models';
 import { DashboardAnalyticsService, DashboardFilters } from '../../services/dashboard-analytics.service';
+import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, HasPermissionDirective],
+  imports: [CommonModule, FormsModule, RouterLink, HasPermissionDirective, FloatingAssistantComponent],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
 })
 export class DashboardComponent {
   readonly session = inject(SessionService);
   private readonly analyticsService = inject(DashboardAnalyticsService);
+  private readonly router = inject(Router);
 
   loading = true;
   error = '';
   analytics: DashboardAnalytics | null = null;
+  financeRange: 'daily' | 'monthly' | 'yearly' = 'daily';
+  financeMetric: 'revenue' | 'cost' | 'all' = 'all';
+  financeCompare: 'current' | 'goal' | 'both' = 'both';
   filters: DashboardFilters = {
     date_from: this.relativeDate(-29),
     date_to: this.relativeDate(0),
@@ -33,6 +38,106 @@ export class DashboardComponent {
 
   constructor() {
     this.loadAnalytics();
+  }
+
+  get demoJourneySteps(): Array<{ label: string; detail: string; route: string }> {
+    return [
+      { label: 'Register', detail: 'Patient, doctor, token', route: '/opd/register' },
+      { label: 'Collect', detail: 'Invoice and receipt', route: '/billing/create' },
+      { label: 'Consult', detail: 'OPD queue and Rx', route: '/opd' },
+      { label: 'Admit', detail: 'Bed and advance', route: '/ipd/admit' },
+      { label: 'Settle', detail: 'Due payments & billing', route: '/billing/due-payments' },
+    ];
+  }
+
+  openDemoStep(route: string): void {
+    void this.router.navigateByUrl(route);
+  }
+
+  financeSeries(kind: 'revenue' | 'cost', which: 'current' | 'goal'): number[] {
+    const finance = this.analytics?.finance_line;
+    if (!finance) return [];
+    const range = finance[this.financeRange];
+    const points =
+      kind === 'revenue'
+        ? which === 'current'
+          ? range.revenue_current
+          : range.revenue_goal
+        : which === 'current'
+          ? range.cost_current
+          : range.cost_goal;
+    return points.map((p) => Number(p.value || 0));
+  }
+
+  financeMax(): number {
+    const values = [
+      ...(this.financeMetric === 'cost' ? [] : this.financeSeries('revenue', 'current')),
+      ...(this.financeMetric === 'cost' ? [] : this.financeSeries('revenue', 'goal')),
+      ...(this.financeMetric === 'revenue' ? [] : this.financeSeries('cost', 'current')),
+      ...(this.financeMetric === 'revenue' ? [] : this.financeSeries('cost', 'goal')),
+    ];
+    return Math.max(...values, 1);
+  }
+
+  financeLinePoints(values: number[]): string {
+    const max = this.financeMax();
+    const len = values.length;
+    if (!len) return '';
+    return values
+      .map((value, index) => {
+        const x = (index / Math.max(len - 1, 1)) * 100;
+        const y = 100 - (Number(value || 0) / max) * 90;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }
+
+  financeSummary(kind: 'revenue' | 'cost', which: 'current' | 'goal'): number {
+    return this.financeSeries(kind, which).reduce((sum, value) => sum + Number(value || 0), 0);
+  }
+
+  kpiByTitle(title: string): DashboardKpi | null {
+    const normalized = title.trim().toLowerCase();
+    return this.analytics?.kpis.find((kpi) => kpi.title.trim().toLowerCase() === normalized) || null;
+  }
+
+  kpiValue(title: string): number {
+    return Number(this.kpiByTitle(title)?.value || 0);
+  }
+
+  kpiRoute(kpi: DashboardKpi): string {
+    const title = kpi.title.toLowerCase();
+    if (title.includes('patient')) return '/patients';
+    if (title.includes('appointment')) return '/appointments';
+    if (title.includes('admitted') || title.includes('discharged') || title.includes('bed')) return '/ipd';
+    if (title.includes('emergency')) return '/er';
+    if (title.includes('bill')) return '/billing';
+    if (title.includes('revenue')) return '/accounting/collections';
+    if (title.includes('lab')) return '/laboratory';
+    if (title.includes('pharmacy')) return '/pharmacy';
+    if (title.includes('ot')) return '/ot';
+    if (title.includes('stock')) return '/inventory';
+    if (title.includes('staff')) return '/hr/attendance';
+    return '/reporting';
+  }
+
+  moduleRoute(moduleName: string | null | undefined): string | null {
+    const value = (moduleName || '').trim().toLowerCase();
+    if (!value) return null;
+    if (value.includes('billing') || value.includes('invoice') || value.includes('payment')) return '/billing';
+    if (value.includes('account')) return '/accounting';
+    if (value.includes('appointment')) return '/appointments';
+    if (value.includes('patient')) return '/patients';
+    if (value.includes('opd')) return '/opd';
+    if (value.includes('ipd') || value.includes('bed') || value.includes('admission')) return '/ipd';
+    if (value.includes('er') || value.includes('emergency')) return '/er';
+    if (value.includes('lab')) return '/laboratory';
+    if (value.includes('radiology')) return '/radiology';
+    if (value.includes('pharmacy')) return '/pharmacy';
+    if (value.includes('inventory') || value.includes('stock')) return '/inventory';
+    if (value.includes('ot') || value.includes('surgery')) return '/ot';
+    if (value.includes('hr') || value.includes('payroll') || value.includes('staff')) return '/hr';
+    return null;
   }
 
   loadAnalytics(): void {

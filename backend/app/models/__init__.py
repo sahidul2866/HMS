@@ -99,6 +99,7 @@ from app.models.pharmacy import (
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.user import User, role_permissions, user_permissions, user_roles
+from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage
 
 __all__ = [
     "AccountingJournal",
@@ -203,6 +204,9 @@ __all__ = [
     "PharmacyStockMovement",
     "RefreshToken",
     "Role",
+    "StaffBotAuditLog",
+    "StaffBotConversation",
+    "StaffBotMessage",
     "User",
     "role_permissions",
     "user_permissions",

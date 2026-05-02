@@ -74,6 +74,30 @@ export interface DashboardAnalytics {
     module_breakdown: DashboardPoint[];
     outstanding_due: number;
   };
+  finance_line: {
+    goals: {
+      revenue: { daily: number; monthly: number; yearly: number };
+      cost: { daily: number; monthly: number; yearly: number };
+    };
+    daily: {
+      revenue_current: DashboardPoint[];
+      cost_current: DashboardPoint[];
+      revenue_goal: DashboardPoint[];
+      cost_goal: DashboardPoint[];
+    };
+    monthly: {
+      revenue_current: DashboardPoint[];
+      cost_current: DashboardPoint[];
+      revenue_goal: DashboardPoint[];
+      cost_goal: DashboardPoint[];
+    };
+    yearly: {
+      revenue_current: DashboardPoint[];
+      cost_current: DashboardPoint[];
+      revenue_goal: DashboardPoint[];
+      cost_goal: DashboardPoint[];
+    };
+  };
   lab_radiology_analytics: {
     lab_today: number;
     radiology_today: number;

@@ -20,6 +20,7 @@ from app.modules.patients.router import router as patients_router
 from app.modules.permissions.router import router as permissions_router
 from app.modules.patient_portal.router import router as patient_portal_router
 from app.modules.patient_bot.router import router as patient_bot_router
+from app.modules.staff_bot.router import router as staff_bot_router
 from app.modules.patient_auth.router import router as patient_auth_router
 from app.modules.pharmacy.router import router as pharmacy_router
 from app.modules.inventory.router import router as inventory_router
@@ -36,6 +37,7 @@ api_router.include_router(roles_router)
 api_router.include_router(permissions_router)
 api_router.include_router(patient_portal_router)
 api_router.include_router(patient_bot_router)
+api_router.include_router(staff_bot_router)
 api_router.include_router(patient_auth_router)
 api_router.include_router(branches_router)
 api_router.include_router(departments_router)

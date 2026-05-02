@@ -21,25 +21,6 @@
     }
   </div>
 
-  <section class="page-card demo-flow-card">
-    <div class="section-header demo-flow-header">
-      <div>
-        <div class="hero-kicker">Client Demo Flow</div>
-        <h2 class="section-title">OPD To IPD Settlement</h2>
-      </div>
-      <button class="primary-btn" type="button" (click)="navigateToRegisterVisit()">Start Registration</button>
-    </div>
-    <div class="demo-flow">
-      @for (step of demoJourneySteps; track step.label; let index = $index) {
-        <button class="demo-step" type="button" (click)="openDemoStep(step.route)">
-          <span>{{ index + 1 }}</span>
-          <strong>{{ step.label }}</strong>
-          <small>{{ step.detail }}</small>
-        </button>
-      }
-    </div>
-  </section>
-
   <section class="analytics-grid">
     <div class="page-card analytics-card analytics-card--wide">
       <div class="section-header analytics-card__header">

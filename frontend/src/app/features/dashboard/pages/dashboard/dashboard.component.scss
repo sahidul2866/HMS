@@ -8,6 +8,7 @@
 .kpi-card,
 .chart-card,
 .summary-band,
+.demo-flow-card,
 .module-access a {
   background: #ffffff;
   border: 1px solid #dfe7ef;
@@ -89,6 +90,71 @@ a:hover {
 
 .filter-bar {
   padding: 12px;
+}
+
+.demo-flow-card {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.demo-flow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.demo-start {
+  border: 1px solid #cbd7e2;
+  color: #102033;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 9px 12px;
+  text-decoration: none;
+  border-radius: 7px;
+}
+
+.demo-flow {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.demo-step {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.demo-step span {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #eaf5f3;
+  color: #0f766e;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.demo-step strong {
+  font-size: 14px;
+  color: #102033;
+}
+
+.demo-step small {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.demo-step:hover {
+  border-color: #0f766e;
 }
 
 label {
@@ -245,6 +311,97 @@ select {
 .chart-card {
   min-height: 240px;
   padding: 14px;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  border-color: #0f766e;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1);
+}
+
+.mini-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.mini-list div {
+  align-items: baseline;
+  background: #f8fafc;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.mini-list small {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.toggle-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #475569;
+}
+
+.toggle-group input {
+  min-height: auto;
+}
+
+.finance-lines {
+  width: 100%;
+  height: 150px;
+  border-radius: 8px;
+  border: 1px solid #edf2f7;
+  background: linear-gradient(180deg, #f8fafc, #ffffff);
+}
+
+.finance-lines .line {
+  fill: none;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.finance-lines .line.revenue {
+  stroke: #2563eb;
+}
+
+.finance-lines .line.cost {
+  stroke: #f59e0b;
+}
+
+.finance-lines .line.goal {
+  stroke-dasharray: 4 4;
+  opacity: 0.9;
+}
+
+.finance-legend span b {
+  font-size: 16px;
 }
 
 .card-head {
@@ -411,6 +568,19 @@ select {
 .module-access a {
   background: #102033;
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-access a small {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.4;
 }
 
 .skeleton-card {

@@ -3,7 +3,9 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import Date, cast, desc, func, select
 from sqlalchemy.orm import Session
 
+from app.models.accounting import Expense, ExpenseCategory
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund
+from app.models.configuration import ConfigurationProfile
 from app.models.encounter import Appointment, ERVisit, IPDAdmission, IPDBed, OPDVisit, OPDVisitOrder
 from app.models.hr import HRAttendance, HREmployee, HRLeaveRequest, HRPayrollRun
 from app.models.inventory import InventoryItem, ReagentBatch, StockBatch
@@ -461,9 +463,20 @@ class ReportingRepository:
 
         patient_trend = self._daily_series(OPDVisit, OPDVisit.visit_date, branch_id, start, end)
         revenue_trend = self._daily_sum_series(BillingPayment, BillingPayment.received_at, BillingPayment.amount, branch_id, start, end)
+        cost_trend = self._daily_sum_series(Expense, Expense.expense_date, Expense.amount, branch_id, start, end)
         appointment_trend = self._daily_series(Appointment, Appointment.appointment_at, branch_id, start, end)
         admission_trend = self._daily_series(IPDAdmission, IPDAdmission.admitted_at, branch_id, start, end)
         discharge_trend = self._daily_series(IPDAdmission, IPDAdmission.discharged_at, branch_id, start, end, extra=[IPDAdmission.status == "discharged"])
+
+        goals = self._dashboard_goals(branch_id, revenue_month=revenue_month)
+        finance_series = self._finance_line_series(
+            branch_id,
+            start=start,
+            end=end,
+            revenue_daily=revenue_trend,
+            cost_daily=cost_trend,
+            goals=goals,
+        )
 
         alerts = self._alerts(
             low_stock_meds=low_stock_meds,
@@ -527,6 +540,7 @@ class ReportingRepository:
                 "module_breakdown": self._group_sums(BillingInvoice.source_module, BillingInvoice.total_amount, BillingInvoice, branch_id),
                 "outstanding_due": unpaid_due,
             },
+            "finance_line": finance_series,
             "lab_radiology_analytics": {
                 "lab_today": lab_today,
                 "radiology_today": radiology_today,
@@ -625,6 +639,44 @@ class ReportingRepository:
                 rows[day.isoformat()] = float(value or 0)
         return [{"label": label[-5:], "date": label, "value": value} for label, value in rows.items()]
 
+    def _monthly_sum_series(self, model, date_column, amount_column, branch_id, *, end: date, months: int = 12) -> list[dict]:
+        end_month = end.replace(day=1)
+        start_month = (end_month - timedelta(days=(months - 1) * 31)).replace(day=1)
+        cursor = start_month
+        rows: dict[str, float] = {}
+        while cursor <= end_month:
+            key = cursor.strftime("%Y-%m")
+            rows[key] = 0.0
+            cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+        stmt = select(func.to_char(date_column, "YYYY-MM").label("month"), func.coalesce(func.sum(amount_column), 0)).where(
+            cast(date_column, Date) >= start_month,
+            cast(date_column, Date) <= end,
+        )
+        if branch_id and hasattr(model, "branch_id"):
+            stmt = stmt.where(model.branch_id == branch_id)
+        stmt = stmt.group_by("month").order_by("month")
+        for month, value in self.db.execute(stmt):
+            if month:
+                rows[str(month)] = float(value or 0)
+        return [{"label": label, "date": f"{label}-01", "value": value} for label, value in rows.items()]
+
+    def _yearly_sum_series(self, model, date_column, amount_column, branch_id, *, end: date, years: int = 5) -> list[dict]:
+        end_year = end.year
+        start_year = end_year - (years - 1)
+        rows = {str(year): 0.0 for year in range(start_year, end_year + 1)}
+        stmt = select(func.to_char(date_column, "YYYY").label("year"), func.coalesce(func.sum(amount_column), 0)).where(
+            cast(date_column, Date) >= date(start_year, 1, 1),
+            cast(date_column, Date) <= end,
+        )
+        if branch_id and hasattr(model, "branch_id"):
+            stmt = stmt.where(model.branch_id == branch_id)
+        stmt = stmt.group_by("year").order_by("year")
+        for year, value in self.db.execute(stmt):
+            if year:
+                rows[str(year)] = float(value or 0)
+        return [{"label": label, "date": f"{label}-01-01", "value": value} for label, value in rows.items()]
+
     def _monthly_series(self, model, date_column, branch_id) -> list[dict]:
         start = date.today().replace(day=1) - timedelta(days=180)
         stmt = select(func.to_char(date_column, "YYYY-MM").label("month"), func.count(model.id)).where(cast(date_column, Date) >= start)
@@ -646,6 +698,76 @@ class ReportingRepository:
             stmt = stmt.where(model.branch_id == branch_id)
         stmt = stmt.group_by(label_column).order_by(desc(func.sum(amount_column))).limit(limit)
         return [{"label": str(label or "Other"), "value": float(value or 0)} for label, value in self.db.execute(stmt)]
+
+    def _dashboard_goals(self, branch_id, *, revenue_month: float) -> dict:
+        profile = self.db.scalar(
+            select(ConfigurationProfile)
+            .where(
+                ConfigurationProfile.profile_type == "dashboard_goals",
+                ConfigurationProfile.is_active.is_(True),
+                ConfigurationProfile.is_default.is_(True),
+                (ConfigurationProfile.branch_id == branch_id) | (ConfigurationProfile.branch_id.is_(None)),
+            )
+            .order_by(ConfigurationProfile.branch_id.desc())
+        )
+        payload = (profile.payload if profile else {}) or {}
+
+        budget_monthly = float(
+            self.db.scalar(
+                select(func.coalesce(func.sum(ExpenseCategory.monthly_budget), 0)).where(
+                    (ExpenseCategory.branch_id == branch_id) | (ExpenseCategory.branch_id.is_(None))
+                )
+            )
+            or 0
+        )
+
+        revenue_goal_monthly = float(payload.get("revenue_goal_monthly") or 0)
+        if revenue_goal_monthly <= 0:
+            revenue_goal_monthly = float(revenue_month * 1.1) if revenue_month > 0 else 500000.0
+        revenue_goal_daily = float(payload.get("revenue_goal_daily") or 0) or round(revenue_goal_monthly / 30, 2)
+        revenue_goal_yearly = float(payload.get("revenue_goal_yearly") or 0) or round(revenue_goal_monthly * 12, 2)
+
+        cost_goal_monthly = float(payload.get("cost_goal_monthly") or 0)
+        if cost_goal_monthly <= 0:
+            cost_goal_monthly = budget_monthly if budget_monthly > 0 else 250000.0
+        cost_goal_daily = float(payload.get("cost_goal_daily") or 0) or round(cost_goal_monthly / 30, 2)
+        cost_goal_yearly = float(payload.get("cost_goal_yearly") or 0) or round(cost_goal_monthly * 12, 2)
+
+        return {
+            "revenue": {"daily": revenue_goal_daily, "monthly": revenue_goal_monthly, "yearly": revenue_goal_yearly},
+            "cost": {"daily": cost_goal_daily, "monthly": cost_goal_monthly, "yearly": cost_goal_yearly},
+        }
+
+    def _finance_line_series(self, branch_id, *, start: date, end: date, revenue_daily: list[dict], cost_daily: list[dict], goals: dict) -> dict:
+        revenue_monthly = self._monthly_sum_series(BillingPayment, BillingPayment.received_at, BillingPayment.amount, branch_id, end=end, months=12)
+        cost_monthly = self._monthly_sum_series(Expense, Expense.expense_date, Expense.amount, branch_id, end=end, months=12)
+        revenue_yearly = self._yearly_sum_series(BillingPayment, BillingPayment.received_at, BillingPayment.amount, branch_id, end=end, years=5)
+        cost_yearly = self._yearly_sum_series(Expense, Expense.expense_date, Expense.amount, branch_id, end=end, years=5)
+
+        def goal_series(template: list[dict], goal_value: float) -> list[dict]:
+            return [{"label": item.get("label"), "date": item.get("date"), "value": float(goal_value)} for item in template]
+
+        return {
+            "goals": goals,
+            "daily": {
+                "revenue_current": revenue_daily,
+                "cost_current": cost_daily,
+                "revenue_goal": goal_series(revenue_daily, goals["revenue"]["daily"]),
+                "cost_goal": goal_series(cost_daily, goals["cost"]["daily"]),
+            },
+            "monthly": {
+                "revenue_current": revenue_monthly,
+                "cost_current": cost_monthly,
+                "revenue_goal": goal_series(revenue_monthly, goals["revenue"]["monthly"]),
+                "cost_goal": goal_series(cost_monthly, goals["cost"]["monthly"]),
+            },
+            "yearly": {
+                "revenue_current": revenue_yearly,
+                "cost_current": cost_yearly,
+                "revenue_goal": goal_series(revenue_yearly, goals["revenue"]["yearly"]),
+                "cost_goal": goal_series(cost_yearly, goals["cost"]["yearly"]),
+            },
+        }
 
     def _top_medicines(self, branch_id) -> list[dict]:
         stmt = (

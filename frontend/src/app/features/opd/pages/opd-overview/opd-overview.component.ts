@@ -227,20 +227,6 @@ export class OPDOverviewComponent {
     void this.router.navigate(['/opd/register']);
   }
 
-  get demoJourneySteps(): Array<{ label: string; detail: string; route: string }> {
-    return [
-      { label: 'Register', detail: 'Patient, doctor, token', route: '/opd/register' },
-      { label: 'Collect', detail: 'OPD fee and receipt', route: '/billing/create' },
-      { label: 'Consult', detail: 'Rx, tests, follow-up', route: '/opd/overview' },
-      { label: 'Admit', detail: 'Bed and advance', route: '/ipd/overview' },
-      { label: 'Settle', detail: 'Final bill and discharge', route: '/billing/desk' },
-    ];
-  }
-
-  openDemoStep(route: string): void {
-    void this.router.navigateByUrl(route);
-  }
-
   get canFilterByDoctor(): boolean {
     return this.sessionService.hasPermission(PERMISSIONS.opdViewDoctorWise);
   }

@@ -1,0 +1,67 @@
+<div class="assistant-fab">
+  <button type="button" class="assistant-button" (click)="toggle()" [attr.aria-expanded]="open">
+    <span class="assistant-dot" *ngIf="!open"></span>
+    <span class="assistant-icon">AI</span>
+    <span class="assistant-label" *ngIf="!open">Assistant</span>
+  </button>
+</div>
+
+<div class="assistant-panel" *ngIf="open">
+  <header class="assistant-header">
+    <div class="assistant-title">
+      <div class="assistant-badge">AI</div>
+      <div>
+        <div class="assistant-name">{{ title }}</div>
+        <div class="assistant-subtitle" *ngIf="loading">Thinking…</div>
+        <div class="assistant-subtitle" *ngIf="!loading">Type “start over” to reset</div>
+      </div>
+    </div>
+    <button type="button" class="assistant-close" (click)="close()" aria-label="Close assistant">×</button>
+  </header>
+
+  <section class="assistant-quick" *ngIf="settings?.quick_actions?.length" (click)="$event.stopPropagation()">
+    <button type="button" class="assistant-quick-btn" *ngFor="let item of settings?.quick_actions?.slice(0, 8) || []" (click)="useQuick(item)">
+      {{ item }}
+    </button>
+  </section>
+
+  <section class="assistant-body" role="log" aria-live="polite">
+    <div class="assistant-error" *ngIf="error">{{ error }}</div>
+    <div class="assistant-msg" *ngFor="let msg of messages; trackBy: trackByIndex" [class.is-user]="msg.sender === 'user'">
+      <div class="assistant-avatar">{{ msg.sender === 'user' ? 'You' : 'AI' }}</div>
+      <div class="assistant-bubble">
+        <div class="assistant-bubble-meta" *ngIf="msg.sender === 'bot' && msg.response">
+          <span class="assistant-chip">{{ msg.response.source_module || 'HMS' }}</span>
+          <span class="assistant-chip warn" *ngIf="msg.response.used_gemini">Gemini</span>
+          <span class="assistant-chip good" *ngIf="msg.response.used_database">DB</span>
+        </div>
+        <div class="assistant-bubble-text">{{ msg.text }}</div>
+        <div class="assistant-detail" *ngIf="msg.sender === 'bot' && msg.response?.details?.length">
+          <div class="assistant-row" *ngFor="let row of msg.response?.details || []">
+            <span>{{ row.label }}</span>
+            <b>{{ row.value }}</b>
+          </div>
+        </div>
+        <div class="assistant-next" *ngIf="msg.sender === 'bot' && msg.response?.next_action">
+          <span>Next:</span>
+          <b>{{ msg.response?.next_action }}</b>
+        </div>
+        <div class="assistant-replies" *ngIf="msg.sender === 'bot' && msg.response?.quick_replies?.length">
+          <button type="button" *ngFor="let item of msg.response?.quick_replies || []" (click)="useQuick(item)">{{ item }}</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="assistant-footer">
+    <input
+      class="assistant-input"
+      type="text"
+      placeholder="Ask about billing, appointments, lab, pharmacy…"
+      [(ngModel)]="input"
+      (keydown.enter)="send()"
+      [disabled]="loading"
+    />
+    <button type="button" class="assistant-send" (click)="send()" [disabled]="loading || !input.trim()">Send</button>
+  </footer>
+</div>
