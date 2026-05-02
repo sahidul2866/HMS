@@ -79,7 +79,11 @@ class StaffBotService:
                 gemini_enabled=bool(self.app_settings.gemini_api_key),
             )
         except SQLAlchemyError as exc:
-            raise AppException(503, "staff_bot_unavailable", "Staff assistant is not ready (database not migrated). Restart backend to run migrations.") from exc
+            raise AppException(
+                503,
+                "staff_bot_unavailable",
+                "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
+            ) from exc
 
     def reset(self, payload: StaffBotResetCreate, actor: User) -> StaffBotResponse:
         try:
@@ -95,7 +99,11 @@ class StaffBotService:
                 quick_replies=self.settings(actor).quick_actions[:6],
             )
         except SQLAlchemyError as exc:
-            raise AppException(503, "staff_bot_unavailable", "Staff assistant is not ready (database not migrated). Restart backend to run migrations.") from exc
+            raise AppException(
+                503,
+                "staff_bot_unavailable",
+                "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
+            ) from exc
 
     def handle_message(self, payload: StaffBotMessageCreate, actor: User) -> StaffBotResponse:
         try:
@@ -168,7 +176,11 @@ class StaffBotService:
                 quick_replies=self.settings(actor).quick_actions[:6],
             )
         except SQLAlchemyError as exc:
-            raise AppException(503, "staff_bot_unavailable", "Staff assistant is not ready (database not migrated). Restart backend to run migrations.") from exc
+            raise AppException(
+                503,
+                "staff_bot_unavailable",
+                "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
+            ) from exc
 
     def _database_first_answer(self, intent: str, normalized: str, actor: User, conversation: StaffBotConversation) -> StaffBotResponse | None:
         if intent == "opd_today_summary":

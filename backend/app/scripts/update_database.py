@@ -10,6 +10,7 @@ from app.scripts.seed_ot_demo import main as seed_ot_demo
 from app.scripts.seed_patient_bot_demo import main as seed_patient_bot_demo
 from app.scripts.seed_pharmacy_production_demo import main as seed_pharmacy_production_demo
 from app.scripts.seed_sample_staff import main as seed_sample_staff
+from app.scripts.seed_dashboard_timeseries import main as seed_dashboard_timeseries
 
 
 def main(include_sample_staff: bool = True) -> None:
@@ -26,6 +27,7 @@ def main(include_sample_staff: bool = True) -> None:
         seed_accounting_demo()
         seed_configuration_demo()
         seed_patient_bot_demo()
+        seed_dashboard_timeseries()
     print("Database updated with migrations and seed scripts.")
 
 
