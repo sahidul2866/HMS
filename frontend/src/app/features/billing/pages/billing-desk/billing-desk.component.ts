@@ -141,6 +141,37 @@ export class BillingDeskComponent {
     return this.viewMode === 'due';
   }
 
+  get billingKpis(): Array<{ label: string; value: string; tone: string }> {
+    const invoices = this.recentInvoices;
+    const total = invoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+    const paid = invoices.reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0);
+    const due = invoices.reduce((sum, invoice) => sum + Number(invoice.due_amount || 0), 0);
+    const refunded = invoices.reduce((sum, invoice) => sum + Number(invoice.refunded_amount || 0), 0);
+    const discounts = invoices.reduce((sum, invoice) => {
+      const fullInvoice = invoice as BillingInvoice;
+      const itemDiscount = Number(fullInvoice.item_discount_amount || 0);
+      const invoiceDiscount = Number(fullInvoice.invoice_discount_amount || 0);
+      return sum + itemDiscount + invoiceDiscount;
+    }, 0);
+    const pending = invoices.filter((invoice) => Number(invoice.due_amount || 0) > 0).length;
+    return [
+      { label: 'Collection', value: this.formatCurrency(paid), tone: 'good' },
+      { label: 'Invoice Value', value: this.formatCurrency(total), tone: 'info' },
+      { label: 'Pending Bills', value: String(pending), tone: pending ? 'warn' : 'good' },
+      { label: 'Due Amount', value: this.formatCurrency(due), tone: due ? 'danger' : 'good' },
+      { label: 'Refunded', value: this.formatCurrency(refunded), tone: refunded ? 'warn' : 'info' },
+      { label: 'Discounts', value: this.formatCurrency(discounts), tone: discounts ? 'warn' : 'info' },
+    ];
+  }
+
+  get paymentMethodSummary(): Array<{ label: string; value: string }> {
+    const map = new Map<string, number>();
+    for (const payment of this.latestInvoice?.payments || []) {
+      map.set(payment.payment_method, (map.get(payment.payment_method) || 0) + Number(payment.amount || 0));
+    }
+    return [...map.entries()].map(([label, value]) => ({ label: this.formatStatus(label), value: this.formatCurrency(value) }));
+  }
+
   printInvoice(): void {
     if (!this.latestInvoice) {
       return;
@@ -179,9 +210,9 @@ export class BillingDeskComponent {
       <section class="invoice-copy">
         <div class="copy-header">
           <div class="brand-block">
-            <div class="brand-mark">HMS</div>
+            <div class="brand-mark">MP</div>
             <div class="brand-copy">
-              <p class="clinic-name">Hospital Management System</p>
+              <p class="clinic-name">MediProfit</p>
               <p>Address : 461, Firmview Super Market, Firmgate, Dhaka-1205</p>
               <p>Contact : +8801720981682</p>
             </div>

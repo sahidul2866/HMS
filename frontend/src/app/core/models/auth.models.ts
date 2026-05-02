@@ -38,6 +38,8 @@ export interface User {
   roles: Role[];
   direct_permissions: Permission[];
   effective_permissions: string[];
+  principal_type?: 'user' | 'patient';
+  last_login_at?: string | null;
 }
 
 export interface TokenPair {

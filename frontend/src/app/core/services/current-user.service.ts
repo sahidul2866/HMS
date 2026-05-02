@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, catchError, of, throwError } from 'rxjs';
 
 import { ApiBaseService } from './api-base.service';
 import { ApiCacheService } from './api-cache.service';
@@ -20,7 +20,18 @@ export class CurrentUserService extends ApiBaseService {
         headers: new HttpHeaders({
           [SKIP_AUTH_REFRESH_HEADER]: '1',
         }),
-      })
+      }).pipe(
+        catchError((error) => {
+          if (error?.status !== 401) {
+            return throwError(() => error);
+          }
+          return this.http.get<User>(this.url('/patient-auth/me'), {
+            headers: new HttpHeaders({
+              [SKIP_AUTH_REFRESH_HEADER]: '1',
+            }),
+          });
+        })
+      )
     );
   }
 

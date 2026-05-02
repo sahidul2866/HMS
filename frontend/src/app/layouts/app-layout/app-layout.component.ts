@@ -37,6 +37,7 @@ export class AppLayoutComponent {
   sidebarCollapsed = false;
   mobileSidebarOpen = false;
   isMobileViewport = false;
+  accountMenuOpen = false;
 
   constructor() {
     this.syncViewport();
@@ -55,8 +56,27 @@ export class AppLayoutComponent {
     this.mobileSidebarOpen = false;
   }
 
+  toggleAccountMenu(): void {
+    this.accountMenuOpen = !this.accountMenuOpen;
+  }
+
+  closeAccountMenu(): void {
+    this.accountMenuOpen = false;
+  }
+
   logout(): void {
+    this.accountMenuOpen = false;
     this.authService.logout().subscribe(() => this.notificationService.info('Logged out.'));
+  }
+
+  openProfile(): void {
+    this.accountMenuOpen = false;
+    this.navigate('/profile');
+  }
+
+  switchTheme(): void {
+    this.themeService.setTheme(this.themeService.activeTheme() === 'midnight' ? 'ocean' : 'midnight');
+    this.accountMenuOpen = false;
   }
 
   visibleQuickActions(): typeof this.quickActions {
@@ -70,6 +90,24 @@ export class AppLayoutComponent {
   navigate(route: string): void {
     this.router.navigateByUrl(route);
     this.closeMobileSidebar();
+  }
+
+  userInitials(): string {
+    const name = this.sessionService.snapshot.user?.full_name || 'User';
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('');
+  }
+
+  accountTypeLabel(): string {
+    const user = this.sessionService.snapshot.user;
+    if (user?.principal_type === 'patient' || user?.patient_id) {
+      return 'Patient Portal';
+    }
+    return user?.roles?.[0]?.name || 'Staff Account';
   }
 
   private syncViewport(): void {

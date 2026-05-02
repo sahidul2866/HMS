@@ -57,12 +57,25 @@ export class AuthService {
   }
 
   login(username_or_email: string, password: string): Observable<User> {
+    const payload = { username_or_email, password };
     return this.http
-      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/login`, { username_or_email, password }, {
+      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/login`, payload, {
         headers: {
           [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
         },
       })
+      .pipe(
+        catchError((error) => {
+          if (error?.status !== 401) {
+            return throwError(() => error);
+          }
+          return this.http.post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/patient-auth/login`, payload, {
+            headers: {
+              [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
+            },
+          });
+        })
+      )
       .pipe(
         tap((response) => {
           this.apiCache.clearAll();
@@ -87,7 +100,7 @@ export class AuthService {
     emergency_contact_phone?: string | null;
   }): Observable<User> {
     return this.http
-      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/patient-register`, payload, {
+      .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/patient-auth/register`, payload, {
         headers: {
           [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
         },
@@ -113,15 +126,28 @@ export class AuthService {
       return throwError(() => ({ status: 401, code: 'missing_refresh_token', message: 'No refresh token available' } as ApiError));
     }
 
+    const refreshPayload = { refresh_token: refreshToken };
     this.refreshInFlight$ = this.http
       .post<LoginResponse>(
         `${runtimeConfig.apiBaseUrl}/auth/refresh`,
-        { refresh_token: refreshToken },
+        refreshPayload,
         {
           headers: {
             [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
           },
         }
+      )
+      .pipe(
+        catchError((error) => {
+          if (error?.status !== 401) {
+            return throwError(() => error);
+          }
+          return this.http.post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/patient-auth/refresh`, refreshPayload, {
+            headers: {
+              [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
+            },
+          });
+        })
       )
       .pipe(
         tap((response) => {
@@ -144,7 +170,9 @@ export class AuthService {
   ): Observable<HttpEvent<unknown>> {
     if (
       request.url.endsWith('/auth/login')
+      || request.url.endsWith('/patient-auth/login')
       || request.url.endsWith('/auth/refresh')
+      || request.url.endsWith('/patient-auth/refresh')
       || request.headers.has('X-Retry-Attempt')
       || request.headers.has(AuthService.SKIP_AUTH_REFRESH_HEADER)
     ) {
@@ -185,7 +213,15 @@ export class AuthService {
         },
       }
     ).pipe(
-      catchError(() => of(void 0)),
+      catchError(() => this.http.post<void>(
+        `${runtimeConfig.apiBaseUrl}/patient-auth/logout`,
+        { refresh_token: refreshToken },
+        {
+          headers: {
+            [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
+          },
+        }
+      ).pipe(catchError(() => of(void 0)))),
       tap(() => this.clearSession(true))
     );
   }

@@ -115,8 +115,8 @@ def _payment_methods(db, branch: Branch, actor: User, accounts: dict[str, Accoun
 def _finance_workflows(db, branch: Branch, actor: User, accounts: dict[str, Account]) -> None:
     now = datetime.now(UTC)
     today = date.today()
-    if not db.scalar(select(BankAccount).where(BankAccount.branch_id == branch.id, BankAccount.account_number == "HMS-001")):
-        bank = BankAccount(branch_id=branch.id, account_name="Hospital Main Collection", bank_name="Demo Bank", account_number="HMS-001", current_balance=Decimal("1250000"), created_by=actor.id, updated_by=actor.id)
+    if not db.scalar(select(BankAccount).where(BankAccount.branch_id == branch.id, BankAccount.account_number == "MP-001")):
+        bank = BankAccount(branch_id=branch.id, account_name="MediProfit Main Collection", bank_name="Demo Bank", account_number="MP-001", current_balance=Decimal("1250000"), created_by=actor.id, updated_by=actor.id)
         db.add(bank)
         db.flush()
         db.add(BankTransaction(branch_id=branch.id, bank_account_id=bank.id, transaction_date=today, transaction_type="deposit", reference_number="BNK-DEMO-001", amount=Decimal("185000"), reconciliation_status="matched", created_by=actor.id, updated_by=actor.id))

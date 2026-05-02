@@ -25,6 +25,7 @@ from app.models.accounting import (
 from app.models.audit_log import AuditLog
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund, BillingService, ReferredDoctor
 from app.models.branch import Branch
+from app.models.configuration import ConfigurationProfile
 from app.models.department import Department
 from app.models.encounter import ERVisit, ERAmbulanceRecord, IPDAdmission, IPDAdmissionMovement, IPDBed, OPDVisit, OPDVisitOrder
 from app.models.hr import (
@@ -66,6 +67,19 @@ from app.models.ot import (
 )
 from app.models.permission import Permission
 from app.models.patient import Patient
+from app.models.patient_portal_account import PatientPortalAccount, PatientPortalRefreshToken
+from app.models.patient_bot import (
+    GeminiAPILog,
+    PatientBotAuditLog,
+    PatientBotConversation,
+    PatientBotFAQ,
+    PatientBotIntakeAnswer,
+    PatientBotIntent,
+    PatientBotMessage,
+    PatientBotRecommendation,
+    PatientBotSetting,
+    SymptomDepartmentRule,
+)
 from app.models.pharmacy import (
     PharmacyCompany,
     PharmacyCustomer,
@@ -117,6 +131,7 @@ __all__ = [
     "BillingService",
     "ReferredDoctor",
     "Branch",
+    "ConfigurationProfile",
     "Department",
     "ERVisit",
     "ERAmbulanceRecord",
@@ -160,6 +175,18 @@ __all__ = [
     "SurgeryTeamAssignment",
     "Permission",
     "Patient",
+    "PatientPortalAccount",
+    "PatientPortalRefreshToken",
+    "GeminiAPILog",
+    "PatientBotAuditLog",
+    "PatientBotConversation",
+    "PatientBotFAQ",
+    "PatientBotIntakeAnswer",
+    "PatientBotIntent",
+    "PatientBotMessage",
+    "PatientBotRecommendation",
+    "PatientBotSetting",
+    "SymptomDepartmentRule",
     "PharmacyCompany",
     "PharmacyCustomer",
     "PharmacyDispense",

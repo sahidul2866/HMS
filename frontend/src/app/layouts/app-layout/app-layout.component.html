@@ -20,10 +20,13 @@
               <span></span>
             </button>
           }
-        <div class="topbar-user">
-          <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
-          <div class="muted">{{ sessionService.snapshot.user?.email }}</div>
-        </div>
+        <button class="topbar-user" type="button" (click)="openProfile()">
+          <span class="account-avatar">{{ userInitials() || 'U' }}</span>
+          <span>
+            <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+            <span class="muted">{{ accountTypeLabel() }}</span>
+          </span>
+        </button>
         </div>
         <div class="topbar-actions">
           <label class="theme-picker">
@@ -34,7 +37,36 @@
               }
             </select>
           </label>
-          <button class="secondary-btn" type="button" (click)="logout()">Logout</button>
+          <div class="account-menu" [class.open]="accountMenuOpen">
+            <button class="account-menu-trigger" type="button" (click)="toggleAccountMenu()" aria-label="Open account menu">
+              <span class="account-avatar compact">{{ userInitials() || 'U' }}</span>
+              <span class="account-menu-text">
+                <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+                <small>{{ sessionService.snapshot.user?.email }}</small>
+              </span>
+              <span class="account-caret">⌄</span>
+            </button>
+            @if (accountMenuOpen) {
+              <div class="account-menu-panel">
+                <div class="account-menu-header">
+                  <span class="account-avatar">{{ userInitials() || 'U' }}</span>
+                  <div>
+                    <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+                    <small>{{ sessionService.snapshot.user?.email }}</small>
+                    <em>{{ accountTypeLabel() }}</em>
+                  </div>
+                </div>
+                <button type="button" (click)="openProfile()">Profile</button>
+                @if (sessionService.snapshot.user?.patient_id || sessionService.snapshot.user?.principal_type === 'patient') {
+                  <button type="button" (click)="navigate('/portal'); closeAccountMenu()">My Portal</button>
+                } @else {
+                  <button type="button" (click)="navigate('/dashboard'); closeAccountMenu()">Dashboard</button>
+                }
+                <button type="button" (click)="switchTheme()">Switch Theme</button>
+                <button class="danger-menu-item" type="button" (click)="logout()">Logout</button>
+              </div>
+            }
+          </div>
         </div>
       </header>
 

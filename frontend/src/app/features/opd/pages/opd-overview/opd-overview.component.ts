@@ -227,6 +227,20 @@ export class OPDOverviewComponent {
     void this.router.navigate(['/opd/register']);
   }
 
+  get demoJourneySteps(): Array<{ label: string; detail: string; route: string }> {
+    return [
+      { label: 'Register', detail: 'Patient, doctor, token', route: '/opd/register' },
+      { label: 'Collect', detail: 'OPD fee and receipt', route: '/billing/create' },
+      { label: 'Consult', detail: 'Rx, tests, follow-up', route: '/opd/overview' },
+      { label: 'Admit', detail: 'Bed and advance', route: '/ipd/overview' },
+      { label: 'Settle', detail: 'Final bill and discharge', route: '/billing/desk' },
+    ];
+  }
+
+  openDemoStep(route: string): void {
+    void this.router.navigateByUrl(route);
+  }
+
   get canFilterByDoctor(): boolean {
     return this.sessionService.hasPermission(PERMISSIONS.opdViewDoctorWise);
   }
@@ -866,7 +880,7 @@ export class OPDOverviewComponent {
       <section class="invoice-copy">
         <div class="copy-header">
           <div class="brand-block">
-            <div class="brand-mark">HMS</div>
+            <div class="brand-mark">MP</div>
             <div>
               <h1>Outpatient Invoice</h1>
               <p class="brand-subtitle">OPD payment acknowledgement</p>
@@ -878,7 +892,7 @@ export class OPDOverviewComponent {
 
         <div class="clinic-banner">
           <div>
-            <strong>Hospital Management System</strong>
+            <strong>MediProfit</strong>
             <span>Outpatient billing desk</span>
           </div>
           <div class="clinic-meta">
@@ -944,7 +958,7 @@ export class OPDOverviewComponent {
         <div class="signature-row">
           <div>
             <span class="signature-label">Prepared by</span>
-            <strong>HMS Front Desk</strong>
+            <strong>MediProfit Front Desk</strong>
             <p>Billing / OPD registration desk</p>
           </div>
           <div>
@@ -1607,7 +1621,7 @@ export class OPDOverviewComponent {
               </div>
             </section>
             <div class="footer">
-              <div>Generated from HMS OPD Desk</div>
+              <div>Generated from MediProfit OPD Desk</div>
               <div>Printed on ${escapePrintHtml(new Date().toLocaleString())}</div>
             </div>
           </div>

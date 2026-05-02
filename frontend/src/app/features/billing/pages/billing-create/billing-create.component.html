@@ -48,6 +48,15 @@
   </section>
 
   <form class="billing-layout" [formGroup]="form" (ngSubmit)="submit()">
+    <section class="invoice-overview-strip">
+      @for (item of invoiceOverviewItems; track item.label) {
+        <article [attr.data-tone]="item.tone">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </article>
+      }
+    </section>
+
     @if (selectedPatient) {
       <section class="top-patient-bar">
         <div>
@@ -365,6 +374,7 @@
           </div>
         }
       </div>
+      <div class="readiness-note" [class.readiness-note--ready]="readyToPost">{{ postReadinessMessage }}</div>
     </section>
 
     <section class="soft-panel">
@@ -511,6 +521,7 @@
       </div>
 
       <div class="submit-row">
+        <button class="ghost-btn compact-btn" type="button" (click)="resetInvoiceDraft()" [disabled]="saving">Reset</button>
         <button class="primary-btn" type="submit" [disabled]="saving || !readyToPost">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
       </div>
     </aside>

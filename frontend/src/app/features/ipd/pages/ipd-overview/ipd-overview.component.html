@@ -21,6 +21,15 @@
     }
   </div>
 
+  <section class="ipd-kpi-grid">
+    @for (item of ipdQuickStats; track item.label) {
+      <article [class]="'ipd-kpi ' + item.tone">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+      </article>
+    }
+  </section>
+
   <section class="analytics-grid">
     <div class="page-card analytics-card analytics-card--wide">
       <div class="section-header analytics-card__header">
@@ -174,6 +183,14 @@
           </div>
 
           @if (selectedAdmission.status !== 'discharged') {
+            <div class="clearance-grid">
+              @for (item of dischargeChecklist(selectedAdmission); track item.label) {
+                <div [class]="item.done ? 'clearance done' : 'clearance pending'">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.done ? 'Ready' : 'Pending' }}</strong>
+                </div>
+              }
+            </div>
             <div class="control-block">
               <div class="control-block__title">Transfer Admission</div>
               <form class="form-grid" [formGroup]="transferForm" (ngSubmit)="transferAdmission()">

@@ -250,6 +250,66 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 255, 0.95));
 }
 
+.demo-flow-card {
+  padding-bottom: 1.15rem;
+}
+
+.demo-flow-header {
+  margin-bottom: 0.75rem;
+}
+
+.demo-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.demo-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'num label'
+    'num detail';
+  gap: 0.1rem 0.7rem;
+  align-items: center;
+  min-height: 78px;
+  padding: 0.8rem 0.9rem;
+  text-align: left;
+  border: 1px solid rgba(20, 184, 166, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.demo-step:hover {
+  transform: translateY(-1px);
+  border-color: rgba(20, 184, 166, 0.34);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.demo-step span {
+  grid-area: num;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+  font-weight: 900;
+}
+
+.demo-step strong {
+  grid-area: label;
+  color: #10233c;
+}
+
+.demo-step small {
+  grid-area: detail;
+  color: #5d6f82;
+}
+
 .prescription-workspace {
   display: grid;
   gap: 1rem;
@@ -693,6 +753,10 @@
     grid-column: span 12;
   }
 
+  .demo-flow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .kpi-grid,
   .revenue-highlight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -741,6 +805,7 @@
 
 @media (max-width: 760px) {
   .kpi-grid,
+  .demo-flow,
   .revenue-highlight-grid,
   .prescription-patient-strip {
     grid-template-columns: 1fr;

@@ -22,25 +22,27 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(subject: str, permissions: list[str], expires_delta: timedelta | None = None) -> tuple[str, datetime]:
+def create_access_token(subject: str, permissions: list[str], expires_delta: timedelta | None = None, principal_type: str = "user") -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
     payload: dict[str, Any] = {
         "sub": subject,
         "type": "access",
         "permissions": permissions,
+        "principal_type": principal_type,
         "jti": str(uuid4()),
         "exp": expires_at,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM), expires_at
 
 
-def create_refresh_token(subject: str, session_id: str, expires_delta: timedelta | None = None) -> tuple[str, datetime, str]:
+def create_refresh_token(subject: str, session_id: str, expires_delta: timedelta | None = None, principal_type: str = "user") -> tuple[str, datetime, str]:
     expires_at = datetime.now(UTC) + (expires_delta or timedelta(days=settings.refresh_token_expire_days))
     jti = str(uuid4())
     payload = {
         "sub": subject,
         "type": "refresh",
         "sid": session_id,
+        "principal_type": principal_type,
         "jti": jti,
         "exp": expires_at,
     }

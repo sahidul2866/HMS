@@ -204,10 +204,12 @@ class Appointment(Base, BaseModelMixin):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="scheduled")
     reason: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
-    booked_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    booked_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    booked_by_patient_account_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patient_portal_accounts.id"), nullable=True)
 
     branch = relationship("Branch")
     patient = relationship("Patient")
     doctor = relationship("User", foreign_keys=[doctor_user_id])
     booked_by = relationship("User", foreign_keys=[booked_by_user_id])
+    booked_by_patient_account = relationship("PatientPortalAccount", foreign_keys=[booked_by_patient_account_id])
     opd_visits = relationship("OPDVisit", back_populates="source_appointment")

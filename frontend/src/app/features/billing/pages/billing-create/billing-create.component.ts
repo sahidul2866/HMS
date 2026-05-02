@@ -198,6 +198,16 @@ export class BillingCreateComponent {
     return this.getInvoiceItemsPayload().filter((item) => this.isInvestigationModule(item.source_module)).length;
   }
 
+  get invoiceOverviewItems(): Array<{ label: string; value: string; tone: string }> {
+    const due = this.preview ? Math.max(0, Number(this.preview.total_amount || 0) - Number(this.form.getRawValue().payment_amount || 0)) : 0;
+    return [
+      { label: 'Patient', value: this.selectedPatientName, tone: this.selectedPatientName === 'Pending' ? 'warn' : 'good' },
+      { label: 'Source', value: this.sourceContextLabel, tone: this.sourceVisit || this.sourceAdmission ? 'info' : 'neutral' },
+      { label: 'Items', value: String(this.selectedItemCount), tone: this.selectedItemCount ? 'good' : 'warn' },
+      { label: 'Due After Pay', value: this.formatCurrency(due), tone: due > 0 ? 'warn' : 'good' },
+    ];
+  }
+
   itemCategoryLabel(index: number): string {
     const option = this.getSelectedCatalogOption(index);
     if (!option) {
@@ -681,6 +691,37 @@ export class BillingCreateComponent {
 
   openBillingDesk(): void {
     void this.router.navigate(['/billing']);
+  }
+
+  resetInvoiceDraft(): void {
+    this.sourceVisit = null;
+    this.sourceAdmission = null;
+    this.draft = null;
+    this.prefillMessage = '';
+    this.selectedPatient = null;
+    this.patientLookupControl.setValue('', { emitEvent: false });
+    this.form.reset({
+      patient_id: '',
+      first_name: '',
+      last_name: '',
+      phone: '',
+      email: '',
+      gender: '',
+      date_of_birth: '',
+      address: '',
+      internal_referral_user_id: '',
+      discount_percentage: 0,
+      payment_amount: 0,
+      payment_method: 'cash',
+      payment_note: '',
+      note: '',
+    });
+    this.items.clear();
+    this.addItem();
+    this.preview = null;
+    this.previewMessage = '';
+    this.closePatientSearch();
+    this.uiStateService.clear(BillingCreateComponent.STATE_KEY);
   }
 
   submit(): void {

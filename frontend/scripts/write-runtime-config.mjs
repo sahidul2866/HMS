@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(__dirname, '..');
 const outputPath = resolve(projectRoot, 'src/assets/app-config.json');
-const apiBaseUrl = process.env.HMS_API_BASE_URL || 'http://localhost:8000/api/v1';
+const apiBaseUrl = process.env.MEDIPROFIT_API_BASE_URL || process.env.HMS_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(

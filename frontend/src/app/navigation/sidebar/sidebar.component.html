@@ -1,9 +1,9 @@
 <aside class="sidebar" [class.collapsed]="collapsed" [class.mobile-open]="mobileOpen" [class.mobile-mode]="mobileMode">
   <div class="brand-row">
     <div class="brand">
-      <h2>{{ collapsed && !mobileMode ? 'H' : 'HMS' }}</h2>
+      <h2>{{ collapsed && !mobileMode ? 'MP' : 'MediProfit' }}</h2>
       @if (!collapsed || mobileMode) {
-        <p>Hospital + Diagnostic Center</p>
+        <p>Hospital Growth Platform</p>
       }
     </div>
     <button class="collapse-btn" type="button" (click)="toggleSidebar()" [attr.aria-label]="mobileMode ? 'Close navigation' : (collapsed ? 'Expand navigation' : 'Collapse navigation')">

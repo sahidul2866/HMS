@@ -28,6 +28,15 @@
     </div>
   </section>
 
+  <section class="billing-kpi-grid">
+    @for (kpi of billingKpis; track kpi.label) {
+      <article [class]="'billing-kpi ' + kpi.tone">
+        <span>{{ kpi.label }}</span>
+        <strong>{{ kpi.value }}</strong>
+      </article>
+    }
+  </section>
+
   @if (latestInvoice) {
     <section class="soft-panel data-panel">
       <div class="panel-head">
@@ -78,6 +87,14 @@
           <div><strong>Void Reason:</strong> {{ latestInvoice.void_reason }}</div>
         }
       </div>
+
+      @if (paymentMethodSummary.length) {
+        <div class="method-strip">
+          @for (method of paymentMethodSummary; track method.label) {
+            <div><span>{{ method.label }}</span><strong>{{ method.value }}</strong></div>
+          }
+        </div>
+      }
 
       <div class="payment-grid">
         @if (isDueMode) {

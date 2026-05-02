@@ -1,254 +1,898 @@
-<div class="workspace-shell">
-  <section class="page-card module-hero">
-    <div class="hero-row">
-      <div>
-        <div class="hero-kicker">Patient Portal</div>
-        <h1 class="page-title">My Care Dashboard</h1>
-        <div class="page-subtitle">Book appointments, follow your lab and radiology reports, and review billing and pharmacy activity from one patient-owned workspace.</div>
+<div class="patient-app-shell">
+  @if (loading) {
+    <section class="page-card patient-skeleton">
+      <div></div>
+      <div></div>
+      <div></div>
+    </section>
+  } @else if (history) {
+    <section class="patient-home-card">
+      <div class="profile-chip">
+        <div class="avatar">{{ profileInitials || 'P' }}</div>
+        <div>
+          <div class="greeting">{{ greeting }}</div>
+          <div class="patient-meta">{{ history.patient.patient_number }} · {{ ageGender }}</div>
+        </div>
       </div>
-    </div>
+      <div class="home-actions">
+        <button type="button" (click)="setTab('book')">Find Doctor</button>
+        <button type="button" (click)="setTab('book')">Book Appointment</button>
+        <button type="button" (click)="setTab('reports')">View Reports</button>
+        <button type="button" (click)="setTab('prescriptions')">View Prescriptions</button>
+        <button type="button" (click)="setTab('billing')">View Bills</button>
+        <button type="button" (click)="setTab('documents')">Download Documents</button>
+        <button type="button" (click)="setTab('assistant')">Health Assistant</button>
+        <button type="button" (click)="setTab('requests')">Request Support</button>
+      </div>
+    </section>
 
-    @if (history) {
-      <div class="hero-summary">
-        <div class="hero-stat"><div class="label">Appointments</div><div class="value">{{ appointments.length }}</div></div>
-        <div class="hero-stat"><div class="label">Lab Reports</div><div class="value">{{ completedLabReports.length }}</div></div>
-        <div class="hero-stat"><div class="label">Radiology Reports</div><div class="value">{{ completedRadiologyReports.length }}</div></div>
-        <div class="hero-stat"><div class="label">Invoices</div><div class="value">{{ history.billing_invoices.length }}</div></div>
-      </div>
+    <section class="overview-grid">
+      <article class="quick-card accent-blue" (click)="setTab('appointments')" tabindex="0">
+        <span>Upcoming</span>
+        <strong>{{ upcomingAppointments.length }}</strong>
+        <small>{{ nextAppointmentText }}</small>
+      </article>
+      <article class="quick-card accent-green" (click)="setTab('prescriptions')" tabindex="0">
+        <span>Latest Prescription</span>
+        <strong>{{ latestPrescription ? 'Ready' : 'None' }}</strong>
+        <small>{{ latestPrescription?.doctor_name || 'Prescription will appear after visit' }}</small>
+      </article>
+      <article class="quick-card accent-amber" (click)="setTab('reports')" tabindex="0">
+        <span>Latest Report</span>
+        <strong>{{ latestReport ? latestReport.status : 'No report' }}</strong>
+        <small>{{ latestReport?.item_name || 'Approved reports are shown here' }}</small>
+      </article>
+      <article class="quick-card accent-red" (click)="setTab('billing')" tabindex="0">
+        <span>Outstanding</span>
+        <strong>{{ formatCurrency(totalOutstandingDue) }}</strong>
+        <small>{{ latestInvoice?.invoice_number || 'No invoice yet' }}</small>
+      </article>
+      <article class="quick-card accent-violet" (click)="setTab('admissions')" tabindex="0">
+        <span>Admission</span>
+        <strong>{{ activeAdmission ? activeAdmission.ward_name : 'Not admitted' }}</strong>
+        <small>{{ activeAdmission ? activeAdmission.bed_number : 'IPD status appears here' }}</small>
+      </article>
+    </section>
+
+    @if (portalMessage) {
+      <div class="inline-message">{{ portalMessage }}</div>
     }
-  </section>
 
-  <section class="portal-grid">
-    <section class="portal-stack">
-      <section class="page-card soft-panel">
-        <div class="panel-head">
-          <div>
-            <h2 class="section-title">Book Appointment</h2>
-            <div class="section-copy">Request a consultation directly from your portal without calling the front desk.</div>
-          </div>
-        </div>
+    <nav class="portal-tabs" aria-label="Patient portal sections">
+      @for (tab of portalTabs; track tab.key) {
+        <button type="button" [class.active]="activeTab === tab.key" (click)="setTab(tab.key)">{{ tab.label }}</button>
+      }
+    </nav>
 
-        <form class="form-grid" [formGroup]="form" (ngSubmit)="submit()">
-          <label class="field">
-            <span>Doctor</span>
-            <select formControlName="doctor_user_id">
-              <option value="">Select doctor</option>
-              @for (doctor of doctors; track doctor.id) {
-                <option [value]="doctor.id">{{ doctor.full_name }}</option>
+    @if (activeTab === 'home') {
+      <section class="portal-layout">
+        <div class="panel-stack">
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Today</span>
+                <h2>Care At A Glance</h2>
+              </div>
+              <button type="button" class="ghost-action" (click)="setTab('timeline')">View timeline</button>
+            </div>
+            <div class="glance-grid">
+              <article>
+                <span>Recent visit</span>
+                <strong>{{ latestVisit?.department_name || 'No visit yet' }}</strong>
+                <small>{{ latestVisit?.visit_date ? (latestVisit?.visit_date | date:'mediumDate') : 'Book an appointment to start' }}</small>
+              </article>
+              <article>
+                <span>Documents</span>
+                <strong>{{ documents.length }}</strong>
+                <small>Prescriptions, reports, receipts</small>
+              </article>
+              <article>
+                <span>Paid</span>
+                <strong>{{ formatCurrency(totalPaidAmount) }}</strong>
+                <small>{{ recentPayments.length }} recent payments</small>
+              </article>
+              <article>
+                <span>Preferred care</span>
+                <strong>{{ preferences.preferredDepartment || 'Any department' }}</strong>
+                <small>{{ preferences.preferredLanguage }} language preference</small>
+              </article>
+            </div>
+          </section>
+
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Next Steps</span>
+                <h2>Quick Actions</h2>
+              </div>
+            </div>
+            <div class="action-grid">
+              <button type="button" (click)="setTab('book')">Find Doctor</button>
+              <button type="button" (click)="setTab('reports')">View Reports</button>
+              <button type="button" (click)="setTab('prescriptions')">View Prescriptions</button>
+              <button type="button" (click)="setTab('billing')">Pay or Check Bill</button>
+              <button type="button" (click)="setTab('packages')">Health Packages</button>
+              <button type="button" (click)="setTab('assistant')">Ask Assistant</button>
+              <button type="button" (click)="setTab('requests')">Request Help</button>
+            </div>
+          </section>
+
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Recent Activity</span>
+                <h2>Health Timeline</h2>
+              </div>
+            </div>
+            <div class="mini-timeline">
+              @for (item of healthTimeline.slice(0, 5); track item.id) {
+                <button type="button" class="timeline-row" (click)="setTab(item.action)">
+                  <span class="dot"></span>
+                  <span>
+                    <strong>{{ item.title }}</strong>
+                    <small>{{ item.date | date:'mediumDate' }} · {{ item.type }} · {{ item.status }}</small>
+                  </span>
+                </button>
+              } @empty {
+                <div class="empty-state">Your visits, reports, bills and admissions will appear here.</div>
               }
-            </select>
-          </label>
-          <label class="field">
-            <span>Date & Time</span>
-            <input type="datetime-local" formControlName="appointment_at" />
-          </label>
-          <label class="field" style="grid-column:1/-1;">
-            <span>Reason</span>
-            <textarea rows="3" formControlName="reason"></textarea>
-          </label>
-          <label class="field" style="grid-column:1/-1;">
-            <span>Note</span>
-            <textarea rows="2" formControlName="note"></textarea>
-          </label>
-          <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Book Appointment</button></div>
-        </form>
-      </section>
-
-      <section class="page-card soft-panel">
-        <div class="panel-head">
-          <div>
-            <h2 class="section-title">Upcoming Appointments</h2>
-            <div class="section-copy">Track your planned visits and cancel scheduled bookings if needed.</div>
-          </div>
+            </div>
+          </section>
         </div>
 
-        @if (upcomingAppointments.length) {
-          <div class="record-stack">
-            @for (appointment of upcomingAppointments; track appointment.id) {
-              <div class="record-card">
-                <div class="record-head">
+        <aside class="panel-stack">
+          <section class="page-card portal-panel profile-panel">
+            <div class="avatar large">{{ profileInitials || 'P' }}</div>
+            <h2>{{ patientName }}</h2>
+            <p>{{ history.patient.phone || 'Phone not set' }} · {{ history.patient.email || 'Email not set' }}</p>
+            <div class="profile-list">
+              <span>Address</span><strong>{{ history.patient.address || 'Not added' }}</strong>
+              <span>Emergency</span><strong>{{ history.patient.emergency_contact_name || 'Not added' }}</strong>
+              <span>Contact</span><strong>{{ history.patient.emergency_contact_phone || 'Not added' }}</strong>
+            </div>
+            <div class="preference-box">
+              <label>
+                <span>Preferred department</span>
+                <select [ngModel]="preferences.preferredDepartment" [ngModelOptions]="{ standalone: true }" (ngModelChange)="savePreference('preferredDepartment', $event)">
+                  <option value="">Any department</option>
+                  @for (department of doctorDepartments; track department) {
+                    <option [value]="department">{{ department }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Language</span>
+                <select [ngModel]="preferences.preferredLanguage" [ngModelOptions]="{ standalone: true }" (ngModelChange)="savePreference('preferredLanguage', $event)">
+                  <option>English</option>
+                  <option>Bangla</option>
+                  <option>Hindi</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Upcoming</span>
+                <h2>Appointments</h2>
+              </div>
+            </div>
+            <div class="record-list compact">
+              @for (appointment of upcomingAppointments.slice(0, 3); track appointment.id) {
+                <article>
+                  <strong>{{ appointment.doctor_name }}</strong>
+                  <small>{{ appointment.appointment_at | date:'medium' }}</small>
+                  <span class="status-pill info">{{ appointmentStatusLabel(appointment.status) }}</span>
+                </article>
+              } @empty {
+                <div class="empty-state">No appointments yet. Book your first appointment.</div>
+              }
+            </div>
+          </section>
+
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Personal</span>
+                <h2>Saved Shortcuts</h2>
+              </div>
+            </div>
+            <div class="shortcut-stack">
+              <button type="button" (click)="setTab('book')">Favorite doctors: {{ favoriteDoctors.length }}</button>
+              <button type="button" (click)="setTab('documents')">Recent downloads: {{ recentlyDownloadedDocuments.length }}</button>
+              <button type="button" (click)="setTab('appointments')">Book previous doctor</button>
+            </div>
+          </section>
+        </aside>
+      </section>
+    }
+
+    @if (activeTab === 'book') {
+      <section class="portal-layout wide-left">
+        <div class="panel-stack">
+          <section class="page-card portal-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Find Doctor</span>
+                <h2>Doctor Discovery</h2>
+              </div>
+            </div>
+            <div class="filter-bar">
+              <input [(ngModel)]="doctorSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search doctor, specialty, chamber" />
+              <select [(ngModel)]="doctorDepartmentFilter" [ngModelOptions]="{ standalone: true }">
+                <option value="">All departments</option>
+                @for (department of doctorDepartments; track department) {
+                  <option [value]="department">{{ department }}</option>
+                }
+              </select>
+              <select [(ngModel)]="doctorAvailability" [ngModelOptions]="{ standalone: true }">
+                <option value="">Any slot</option>
+                <option value="today">Available today</option>
+                <option value="sat">This week</option>
+              </select>
+              <select [(ngModel)]="doctorFeeRange" [ngModelOptions]="{ standalone: true }">
+                <option value="">Any fee</option>
+                <option value="low">Up to BDT 700</option>
+                <option value="mid">BDT 701-1200</option>
+                <option value="high">Above BDT 1200</option>
+              </select>
+            </div>
+
+            <div class="recommendation-strip">
+              <div>
+                <span class="eyebrow">Recommended</span>
+                @for (doctor of recommendedDoctors; track doctor.id) {
+                  <button type="button" (click)="selectDoctor(doctor)">{{ doctor.full_name }}</button>
+                }
+              </div>
+              <div>
+                <span class="eyebrow">Recently visited</span>
+                @for (doctor of recentlyVisitedDoctors; track doctor.id) {
+                  <button type="button" (click)="selectDoctor(doctor)">{{ doctor.full_name }}</button>
+                } @empty {
+                  <span class="subtle-text">Your previous doctors will appear here.</span>
+                }
+              </div>
+            </div>
+
+            <div class="doctor-grid">
+              @for (doctor of filteredDoctors; track doctor.id) {
+                <article class="doctor-card" [class.selected]="form.value.doctor_user_id === doctor.id">
+                  <div class="doctor-photo">{{ doctor.full_name.slice(0, 1) }}</div>
                   <div>
-                    <strong>{{ appointment.appointment_number }}</strong>
-                    <div class="page-subtitle">{{ appointment.doctor_name }} · {{ appointment.appointment_at | date:'medium' }}</div>
+                    <h3>{{ doctor.full_name }}</h3>
+                    <p>{{ doctorSpecialty(doctor) }}</p>
+                    <div class="doctor-meta">
+                      <span>{{ doctorDepartmentLabel(doctor) }}</span>
+                      <span>{{ doctorQualification(doctor) }}</span>
+                      <span>{{ doctorExperience(doctor) }}</span>
+                      <span>{{ doctorChamber(doctor) }}</span>
+                      <span>{{ doctorFee(doctor) }}</span>
+                      <span>{{ nextAvailableSlot(doctor) }}</span>
+                      <span>{{ doctorLanguages(doctor) }}</span>
+                      <span>{{ doctorRating(doctor) }} rating</span>
+                    </div>
                   </div>
-                  <div class="toolbar-row">
-                    <span class="pill">{{ appointment.status }}</span>
+                  <p class="doctor-bio">{{ doctorBio(doctor) }}</p>
+                  <div class="doctor-actions">
+                    <button type="button" (click)="toggleFavoriteDoctor(doctor)">{{ isFavoriteDoctor(doctor) ? 'Saved' : 'Favorite' }}</button>
+                    <button type="button" (click)="viewDoctor(doctor)">Profile</button>
+                    <button type="button" (click)="selectDoctor(doctor)">Select</button>
+                  </div>
+                </article>
+              } @empty {
+                <div class="empty-state">No doctors match this search.</div>
+              }
+            </div>
+          </section>
+        </div>
+
+        <aside class="page-card portal-panel sticky-booking">
+          <span class="eyebrow">Appointment</span>
+          <h2>Request Booking</h2>
+          <div class="booking-steps">
+            <span [class.done]="!!doctorDepartmentFilter || !!form.value.doctor_user_id">1 Department</span>
+            <span [class.done]="!!form.value.doctor_user_id">2 Doctor</span>
+            <span [class.done]="!!form.value.appointment_at">3 Time</span>
+            <span [class.done]="!!form.value.reason">4 Reason</span>
+          </div>
+          @if (selectedDoctor) {
+            <div class="selected-doctor-panel">
+              <div class="doctor-photo">{{ selectedDoctor.full_name.slice(0, 1) }}</div>
+              <div>
+                <strong>{{ selectedDoctor.full_name }}</strong>
+                <small>{{ doctorSpecialty(selectedDoctor) }} · {{ doctorFee(selectedDoctor) }}</small>
+                <div class="slot-row">
+                  @for (slot of doctorSlots(selectedDoctor); track slot) {
+                    <span>{{ slot }}</span>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+          <form class="booking-form" [formGroup]="form" (ngSubmit)="submit()">
+            <label>
+              <span>Doctor</span>
+              <select formControlName="doctor_user_id">
+                <option value="">Select doctor</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Visit type</span>
+              <select formControlName="visit_type">
+                <option>New Visit</option>
+                <option>Follow-up</option>
+                <option>Report Review</option>
+                <option>General Consultation</option>
+              </select>
+            </label>
+            <label>
+              <span>Date & time</span>
+              <input type="datetime-local" formControlName="appointment_at" />
+            </label>
+            <label>
+              <span>Reason</span>
+              <textarea rows="3" formControlName="reason"></textarea>
+            </label>
+            <label>
+              <span>Note</span>
+              <textarea rows="2" formControlName="note"></textarea>
+            </label>
+            <button class="primary-action" type="submit">Confirm Request</button>
+          </form>
+        </aside>
+      </section>
+    }
+
+    @if (activeTab === 'appointments') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">My Appointments</span>
+            <h2>Upcoming And Past Visits</h2>
+          </div>
+          <button type="button" class="primary-action small" (click)="setTab('book')">Book Again</button>
+        </div>
+        <div class="split-list">
+          <div>
+            <h3>Upcoming</h3>
+            <div class="record-list">
+              @for (appointment of upcomingAppointments; track appointment.id) {
+                <article>
+                  <strong>{{ appointment.doctor_name }}</strong>
+                  <small>{{ appointment.appointment_at | date:'medium' }} · {{ appointment.reason || 'Consultation' }}</small>
+                  <div class="row-actions">
+                    <span class="status-pill info">{{ appointmentStatusLabel(appointment.status) }}</span>
                     @if (appointment.status === 'scheduled' || appointment.status === 'confirmed') {
-                      <button class="danger-btn" type="button" (click)="cancelAppointment(appointment)">Cancel</button>
+                      <button type="button" (click)="cancelAppointment(appointment)">Cancel</button>
                     }
                   </div>
-                </div>
-                <div class="record-copy">{{ appointment.reason || 'No reason provided' }}</div>
-              </div>
-            }
+                </article>
+              } @empty {
+                <div class="empty-state">No upcoming appointments.</div>
+              }
+            </div>
           </div>
-        } @else {
-          <div class="empty-state">No upcoming appointments are scheduled right now.</div>
-        }
-      </section>
-
-      <section class="page-card soft-panel">
-        <div class="panel-head">
           <div>
-            <h2 class="section-title">Prescription Archive</h2>
-            <div class="section-copy">See the medications that were ordered during your OPD consultations.</div>
+            <h3>Past</h3>
+            <div class="record-list">
+              @for (appointment of pastAppointments; track appointment.id) {
+                <article>
+                  <strong>{{ appointment.doctor_name }}</strong>
+                  <small>{{ appointment.appointment_at | date:'medium' }} · {{ appointment.reason || 'Consultation' }}</small>
+                  <div class="row-actions">
+                    <span class="status-pill neutral">{{ appointmentStatusLabel(appointment.status) }}</span>
+                    <button type="button" (click)="bookAgain(appointment)">Book again</button>
+                  </div>
+                </article>
+              } @empty {
+                <div class="empty-state">Past appointments will appear here.</div>
+              }
+            </div>
+          </div>
+          <div>
+            <h3>Follow-up</h3>
+            <div class="record-list">
+              @for (appointment of pastAppointments; track appointment.id) {
+                @if ((appointment.reason || '').toLowerCase().includes('follow')) {
+                  <article>
+                    <strong>{{ appointment.doctor_name }}</strong>
+                    <small>{{ appointment.appointment_at | date:'medium' }} · Follow-up</small>
+                    <button type="button" (click)="bookAgain(appointment)">Book follow-up</button>
+                  </article>
+                }
+              } @empty {
+                <div class="empty-state">Follow-up appointments will appear here.</div>
+              }
+            </div>
           </div>
         </div>
-
-        @if (prescriptionArchive.length) {
-          <div class="record-stack">
-            @for (item of prescriptionArchive; track item.id) {
-              <div class="record-card">
-                <div class="record-head">
-                  <div>
-                    <strong>{{ item.item_name }}</strong>
-                    <div class="page-subtitle">{{ item.visit_number }} · {{ item.visit_date | date:'mediumDate' }} · {{ item.doctor_name }}</div>
-                  </div>
-                  <span class="pill">{{ item.status }}</span>
-                </div>
-                <div class="record-copy">
-                  Quantity: {{ item.quantity }} · Diagnosis: {{ item.diagnosis || 'Not recorded' }}<br />
-                  Instructions: {{ item.instructions || 'No instructions' }}
-                </div>
-              </div>
-            }
-          </div>
-        } @else {
-          <div class="empty-state">No prescriptions are available yet.</div>
-        }
       </section>
-    </section>
+    }
 
-    <section class="portal-stack">
-      @if (history) {
-        <section class="page-card soft-panel">
-          <div class="panel-head">
+    @if (activeTab === 'timeline') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">My Health Timeline</span>
+            <h2>Everything In One Place</h2>
+          </div>
+          <select [(ngModel)]="visitType" [ngModelOptions]="{ standalone: true }">
+            <option value="">All visit statuses</option>
+            @for (status of visitStatuses; track status) {
+              <option [value]="status">{{ status }}</option>
+            }
+          </select>
+        </div>
+        <div class="timeline-list">
+          @for (item of healthTimeline; track item.id) {
+            <article>
+              <div class="timeline-badge">{{ item.type }}</div>
+              <div>
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.summary }}</p>
+                <small>{{ item.date | date:'medium' }} · {{ item.status }}</small>
+              </div>
+              <div class="timeline-actions">
+                <button type="button" (click)="setTab(item.action)">Open</button>
+                <button type="button" (click)="setTab('documents')">Documents</button>
+              </div>
+            </article>
+          } @empty {
+            <div class="empty-state">Your timeline will grow as you use hospital services.</div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (activeTab === 'prescriptions') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Prescriptions</span>
+            <h2>Simple View</h2>
+          </div>
+          <button type="button" class="ghost-action" (click)="setTab('documents')">Official documents</button>
+        </div>
+        <div class="prescription-grid">
+          @for (item of prescriptionArchive; track item.id) {
+            <article class="prescription-card">
+              <div class="panel-title-row compact-row">
+                <div>
+                  <h3>{{ item.item_name }}</h3>
+                  <p>{{ item.doctor_name }} · {{ item.visit_date | date:'mediumDate' }}</p>
+                </div>
+                <span class="status-pill good">{{ item.status }}</span>
+              </div>
+              <dl>
+                <dt>Dosage</dt>
+                <dd>{{ item.instructions || 'Follow doctor instruction' }}</dd>
+                <dt>Duration</dt>
+                <dd>{{ item.quantity }} unit(s)</dd>
+                <dt>Timing</dt>
+                <dd>Morning / evening as prescribed</dd>
+                <dt>Meal</dt>
+                <dd>After meal unless doctor advised differently</dd>
+                <dt>Diagnosis</dt>
+                <dd>{{ item.diagnosis || 'Not shown' }}</dd>
+                <dt>Follow-up</dt>
+                <dd>{{ item.follow_up_date ? (item.follow_up_date | date:'mediumDate') : 'As advised' }}</dd>
+              </dl>
+              <div class="row-actions">
+                <button type="button" (click)="setTab('documents')">Original PDF View</button>
+                <button type="button" (click)="setTab('documents')">Download</button>
+              </div>
+            </article>
+          } @empty {
+            <div class="empty-state">No prescriptions available yet.</div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (activeTab === 'reports') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Reports</span>
+            <h2>Lab And Radiology</h2>
+          </div>
+          <div class="segmented-control">
+            <button type="button" [class.active]="reportType === 'all'" (click)="reportType = 'all'">All</button>
+            <button type="button" [class.active]="reportType === 'laboratory'" (click)="reportType = 'laboratory'">Lab</button>
+            <button type="button" [class.active]="reportType === 'radiology'" (click)="reportType = 'radiology'">Radiology</button>
+          </div>
+        </div>
+        <div class="record-list">
+          @for (report of visibleReports; track report.id) {
+            <article>
+              <strong>{{ report.item_name }}</strong>
+              <small>{{ report.department_name }} · {{ report.doctor_name }} · {{ (report.completed_at || report.visit_date) | date:'medium' }}</small>
+              <p>{{ report.result_text || 'Final approved report is available.' }}</p>
+              <p class="reassurance-text">Reference range and doctor remarks are shown when the approved report includes them.</p>
+              <span class="status-pill good">{{ report.status }}</span>
+            </article>
+          } @empty {
+            <div class="empty-state">Approved lab and radiology reports will appear here.</div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (activeTab === 'billing') {
+      <section class="portal-layout">
+        <section class="page-card portal-panel">
+          <div class="panel-title-row">
             <div>
-              <h2 class="section-title">Financial Snapshot</h2>
-              <div class="section-copy">Review your invoice count, total paid amount, and any outstanding dues.</div>
+              <span class="eyebrow">Billing</span>
+              <h2>Invoices And Payments</h2>
             </div>
           </div>
-
-          <div class="metric-grid">
-            <div class="metric-card">
-              <div class="label">Invoices</div>
-              <div class="value">{{ history.billing_invoices.length }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">Total Paid</div>
-              <div class="value">{{ formatCurrency(totalPaidAmount) }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">Outstanding Due</div>
-              <div class="value">{{ formatCurrency(totalOutstandingDue) }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">Pharmacy Issues</div>
-              <div class="value">{{ history.pharmacy_dispenses.length }}</div>
-            </div>
+          <div class="billing-summary">
+            <article><span>Total paid</span><strong>{{ formatCurrency(totalPaidAmount) }}</strong></article>
+            <article><span>Due amount</span><strong>{{ formatCurrency(totalOutstandingDue) }}</strong></article>
+            <article><span>Invoices</span><strong>{{ billingInvoices.length }}</strong></article>
+          </div>
+          @if (totalOutstandingDue <= 0) {
+            <div class="no-dues-state">You have no outstanding bills.</div>
+          }
+          <div class="record-list">
+            @for (invoice of billingInvoices; track invoice.id) {
+              <article>
+                <strong>{{ invoice.invoice_number }}</strong>
+                <small>{{ invoice.created_at | date:'medium' }} · {{ invoice.status }}</small>
+                <p>Total {{ formatCurrency(invoice.total_amount) }} · Paid {{ formatCurrency(invoice.paid_amount) }} · Due {{ formatCurrency(invoice.due_amount) }}</p>
+                <span class="status-pill" [class.good]="invoice.payment_status === 'paid'" [class.warn]="invoice.payment_status !== 'paid'">{{ invoice.payment_status }}</span>
+              </article>
+            } @empty {
+              <div class="empty-state">You have no invoices yet.</div>
+            }
           </div>
         </section>
-
-        <section class="page-card soft-panel">
-          <div class="panel-head">
-            <div>
-              <h2 class="section-title">Lab Reports</h2>
-              <div class="section-copy">Verified and completed laboratory findings remain visible here.</div>
-            </div>
+        <aside class="page-card portal-panel">
+          <span class="eyebrow">Recent Payments</span>
+          <h2>Receipts</h2>
+          <div class="record-list compact">
+            @for (payment of recentPayments; track payment.id) {
+              <article>
+                <strong>{{ payment.receipt_number }}</strong>
+                <small>{{ payment.received_at | date:'medium' }} · {{ payment.payment_method }}</small>
+                <span class="status-pill good">{{ formatCurrency(payment.amount) }}</span>
+              </article>
+            } @empty {
+              <div class="empty-state">No payment receipt yet.</div>
+            }
           </div>
+        </aside>
+      </section>
+    }
 
-          @if (completedLabReports.length) {
-            <div class="record-stack">
-              @for (item of completedLabReports; track item.id) {
-                <div class="record-card">
-                  <div class="record-head">
-                    <div>
-                      <strong>{{ item.item_name }}</strong>
-                      <div class="page-subtitle">{{ item.completed_at | date:'medium' }}</div>
-                    </div>
-                    <span class="pill">{{ item.status }}</span>
-                  </div>
-                  <div class="record-copy">{{ item.result_text || 'No result text available' }}</div>
+    @if (activeTab === 'admissions') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">IPD</span>
+            <h2>Admission Information</h2>
+          </div>
+        </div>
+        <div class="record-list">
+          @for (admission of history.ipd_admissions; track admission.id) {
+            <article>
+              <strong>{{ admission.admission_number }}</strong>
+              <small>{{ admission.admitted_at | date:'medium' }} · {{ admission.attending_doctor_name }}</small>
+              <p>{{ admission.ward_name }} · {{ admission.bed_number }} · {{ admission.diagnosis || 'Diagnosis not shown' }}</p>
+              <p>Running bill and discharge documents are shown according to hospital portal settings.</p>
+              <span class="status-pill" [class.info]="!admission.discharged_at" [class.good]="admission.discharged_at">{{ admission.status }}</span>
+              @if (admission.discharged_at) {
+                <div class="row-actions">
+                  <button type="button" (click)="setTab('documents')">Discharge summary</button>
+                  <button type="button" (click)="setTab('billing')">Final bill</button>
                 </div>
               }
-            </div>
-          } @else {
-            <div class="empty-state">No laboratory reports are available yet.</div>
+            </article>
+          } @empty {
+            <div class="empty-state">No IPD admission record is available.</div>
           }
-        </section>
+        </div>
+      </section>
+    }
 
-        <section class="page-card soft-panel">
-          <div class="panel-head">
+    @if (activeTab === 'documents') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Document Center</span>
+            <h2>Prescriptions, Reports, Bills And Receipts</h2>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input [(ngModel)]="documentSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search documents" />
+          <select [(ngModel)]="documentType" [ngModelOptions]="{ standalone: true }">
+            <option value="">All document types</option>
+            @for (type of documentTypes; track type) {
+              <option [value]="type">{{ type }}</option>
+            }
+          </select>
+          <select [(ngModel)]="documentDateFilter" [ngModelOptions]="{ standalone: true }">
+            <option value="">Any date</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="365">This year</option>
+          </select>
+        </div>
+        <div class="document-category-strip">
+          @for (category of documentCategories; track category.type) {
+            <button type="button" [class.active]="documentType === category.type" (click)="documentType = category.type">
+              {{ category.type }} <span>{{ category.count }}</span>
+            </button>
+          }
+        </div>
+        <div class="recent-documents">
+          <div>
+            <span class="eyebrow">Recently Added</span>
+            @for (document of recentlyAddedDocuments; track document.id) {
+              <button type="button" (click)="documentType = document.type">{{ document.title }}</button>
+            }
+          </div>
+          <div>
+            <span class="eyebrow">Recent Downloads</span>
+            @for (document of recentlyDownloadedDocuments; track document.id) {
+              <button type="button" (click)="downloadDocument(document)">{{ document.title }}</button>
+            } @empty {
+              <span class="subtle-text">Downloaded documents will stay here.</span>
+            }
+          </div>
+        </div>
+        <div class="document-grid">
+          @for (document of filteredDocuments; track document.id) {
+            <article class="document-card">
+              <span class="document-type">{{ document.type }}</span>
+              <h3>{{ document.title }}</h3>
+              <p>{{ document.description }}</p>
+              <small>{{ document.owner }} · {{ document.date | date:'mediumDate' }} · {{ document.status }}</small>
+              <div class="row-actions">
+                <button type="button">Preview</button>
+                <button type="button" (click)="downloadDocument(document)">Download</button>
+                <button type="button" (click)="printDocument(document)">Print</button>
+              </div>
+            </article>
+          } @empty {
+            <div class="empty-state">No documents match your search.</div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (activeTab === 'family') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Family</span>
+            <h2>Family Health Access</h2>
+          </div>
+        </div>
+        <div class="family-grid">
+          @for (member of familyMembers; track member.id) {
+            <article [class.active]="selectedFamilyProfile === member.id" (click)="selectedFamilyProfile = member.id">
+              <div class="avatar">{{ member.name.slice(0, 1) }}</div>
+              <strong>{{ member.name }}</strong>
+              <small>{{ member.relation }}</small>
+              <span class="status-pill info">{{ member.status }}</span>
+            </article>
+          }
+        </div>
+        <div class="family-actions">
+          <button type="button" (click)="setTab('book')">Book for selected profile</button>
+          <button type="button" (click)="setTab('documents')">Family documents</button>
+          <button type="button" (click)="setTab('requests'); requestForm.patchValue({ type: 'General support request', summary: 'I want to link a family member profile.' })">Add family request</button>
+        </div>
+        <div class="empty-state">Family linking is privacy controlled. Submit a request from the Request Center to add a child, parent, spouse or guardian profile.</div>
+      </section>
+    }
+
+    @if (activeTab === 'requests') {
+      <section class="portal-layout wide-left">
+        <section class="page-card portal-panel">
+          <div class="panel-title-row">
             <div>
-              <h2 class="section-title">Radiology Reports</h2>
-              <div class="section-copy">Imaging interpretations and finalized reports appear here after completion.</div>
+              <span class="eyebrow">Request Center</span>
+              <h2>Ask For Help</h2>
             </div>
           </div>
+          <form class="booking-form request-form" [formGroup]="requestForm" (ngSubmit)="submitRequest()">
+            <label>
+              <span>Request type</span>
+              <select formControlName="type">
+                @for (type of requestTypes; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Short detail</span>
+              <textarea rows="4" formControlName="summary" placeholder="Write what you need from the hospital team"></textarea>
+            </label>
+            <button class="primary-action" type="submit">Submit Request</button>
+          </form>
+        </section>
+        <aside class="page-card portal-panel">
+          <span class="eyebrow">Status</span>
+          <h2>My Requests</h2>
+          <div class="record-list compact">
+            @for (request of patientRequests; track request.id) {
+              <article>
+                <strong>{{ request.id }}</strong>
+                <small>{{ request.type }} · {{ request.submitted_at | date:'medium' }}</small>
+                <p>{{ request.summary }}</p>
+                <span class="status-pill info">{{ request.status }}</span>
+              </article>
+            } @empty {
+              <div class="empty-state">Submitted requests will appear here.</div>
+            }
+          </div>
+        </aside>
+        <section class="page-card portal-panel help-panel">
+          <span class="eyebrow">Help Center</span>
+          <h2>Useful Contacts</h2>
+          <div class="service-grid">
+            <article><h3>Front Desk</h3><p>Appointment help, doctor availability, visit information.</p><strong>+880 1700-000001</strong></article>
+            <article><h3>Billing Desk</h3><p>Invoice copy, receipt copy, payment questions.</p><strong>+880 1700-000002</strong></article>
+            <article><h3>Emergency</h3><p>For urgent medical help, call directly or visit emergency.</p><strong>10666</strong></article>
+          </div>
+          <div class="faq-list">
+            <article><strong>When can I see my report?</strong><span>Only finalized and approved reports are visible in the portal.</span></article>
+            <article><strong>Can I update my profile?</strong><span>Submit a profile update request; sensitive fields may need approval.</span></article>
+            <article><strong>Can I add family?</strong><span>Yes, family linking is request based and privacy verified.</span></article>
+          </div>
+        </section>
+      </section>
+    }
 
-          @if (completedRadiologyReports.length) {
-            <div class="record-stack">
-              @for (item of completedRadiologyReports; track item.id) {
-                <div class="record-card">
-                  <div class="record-head">
-                    <div>
-                      <strong>{{ item.item_name }}</strong>
-                      <div class="page-subtitle">{{ item.completed_at | date:'medium' }}</div>
+    @if (activeTab === 'assistant') {
+      <section class="portal-layout wide-left assistant-layout">
+        <section class="page-card portal-panel assistant-panel">
+          <div class="panel-title-row">
+            <div>
+              <span class="eyebrow">Patient Health Assistant</span>
+              <h2>Ask, Prepare, Find Care</h2>
+              <p>General guidance only. The assistant does not diagnose, prescribe medicine, or replace a licensed doctor.</p>
+            </div>
+            <button type="button" class="ghost-action" (click)="resetBot()">Start over</button>
+          </div>
+
+          <div class="assistant-chat">
+            @for (item of botMessages; track $index) {
+              <article class="assistant-message" [class.patient]="item.sender === 'patient'" [class.bot]="item.sender === 'bot'">
+                <div class="assistant-avatar">{{ item.sender === 'patient' ? profileInitials || 'P' : 'AI' }}</div>
+                <div class="assistant-bubble">
+                  <p>{{ item.text }}</p>
+                  @if (item.response?.context_summary && (item.response?.needs_more_input || item.response?.recommended_department)) {
+                    <div class="context-card">
+                      <span>Context</span>
+                      @for (entry of item.response?.context_summary | keyvalue; track entry.key) {
+                        <small>{{ entry.key }}: {{ entry.value }}</small>
+                      }
                     </div>
-                    <span class="pill">{{ item.status }}</span>
-                  </div>
-                  <div class="record-copy">{{ item.result_text || 'No report text available' }}</div>
+                  }
+                  @if (item.response?.doctor_cards?.length) {
+                    <div class="bot-doctor-grid">
+                      @for (doctor of item.response?.doctor_cards; track doctor.id) {
+                        <article>
+                          <div class="doctor-photo">{{ doctor.name.slice(0, 1) }}</div>
+                          <div>
+                            <strong>{{ doctor.name }}</strong>
+                            <small>{{ doctor.department }} · {{ doctor.specialty }}</small>
+                            <div class="doctor-meta">
+                              <span>{{ doctor.qualification || 'Specialist' }}</span>
+                              <span>{{ formatCurrency(doctor.fee || 0) }}</span>
+                              <span>{{ doctor.chamber || 'Chamber assigned by desk' }}</span>
+                              <span>{{ doctor.languages.join(', ') }}</span>
+                            </div>
+                          </div>
+                          <div class="doctor-actions">
+                            <button type="button" (click)="selectBotDoctor(doctor)">Select</button>
+                            <button type="button" (click)="botBookAppointment(doctor)">Book</button>
+                          </div>
+                        </article>
+                      }
+                    </div>
+                  }
+                  @if (item.response?.gemini_used) {
+                    <span class="ai-used">AI explanation used after structured context collection</span>
+                  }
                 </div>
-              }
-            </div>
-          } @else {
-            <div class="empty-state">No radiology reports are available yet.</div>
+              </article>
+            }
+            @if (botLoading) {
+              <article class="assistant-message bot">
+                <div class="assistant-avatar">AI</div>
+                <div class="assistant-bubble typing">Thinking safely...</div>
+              </article>
+            }
+          </div>
+
+          <div class="assistant-quick-replies">
+            @for (reply of botQuickReplies; track reply) {
+              <button type="button" (click)="sendBotMessage(reply)">{{ reply }}</button>
+            }
+          </div>
+
+          <form class="assistant-input" (ngSubmit)="sendBotMessage()">
+            <input [(ngModel)]="botInput" [ngModelOptions]="{ standalone: true }" placeholder="Tell me your symptom, question, or what you need help with" />
+            <button type="submit" class="primary-action" [disabled]="botLoading">Send</button>
+          </form>
+        </section>
+
+        <aside class="page-card portal-panel assistant-side">
+          <span class="eyebrow">How I Help</span>
+          <h2>Safe Local-First Flow</h2>
+          <div class="assistant-steps">
+            <article><strong>1</strong><span>Ask one or two questions</span></article>
+            <article><strong>2</strong><span>Use hospital rules first</span></article>
+            <article><strong>3</strong><span>Show departments and doctors</span></article>
+            <article><strong>4</strong><span>Use Gemini only for explanations when needed</span></article>
+          </div>
+          <div class="safety-note">
+            For severe or rapidly worsening symptoms, the assistant routes patients to urgent care instead of giving treatment instructions.
+          </div>
+          <div class="assistant-demo">
+            <button type="button" (click)="sendBotMessage('I have fever and cough')">Demo: fever and cough</button>
+            <button type="button" (click)="sendBotMessage('What should I eat during fever?')">Demo: fever diet</button>
+            <button type="button" (click)="sendBotMessage('I need a female gynecologist')">Demo: find gynecologist</button>
+          </div>
+        </aside>
+      </section>
+    }
+
+    @if (activeTab === 'hospital') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Hospital Info</span>
+            <h2>Services Directory</h2>
+          </div>
+        </div>
+        <div class="service-grid">
+          @for (service of hospitalServices; track service.title) {
+            <article>
+              <h3>{{ service.title }}</h3>
+              <p>{{ service.detail }}</p>
+              <strong>{{ service.hours }}</strong>
+            </article>
           }
-        </section>
+        </div>
+        <div class="hospital-info-strip">
+          <article><span>Visiting hours</span><strong>4:00 PM-8:00 PM</strong></article>
+          <article><span>Location</span><strong>Hospital Road, Dhaka</strong></article>
+          <article><span>Insurance</span><strong>Corporate and insurance desk available</strong></article>
+        </div>
+      </section>
+    }
 
-        <section class="page-card soft-panel">
-          <div class="panel-head">
-            <div>
-              <h2 class="section-title">Billing And Pharmacy Activity</h2>
-              <div class="section-copy">Track invoice status, payment progress, and issued medicines from your patient account.</div>
-            </div>
+    @if (activeTab === 'packages') {
+      <section class="page-card portal-panel">
+        <div class="panel-title-row">
+          <div>
+            <span class="eyebrow">Health Packages</span>
+            <h2>Preventive Care</h2>
           </div>
-
-          <div class="record-stack">
-            @for (invoice of history.billing_invoices; track invoice.id) {
-              <div class="record-card">
-                <div class="record-head">
-                  <div>
-                    <strong>{{ invoice.invoice_number }}</strong>
-                    <div class="page-subtitle">{{ invoice.created_at | date:'medium' }}</div>
-                  </div>
-                  <div class="toolbar-row">
-                    <span class="pill">{{ invoice.status }}</span>
-                    <span class="pill">{{ invoice.payment_status }}</span>
-                  </div>
-                </div>
-                <div class="record-copy">
-                  Total: {{ formatCurrency(invoice.total_amount) }} · Paid: {{ formatCurrency(invoice.paid_amount) }} · Due: {{ formatCurrency(invoice.due_amount) }}
-                </div>
-              </div>
-            }
-
-            @for (dispense of history.pharmacy_dispenses; track dispense.id) {
-              <div class="record-card">
-                <div class="record-head">
-                  <div>
-                    <strong>{{ dispense.medicine_name }}</strong>
-                    <div class="page-subtitle">{{ dispense.created_at | date:'medium' }}</div>
-                  </div>
-                  <span class="pill">{{ formatCurrency(dispense.total_price) }}</span>
-                </div>
-                <div class="record-copy">
-                  Quantity: {{ dispense.quantity }} · Reference: {{ dispense.prescription_ref || 'No reference' }}
-                </div>
-              </div>
-            }
-          </div>
-        </section>
-      }
-    </section>
-  </section>
+        </div>
+        <div class="package-grid">
+          @for (item of healthPackages; track item.name) {
+            <article>
+              <h3>{{ item.name }}</h3>
+              <p>{{ item.includes }}</p>
+              <small>{{ item.consult ? 'Doctor consultation included' : 'Consultation not included' }}</small>
+              <div><span>{{ formatCurrency(item.price) }}</span><strong>{{ formatCurrency(item.offer) }}</strong></div>
+              <button type="button" (click)="setTab('requests'); requestForm.patchValue({ type: 'Appointment request', summary: 'I want to book ' + item.name })">Book Package</button>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  }
 </div>

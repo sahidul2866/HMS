@@ -191,6 +191,33 @@ export class IPDOverviewComponent {
     return Math.round((this.occupiedBeds.length / this.beds.length) * 100);
   }
 
+  get longStayAdmissions(): IPDAdmission[] {
+    const now = Date.now();
+    return this.activeAdmissions.filter((admission) => {
+      const admitted = new Date(admission.admitted_at).getTime();
+      return Number.isFinite(admitted) && now - admitted > 5 * 24 * 60 * 60 * 1000;
+    });
+  }
+
+  get ipdQuickStats(): Array<{ label: string; value: string | number; tone: string }> {
+    return [
+      { label: 'Available Beds', value: this.availableBeds.length, tone: 'good' },
+      { label: 'Occupied Beds', value: this.occupiedBeds.length, tone: 'warn' },
+      { label: 'Long Stay', value: this.longStayAdmissions.length, tone: this.longStayAdmissions.length ? 'danger' : 'good' },
+      { label: 'Pending Bills', value: this.activeAdmissions.length, tone: 'info' },
+      { label: 'Today Discharge', value: this.dischargedAdmissions.filter((item) => (item.discharged_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length, tone: 'good' },
+    ];
+  }
+
+  dischargeChecklist(admission: IPDAdmission): Array<{ label: string; done: boolean }> {
+    return [
+      { label: 'Doctor approval', done: !!this.dischargeForm.getRawValue().discharge_diagnosis || admission.status === 'discharged' },
+      { label: 'Nursing clearance', done: admission.movements.length > 0 || admission.status === 'discharged' },
+      { label: 'Billing review', done: Number(admission.advance_amount || 0) > 0 || admission.status === 'discharged' },
+      { label: 'Summary ready', done: !!this.dischargeForm.getRawValue().discharge_summary || admission.status === 'discharged' },
+    ];
+  }
+
   onTransferBedChanged(): void {
     const bedId = this.transferForm.getRawValue().bed_id;
     const selectedBed = this.beds.find((bed) => bed.id === bedId);

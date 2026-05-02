@@ -8,8 +8,53 @@
   align-items: start;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   grid-template-areas:
+    "overview overview"
     "patient patient"
     "main preview";
+}
+
+.invoice-overview-strip {
+  grid-area: overview;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.invoice-overview-strip article {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.invoice-overview-strip article[data-tone='good'] {
+  border-left-color: var(--success, #16a34a);
+}
+
+.invoice-overview-strip article[data-tone='warn'] {
+  border-left-color: #f59e0b;
+}
+
+.invoice-overview-strip article[data-tone='info'] {
+  border-left-color: var(--primary);
+}
+
+.invoice-overview-strip span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.invoice-overview-strip strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .billing-main {
@@ -451,7 +496,9 @@
 }
 
 .submit-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 0.6rem;
   justify-content: stretch;
   margin-top: 0.75rem;
 }
@@ -514,6 +561,7 @@
   .billing-layout {
     grid-template-columns: 1fr;
     grid-template-areas:
+      "overview"
       "patient"
       "main"
       "preview";
@@ -533,6 +581,10 @@
 }
 
 @media (max-width: 920px) {
+  .invoice-overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .patient-grid,
   .context-grid {
     grid-template-columns: 1fr;
@@ -540,6 +592,10 @@
 }
 
 @media (max-width: 700px) {
+  .invoice-overview-strip {
+    grid-template-columns: 1fr;
+  }
+
   .top-patient-bar {
     align-items: flex-start;
     flex-direction: column;

@@ -7,6 +7,7 @@ from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.branches.router import router as branches_router
 from app.modules.billing.router import router as billing_router
+from app.modules.configuration.router import router as configuration_router
 from app.modules.departments.router import router as departments_router
 from app.modules.diagnostics.router import router as diagnostics_router
 from app.modules.hr.router import router as hr_router
@@ -18,6 +19,8 @@ from app.modules.er.router import router as er_router
 from app.modules.patients.router import router as patients_router
 from app.modules.permissions.router import router as permissions_router
 from app.modules.patient_portal.router import router as patient_portal_router
+from app.modules.patient_bot.router import router as patient_bot_router
+from app.modules.patient_auth.router import router as patient_auth_router
 from app.modules.pharmacy.router import router as pharmacy_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.radiology.router import router as radiology_router
@@ -32,10 +35,13 @@ api_router.include_router(users_router)
 api_router.include_router(roles_router)
 api_router.include_router(permissions_router)
 api_router.include_router(patient_portal_router)
+api_router.include_router(patient_bot_router)
+api_router.include_router(patient_auth_router)
 api_router.include_router(branches_router)
 api_router.include_router(departments_router)
 api_router.include_router(audit_router)
 api_router.include_router(billing_router)
+api_router.include_router(configuration_router)
 api_router.include_router(opd_router)
 api_router.include_router(ot_router)
 api_router.include_router(er_router)

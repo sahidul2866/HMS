@@ -148,6 +148,7 @@ export const menuConfig: MenuItem[] = [
     icon: 'admin',
     permissions: ['settings.user.manage'],
     children: [
+      { label: 'Configuration', icon: 'settings', route: '/configuration', permissions: ['settings.configuration.manage'] },
       { label: 'Users', icon: 'users', route: '/admin/users', permissions: ['settings.user.manage'] },
       { label: 'Roles', icon: 'shield', route: '/admin/roles', permissions: ['settings.role.manage'] },
     ],

@@ -23,6 +23,37 @@ class LoginResponse(BaseModel):
     tokens: TokenPair
 
 
+class PatientPortalAccountRead(BaseModel):
+    id: str
+    username: str
+    email: str
+    full_name: str
+    branch_id: str | None = None
+    department_id: None = None
+    patient_id: str
+    is_active: bool
+    opd_consultation_fee: str = "0.00"
+    opd_follow_up_fee: str = "0.00"
+    opd_follow_up_days: int = 30
+    opd_prescription_header_name: None = None
+    opd_prescription_header_degrees: None = None
+    opd_prescription_header_specialty: None = None
+    opd_prescription_header_workplace: None = None
+    opd_prescription_header_chamber: None = None
+    opd_prescription_header_phone: None = None
+    opd_prescription_header_address: None = None
+    last_login_at: datetime | None = None
+    roles: list = []
+    direct_permissions: list = []
+    effective_permissions: list[str] = ["patient.portal.view", "appointment.view", "appointment.book"]
+    principal_type: str = "patient"
+
+
+class PatientLoginResponse(BaseModel):
+    user: PatientPortalAccountRead
+    tokens: TokenPair
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

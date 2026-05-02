@@ -62,7 +62,8 @@ class PatientPortalService:
             status="scheduled",
             reason=payload.reason,
             note=payload.note,
-            booked_by_user_id=actor.id,
+            booked_by_user_id=actor.id if actor.__class__.__name__ == "User" else None,
+            booked_by_patient_account_id=actor.id if actor.__class__.__name__ == "PatientPortalAccount" else None,
             created_by=actor.id,
             updated_by=actor.id,
         )

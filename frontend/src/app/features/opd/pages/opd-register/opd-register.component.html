@@ -26,6 +26,15 @@
       </div>
 
       <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="compact-patient-strip">
+          @for (item of patientSummaryItems; track item.label) {
+            <article>
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          }
+        </div>
+
         <div class="lookup-banner">
           <div class="search-stack">
             <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, patient ID, name, phone, mobile, or email" />
@@ -181,6 +190,7 @@
           <div class="section-headline">
 
             <h3>Visit Setup</h3>
+            <span class="queue-badge">ETA {{ estimatedWaitLabel }}</span>
           </div>
           <div class="form-grid opd-grid">
             <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.visit_date, submitted)">
@@ -207,6 +217,51 @@
         <div class="section-block">
           <div class="section-headline">
             <h3>Doctor Assignment</h3>
+            @if (selectedDoctor) {
+              <span class="queue-badge">{{ selectedDoctor.opd_prescription_header_chamber || 'Room TBA' }}</span>
+            }
+          </div>
+          <div class="doctor-picker-panel">
+            <div class="doctor-picker-tools">
+              <input [(ngModel)]="doctorSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search doctor, degree, speciality" />
+              <select [(ngModel)]="doctorDepartmentFilter" [ngModelOptions]="{ standalone: true }">
+                <option value="">All specialities</option>
+                @for (department of doctorDepartments; track department) {
+                  <option [value]="department">{{ department }}</option>
+                }
+              </select>
+              <div class="segmented-control">
+                <button type="button" [class.active]="doctorView === 'cards'" (click)="doctorView = 'cards'">Cards</button>
+                <button type="button" [class.active]="doctorView === 'list'" (click)="doctorView = 'list'">List</button>
+              </div>
+            </div>
+            @if (doctorView === 'cards') {
+              <div class="doctor-card-grid">
+                @for (doctor of filteredDoctors; track doctor.id) {
+                  <button type="button" class="doctor-card" [class.selected]="form.getRawValue().doctor_user_id === doctor.id" (click)="selectDoctor(doctor)">
+                    <div class="doctor-avatar">{{ doctor.full_name.slice(0, 1) }}</div>
+                    <div class="doctor-card-body">
+                      <strong>{{ doctor.full_name }}</strong>
+                      <span>{{ doctor.opd_prescription_header_specialty || 'General' }} · {{ doctor.opd_prescription_header_degrees || 'Consultant' }}</span>
+                      <small>{{ doctor.opd_prescription_header_chamber || 'Room TBA' }} · {{ doctorQueueLabel(doctor) }} · Next {{ doctorSlotLabel(doctor) }}</small>
+                    </div>
+                    <div class="doctor-fee">BDT {{ doctor.opd_consultation_fee || 0 }}</div>
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="doctor-list">
+                @for (doctor of filteredDoctors; track doctor.id) {
+                  <button type="button" [class.selected]="form.getRawValue().doctor_user_id === doctor.id" (click)="selectDoctor(doctor)">
+                    <strong>{{ doctor.full_name }}</strong>
+                    <span>{{ doctor.opd_prescription_header_specialty || 'General' }}</span>
+                    <span>{{ doctor.opd_prescription_header_chamber || 'Room TBA' }}</span>
+                    <span>{{ doctorQueueLabel(doctor) }}</span>
+                    <b>BDT {{ doctor.opd_consultation_fee || 0 }}</b>
+                  </button>
+                }
+              </div>
+            }
           </div>
           <div class="form-grid opd-grid">
             <label class="field">
@@ -262,6 +317,7 @@
         <div class="section-block">
           <div class="section-headline">
             <h3>Visit Notes</h3>
+            <span class="queue-badge">{{ readinessPercent }}% ready</span>
           </div>
           <div class="form-grid opd-grid">
             <label class="field field-wide">
@@ -285,9 +341,20 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="billing-preview-strip">
+          @for (item of visitChargePreview; track item.label) {
+            <article>
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
+          }
+        </div>
+
+        <div class="form-actions sticky-actions">
+          <button class="ghost-btn" type="button" (click)="resetPage()">Reset</button>
           <button class="ghost-btn" type="button" (click)="backToQueue()">Cancel</button>
-          <button class="primary-btn" type="submit" [disabled]="saving">{{ hasExistingPatientSelection ? 'Register OPD Visit' : 'Create Patient And Register Visit' }}</button>
+          <button class="secondary-btn" type="submit" [disabled]="saving" (click)="setSubmitMode('queue')">Save Visit</button>
+          <button class="primary-btn" type="submit" [disabled]="saving" (click)="setSubmitMode('invoice')">Save & Invoice</button>
         </div>
       </form>
     </section>
@@ -313,8 +380,12 @@
         <div class="summary-meter">
           <div class="summary-meter__label">Registration readiness</div>
           <div class="summary-meter__bar">
-            <span [style.width]="(form.getRawValue().consulting_doctor_name && form.getRawValue().department_name && (hasExistingPatientSelection || (form.getRawValue().first_name && form.getRawValue().last_name))) ? '100%' : '58%'"></span>
+            <span [style.width.%]="readinessPercent"></span>
           </div>
+        </div>
+        <div class="summary-actions">
+          <button class="secondary-btn" type="button" (click)="setSubmitMode('queue'); submit()" [disabled]="saving">Save</button>
+          <button class="primary-btn" type="button" (click)="setSubmitMode('invoice'); submit()" [disabled]="saving">Invoice</button>
         </div>
       </section>
 

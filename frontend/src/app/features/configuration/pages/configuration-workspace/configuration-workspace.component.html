@@ -1,0 +1,158 @@
+<section class="workspace-shell configuration-page">
+  <section class="page-card module-hero config-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Configuration Center</div>
+        <h1 class="page-title">Hospital Setup Builders</h1>
+        <div class="page-subtitle">Configure OPD fee sharing, doctor prescription suggestions, prescription print layouts, and invoice templates without code changes.</div>
+      </div>
+      <div class="hero-actions">
+        <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
+      </div>
+    </div>
+    <div class="config-kpis">
+      @for (type of profileTypes; track type.key) {
+        <button type="button" [class.active]="activeType === type.key" (click)="openType(type.key)">
+          <span>{{ type.label }}</span>
+          <strong>{{ getTypeCount(type.key) }}</strong>
+        </button>
+      }
+    </div>
+  </section>
+
+  <section class="config-layout">
+    <aside class="page-card config-sidebar">
+      <div class="section-header">
+        <div>
+          <div class="hero-kicker">Setup Area</div>
+          <h2 class="section-title">{{ activeTypeMeta.label }}</h2>
+          <div class="section-copy">{{ activeTypeMeta.description }}</div>
+        </div>
+      </div>
+      <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search templates and rules" />
+      <div class="profile-list">
+        @for (profile of filteredProfiles; track profile.id) {
+          <button type="button" class="profile-card" [class.default]="profile.is_default" (click)="edit(profile)">
+            <strong>{{ profile.name }}</strong>
+            <span>{{ profile.scope }} · {{ profile.code }}</span>
+          </button>
+        } @empty {
+          <div class="empty-state">No profile configured for this area.</div>
+        }
+      </div>
+    </aside>
+
+    <main class="config-main">
+      <section class="page-card editor-card">
+        <div class="section-header">
+          <div>
+            <div class="hero-kicker">Profile Editor</div>
+            <h2 class="section-title">{{ editing ? 'Edit Profile' : 'Create Profile' }}</h2>
+          </div>
+          <button class="ghost-btn" type="button" (click)="editing = null; resetForm()">New</button>
+        </div>
+
+        <form class="editor-grid" [formGroup]="form" (ngSubmit)="save()">
+          <label class="field">
+            <span>Code</span>
+            <input formControlName="code" />
+          </label>
+          <label class="field">
+            <span>Name</span>
+            <input formControlName="name" />
+          </label>
+          <label class="field">
+            <span>Scope</span>
+            <select formControlName="scope">
+              <option value="hospital">Hospital-wide</option>
+              <option value="department">Department-wise</option>
+              <option value="doctor">Doctor-wise</option>
+              <option value="specialty">Specialty-wise</option>
+              <option value="visit_type">Visit-type-wise</option>
+            </select>
+          </label>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="is_default" />
+            <span>Default profile</span>
+          </label>
+          <label class="field field-wide">
+            <span>Description</span>
+            <textarea rows="2" formControlName="description"></textarea>
+          </label>
+          <label class="field field-wide">
+            <span>Structured Payload</span>
+            <textarea rows="13" formControlName="payload" spellcheck="false"></textarea>
+          </label>
+          <div class="form-actions sticky-actions">
+            @if (editing) {
+              <button class="danger-btn" type="button" (click)="delete(editing)">Delete</button>
+              <button class="secondary-btn" type="button" (click)="duplicate(editing)">Duplicate</button>
+            }
+            <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Save Configuration' }}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="page-card preview-card">
+        <div class="section-header">
+          <div>
+            <div class="hero-kicker">Live Preview</div>
+            <h2 class="section-title">{{ activeProfile?.name || activeTypeMeta.label }}</h2>
+          </div>
+        </div>
+
+        @if (activeType === 'doctor_share') {
+          <div class="share-preview">
+            <label class="field">
+              <span>Consultation Fee</span>
+              <input type="number" [formControl]="sharePreviewForm.controls.consultationFee" />
+            </label>
+            <label class="field">
+              <span>Discount</span>
+              <input type="number" [formControl]="sharePreviewForm.controls.discount" />
+            </label>
+            <div class="preview-metrics">
+              <article><span>Net Fee</span><strong>{{ formatCurrency(sharePreview.net) }}</strong></article>
+              <article><span>Doctor Payable</span><strong>{{ formatCurrency(sharePreview.doctor) }}</strong></article>
+              <article><span>Hospital Share</span><strong>{{ formatCurrency(sharePreview.hospital) }}</strong></article>
+            </div>
+          </div>
+        } @else if (activeType === 'prescription_suggestion') {
+          <div class="template-preview">
+            @for (key of ['complaints', 'diagnoses', 'medicines', 'investigations', 'advice']; track key) {
+              <article>
+                <span>{{ key }}</span>
+                <strong>{{ payloadListLabel(key) }}</strong>
+              </article>
+            }
+          </div>
+        } @else if (activeType === 'patient_portal_settings' || activeType === 'patient_bot_settings') {
+          <div class="template-preview">
+            @for (key of ['enabled', 'allow_appointment_booking', 'allow_family_access', 'allow_document_download', 'show_billing_details']; track key) {
+              <article>
+                <span>{{ key }}</span>
+                <strong>{{ payloadListLabel(key) }}</strong>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="print-preview">
+            <div class="print-paper">
+              <div class="print-header">Hospital Logo · Hospital Name · Contact</div>
+              @for (section of getSections(activeProfile); track section) {
+                <div class="print-section">{{ section }}</div>
+              }
+              <div class="print-footer">{{ payloadObject(activeProfile)['footer_note'] || 'Footer note' }}</div>
+            </div>
+          </div>
+        }
+
+        <div class="demo-points">
+          @for (point of workspace?.demo_points || []; track point) {
+            <div>{{ point }}</div>
+          }
+        </div>
+      </section>
+    </main>
+  </section>
+</section>

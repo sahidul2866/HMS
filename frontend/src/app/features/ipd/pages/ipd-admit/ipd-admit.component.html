@@ -76,6 +76,7 @@
           <div class="section-headline">
             <div class="section-eyebrow">Step 2</div>
             <h3>Admission Header</h3>
+            <span class="admission-badge">{{ form.getRawValue().admission_type || 'General' }}</span>
           </div>
           <div class="form-grid ipd-grid">
             <label class="field">
@@ -160,7 +161,11 @@
             </label>
             <label class="field">
               <span>Admission Type</span>
-              <input type="text" formControlName="admission_type" />
+              <select formControlName="admission_type">
+                @for (type of admissionTypeOptions; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
             </label>
             <label class="field field-wide">
               <span>Address</span>
@@ -202,6 +207,7 @@
           <div class="section-headline">
             <div class="section-eyebrow">Step 5</div>
             <h3>Bed And Finance</h3>
+            <span class="admission-badge">{{ selectedBedSummary }}</span>
           </div>
           <div class="form-grid ipd-grid">
             <label class="field">
@@ -222,6 +228,19 @@
                 }
               </select>
             </label>
+          </div>
+
+          <div class="bed-map">
+            @for (bed of bedMapItems; track bed.id) {
+              <button type="button" [class]="bedStatusClass(bed)" (click)="selectBed(bed)">
+                <strong>{{ bed.bed_number }}</strong>
+                <span>{{ bed.ward_name }} · {{ bed.bed_type }}</span>
+                <small>{{ bed.status }} · BDT {{ bed.daily_rate }}</small>
+              </button>
+            }
+          </div>
+
+          <div class="form-grid ipd-grid">
             <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.ward_name, submitted)">
               <span>Ward</span>
               <input type="text" formControlName="ward_name" />
@@ -268,9 +287,19 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="admission-checklist">
+          @for (item of admissionChecklist; track item.label) {
+            <article [class.done]="item.done">
+              <span>{{ item.done ? 'Ready' : 'Pending' }}</span>
+              <strong>{{ item.label }}</strong>
+            </article>
+          }
+        </div>
+
+        <div class="form-actions sticky-actions">
           <button class="ghost-btn" type="button" (click)="backToOverview()">Cancel</button>
-          <button class="primary-btn" type="submit">Create Admission</button>
+          <button class="secondary-btn" type="button" (click)="clearPatientSelection()">Reset Patient</button>
+          <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Create Admission' }}</button>
         </div>
       </form>
     </section>
@@ -286,6 +315,10 @@
           <li><span>Ward / Bed</span><strong>{{ selectedBedSummary }}</strong></li>
           <li><span>Advance</span><strong>{{ form.getRawValue().advance_amount || 0 }}</strong></li>
         </ul>
+        <div class="summary-meter">
+          <div class="summary-meter__label">Admission progress</div>
+          <div class="summary-meter__bar"><span [style.width.%]="admissionProgress"></span></div>
+        </div>
       </section>
 
       <section class="page-card tip-card">

@@ -36,6 +36,7 @@ export class IPDAdmitComponent {
   selectedPatient: Patient | null = null;
   patientLookupModalOpen = false;
   submitted = false;
+  saving = false;
 
   readonly form = this.fb.group({
     patient_id: ['', Validators.required],
@@ -96,6 +97,12 @@ export class IPDAdmitComponent {
     return this.availableBeds.filter((bed) => bed.ward_name === wardFilter);
   }
 
+  get bedMapItems(): IPDBed[] {
+    const wardFilter = this.form.getRawValue().ward_filter;
+    const beds = wardFilter ? this.beds.filter((bed) => bed.ward_name === wardFilter) : this.beds;
+    return beds.slice(0, 18);
+  }
+
   get wardOptions(): string[] {
     return [...new Set(this.beds.map((bed) => bed.ward_name).filter(Boolean))].sort((left, right) => left.localeCompare(right));
   }
@@ -111,6 +118,21 @@ export class IPDAdmitComponent {
     ];
     const completed = checkpoints.filter(Boolean).length;
     return Math.round((completed / checkpoints.length) * 100);
+  }
+
+  get admissionChecklist(): Array<{ label: string; done: boolean }> {
+    const value = this.form.getRawValue();
+    return [
+      { label: 'Patient selected', done: !!value.patient_id },
+      { label: 'Doctor assigned', done: !!value.doctor_user_id || !!value.attending_doctor_name },
+      { label: 'Bed assigned', done: !!value.ward_name && !!value.bed_number },
+      { label: 'Advance reviewed', done: Number(value.advance_amount || 0) > 0 },
+      { label: 'Diagnosis noted', done: !!value.diagnosis },
+    ];
+  }
+
+  get admissionTypeOptions(): string[] {
+    return ['General', 'Emergency', 'Surgery', 'ICU', 'Maternity', 'Pediatric', 'Corporate', 'Insurance'];
   }
 
   get patientDisplayName(): string {
@@ -215,6 +237,24 @@ export class IPDAdmitComponent {
     });
   }
 
+  selectBed(bed: IPDBed): void {
+    if (String(bed.status).toLowerCase() !== 'available') {
+      this.notificationService.warning(`${bed.ward_name} / ${bed.bed_number} is ${bed.status}. Choose an available bed.`);
+      return;
+    }
+    this.form.patchValue({
+      bed_id: bed.id,
+      ward_filter: bed.ward_name,
+      ward_name: bed.ward_name,
+      bed_number: bed.bed_number,
+      daily_charge: bed.daily_rate,
+    });
+  }
+
+  bedStatusClass(bed: IPDBed): string {
+    return `bed-tile bed-tile--${String(bed.status).toLowerCase()} ${this.form.getRawValue().bed_id === bed.id ? 'bed-tile--selected' : ''}`;
+  }
+
   onWardFilterChanged(): void {
     const wardFilter = this.form.getRawValue().ward_filter;
     const currentBedId = this.form.getRawValue().bed_id;
@@ -251,12 +291,14 @@ export class IPDAdmitComponent {
 
   submit(): void {
     this.submitted = true;
-    if (this.form.invalid) {
+    if (this.form.invalid || this.saving) {
       this.form.markAllAsTouched();
       return;
     }
+    this.saving = true;
     const value = this.form.getRawValue();
     this.ipdService.createAdmission({ ...value, expected_discharge_date: value.expected_discharge_date || null } as never).subscribe((admission) => {
+      this.saving = false;
       this.submitted = false;
       this.notificationService.success(`Admission ${admission.admission_number} created.`);
       this.form.reset({
@@ -275,6 +317,8 @@ export class IPDAdmitComponent {
       });
       this.clearPatientSelection();
       void this.router.navigate(['/ipd'], { queryParams: { openAdmission: admission.id } });
+    }, () => {
+      this.saving = false;
     });
   }
 

@@ -47,6 +47,8 @@ import { AccountingJournalComponent } from './features/accounting/pages/accounti
 import { HRPayrollComponent } from './features/hr/pages/hr-payroll/hr-payroll.component';
 import { UserManagementComponent } from './features/admin/pages/user-management/user-management.component';
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
+import { ConfigurationWorkspaceComponent } from './features/configuration/pages/configuration-workspace/configuration-workspace.component';
+import { AccountProfileComponent } from './features/profile/pages/account-profile/account-profile.component';
 
 export const appRoutes: Routes = [
   {
@@ -63,6 +65,11 @@ export const appRoutes: Routes = [
     canActivate: [authGuard],
     children: [
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      {
+        path: 'profile',
+        component: AccountProfileComponent,
+        data: { tabLabel: 'Profile' },
+      },
       {
         path: 'dashboard',
         component: DashboardComponent,
@@ -506,6 +513,12 @@ export const appRoutes: Routes = [
         canActivate: [permissionGuard],
         data: { permissions: [permission], tabLabel, accountingTab },
       })),
+      {
+        path: 'configuration',
+        component: ConfigurationWorkspaceComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['settings.configuration.manage'], tabLabel: 'Configuration Center' },
+      },
       {
         path: 'admin/users',
         component: UserManagementComponent,

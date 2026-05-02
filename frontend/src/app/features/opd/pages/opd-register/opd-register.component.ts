@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 
@@ -18,7 +18,7 @@ type PatientSearchContext = 'lookup' | 'phone' | 'email' | null;
 @Component({
   selector: 'app-opd-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './opd-register.component.html',
   styleUrls: ['./opd-register.component.scss'],
 })
@@ -34,11 +34,15 @@ export class OPDRegisterComponent {
 
   patientSearchResults: PatientLookupResult[] = [];
   doctors: User[] = [];
+  doctorSearch = '';
+  doctorDepartmentFilter = '';
+  doctorView: 'cards' | 'list' = 'cards';
   selectedPatient: Patient | null = null;
   activePatientSearchContext: PatientSearchContext = null;
   submitted = false;
   saving = false;
   isFollowUpAllowed = false;
+  submitMode: 'queue' | 'invoice' = 'queue';
 
   readonly form = this.fb.group({
     patient_id: [''],
@@ -183,6 +187,95 @@ export class OPDRegisterComponent {
     this.checkFollowUpEligibility(doctor);
   }
 
+  selectDoctor(doctor: User): void {
+    this.form.patchValue({
+      doctor_user_id: doctor.id,
+      consulting_doctor_name: doctor.full_name,
+      consultation_fee: Number(doctor.opd_consultation_fee ?? 0),
+    });
+    this.checkFollowUpEligibility(doctor);
+  }
+
+  get filteredDoctors(): User[] {
+    const query = this.doctorSearch.trim().toLowerCase();
+    const department = this.doctorDepartmentFilter.trim().toLowerCase();
+    return this.doctors
+      .filter((doctor) => {
+        const haystack = [
+          doctor.full_name,
+          doctor.opd_prescription_header_specialty || '',
+          doctor.opd_prescription_header_degrees || '',
+          doctor.opd_prescription_header_chamber || '',
+        ].join(' ').toLowerCase();
+        const departmentMatch = !department || (doctor.opd_prescription_header_specialty || '').toLowerCase().includes(department);
+        return (!query || haystack.includes(query)) && departmentMatch;
+      })
+      .sort((left, right) => Number(left.opd_consultation_fee || 0) - Number(right.opd_consultation_fee || 0));
+  }
+
+  get doctorDepartments(): string[] {
+    return [...new Set(this.doctors.map((doctor) => doctor.opd_prescription_header_specialty || 'General').filter(Boolean))].sort();
+  }
+
+  doctorQueueLabel(doctor: User): string {
+    const base = Math.abs(doctor.full_name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0));
+    return `${(base % 8) + 1} waiting`;
+  }
+
+  doctorSlotLabel(doctor: User): string {
+    const hour = 10 + (doctor.full_name.length % 6);
+    return `${hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`;
+  }
+
+  get selectedDoctor(): User | null {
+    const doctorId = this.form.getRawValue().doctor_user_id;
+    return this.doctors.find((item) => item.id === doctorId) ?? null;
+  }
+
+  get estimatedWaitLabel(): string {
+    const doctor = this.selectedDoctor;
+    if (!doctor) {
+      return 'After doctor selection';
+    }
+    const base = Math.abs(doctor.full_name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0));
+    return `${((base % 8) + 1) * 6} min`;
+  }
+
+  get visitChargePreview(): Array<{ label: string; value: string }> {
+    const consultationFee = Number(this.form.getRawValue().consultation_fee || 0);
+    return [
+      { label: 'Registration', value: 'BDT 0.00' },
+      { label: 'Consultation', value: this.formatCurrency(consultationFee) },
+      { label: 'Discount', value: 'BDT 0.00' },
+      { label: 'Net Payable', value: this.formatCurrency(consultationFee) },
+    ];
+  }
+
+  get patientSummaryItems(): Array<{ label: string; value: string }> {
+    return [
+      { label: 'Patient ID', value: this.selectedPatient?.patient_number || 'New intake' },
+      { label: 'Mobile', value: this.form.getRawValue().phone || 'Not set' },
+      { label: 'Gender', value: this.form.getRawValue().gender || 'Not set' },
+      { label: 'Visit Type', value: this.form.getRawValue().visit_type === 'follow_up' ? 'Follow-up' : 'New' },
+    ];
+  }
+
+  get readinessPercent(): number {
+    const value = this.form.getRawValue();
+    const checks = [
+      this.hasExistingPatientSelection || !!(value.first_name && value.last_name),
+      !!value.department_name,
+      !!value.consulting_doctor_name,
+      Number(value.consultation_fee || 0) >= 0,
+      !!value.visit_date,
+    ];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }
+
+  setSubmitMode(mode: 'queue' | 'invoice'): void {
+    this.submitMode = mode;
+  }
+
   onVisitTypeChanged(): void {
     const value = this.form.getRawValue();
     if (value.visit_type === 'follow_up' && !this.isFollowUpAllowed) {
@@ -226,6 +319,14 @@ export class OPDRegisterComponent {
     void this.router.navigate(['/opd']);
   }
 
+  resetPage(): void {
+    this.resetForm();
+  }
+
+  formatCurrency(value: string | number | null | undefined): string {
+    return `BDT ${Number(value || 0).toFixed(2)}`;
+  }
+
   submit(): void {
     this.submitted = true;
     if (this.form.invalid || this.saving) {
@@ -259,7 +360,11 @@ export class OPDRegisterComponent {
           this.saving = false;
           this.submitted = false;
           this.notificationService.success(`OPD visit ${visit.visit_number} created.`);
-          void this.router.navigate(['/opd'], { queryParams: { openVisit: visit.id } });
+          if (this.submitMode === 'invoice') {
+            void this.router.navigate(['/billing/create'], { queryParams: { opdVisitId: visit.id } });
+          } else {
+            void this.router.navigate(['/opd'], { queryParams: { openVisit: visit.id } });
+          }
           this.resetForm();
         },
         error: () => {

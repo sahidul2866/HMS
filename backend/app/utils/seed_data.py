@@ -87,6 +87,7 @@ PERMISSION_CATALOG = [
     ("settings.permission.manage", "settings", "permission.manage", "Manage permission catalog"),
     ("settings.branch.manage", "settings", "branch.manage", "Manage branches"),
     ("settings.department.manage", "settings", "department.manage", "Manage departments"),
+    ("settings.configuration.manage", "settings", "configuration.manage", "Manage hospital configuration builders and setup profiles"),
     ("audit.view", "audit", "view", "View audit logs"),
 ]
 
@@ -168,6 +169,7 @@ ROLE_CATALOG = {
         "settings.role.manage",
         "settings.branch.manage",
         "settings.department.manage",
+        "settings.configuration.manage",
         "audit.view",
         "appointment.view",
         "appointment.manage",

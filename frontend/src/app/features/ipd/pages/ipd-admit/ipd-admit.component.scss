@@ -220,6 +220,110 @@
   color: #10233c;
 }
 
+.admission-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.bed-map,
+.admission-checklist {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.bed-map {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-top: 1rem;
+}
+
+.bed-tile {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 96px;
+  padding: 0.85rem;
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-left: 4px solid #64748b;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.bed-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.bed-tile strong {
+  color: #10233c;
+  font-size: 1.1rem;
+}
+
+.bed-tile span,
+.bed-tile small {
+  color: #64748b;
+}
+
+.bed-tile--available {
+  border-left-color: #16a34a;
+}
+
+.bed-tile--occupied,
+.bed-tile--reserved {
+  border-left-color: #dc2626;
+  opacity: 0.72;
+}
+
+.bed-tile--cleaning,
+.bed-tile--maintenance {
+  border-left-color: #f59e0b;
+  opacity: 0.78;
+}
+
+.bed-tile--selected {
+  border-color: rgba(37, 99, 235, 0.42);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, 0.16);
+}
+
+.admission-checklist {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: 1rem 0;
+}
+
+.admission-checklist article {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 16px;
+  background: rgba(255, 251, 235, 0.9);
+}
+
+.admission-checklist article.done {
+  border-color: rgba(22, 163, 74, 0.22);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.admission-checklist span,
+.summary-meter__label {
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admission-checklist strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: #10233c;
+}
+
 .side-stack {
   display: grid;
   gap: 1rem;
@@ -267,6 +371,39 @@
 
 .tip-list li {
   color: #64748b;
+}
+
+.summary-meter {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.summary-meter__bar {
+  height: 0.65rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(226, 232, 240, 0.85);
+}
+
+.summary-meter__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #16a34a);
+}
+
+.sticky-actions {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 4;
+  justify-content: flex-end;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .modal-backdrop {

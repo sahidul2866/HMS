@@ -57,4 +57,5 @@ export const PERMISSIONS = {
   accountingJournalPost: 'accounting.journal.post',
   settingsUserManage: 'settings.user.manage',
   settingsRoleManage: 'settings.role.manage',
+  settingsConfigurationManage: 'settings.configuration.manage',
 } as const;

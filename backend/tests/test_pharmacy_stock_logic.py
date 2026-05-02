@@ -24,13 +24,31 @@ from app.modules.pharmacy.service import PharmacyService
 from app.schemas.pharmacy import PharmacyPurchaseCreate, PharmacySaleCreate, PharmacySaleItemWrite, PharmacySaleReturnCreate
 
 
+def apply_model_defaults(entity):
+    if getattr(entity, "id", None) is None:
+        entity.id = uuid4()
+    if getattr(entity, "is_active", None) is None:
+        entity.is_active = True
+    now = datetime.now(UTC)
+    if getattr(entity, "created_at", None) is None:
+        entity.created_at = now
+    if getattr(entity, "updated_at", None) is None:
+        entity.updated_at = now
+    return entity
+
+
 class FakeDB:
-    def refresh(self, _entity) -> None:
-        return None
+    def refresh(self, entity) -> None:
+        apply_model_defaults(entity)
+        for relationship_name in ("items", "returns"):
+            for child in getattr(entity, relationship_name, []) or []:
+                apply_model_defaults(child)
 
 
 class FakePharmacyRepository:
     def __init__(self, *, medicines: list[PharmacyMedicine], customers: list[PharmacyCustomer], users: list[User]) -> None:
+        for item in [*medicines, *customers, *users]:
+            apply_model_defaults(item)
         self.medicines = {item.id: item for item in medicines}
         self.customers = {item.id: item for item in customers}
         self.users = {item.id: item for item in users}
@@ -40,6 +58,7 @@ class FakePharmacyRepository:
         self.stock_movements: dict = {}
 
     def create(self, entity):
+        apply_model_defaults(entity)
         if isinstance(entity, PharmacyPurchase):
             entity.medicine = self.medicines[entity.medicine_id]
             entity.purchased_by = self.users.get(entity.purchased_by_user_id)

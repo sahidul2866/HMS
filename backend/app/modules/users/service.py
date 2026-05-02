@@ -26,6 +26,8 @@ class UsersService:
             raise AppException(409, "user_exists", "User with same username or email already exists")
 
         roles = self.repository.get_roles(payload.role_codes)
+        if payload.patient_id or any(role.code == "PATIENT" for role in roles):
+            raise AppException(400, "patient_accounts_separated", "Patient portal accounts must be created from patient registration, not staff user management")
         permissions = self.repository.get_permissions(payload.direct_permission_codes)
         user = User(
             username=payload.username,

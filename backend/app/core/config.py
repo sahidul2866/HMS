@@ -17,7 +17,7 @@ DEFAULT_FRONTEND_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BASE_DIR / ".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = Field(default="HMS API", alias="APP_NAME")
+    app_name: str = Field(default="MediProfit API", alias="APP_NAME")
     app_env: Literal["development", "staging", "production"] = Field(default="development", alias="APP_ENV")
     debug: bool | str = Field(default=True, alias="DEBUG")
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")
@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     auto_db_bootstrap: bool | str = Field(default=True, alias="AUTO_DB_BOOTSTRAP")
     auto_seed_sample_data: bool | str = Field(default=False, alias="AUTO_SEED_SAMPLE_DATA")
     max_patients_per_mobile: int = Field(default=5, alias="MAX_PATIENTS_PER_MOBILE")
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    patient_bot_max_gemini_calls_per_day: int = Field(default=5, alias="PATIENT_BOT_MAX_GEMINI_CALLS_PER_DAY")
 
     def model_post_init(self, __context: object) -> None:
         self.debug = self._normalize_bool(self.debug, default=False)
@@ -39,6 +42,9 @@ class Settings(BaseSettings):
         self.database_url = self._normalize_database_url(self.database_url)
         self.secret_key = self.secret_key.strip().strip("\"'")
         self.log_level = self.log_level.strip().strip("\"'")
+        self.gemini_model = self.gemini_model.strip().strip("\"'")
+        if self.gemini_api_key:
+            self.gemini_api_key = self.gemini_api_key.strip().strip("\"'")
         if isinstance(self.frontend_origins, str):
             normalized = self.frontend_origins.strip().strip("\"'")
             self.frontend_origins = [item.strip().strip("\"'") for item in normalized.split(",") if item.strip()]

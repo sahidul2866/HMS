@@ -7,6 +7,7 @@ from app.core.security import get_password_hash
 from app.models.branch import Branch
 from app.models.department import Department
 from app.models.patient import Patient
+from app.models.patient_portal_account import PatientPortalAccount
 from app.models.role import Role
 from app.models.user import User
 from app.scripts.script_checkpoints import run_checkpoint_step
@@ -160,7 +161,7 @@ def create_or_update_staff_user(session, *, branch: Branch, role: Role, departme
     user.roles = [role]
 
 
-def create_or_update_demo_patient_user(session, *, branch: Branch, role: Role, payload: dict) -> None:
+def create_or_update_demo_patient_user(session, *, branch: Branch, payload: dict) -> None:
     patient = session.scalar(select(Patient).where(Patient.email == payload["email"]))
     first_name, _, last_name = payload["full_name"].partition(" ")
     if not patient:
@@ -183,26 +184,31 @@ def create_or_update_demo_patient_user(session, *, branch: Branch, role: Role, p
         patient.email = payload["email"]
         patient.gender = payload["gender"]
 
-    user = session.scalar(select(User).where(User.username == payload["username"]))
-    if not user:
-        user = User(
+    account = session.scalar(select(PatientPortalAccount).where(PatientPortalAccount.username == payload["username"]))
+    if not account:
+        account = PatientPortalAccount(
             username=payload["username"],
             email=payload["email"],
             full_name=payload["full_name"],
             hashed_password=get_password_hash(payload["password"]),
             branch_id=branch.id,
             patient_id=patient.id,
+            phone=payload["phone"],
             is_active=True,
         )
-        session.add(user)
+        session.add(account)
         session.flush()
     else:
-        user.email = payload["email"]
-        user.full_name = payload["full_name"]
-        user.branch_id = branch.id
-        user.patient_id = patient.id
-        user.is_active = True
-    user.roles = [role]
+        account.email = payload["email"]
+        account.full_name = payload["full_name"]
+        account.branch_id = branch.id
+        account.patient_id = patient.id
+        account.phone = payload["phone"]
+        account.is_active = True
+
+    legacy_user = session.scalar(select(User).where(User.username == payload["username"]))
+    if legacy_user and legacy_user.patient_id:
+        legacy_user.is_active = False
 
 
 def main() -> None:
@@ -229,8 +235,7 @@ def main() -> None:
             session = SessionLocal()
             try:
                 branch = get_required(session, Branch, Branch.code, "HQ", "branch")
-                role = get_required(session, Role, Role.code, "PATIENT", "role")
-                create_or_update_demo_patient_user(session, branch=branch, role=role, payload=payload)
+                create_or_update_demo_patient_user(session, branch=branch, payload=payload)
                 session.commit()
                 return f"{payload['username']} synchronized"
             finally:
