@@ -24,6 +24,8 @@ from app.models.accounting import (
 )
 from app.models.audit_log import AuditLog
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund, BillingService, ReferredDoctor
+from app.models.billing_links import BillingItemLink
+from app.models.laboratory import LabAttachment, LabOrder, LabOrderItem, LabResult, LabResultItem
 from app.models.branch import Branch
 from app.models.configuration import ConfigurationProfile
 from app.models.department import Department
@@ -66,6 +68,7 @@ from app.models.ot import (
     SurgeryTeamAssignment,
 )
 from app.models.permission import Permission
+from app.models.radiology import PACSLink, RadiologyAttachment, RadiologyOrder, RadiologyReport, RadiologyReportSection
 from app.models.patient import Patient
 from app.models.patient_portal_account import PatientPortalAccount, PatientPortalRefreshToken
 from app.models.patient_bot import (
@@ -131,6 +134,17 @@ __all__ = [
     "BillingRefund",
     "BillingService",
     "ReferredDoctor",
+    "BillingItemLink",
+    "LabAttachment",
+    "LabOrder",
+    "LabOrderItem",
+    "LabResult",
+    "LabResultItem",
+    "PACSLink",
+    "RadiologyAttachment",
+    "RadiologyOrder",
+    "RadiologyReport",
+    "RadiologyReportSection",
     "Branch",
     "ConfigurationProfile",
     "Department",

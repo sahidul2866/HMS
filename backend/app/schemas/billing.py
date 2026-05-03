@@ -292,4 +292,17 @@ class BillingSettingsUpdate(BaseModel):
     default_referral_percentage: Decimal = Field(ge=0, le=100)
 
 
+class BillingItemLinkRead(BaseModel):
+    id: UUID
+    invoice_item_id: UUID
+    branch_id: UUID | None = None
+    source_module: str
+    source_entity_type: str
+    source_entity_id: UUID
+    meta: dict | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 BillingInvoiceRead.model_rebuild()

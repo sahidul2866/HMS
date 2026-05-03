@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.encounter import OPDVisit, OPDVisitOrder
+from app.models.laboratory import LabOrder, LabOrderItem
+from app.models.radiology import RadiologyOrder
 from app.models.user import User
 from app.modules.auth.service import AuthService
 from app.modules.audit.service import AuditService
@@ -211,6 +213,45 @@ class OPDService:
             updated_by=actor.id,
         )
         self.repository.create_order(order)
+
+        # Create linked domain records for investigation orders
+        if order.order_type == "investigation":
+            if order.service_area == "laboratory":
+                lab_order = LabOrder(
+                    branch_id=visit.branch_id,
+                    patient_id=visit.patient_id,
+                    visit_id=visit.id,
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(lab_order)
+                self.db.flush()
+                lab_item = LabOrderItem(
+                    order_id=lab_order.id,
+                    test_name=order.item_name,
+                    quantity=order.quantity,
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(lab_item)
+                order.lab_order_id = lab_order.id
+            elif order.service_area == "radiology":
+                rad_order = RadiologyOrder(
+                    branch_id=visit.branch_id,
+                    patient_id=visit.patient_id,
+                    visit_id=visit.id,
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    study_description=order.item_name,
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(rad_order)
+                self.db.flush()
+                order.radiology_order_id = rad_order.id
+
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.OPD_VISIT_ORDER_CREATE,

@@ -8,12 +8,16 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppException
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingService, ReferredDoctor
 from app.models.billing import BillingRefund, BillingSetting
+from app.models.billing_links import BillingItemLink
 from app.models.encounter import IPDAdmission, OPDVisit, OPDVisitOrder
+from app.models.laboratory import LabOrder, LabOrderItem
+from app.models.radiology import RadiologyOrder
 from app.models.patient import Patient
 from app.models.pharmacy import PharmacyInvestigationSetting, PharmacyMedicine
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.billing.repository import BillingRepository
+from app.modules.billing_links.repository import BillingLinksRepository
 from app.modules.ipd.repository import IPDRepository
 from app.modules.opd.repository import OPDRepository
 from app.modules.patients.repository import PatientsRepository
@@ -50,6 +54,7 @@ class BillingServiceManager:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repository = BillingRepository(db)
+        self.billing_links_repository = BillingLinksRepository(db)
         self.opd_repository = OPDRepository(db)
         self.ipd_repository = IPDRepository(db)
         self.patients_repository = PatientsRepository(db)
@@ -418,6 +423,34 @@ class BillingServiceManager:
         ]
         self.repository.create_invoice(invoice)
         self._sync_invoice_items_to_worklists(invoice, resolved_items, patient, actor)
+        # Create billing_item_links for domain records
+        for index, item in enumerate(invoice.items):
+            if item.source_opd_visit_order_id:
+                visit_order = self.db.get(OPDVisitOrder, item.source_opd_visit_order_id)
+                if visit_order and visit_order.lab_order_id:
+                    link = BillingItemLink(
+                        invoice_item_id=item.id,
+                        branch_id=invoice.branch_id,
+                        source_module="lab",
+                        source_entity_type="lab_order_item",
+                        source_entity_id=visit_order.lab_order_id,
+                        meta={"invoice_number": invoice.invoice_number, "source_label": item.source_label},
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                    self.billing_links_repository.create_link(link)
+                elif visit_order and visit_order.radiology_order_id:
+                    link = BillingItemLink(
+                        invoice_item_id=item.id,
+                        branch_id=invoice.branch_id,
+                        source_module="radiology",
+                        source_entity_type="radiology_order",
+                        source_entity_id=visit_order.radiology_order_id,
+                        meta={"invoice_number": invoice.invoice_number, "source_label": item.source_label},
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                    self.billing_links_repository.create_link(link)
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.BILLING_INVOICE_CREATE,
@@ -822,6 +855,42 @@ class BillingServiceManager:
                 updated_by=actor.id,
             )
             self.opd_repository.create_order(order)
+            # Create domain records for lab/radiology
+            if module == "laboratory":
+                lab_order = LabOrder(
+                    branch_id=visit.branch_id,
+                    patient_id=visit.patient_id,
+                    visit_id=visit.id,
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(lab_order)
+                self.db.flush()
+                lab_item = LabOrderItem(
+                    order_id=lab_order.id,
+                    test_name=order.item_name,
+                    quantity=order.quantity,
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(lab_item)
+                order.lab_order_id = lab_order.id
+            elif module == "radiology":
+                rad_order = RadiologyOrder(
+                    branch_id=visit.branch_id,
+                    patient_id=visit.patient_id,
+                    visit_id=visit.id,
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    study_description=order.item_name,
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(rad_order)
+                self.db.flush()
+                order.radiology_order_id = rad_order.id
             item.source_opd_visit_order_id = order.id
             if index < len(invoice.items):
                 invoice.items[index].source_opd_visit_order_id = order.id

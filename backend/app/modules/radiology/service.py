@@ -3,9 +3,11 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
+from app.models.radiology import RadiologyOrder, RadiologyReport, RadiologyReportSection
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.opd.repository import OPDRepository
+from app.modules.radiology.repository import RadiologyRepository
 from app.schemas.encounter import ClinicalInvestigationResultUpdate, ClinicalInvestigationWorkItemRead
 from app.schemas.radiology import RadiologySummaryRead
 from app.utils.enums import AuditAction
@@ -14,25 +16,71 @@ from app.utils.enums import AuditAction
 class RadiologyService:
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.repository = OPDRepository(db)
+        self.legacy_repository = OPDRepository(db)
+        self.repository = RadiologyRepository(db)
 
     def list_worklist(self, actor: User) -> list[ClinicalInvestigationWorkItemRead]:
-        orders = self.repository.list_investigation_orders("radiology", actor.branch_id)
-        return [self._serialize(order) for order in orders]
+        new_orders = self.repository.list_orders(actor.branch_id)
+        legacy_orders = self.legacy_repository.list_investigation_orders("radiology", actor.branch_id)
+        # Exclude legacy orders that are already linked to new orders
+        linked_legacy_ids = {o.radiology_order_id for o in legacy_orders if o.radiology_order_id}
+        legacy_orders = [o for o in legacy_orders if o.id not in linked_legacy_ids]
+        new_items = [self._serialize_new(order) for order in new_orders]
+        legacy_items = [self._serialize_legacy(order) for order in legacy_orders]
+        return sorted(new_items + legacy_items, key=lambda x: (x.visit_date, x.order_id), reverse=True)
 
     def get_summary(self, actor: User) -> RadiologySummaryRead:
-        items = self.list_worklist(actor)
+        new_counts = self.repository.get_summary_counts(actor.branch_id)
+        legacy_items = self.legacy_repository.list_investigation_orders("radiology", actor.branch_id)
+        linked_legacy_ids = {o.radiology_order_id for o in legacy_items if o.radiology_order_id}
+        legacy_items = [o for o in legacy_items if o.id not in linked_legacy_ids]
         return RadiologySummaryRead(
-            total_orders=len(items),
-            pending_orders=len([item for item in items if item.status == "pending"]),
-            ready_orders=len([item for item in items if item.status == "collected"]),
-            in_progress_orders=len([item for item in items if item.status == "in_progress"]),
-            completed_orders=len([item for item in items if item.status == "completed"]),
-            verified_orders=len([item for item in items if item.status == "verified"]),
+            total_orders=new_counts["total_orders"] + len(legacy_items),
+            pending_orders=new_counts["pending_orders"] + len([i for i in legacy_items if i.status == "pending"]),
+            ready_orders=new_counts["collected_orders"] + len([i for i in legacy_items if i.status == "collected"]),
+            in_progress_orders=new_counts["in_progress_orders"] + len([i for i in legacy_items if i.status == "in_progress"]),
+            completed_orders=new_counts["completed_orders"] + len([i for i in legacy_items if i.status == "completed"]),
+            verified_orders=new_counts["verified_orders"] + len([i for i in legacy_items if i.status == "verified"]),
         )
 
     def update_result(self, order_id, payload: ClinicalInvestigationResultUpdate, actor: User, context: dict[str, str | None]) -> ClinicalInvestigationWorkItemRead:
-        order = self.repository.get_order(order_id)
+        # Try new table first
+        rad_order = self.repository.get_order(order_id)
+        if rad_order:
+            if actor.branch_id and rad_order.branch_id and actor.branch_id != rad_order.branch_id:
+                raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
+            rad_order.status = payload.status
+            if payload.status in {"collected", "in_progress", "completed", "verified"} and not rad_order.performed_at:
+                rad_order.performed_at = datetime.now(UTC)
+                rad_order.performed_by_user_id = actor.id
+            if payload.status in {"completed", "verified"}:
+                rad_order.completed_at = rad_order.completed_at or datetime.now(UTC)
+                rad_order.completed_by_user_id = actor.id
+            else:
+                rad_order.completed_at = None
+                rad_order.completed_by_user_id = None
+            if payload.status == "verified":
+                rad_order.verified_at = datetime.now(UTC)
+                rad_order.verified_by_user_id = actor.id
+            else:
+                rad_order.verified_at = None
+                rad_order.verified_by_user_id = None
+            rad_order.updated_by = actor.id
+            AuditService(self.db).log(
+                user_id=actor.id,
+                action=AuditAction.OPD_INVESTIGATION_RESULT_UPDATE,
+                module="radiology",
+                entity_type="radiology_order",
+                entity_id=str(rad_order.id),
+                detail={"service_area": "radiology", "status": payload.status, "order_number": rad_order.order_number},
+                context=context,
+            )
+            self.db.commit()
+            self.db.refresh(rad_order)
+            return self._serialize_new(rad_order)
+
+        # Fallback to legacy
+        order = self.legacy_repository.get_order(order_id)
         if not order or order.order_type != "investigation" or order.service_area != "radiology":
             raise AppException(404, "radiology_order_not_found", "Radiology work item not found")
         if actor.branch_id and order.visit.branch_id and actor.branch_id != order.visit.branch_id:
@@ -68,9 +116,39 @@ class RadiologyService:
         )
         self.db.commit()
         self.db.refresh(order)
-        return self._serialize(order)
+        return self._serialize_legacy(order)
 
-    def _serialize(self, order) -> ClinicalInvestigationWorkItemRead:
+    def _serialize_new(self, order: RadiologyOrder) -> ClinicalInvestigationWorkItemRead:
+        visit = order.visit
+        patient = order.patient
+        report = order.reports[0] if order.reports else None
+        return ClinicalInvestigationWorkItemRead(
+            order_id=order.id,
+            visit_id=visit.id if visit else order.visit_id,
+            visit_number=visit.visit_number if visit else "",
+            visit_date=visit.visit_date if visit else datetime.now(UTC).date(),
+            patient_id=patient.id if patient else order.patient_id,
+            patient_number=patient.patient_number if patient else "",
+            patient_name=f"{patient.first_name} {patient.last_name}" if patient else "",
+            consulting_doctor_name=visit.consulting_doctor_name if visit else "",
+            service_area="radiology",
+            item_name=order.study_description,
+            room_number=None,
+            quantity=1,
+            instructions=None,
+            chief_complaint=visit.chief_complaint if visit else None,
+            diagnosis=(visit.final_diagnosis or visit.provisional_diagnosis) if visit else None,
+            status=order.status,
+            sample_note=None,
+            sample_collected_at=order.performed_at,
+            result_text=report.overall_findings if report else None,
+            completed_at=order.completed_at,
+            verified_at=order.verified_at,
+            lab_order_id=None,
+            radiology_order_id=order.id,
+        )
+
+    def _serialize_legacy(self, order) -> ClinicalInvestigationWorkItemRead:
         return ClinicalInvestigationWorkItemRead(
             order_id=order.id,
             visit_id=order.visit_id,
@@ -93,4 +171,6 @@ class RadiologyService:
             result_text=order.result_text,
             completed_at=order.completed_at,
             verified_at=order.verified_at,
+            lab_order_id=order.lab_order_id,
+            radiology_order_id=order.radiology_order_id,
         )

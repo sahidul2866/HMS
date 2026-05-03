@@ -7,6 +7,8 @@ from app.models.accounting import Expense, ExpenseCategory
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund
 from app.models.configuration import ConfigurationProfile
 from app.models.encounter import Appointment, ERVisit, IPDAdmission, IPDBed, OPDVisit, OPDVisitOrder
+from app.models.laboratory import LabOrder
+from app.models.radiology import RadiologyOrder
 from app.models.hr import HRAttendance, HREmployee, HRLeaveRequest, HRPayrollRun
 from app.models.inventory import InventoryItem, ReagentBatch, StockBatch
 from app.models.ot import OTBooking, OTRoom, SurgerySchedule
@@ -322,35 +324,80 @@ class ReportingRepository:
         }
 
     def get_lab_radiology_summary(self, branch_id=None) -> dict[str, int]:
+        # New table counts
+        new_lab_pending = self.db.scalar(
+            select(func.count(LabOrder.id)).where(
+                LabOrder.status.not_in(["completed", "verified"]),
+                (LabOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+        new_lab_completed = self.db.scalar(
+            select(func.count(LabOrder.id)).where(
+                LabOrder.status == "completed",
+                (LabOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+        new_lab_verified = self.db.scalar(
+            select(func.count(LabOrder.id)).where(
+                LabOrder.status == "verified",
+                (LabOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+        new_rad_pending = self.db.scalar(
+            select(func.count(RadiologyOrder.id)).where(
+                RadiologyOrder.status.not_in(["completed", "verified"]),
+                (RadiologyOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+        new_rad_completed = self.db.scalar(
+            select(func.count(RadiologyOrder.id)).where(
+                RadiologyOrder.status == "completed",
+                (RadiologyOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+        new_rad_verified = self.db.scalar(
+            select(func.count(RadiologyOrder.id)).where(
+                RadiologyOrder.status == "verified",
+                (RadiologyOrder.branch_id == branch_id) if branch_id else True,
+            )
+        ) or 0
+
+        # Legacy counts (only unlinked)
         pending_lab_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "laboratory",
             OPDVisitOrder.status.not_in(["completed", "verified"]),
+            OPDVisitOrder.lab_order_id.is_(None),
         )
         completed_lab_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "laboratory",
             OPDVisitOrder.status == "completed",
+            OPDVisitOrder.lab_order_id.is_(None),
         )
         verified_lab_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "laboratory",
             OPDVisitOrder.status == "verified",
+            OPDVisitOrder.lab_order_id.is_(None),
         )
         pending_radiology_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "radiology",
             OPDVisitOrder.status.not_in(["completed", "verified"]),
+            OPDVisitOrder.radiology_order_id.is_(None),
         )
         completed_radiology_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "radiology",
             OPDVisitOrder.status == "completed",
+            OPDVisitOrder.radiology_order_id.is_(None),
         )
         verified_radiology_stmt = select(func.count(OPDVisitOrder.id)).where(
             OPDVisitOrder.order_type == "investigation",
             OPDVisitOrder.service_area == "radiology",
             OPDVisitOrder.status == "verified",
+            OPDVisitOrder.radiology_order_id.is_(None),
         )
         if branch_id:
             pending_lab_stmt = pending_lab_stmt.join(OPDVisitOrder.visit).where(OPDVisit.branch_id == branch_id)
@@ -360,12 +407,12 @@ class ReportingRepository:
             completed_radiology_stmt = completed_radiology_stmt.join(OPDVisitOrder.visit).where(OPDVisit.branch_id == branch_id)
             verified_radiology_stmt = verified_radiology_stmt.join(OPDVisitOrder.visit).where(OPDVisit.branch_id == branch_id)
         return {
-            "pending_laboratory": self.db.scalar(pending_lab_stmt) or 0,
-            "completed_laboratory": self.db.scalar(completed_lab_stmt) or 0,
-            "verified_laboratory": self.db.scalar(verified_lab_stmt) or 0,
-            "pending_radiology": self.db.scalar(pending_radiology_stmt) or 0,
-            "completed_radiology": self.db.scalar(completed_radiology_stmt) or 0,
-            "verified_radiology": self.db.scalar(verified_radiology_stmt) or 0,
+            "pending_laboratory": new_lab_pending + (self.db.scalar(pending_lab_stmt) or 0),
+            "completed_laboratory": new_lab_completed + (self.db.scalar(completed_lab_stmt) or 0),
+            "verified_laboratory": new_lab_verified + (self.db.scalar(verified_lab_stmt) or 0),
+            "pending_radiology": new_rad_pending + (self.db.scalar(pending_radiology_stmt) or 0),
+            "completed_radiology": new_rad_completed + (self.db.scalar(completed_radiology_stmt) or 0),
+            "verified_radiology": new_rad_verified + (self.db.scalar(verified_radiology_stmt) or 0),
         }
 
     def get_pharmacy_summary(self, branch_id=None) -> dict[str, int]:

@@ -368,6 +368,8 @@ class ClinicalInvestigationWorkItemRead(BaseModel):
     result_text: str | None = None
     completed_at: datetime | None = None
     verified_at: datetime | None = None
+    lab_order_id: UUID | None = None
+    radiology_order_id: UUID | None = None
 
 
 class ClinicalInvestigationResultUpdate(BaseModel):

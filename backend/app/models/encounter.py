@@ -83,11 +83,15 @@ class OPDVisitOrder(Base, BaseModelMixin):
     completed_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verified_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    lab_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("lab_orders.id"))
+    radiology_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("radiology_orders.id"))
 
     visit = relationship("OPDVisit", back_populates="orders")
     sample_collected_by = relationship("User", foreign_keys=[sample_collected_by_user_id])
     completed_by = relationship("User", foreign_keys=[completed_by_user_id])
     verified_by = relationship("User", foreign_keys=[verified_by_user_id])
+    lab_order = relationship("LabOrder", foreign_keys=[lab_order_id])
+    radiology_order = relationship("RadiologyOrder", foreign_keys=[radiology_order_id])
 
 
 class IPDAdmission(Base, BaseModelMixin):

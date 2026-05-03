@@ -107,6 +107,7 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     invoice = relationship("BillingInvoice", back_populates="items")
     billing_service = relationship("BillingService", back_populates="invoice_items")
     source_opd_visit_order = relationship("OPDVisitOrder", foreign_keys=[source_opd_visit_order_id])
+    item_links = relationship("BillingItemLink", back_populates="invoice_item", cascade="all, delete-orphan")
 
 
 class BillingPayment(Base, BaseModelMixin):

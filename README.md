@@ -256,6 +256,24 @@ alembic upgrade head
 PYTHONPATH=. python -m app.scripts.seed
 ```
 
+#### Database Reset + Reseed (Destructive)
+
+**WARNING: This will DESTROY all data in the configured database.**
+
+Requires `RESET_DB_CONFIRM=YES` environment variable:
+
+```bash
+RESET_DB_CONFIRM=YES PYTHONPATH=. python -m app.scripts.reset_db
+```
+
+#### Backfill Lab/Radiology Data (Non-destructive)
+
+Migrate existing `opd_visit_orders` investigation records to the new lab/radiology domain tables:
+
+```bash
+PYTHONPATH=. python -m app.scripts.backfill_lab_radiology
+```
+
 7. Start the API:
 
 ```bash
