@@ -1,53 +1,20 @@
 <div class="workspace-shell">
-  <section class="page-card module-hero">
-    <div class="hero-row">
-      <div>
-        <div class="hero-kicker">Billing Operations</div>
-        <h1 class="page-title">{{ pageTitle }}</h1>
-        <div class="page-subtitle">{{ pageSubtitle }}</div>
-      </div>
-      <div class="toolbar-row">
-        <button class="primary-btn" type="button" (click)="navigateToCreateInvoice()">Create Invoice</button>
-        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
-      </div>
-    </div>
-
-    <div class="hero-summary">
-      <div class="hero-stat">
-        <div class="label">Referral Sources</div>
-        <div class="value">{{ internalReferralDoctors.length }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">{{ queueLabel }}</div>
-        <div class="value">{{ recentInvoices.length }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">Active View</div>
-        <div class="value">{{ latestInvoice ? latestInvoice.invoice_number : 'History' }}</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="billing-kpi-grid">
-    @for (kpi of billingKpis; track kpi.label) {
-      <article [class]="'billing-kpi ' + kpi.tone">
-        <span>{{ kpi.label }}</span>
-        <strong>{{ kpi.value }}</strong>
-      </article>
-    }
-  </section>
-
   @if (latestInvoice) {
-    <section class="soft-panel data-panel">
+    <div class="modal-backdrop" (click)="closeInvoiceDetail()">
+    <section class="soft-panel data-panel modal-card billing-detail-modal" (click)="$event.stopPropagation()">
       <div class="panel-head">
         <div>
           <h2 class="section-title">{{ detailTitle }}</h2>
           <div class="section-copy">{{ latestInvoice.invoice_number }} for {{ latestInvoice.patient.first_name }} {{ latestInvoice.patient.last_name }}</div>
         </div>
         <div class="toolbar-row">
+          <button class="secondary-btn" type="button" (click)="closeInvoiceDetail()">Close</button>
           <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.status ">{{ formatStatus(latestInvoice.status) }}</span>
           <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.payment_status ">{{ formatStatus(latestInvoice.payment_status) }}</span>
           <button class="primary-btn" type="button" (click)="printInvoice()">Print Invoice</button>
+          @if (sessionService.hasPermission('billing.sticker.print')) {
+            <button class="secondary-btn" type="button" (click)="printStickers()">Print Stickers</button>
+          }
           @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
             <button class="danger-btn" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
           }
@@ -230,6 +197,7 @@
         </section>
       </div>
     </section>
+    </div>
   }
 
   <section class="soft-panel data-panel">
@@ -239,17 +207,18 @@
         <div class="section-copy">{{ listCopy }}</div>
       </div>
       <div class="toolbar-row">
-        <div class="hero-kicker">Searchable</div>
+        <button class="primary-btn" type="button" (click)="navigateToCreateInvoice()">Create Invoice</button>
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
       </div>
     </div>
 
-    <form class="form-grid billing-filter-grid" [formGroup]="invoiceFilterForm">
+    <form class="form-grid billing-filter-grid billing-filter-grid--compact" [formGroup]="invoiceFilterForm">
       <label class="field">
-        <span>Search</span>
-        <input type="text" formControlName="q" placeholder="Invoice, patient, doctor" />
+        <span class="compact-label">Search</span>
+        <input type="text" formControlName="q" placeholder="Search invoice/patient/doctor" />
       </label>
       <label class="field">
-        <span>Doctor</span>
+        <span class="compact-label">Doctor</span>
         <select formControlName="internal_referral_user_id">
           <option value="">All doctors</option>
           @for (doctor of internalReferralDoctors; track doctor.id) {
@@ -258,7 +227,7 @@
         </select>
       </label>
       <label class="field">
-        <span>Status</span>
+        <span class="compact-label">Status</span>
         <select formControlName="status">
           <option value="">All statuses</option>
           <option value="posted">Posted</option>
@@ -266,11 +235,33 @@
         </select>
       </label>
       <label class="field">
-        <span>From</span>
+        <span class="compact-label">Payment</span>
+        <select formControlName="payment_status">
+          <option value="">All payments</option>
+          <option value="paid">Paid</option>
+          <option value="partial">Partial</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="due">Due</option>
+        </select>
+      </label>
+      <label class="field" style="grid-column:1/-1;">
+        <span class="compact-label">Module</span>
+        <div class="toggle-group" (change)="searchInvoices()">
+          <label><input type="radio" formControlName="source_module" value="" /> All</label>
+          <label><input type="radio" formControlName="source_module" value="laboratory" /> Lab</label>
+          <label><input type="radio" formControlName="source_module" value="radiology" /> Radiology</label>
+          <label><input type="radio" formControlName="source_module" value="pharmacy" /> Pharmacy</label>
+          <label><input type="radio" formControlName="source_module" value="ipd" /> IPD</label>
+          <label><input type="radio" formControlName="source_module" value="inventory" /> Inventory</label>
+          <label><input type="radio" formControlName="source_module" value="opd" /> OPD</label>
+        </div>
+      </label>
+      <label class="field">
+        <span class="compact-label">From</span>
         <input type="date" formControlName="date_from" />
       </label>
       <label class="field">
-        <span>To</span>
+        <span class="compact-label">To</span>
         <input type="date" formControlName="date_to" />
       </label>
       <div class="toolbar-row billing-filter-actions">
@@ -281,19 +272,19 @@
     <table class="table">
       <thead>
         <tr>
-          <th>Invoice No</th>
-          <th>Patient</th>
-          <th>Status</th>
-          <th>Payment</th>
+          <th class="sortable-th" (click)="toggleSort('invoice_number')">Invoice No</th>
+          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+          <th class="sortable-th" (click)="toggleSort('payment_status')">Payment</th>
           <th>Doctor</th>
-          <th>Total</th>
+          <th class="sortable-th" (click)="toggleSort('total_amount')">Total</th>
           <th>Refunded</th>
-          <th>Due</th>
-          <th>Date</th>
+          <th class="sortable-th" (click)="toggleSort('due_amount')">Due</th>
+          <th class="sortable-th" (click)="toggleSort('created_at')">Date</th>
         </tr>
       </thead>
       <tbody>
-        @for (invoice of recentInvoices; track invoice.id) {
+        @for (invoice of displayedInvoices; track invoice.id) {
           <tr class="history-row" (click)="loadInvoiceDetail(invoice.id)">
             <td><strong>{{ invoice.invoice_number }}</strong></td>
             <td>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</td>
@@ -321,6 +312,9 @@
           </div>
           <div class="toolbar-row">
             <button class="secondary-btn" type="button" (click)="closeInvoicePreview()">Close</button>
+            @if (sessionService.hasPermission('billing.sticker.print')) {
+              <button class="secondary-btn" type="button" (click)="printStickerPreview()">Print Stickers</button>
+            }
             <button class="primary-btn" type="button" (click)="printInvoicePreview()">Print Invoice</button>
           </div>
         </div>

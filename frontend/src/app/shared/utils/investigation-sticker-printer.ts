@@ -1,3 +1,5 @@
+import { buildBarcodeSvg } from './print-layout.utils';
+
 export interface InvestigationSticker {
   module: string;
   token: string;
@@ -17,45 +19,76 @@ export function printInvestigationStickers(stickers: InvestigationSticker[], tit
     .map(
       (item) => `
         <section class="sticker">
-          <div class="sticker-head">
+          <header class="sticker-head">
             <strong>${escapeHtml(item.module)}</strong>
             <span>${escapeHtml(item.token)}</span>
-          </div>
-          <div class="barcode">${escapeHtml(item.patientNumber)}</div>
+          </header>
+          <div class="barcode-wrap">${buildBarcodeSvg(`${item.patientNumber}-${item.token}`, item.patientNumber)}</div>
           <div class="patient">${escapeHtml(item.patientName)}</div>
-          <div class="meta">${escapeHtml([item.patientNumber, item.invoiceNumber].filter(Boolean).join(' · '))}</div>
           <div class="test">${escapeHtml(item.testName)}</div>
-          <div class="meta">Room ${escapeHtml(item.roomNumber || '-')} · Qty ${escapeHtml(item.quantity ?? 1)}</div>
+          <div class="meta-row">
+            <span>${escapeHtml(item.invoiceNumber || '-')}</span>
+            <span>Room ${escapeHtml(item.roomNumber || '-')}</span>
+            <span>Qty ${escapeHtml(item.quantity ?? 1)}</span>
+          </div>
         </section>
       `
     )
     .join('');
-  const printWindow = window.open('', '_blank', 'width=900,height=700');
-  if (!printWindow) {
-    return false;
-  }
-  printWindow.document.write(`
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.style.visibility = 'hidden';
+  iframe.srcdoc = `
     <html>
       <head>
         <title>${escapeHtml(title)}</title>
         <style>
-          @page { size: 70mm 38mm; margin: 3mm; }
-          body { margin: 0; font-family: Arial, sans-serif; color: #111827; }
-          .sheet { display: grid; gap: 4mm; }
-          .sticker { width: 64mm; min-height: 32mm; border: 1px solid #111827; border-radius: 2mm; padding: 2mm; break-inside: avoid; }
-          .sticker-head { display: flex; justify-content: space-between; gap: 2mm; font-size: 9px; }
-          .barcode { margin: 1mm 0; padding: 1mm; border: 1px dashed #111827; text-align: center; font-family: "Courier New", monospace; font-size: 18px; letter-spacing: 2px; }
-          .patient { font-weight: 700; font-size: 11px; }
-          .test { margin-top: 1mm; font-size: 10px; font-weight: 700; }
-          .meta { font-size: 8px; color: #374151; }
+          @page { size: 70mm 38mm; margin: 2mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; font-family: Inter, Arial, sans-serif; color: #0f172a; background: #ffffff; }
+          .sheet { display: block; }
+          .sticker {
+            width: 66mm;
+            height: 33.5mm;
+            border: 1px solid #1e3a8a;
+            border-radius: 2.5mm;
+            padding: 2mm;
+            overflow: hidden;
+            page-break-inside: avoid;
+            break-inside: avoid-page;
+          }
+          .sticker + .sticker { page-break-before: always; }
+          .sticker-head { display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 700; color: #1e3a8a; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 1mm; }
+          .barcode-wrap { margin-bottom: 1mm; }
+          .barcode-wrap .id-barcode-svg { width: 100%; height: 12.5mm; border: 1px dashed #94a3b8; border-radius: 1.5mm; }
+          .patient { font-size: 10.5px; font-weight: 700; margin-bottom: .6mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .test { font-size: 9px; font-weight: 600; margin-bottom: .6mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .meta-row { display: flex; gap: 1mm; justify-content: space-between; font-size: 7.2px; color: #334155; }
         </style>
       </head>
       <body><main class="sheet">${stickerHtml}</main></body>
     </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  `;
+  document.body.appendChild(iframe);
+  iframe.onload = () => {
+    const printWindow = iframe.contentWindow;
+    if (!printWindow) {
+      document.body.removeChild(iframe);
+      return;
+    }
+    printWindow.focus();
+    printWindow.print();
+    window.setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 300);
+  };
   return true;
 }
 

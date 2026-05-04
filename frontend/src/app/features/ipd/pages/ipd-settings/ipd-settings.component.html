@@ -1,0 +1,63 @@
+<section class="workspace-shell ipd-settings-page">
+  <div class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">IPD Settings</div>
+        <h1 class="page-title">Bed And Type Configuration</h1>
+        <div class="page-subtitle">Manage bed inventory, categories, and daily rates from a dedicated settings workspace.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-layout">
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Add Bed</h2>
+          <div class="section-copy">Create new ward/bed entries used by IPD admission flow.</div>
+        </div>
+      </div>
+      <form class="form-grid" [formGroup]="bedForm" (ngSubmit)="submitBed()">
+        <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
+        <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
+        <label class="field"><span>Bed Type</span><input type="text" formControlName="bed_type" list="ipd-bed-types" /></label>
+        <label class="field"><span>Daily Rate</span><input type="number" formControlName="daily_rate" /></label>
+        <label class="field field-wide"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
+        <div class="actions-row"><button class="primary-btn" type="submit">Save Bed</button></div>
+      </form>
+      <datalist id="ipd-bed-types">
+        @for (type of bedTypeOptions; track type) {
+          <option [value]="type"></option>
+        }
+      </datalist>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Configured Beds</h2>
+          <div class="section-copy">Current IPD bed master used in admission and transfer screens.</div>
+        </div>
+      </div>
+
+      <div class="pill-row">
+        @for (ward of wardOptions; track ward) {
+          <span class="pill">{{ ward }}</span>
+        }
+      </div>
+
+      <div class="bed-grid">
+        @for (bed of beds; track bed.id) {
+          <article class="bed-card" [class.bed-card--occupied]="bed.status === 'occupied'">
+            <div class="bed-card__head">
+              <strong>{{ bed.ward_name }} / {{ bed.bed_number }}</strong>
+              <span class="pill">{{ bed.status }}</span>
+            </div>
+            <div class="bed-card__meta">{{ bed.bed_type }} · Daily {{ bed.daily_rate }}</div>
+            <div class="bed-card__note">{{ bed.note || 'No note' }}</div>
+          </article>
+        }
+      </div>
+    </section>
+  </div>
+</section>

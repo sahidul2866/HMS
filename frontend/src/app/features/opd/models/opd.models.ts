@@ -24,6 +24,7 @@ export interface OPDVisit {
   id: string;
   visit_number: string;
   visit_date: string;
+  slot_start_at?: string | null;
   department_name: string;
   doctor_user_id?: string | null;
   consulting_doctor_user_id?: string | null;
@@ -54,6 +55,7 @@ export interface OPDVisit {
 export interface CreateOPDVisitPayload {
   patient_id: string;
   visit_date: string;
+  slot_start_at?: string | null;
   department_name: string;
   doctor_user_id?: string | null;
   consulting_doctor_name: string;

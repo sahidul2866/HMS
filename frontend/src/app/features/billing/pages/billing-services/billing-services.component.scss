@@ -30,3 +30,52 @@
   align-items: flex-start;
   flex-wrap: wrap;
 }
+
+.module-filter-radio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: 1rem;
+}
+
+.radio-pill {
+  position: relative;
+}
+
+.radio-pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-pill span {
+  display: inline-flex;
+  align-items: center;
+  padding: .5rem .95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(100, 116, 139, .35);
+  background: rgba(241, 245, 249, .7);
+  color: #334155;
+  font-weight: 600;
+  font-size: .82rem;
+  cursor: pointer;
+  transition: all .18s ease;
+}
+
+.radio-pill input:checked + span {
+  border-color: rgba(37, 99, 235, .75);
+  background: linear-gradient(180deg, rgba(59, 130, 246, .18), rgba(37, 99, 235, .26));
+  color: #0f172a;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, .2);
+}
+
+.table-actions {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}

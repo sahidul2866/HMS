@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
@@ -34,6 +35,7 @@ export class IPDAdmitComponent {
   beds: IPDBed[] = [];
   doctors: User[] = [];
   selectedPatient: Patient | null = null;
+  showPatientLookup = true;
   patientLookupModalOpen = false;
   submitted = false;
   saving = false;
@@ -68,6 +70,9 @@ export class IPDAdmitComponent {
   constructor() {
     this.loadFormData();
     this.form.controls.patient_id.valueChanges.subscribe(() => this.syncSelectedPatient());
+    this.patientLookupControl.valueChanges.pipe(debounceTime(350), distinctUntilChanged()).subscribe((value) => {
+      this.searchPatientsByTyping(value);
+    });
     this.route.queryParamMap.subscribe((params) => {
       const patientId = params.get('patientId');
       if (patientId) {
@@ -180,14 +185,31 @@ export class IPDAdmitComponent {
     });
   }
 
+  private searchPatientsByTyping(raw: string): void {
+    const query = raw.trim();
+    if (query.length < 2) {
+      this.patientSearchResults = [];
+      this.patientLookupModalOpen = false;
+      return;
+    }
+    this.patientService.search(query).subscribe((results) => {
+      this.patientSearchResults = results.slice(0, 6);
+      this.patientLookupModalOpen = false;
+    });
+  }
+
   applyPatient(result: PatientLookupResult): void {
     this.patchPatientContext({ ...result } as Patient, result.full_name);
+    this.showPatientLookup = false;
     this.patientSearchResults = [];
     this.patientLookupModalOpen = false;
   }
 
   private loadPatientContext(patientId: string): void {
-    this.patientService.get(patientId).subscribe((patient) => this.patchPatientContext(patient));
+    this.patientService.get(patientId).subscribe((patient) => {
+      this.patchPatientContext(patient);
+      this.showPatientLookup = false;
+    });
   }
 
   private patchPatientContext(patient: Patient, fullName = `${patient.first_name} ${patient.last_name}`.trim()): void {
@@ -207,6 +229,7 @@ export class IPDAdmitComponent {
       emergency_contact_phone: '',
     });
     this.selectedPatient = null;
+    this.showPatientLookup = true;
     this.patientLookupControl.setValue('');
     this.patientSearchResults = [];
     this.patientLookupModalOpen = false;
@@ -279,6 +302,16 @@ export class IPDAdmitComponent {
 
   onPatientChanged(): void {
     this.syncSelectedPatient();
+    if (this.selectedPatient) {
+      this.showPatientLookup = false;
+    }
+  }
+
+  enablePatientLookup(): void {
+    this.showPatientLookup = true;
+    this.patientLookupControl.setValue('');
+    this.patientSearchResults = [];
+    this.patientLookupModalOpen = false;
   }
 
   navigateToNewPatient(): void {

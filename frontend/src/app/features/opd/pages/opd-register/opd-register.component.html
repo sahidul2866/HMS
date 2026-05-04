@@ -36,26 +36,35 @@
         </div>
 
         <div class="lookup-banner">
-          <div class="search-stack">
-            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, patient ID, name, phone, mobile, or email" />
-            @if (showSearchContext('lookup')) {
-              <div class="inline-search-card">
-                @for (patient of patientSearchResults; track patient.id) {
-                  <button class="inline-result" type="button" (click)="applyPatient(patient)">
-                    <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
-                    <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
-                  </button>
-                }
+          @if (selectedPatient && !showPatientLookup) {
+            <div class="selected-context-row">
+              <div class="selected-context-copy">
+                <strong>{{ selectedPatient.patient_number }} · {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}</strong>
+                <span>{{ selectedPatient.phone || 'No mobile' }} · {{ selectedPatient.email || 'No email' }}</span>
               </div>
-            }
-          </div>
-          <div class="lookup-actions">
-            @if (selectedPatient) {
-              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear Selection</button>
-            }
-          </div>
+              <div class="lookup-actions">
+                <button class="secondary-btn" type="button" (click)="enablePatientLookup()">Change Patient</button>
+                <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear Selection</button>
+              </div>
+            </div>
+          } @else {
+            <div class="search-stack">
+              <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, patient ID, name, phone, mobile, or email" />
+              @if (showSearchContext('lookup')) {
+                <div class="inline-search-card">
+                  @for (patient of patientSearchResults; track patient.id) {
+                    <button class="inline-result" type="button" (click)="applyPatient(patient)">
+                      <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                      <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
 
+        @if (!selectedPatient) {
         <div class="section-block">
           <div class="section-headline">
             <h3>Patient Information</h3>
@@ -185,6 +194,7 @@
             </label>
           </div>
         </div>
+        }
 
         <div class="section-block">
           <div class="section-headline">
@@ -210,6 +220,15 @@
                 </span>
               </div>
               <input type="text" formControlName="department_name" />
+            </label>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.slot_date, submitted)">
+              <div class="field-label-row">
+                <span>Slot Date</span>
+                <span class="field-label-meta">
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.slot_date)" [class.field-badge--optional]="!validation.isRequired(form.controls.slot_date)">{{ validation.fieldStateLabel(form.controls.slot_date) }}</span>
+                </span>
+              </div>
+              <input type="date" formControlName="slot_date" />
             </label>
           </div>
         </div>
@@ -312,6 +331,30 @@
               </select>
             </label>
           </div>
+          <div class="slot-grid-wrap">
+            <div class="slot-grid-head">
+              <strong>Doctor Slots</strong>
+              @if (loadingSlots) {
+                <span>Loading...</span>
+              } @else {
+                <span>{{ slots.length }} slots</span>
+              }
+            </div>
+            <div class="slot-grid">
+              @for (slot of slots; track slot.slot_start_at) {
+                <button
+                  type="button"
+                  class="slot-chip"
+                  [class.slot-chip--selected]="selectedSlot?.slot_start_at === slot.slot_start_at"
+                  [class.slot-chip--booked]="slot.status !== 'available'"
+                  [disabled]="slot.status !== 'available'"
+                  (click)="selectSlot(slot)"
+                >
+                  {{ formatTime(slot.slot_start_at) }}
+                </button>
+              }
+            </div>
+          </div>
         </div>
 
         <div class="section-block">
@@ -353,8 +396,7 @@
         <div class="form-actions sticky-actions">
           <button class="ghost-btn" type="button" (click)="resetPage()">Reset</button>
           <button class="ghost-btn" type="button" (click)="backToQueue()">Cancel</button>
-          <button class="secondary-btn" type="submit" [disabled]="saving" (click)="setSubmitMode('queue')">Save Visit</button>
-          <button class="primary-btn" type="submit" [disabled]="saving" (click)="setSubmitMode('invoice')">Save & Invoice</button>
+          <button class="primary-btn" type="submit" [disabled]="saving">Save Visit</button>
         </div>
       </form>
     </section>
@@ -384,8 +426,7 @@
           </div>
         </div>
         <div class="summary-actions">
-          <button class="secondary-btn" type="button" (click)="setSubmitMode('queue'); submit()" [disabled]="saving">Save</button>
-          <button class="primary-btn" type="button" (click)="setSubmitMode('invoice'); submit()" [disabled]="saving">Invoice</button>
+          <button class="primary-btn" type="button" (click)="submit()" [disabled]="saving">Save Visit</button>
         </div>
       </section>
 

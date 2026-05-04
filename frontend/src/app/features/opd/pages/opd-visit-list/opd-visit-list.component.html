@@ -1,0 +1,135 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">OPD Operations</div>
+        <h1 class="page-title">Visit List</h1>
+        <div class="page-subtitle">List-only view. Click any row to open visit details in a modal.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="primary-btn" type="button" (click)="navigateToRegisterVisit()">New Visit</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-card">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Visit Queue</h2>
+        <div class="section-copy">No inline detail panels are shown on this page.</div>
+      </div>
+      <div class="toolbar-row">
+        <label class="field" style="min-width: 220px;">
+          <span>Search</span>
+          <input type="text" [(ngModel)]="searchText" placeholder="Visit no, patient, doctor..." />
+        </label>
+        <label class="field" style="min-width: 180px;">
+          <span>Status</span>
+          <select [(ngModel)]="selectedStatus">
+            <option value="">All status</option>
+            <option value="waiting">Waiting</option>
+            <option value="in_consultation">In consultation</option>
+            <option value="prescribed">Prescribed</option>
+            <option value="billed">Billed</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <label class="field" style="min-width: 180px;">
+          <span>Payment</span>
+          <select [(ngModel)]="selectedPayment">
+            <option value="">All</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+        </label>
+        <label class="field" style="min-width: 180px;">
+          <span>Visit Date</span>
+          <input type="date" [(ngModel)]="selectedDate" />
+        </label>
+      </div>
+      @if (canFilterByDoctor) {
+        <label class="field" style="min-width: 280px;">
+          <span>Doctor Filter</span>
+          <select [(ngModel)]="selectedDoctorUserId" (change)="loadVisits()">
+            <option value="">All doctors</option>
+            @for (doctor of doctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="sortable-th" (click)="toggleSort('visit_number')">Visit No</th>
+          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" (click)="toggleSort('department')">Department</th>
+          <th class="sortable-th" (click)="toggleSort('doctor')">Doctor</th>
+          <th class="sortable-th" (click)="toggleSort('fee')">Fee</th>
+          <th class="sortable-th" (click)="toggleSort('payment')">Payment</th>
+          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (visit of filteredVisits; track visit.id) {
+          <tr class="list-row" (click)="openVisit(visit.id)">
+            <td>{{ visit.visit_number }}</td>
+            <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
+            <td>{{ visit.department_name }}</td>
+            <td>{{ visit.consulting_doctor_name }}</td>
+            <td>{{ formatCurrency(visit.consultation_fee) }}</td>
+            <td>
+              <div>{{ formatCurrency(visit.consultation_total || visit.consultation_fee) }}</div>
+              <span class="page-subtitle">{{ visit.consultation_payment_status || 'unpaid' }}</span>
+            </td>
+            <td><span class="pill">{{ visit.status.replace('_', ' ') }}</span></td>
+            <td>
+              @if (canStartVisit && isPaymentDone(visit)) {
+                <button class="primary-btn" type="button" (click)="$event.stopPropagation(); startVisit(visit)">Start Visit</button>
+              }
+              @if (!isPaymentDone(visit) && session.hasPermission(permissions.billingInvoiceCreate)) {
+                <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openPayment(visit)">Pay</button>
+              }
+              <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openVisit(visit.id)">Open</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedVisit) {
+    <div class="modal-backdrop" (click)="closeVisit()">
+      <section class="page-card modal-card" (click)="$event.stopPropagation()">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">{{ selectedVisit.visit_number }}</h2>
+            <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
+          </div>
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closeVisit()">Close</button>
+            @if (canStartVisit && isPaymentDone(selectedVisit)) {
+              <button class="primary-btn" type="button" (click)="startVisit(selectedVisit)">Start Visit</button>
+            }
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div><strong>Patient ID:</strong> {{ selectedVisit.patient.patient_number }}</div>
+          <div><strong>Department:</strong> {{ selectedVisit.department_name }}</div>
+          <div><strong>Doctor:</strong> {{ selectedVisit.consulting_doctor_name }}</div>
+          <div><strong>Status:</strong> {{ selectedVisit.status }}</div>
+          <div><strong>Visit Date:</strong> {{ selectedVisit.visit_date }}</div>
+          <div><strong>Payment:</strong> {{ selectedVisit.consultation_payment_status || 'unpaid' }}</div>
+          <div><strong>Visit Fee:</strong> {{ formatCurrency(selectedVisit.consultation_total || selectedVisit.consultation_fee) }}</div>
+          <div><strong>Chief Complaint:</strong> {{ selectedVisit.chief_complaint || 'Not recorded' }}</div>
+        </div>
+      </section>
+    </div>
+  }
+</section>

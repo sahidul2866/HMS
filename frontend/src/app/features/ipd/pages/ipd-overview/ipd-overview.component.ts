@@ -8,13 +8,14 @@ import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
+import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
 import { IPDAdmission, IPDBed, IPDSummary } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
 @Component({
   selector: 'app-ipd-overview',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FloatingAssistantComponent],
   templateUrl: './ipd-overview.component.html',
   styleUrls: ['./ipd-overview.component.scss'],
 })
@@ -33,14 +34,16 @@ export class IPDOverviewComponent {
   beds: IPDBed[] = [];
   doctors: User[] = [];
   selectedAdmission: IPDAdmission | null = null;
-
-  readonly bedForm = this.fb.group({
-    ward_name: ['Ward A', Validators.required],
-    bed_number: ['', Validators.required],
-    bed_type: ['General', Validators.required],
-    daily_rate: [0, Validators.required],
-    note: [''],
-  });
+  readonly assistantQuickActions = [
+    'Show IPD occupancy',
+    'Show admitted patients under me',
+    'Show active admissions',
+    'Show discharge-ready patients',
+    'Show hospital summary',
+    'Show revenue analysis',
+    'Check interim billing for admission',
+    'Show available beds by ward',
+  ];
 
   readonly transferForm = this.fb.group({
     bed_id: [''],
@@ -86,21 +89,12 @@ export class IPDOverviewComponent {
     void this.router.navigate(['/ipd/admit']);
   }
 
-  submitBed(): void {
-    if (this.bedForm.invalid) {
-      return;
-    }
-    this.ipdService.createBed(this.bedForm.getRawValue() as never).subscribe((bed) => {
-      this.bedForm.reset({
-        ward_name: 'Ward A',
-        bed_number: '',
-        bed_type: 'General',
-        daily_rate: 0,
-        note: '',
-      });
-      this.loadAll();
-      this.notificationService.success(`Bed ${bed.ward_name} / ${bed.bed_number} created.`);
-    });
+  navigateToAdmissionList(): void {
+    void this.router.navigate(['/ipd/admissions']);
+  }
+
+  navigateToSettings(): void {
+    void this.router.navigate(['/ipd/settings']);
   }
 
   discharge(admission: IPDAdmission): void {

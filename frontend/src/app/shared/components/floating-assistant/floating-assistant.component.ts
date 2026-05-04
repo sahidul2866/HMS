@@ -18,8 +18,11 @@ export class FloatingAssistantComponent {
 
   @Input() title = 'Staff Assistant';
   @Input() context: 'staff-dashboard' | string = 'staff-dashboard';
+  @Input() quickActions: string[] = [];
+  @Input() placeholder = 'Ask about billing, appointments, lab, pharmacy…';
 
   open = false;
+  fullscreen = false;
   loading = false;
   conversationId: string | null = null;
   input = '';
@@ -36,6 +39,11 @@ export class FloatingAssistantComponent {
 
   close(): void {
     this.open = false;
+    this.fullscreen = false;
+  }
+
+  toggleFullscreen(): void {
+    this.fullscreen = !this.fullscreen;
   }
 
   bootstrap(): void {
@@ -108,6 +116,11 @@ export class FloatingAssistantComponent {
   useQuick(text: string): void {
     this.input = text;
     this.send(text);
+  }
+
+  get visibleQuickActions(): string[] {
+    const dynamic = this.settings?.quick_actions || [];
+    return [...new Set([...(this.quickActions || []), ...dynamic])].slice(0, 8);
   }
 
   trackByIndex(index: number): number {

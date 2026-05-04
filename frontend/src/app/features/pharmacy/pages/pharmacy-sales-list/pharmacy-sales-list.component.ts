@@ -30,6 +30,9 @@ export class PharmacySalesListComponent {
   page = 1;
   pageSize = 10;
   total = 0;
+  sortField: 'sale_number' | 'customer' | 'status' | 'subtotal' | 'net_payable' | 'sale_date' = 'sale_date';
+  sortDirection: 'asc' | 'desc' = 'desc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly returnForm = this.fb.group({
     sale_item_id: ['', Validators.required],
@@ -79,6 +82,42 @@ export class PharmacySalesListComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacySalesListComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = field === 'sale_date' ? 'desc' : 'asc';
+  }
+
+  get displayedSales(): PharmacySale[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.sales].sort((a, b) => {
+      switch (this.sortField) {
+        case 'sale_number':
+          return dir * a.sale_number.localeCompare(b.sale_number);
+        case 'customer':
+          return dir * (a.customer_name || '').localeCompare(b.customer_name || '');
+        case 'status':
+          return dir * (a.status || '').localeCompare(b.status || '');
+        case 'subtotal':
+          return dir * (Number(a.subtotal || 0) - Number(b.subtotal || 0));
+        case 'net_payable':
+          return dir * (Number(a.net_payable || 0) - Number(b.net_payable || 0));
+        case 'sale_date':
+        default:
+          return dir * ((a.sale_date || '').localeCompare(b.sale_date || ''));
+      }
+    });
   }
 
   openSale(sale: PharmacySale): void {

@@ -225,6 +225,28 @@
   justify-content: flex-end;
 }
 
+.selected-context-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.selected-context-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.selected-context-copy strong {
+  color: #10233c;
+}
+
+.selected-context-copy span {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
 .inline-search-card {
   position: absolute;
   top: calc(100% + 0.4rem);
@@ -416,6 +438,44 @@
   border-radius: 14px;
   background: #fff;
   text-align: left;
+}
+
+.slot-grid-wrap {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.slot-grid-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.5rem;
+}
+
+.slot-chip {
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 12px;
+  padding: 0.42rem 0.56rem;
+  background: #fff;
+  color: #0369a1;
+  font-weight: 800;
+}
+
+.slot-chip--selected {
+  background: rgba(14, 165, 233, 0.16);
+}
+
+.slot-chip--booked {
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.1);
 }
 
 .side-stack {

@@ -12,18 +12,21 @@ import { PatientCreateComponent } from './features/patients/pages/patient-create
 import { PatientDetailComponent } from './features/patients/pages/patient-detail/patient-detail.component';
 import { BillingCreateComponent } from './features/billing/pages/billing-create/billing-create.component';
 import { BillingDeskComponent } from './features/billing/pages/billing-desk/billing-desk.component';
+import { BillingOverviewComponent } from './features/billing/pages/billing-overview/billing-overview.component';
 import { BillingSettingsComponent } from './features/billing/pages/billing-settings/billing-settings.component';
 import { BillingServicesComponent } from './features/billing/pages/billing-services/billing-services.component';
 import { AppointmentCreateComponent } from './features/appointments/pages/appointment-create/appointment-create.component';
 import { AppointmentsOverviewComponent } from './features/appointments/pages/appointments-overview/appointments-overview.component';
 import { IPDOverviewComponent } from './features/ipd/pages/ipd-overview/ipd-overview.component';
 import { IPDAdmitComponent } from './features/ipd/pages/ipd-admit/ipd-admit.component';
+import { IPDSettingsComponent } from './features/ipd/pages/ipd-settings/ipd-settings.component';
 import { EROverviewComponent } from './features/er/pages/er-overview/er-overview.component';
 import { ERRegisterComponent } from './features/er/pages/er-register/er-register.component';
 import { LaboratoryOverviewComponent } from './features/laboratory/pages/laboratory-overview/laboratory-overview.component';
 import { LaboratoryWorkbenchComponent } from './features/laboratory/pages/laboratory-workbench/laboratory-workbench.component';
 import { InventoryManagementComponent } from './features/inventory/pages/inventory-management/inventory-management.component';
 import { OPDOverviewComponent } from './features/opd/pages/opd-overview/opd-overview.component';
+import { OPDVisitListComponent } from './features/opd/pages/opd-visit-list/opd-visit-list.component';
 import { OPDRegisterComponent } from './features/opd/pages/opd-register/opd-register.component';
 import { OPDSettingsComponent } from './features/opd/pages/opd-settings/opd-settings.component';
 import { OTManagementComponent } from './features/ot/pages/ot-management/ot-management.component';
@@ -45,6 +48,7 @@ import { PharmacyInvestigationSettingsComponent } from './features/diagnostics/p
 import { PharmacyInvestigationsComponent } from './features/diagnostics/pages/diagnostics-orders/pharmacy-investigations.component';
 import { AccountingJournalComponent } from './features/accounting/pages/accounting-journal/accounting-journal.component';
 import { HRPayrollComponent } from './features/hr/pages/hr-payroll/hr-payroll.component';
+import { IPDAdmissionListComponent } from './features/ipd/pages/ipd-admission-list/ipd-admission-list.component';
 import { UserManagementComponent } from './features/admin/pages/user-management/user-management.component';
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
 import { ConfigurationWorkspaceComponent } from './features/configuration/pages/configuration-workspace/configuration-workspace.component';
@@ -114,6 +118,12 @@ export const appRoutes: Routes = [
       },
       {
         path: 'billing',
+        component: BillingOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing Overview' },
+      },
+      {
+        path: 'billing/list',
         component: BillingDeskComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing List', billingView: 'all' },
@@ -146,7 +156,13 @@ export const appRoutes: Routes = [
         path: 'opd',
         component: OPDOverviewComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['opd.view'], tabLabel: 'OPD' },
+        data: { permissions: ['opd.view'], tabLabel: 'OPD Dashboard' },
+      },
+      {
+        path: 'opd/visits',
+        component: OPDVisitListComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['opd.view'], tabLabel: 'OPD Visit List' },
       },
       {
         path: 'opd/register',
@@ -164,13 +180,25 @@ export const appRoutes: Routes = [
         path: 'ipd',
         component: IPDOverviewComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['ipd.view'], tabLabel: 'IPD' },
+        data: { permissions: ['ipd.view'], tabLabel: 'IPD Overview' },
+      },
+      {
+        path: 'ipd/admissions',
+        component: IPDAdmissionListComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['ipd.view'], tabLabel: 'IPD Admission List' },
       },
       {
         path: 'ipd/admit',
         component: IPDAdmitComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['ipd.view'], tabLabel: 'New Admission' },
+      },
+      {
+        path: 'ipd/settings',
+        component: IPDSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['ipd.admission.manage'], tabLabel: 'IPD Settings' },
       },
       {
         path: 'er',

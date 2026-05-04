@@ -7,6 +7,8 @@
         <div class="page-subtitle">Monitor bed occupancy, current admissions, transfers, discharge readiness, and billing handoff from one inpatient operations board.</div>
       </div>
       <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToAdmissionList()">Admission List</button>
+        <button class="secondary-btn" type="button" (click)="navigateToSettings()">IPD Settings</button>
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="primary-btn" type="button" (click)="navigateToAdmission()">New Admission</button>
       </div>
@@ -90,19 +92,11 @@
       <section class="page-card">
         <div class="section-header">
           <div>
-            <h2 class="section-title">Bed Master</h2>
-            <div class="section-copy">Create and monitor bed inventory without leaving the live control room.</div>
+            <h2 class="section-title">Bed Inventory</h2>
+            <div class="section-copy">Bed creation and type configuration are managed from IPD Settings.</div>
           </div>
+          <button class="secondary-btn" type="button" (click)="navigateToSettings()">Open IPD Settings</button>
         </div>
-
-        <form class="form-grid" [formGroup]="bedForm" (ngSubmit)="submitBed()">
-          <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" /></label>
-          <label class="field"><span>Bed Number</span><input type="text" formControlName="bed_number" /></label>
-          <label class="field"><span>Bed Type</span><input type="text" formControlName="bed_type" /></label>
-          <label class="field"><span>Daily Rate</span><input type="number" formControlName="daily_rate" /></label>
-          <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="2" formControlName="note"></textarea></label>
-          <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Add Bed</button></div>
-        </form>
 
         <div class="bed-grid">
           @for (bed of beds; track bed.id) {
@@ -268,3 +262,10 @@
     </aside>
   </section>
 </section>
+
+<app-floating-assistant
+  title="IPD Assistant"
+  context="ipd-dashboard"
+  [quickActions]="assistantQuickActions"
+  placeholder="Ask about admissions, beds, discharge, and IPD billing…"
+></app-floating-assistant>

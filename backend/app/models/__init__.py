@@ -23,7 +23,7 @@ from app.models.accounting import (
     SupplierPayment,
 )
 from app.models.audit_log import AuditLog
-from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund, BillingService, ReferredDoctor
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, BillingRefund, BillingService, ReferredDoctor
 from app.models.billing_links import BillingItemLink
 from app.models.laboratory import LabAttachment, LabOrder, LabOrderItem, LabResult, LabResultItem
 from app.models.branch import Branch

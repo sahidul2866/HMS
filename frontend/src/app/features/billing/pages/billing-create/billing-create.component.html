@@ -310,16 +310,25 @@
                 [disabled]="!hasAnyBillingItemPermission"
                 (focus)="activeItemSearchIndex = itemIndex"
                 (input)="activeItemSearchIndex = itemIndex"
+                (keydown.tab)="onCatalogTab(itemIndex, $any($event))"
               />
               @if (showItemSearch(itemIndex)) {
                 <div class="search-dropdown catalog-dropdown">
                   @for (option of filteredCatalogOptions(itemIndex); track option.key) {
-                    <button class="result-card" type="button" (click)="selectCatalogOption(itemIndex, option)">
+                    <div class="result-card" role="button" tabindex="0" (click)="selectCatalogOption(itemIndex, option)" (keydown.enter)="selectCatalogOption(itemIndex, option)">
                       <div class="result-main">
                         <strong>{{ option.group }} - {{ option.name }}</strong>
                         <span>{{ option.code }} · {{ formatCurrency(option.unitPrice) }} · {{ option.meta }}</span>
                       </div>
-                    </button>
+                      <button
+                        class="secondary-btn compact-btn"
+                        type="button"
+                        title="Select and add next item"
+                        (click)="$event.stopPropagation(); selectCatalogOptionAndAddNext(itemIndex, option)"
+                      >
+                        +
+                      </button>
+                    </div>
                   }
                 </div>
               }
@@ -370,7 +379,10 @@
 
             <div class="row-readonly strong">{{ getCatalogAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}</div>
 
-            <button class="danger-btn compact-btn" type="button" (click)="removeItem(itemIndex)">Delete</button>
+            <div class="toolbar-row">
+              <button class="secondary-btn compact-btn" type="button" title="Add next item" (click)="addItem()">+</button>
+              <button class="danger-btn compact-btn" type="button" (click)="removeItem(itemIndex)">Delete</button>
+            </div>
           </div>
         }
       </div>

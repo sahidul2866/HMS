@@ -28,6 +28,9 @@ export class PharmacyPurchasesComponent {
   pageSize = 10;
   total = 0;
   editingId: string | null = null;
+  sortField: 'purchase_number' | 'medicine' | 'supplier' | 'quantity' | 'unit_cost' | 'total_amount' | 'purchase_date' = 'purchase_date';
+  sortDirection: 'asc' | 'desc' = 'desc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly form = this.fb.group({
     medicine_id: ['', Validators.required],
@@ -80,6 +83,44 @@ export class PharmacyPurchasesComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacyPurchasesComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = field === 'purchase_date' ? 'desc' : 'asc';
+  }
+
+  get displayedPurchases(): PharmacyPurchase[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.purchases].sort((a, b) => {
+      switch (this.sortField) {
+        case 'purchase_number':
+          return dir * (a.purchase_number || '').localeCompare(b.purchase_number || '');
+        case 'medicine':
+          return dir * (a.medicine_name || '').localeCompare(b.medicine_name || '');
+        case 'supplier':
+          return dir * (a.supplier_name || '').localeCompare(b.supplier_name || '');
+        case 'quantity':
+          return dir * (Number(a.quantity || 0) - Number(b.quantity || 0));
+        case 'unit_cost':
+          return dir * (Number(a.unit_cost || 0) - Number(b.unit_cost || 0));
+        case 'total_amount':
+          return dir * (Number(a.total_amount || 0) - Number(b.total_amount || 0));
+        case 'purchase_date':
+        default:
+          return dir * (a.purchase_date || '').localeCompare(b.purchase_date || '');
+      }
+    });
   }
 
   edit(item: PharmacyPurchase): void {

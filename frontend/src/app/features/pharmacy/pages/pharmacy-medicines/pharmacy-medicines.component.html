@@ -54,37 +54,36 @@
       </div>
 
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search name, strength, SKU" />
-        <select [(ngModel)]="typeFilter" [ngModelOptions]="{ standalone: true }">
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search name, strength, SKU" />
+        <select [(ngModel)]="typeFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All types</option>
           @for (item of medicineTypes; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
         </select>
-        <select [(ngModel)]="companyFilter" [ngModelOptions]="{ standalone: true }">
+        <select [(ngModel)]="companyFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All companies</option>
           @for (item of companies; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
         </select>
-        <label class="checkbox-line"><input type="checkbox" [(ngModel)]="lowStockOnly" [ngModelOptions]="{ standalone: true }" /> Low stock only</label>
-        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+        <label class="checkbox-line"><input type="checkbox" [(ngModel)]="lowStockOnly" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" /> Low stock only</label>
       </div>
 
       <table class="table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Generic</th>
-            <th>Company</th>
-            <th>Stock</th>
-            <th>Sale Price</th>
+            <th class="sortable-th" (click)="toggleSort('name')">Name</th>
+            <th class="sortable-th" (click)="toggleSort('type')">Type</th>
+            <th class="sortable-th" (click)="toggleSort('generic')">Generic</th>
+            <th class="sortable-th" (click)="toggleSort('company')">Company</th>
+            <th class="sortable-th" (click)="toggleSort('stock')">Stock</th>
+            <th class="sortable-th" (click)="toggleSort('sale_price')">Sale Price</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of medicines; track item.id) {
+          @for (item of displayedMedicines; track item.id) {
             <tr>
               <td><strong>{{ item.name }}</strong><div class="muted-line">{{ item.strength || '-' }} · {{ item.dosage_form || '-' }}</div></td>
               <td>{{ item.medicine_type_name }}</td>

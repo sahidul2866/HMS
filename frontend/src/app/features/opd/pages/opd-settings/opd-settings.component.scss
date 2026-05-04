@@ -188,6 +188,35 @@
   gap: 0.75rem;
 }
 
+.slot-actions {
+  align-self: end;
+}
+
+.slot-table {
+  min-width: 620px;
+}
+
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.weekday-chip {
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+.weekday-chip--active {
+  border-color: rgba(15, 118, 110, 0.45);
+  background: rgba(15, 118, 110, 0.12);
+  color: #115e59;
+}
+
 @media (max-width: 840px) {
   .hero-main,
   .settings-head,

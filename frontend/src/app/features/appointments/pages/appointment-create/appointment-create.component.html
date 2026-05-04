@@ -4,7 +4,6 @@
       <div>
         <div class="hero-kicker">Scheduling</div>
         <h1 class="page-title">Create Appointment</h1>
-        <p class="page-subtitle">Book a patient into the doctor schedule with a clean intake flow and a focused patient picker.</p>
       </div>
       <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
@@ -17,9 +16,7 @@
     <section class="page-card entry-card">
       <div class="section-intro">
         <div>
-          <div class="section-eyebrow">Step 1</div>
           <h2 class="section-title">Patient Lookup</h2>
-          <p class="section-copy">Find the patient first, then confirm the doctor, time, and reason without mixing queue and booking views.</p>
         </div>
         @if (selectedPatient) {
           <div class="selection-badge">
@@ -33,11 +30,9 @@
         <div class="lookup-banner">
           <div class="lookup-copy">
             <div class="lookup-title">Existing Patient Search</div>
-            <p>Search by patient number, name, phone, or email. Results open in a modal so the booking page stays focused.</p>
           </div>
           <div class="lookup-row">
             <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
-            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
             <button class="ghost-btn" type="button" [disabled]="!patientSearchResults.length" (click)="openPatientLookupModal()">View Matches</button>
             @if (selectedPatient) {
               <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
@@ -47,26 +42,22 @@
 
         <div class="section-block">
           <div class="section-headline">
-            <div class="section-eyebrow">Step 2</div>
             <h3>Booking Details</h3>
           </div>
           <div class="form-grid appointment-grid">
-            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.patient_id, submitted)">
+            <label class="field">
               <div class="field-label-row">
                 <span>Patient</span>
                 <span class="field-label-meta">
-                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.patient_id)" [class.field-badge--optional]="!validation.isRequired(form.controls.patient_id)">{{ validation.fieldStateLabel(form.controls.patient_id) }}</span>
+                  <span class="field-badge field-badge--optional">Optional</span>
                 </span>
               </div>
               <select formControlName="patient_id">
-                <option value="">Select patient</option>
+                <option value="">New patient (register now)</option>
                 @for (patient of patients; track patient.id) {
                   <option [value]="patient.id">{{ formatPatient(patient) }}</option>
                 }
               </select>
-              @if (validation.isInvalid(form.controls.patient_id, submitted)) {
-                <div class="field-error">{{ validation.errorMessage(form.controls.patient_id, 'Patient') }}</div>
-              }
             </label>
             <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.doctor_user_id, submitted)">
               <div class="field-label-row">
@@ -86,16 +77,16 @@
                 <div class="field-error">{{ validation.errorMessage(form.controls.doctor_user_id, 'Doctor') }}</div>
               }
             </label>
-            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.appointment_at, submitted)">
+            <label class="field">
               <div class="field-label-row">
-                <span>Appointment Time</span>
+                <span>Slot Date</span>
                 <span class="field-label-meta">
-                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.appointment_at)" [class.field-badge--optional]="!validation.isRequired(form.controls.appointment_at)">{{ validation.fieldStateLabel(form.controls.appointment_at) }}</span>
+                  <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.slot_date)" [class.field-badge--optional]="!validation.isRequired(form.controls.slot_date)">{{ validation.fieldStateLabel(form.controls.slot_date) }}</span>
                 </span>
               </div>
-              <input type="datetime-local" formControlName="appointment_at" />
-              @if (validation.isInvalid(form.controls.appointment_at, submitted)) {
-                <div class="field-error">{{ validation.errorMessage(form.controls.appointment_at, 'Appointment time') }}</div>
+              <input type="date" formControlName="slot_date" />
+              @if (validation.isInvalid(form.controls.slot_date, submitted)) {
+                <div class="field-error">{{ validation.errorMessage(form.controls.slot_date, 'Slot date') }}</div>
               }
             </label>
             <label class="field">
@@ -117,6 +108,79 @@
               <textarea rows="3" formControlName="note" placeholder="Additional scheduling note"></textarea>
             </label>
           </div>
+
+          @if (!selectedPatient) {
+            <div class="section-headline" style="margin-top: 1rem;">
+              <h3>New Patient Registration</h3>
+            </div>
+            <div class="form-grid appointment-grid">
+              <label class="field">
+                <div class="field-label-row"><span>First Name</span><span class="field-label-meta"><span class="field-badge field-badge--required">Required</span></span></div>
+                <input type="text" formControlName="first_name" />
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Last Name</span><span class="field-label-meta"><span class="field-badge field-badge--required">Required</span></span></div>
+                <input type="text" formControlName="last_name" />
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <input type="text" formControlName="phone" />
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Email</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <input type="email" formControlName="email" />
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Gender</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <select formControlName="gender">
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Date of Birth</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <input type="date" formControlName="date_of_birth" />
+              </label>
+              <label class="field field-wide">
+                <div class="field-label-row"><span>Address</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <textarea rows="2" formControlName="address"></textarea>
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Emergency Contact Name</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <input type="text" formControlName="emergency_contact_name" />
+              </label>
+              <label class="field">
+                <div class="field-label-row"><span>Emergency Contact Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <input type="text" formControlName="emergency_contact_phone" />
+              </label>
+            </div>
+          }
+          <div class="slot-grid-wrap">
+            <div class="slot-grid-head">
+              <strong>Available Slots</strong>
+              @if (loadingSlots) {
+                <span>Loading...</span>
+              } @else {
+                <span>{{ slots.length }} slots</span>
+              }
+            </div>
+            <div class="slot-grid">
+              @for (slot of slots; track slot.slot_start_at) {
+                <button
+                  type="button"
+                  class="slot-chip"
+                  [class.slot-chip--selected]="selectedSlot?.slot_start_at === slot.slot_start_at"
+                  [class.slot-chip--booked]="slot.status !== 'available'"
+                  [disabled]="slot.status !== 'available'"
+                  (click)="selectSlot(slot)"
+                >
+                  {{ formatTime(slot.slot_start_at) }}
+                </button>
+              }
+            </div>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -133,7 +197,7 @@
         <ul class="summary-list">
           <li><span>Patient</span><strong>{{ selectedPatient?.patient_number || 'Pending' }}</strong></li>
           <li><span>Doctor</span><strong>{{ selectedDoctorName }}</strong></li>
-          <li><span>Schedule</span><strong>{{ form.getRawValue().appointment_at || 'Pending' }}</strong></li>
+          <li><span>Schedule</span><strong>{{ selectedScheduleLabel }}</strong></li>
         </ul>
       </section>
     </aside>
@@ -144,7 +208,6 @@
       <section class="modal-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
-            <p class="modal-label">Patient Matches</p>
             <h3>Select Patient For Appointment</h3>
           </div>
           <button class="icon-btn" type="button" (click)="closePatientLookupModal()">×</button>

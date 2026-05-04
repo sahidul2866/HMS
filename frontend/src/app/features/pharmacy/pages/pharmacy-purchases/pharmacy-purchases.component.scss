@@ -32,3 +32,8 @@
   align-items: center;
   margin-top: 1rem;
 }
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}

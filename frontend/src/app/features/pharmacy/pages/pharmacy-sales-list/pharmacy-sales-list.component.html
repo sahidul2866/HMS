@@ -12,35 +12,34 @@
   <div class="layout-shell">
     <section class="page-card">
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search sale number or customer" />
-        <select [(ngModel)]="customerFilter" [ngModelOptions]="{ standalone: true }">
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search sale number or customer" />
+        <select [(ngModel)]="customerFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All customers</option>
           @for (item of customers; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
         </select>
-        <select [(ngModel)]="statusFilter" [ngModelOptions]="{ standalone: true }">
+        <select [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All statuses</option>
           <option value="sold">Sold</option>
           <option value="partially_returned">Partially Returned</option>
           <option value="returned">Returned</option>
         </select>
-        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
       </div>
 
       <table class="table">
         <thead>
           <tr>
-            <th>Sale No</th>
-            <th>Customer</th>
-            <th>Status</th>
-            <th>Subtotal</th>
-            <th>Net</th>
+            <th class="sortable-th" (click)="toggleSort('sale_number')">Sale No</th>
+            <th class="sortable-th" (click)="toggleSort('customer')">Customer</th>
+            <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+            <th class="sortable-th" (click)="toggleSort('subtotal')">Subtotal</th>
+            <th class="sortable-th" (click)="toggleSort('net_payable')">Net</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (sale of sales; track sale.id) {
+          @for (sale of displayedSales; track sale.id) {
             <tr>
               <td><strong>{{ sale.sale_number }}</strong><div class="muted-line">{{ sale.sale_date }}</div></td>
               <td>{{ sale.customer_name }}</td>

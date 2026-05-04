@@ -41,6 +41,9 @@ export class PharmacyInvestigationsComponent {
   page = 1;
   pageSize = 10;
   total = 0;
+  sortField: 'number' | 'tests' | 'customer' | 'status' | 'total_amount' | 'ordered_at' = 'ordered_at';
+  sortDirection: 'asc' | 'desc' = 'desc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly form = this.fb.group({
     customer_id: [''],
@@ -109,6 +112,42 @@ export class PharmacyInvestigationsComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacyInvestigationsComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = field === 'ordered_at' ? 'desc' : 'asc';
+  }
+
+  get displayedInvestigations(): PharmacyInvestigation[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.investigations].sort((a, b) => {
+      switch (this.sortField) {
+        case 'number':
+          return dir * (a.investigation_number || '').localeCompare(b.investigation_number || '');
+        case 'tests':
+          return dir * (Number(a.test_count || 0) - Number(b.test_count || 0));
+        case 'customer':
+          return dir * this.patientOrCustomerLabel(a).localeCompare(this.patientOrCustomerLabel(b));
+        case 'status':
+          return dir * (a.status || '').localeCompare(b.status || '');
+        case 'total_amount':
+          return dir * (Number(a.total_amount || 0) - Number(b.total_amount || 0));
+        case 'ordered_at':
+        default:
+          return dir * (a.ordered_at || '').localeCompare(b.ordered_at || '');
+      }
+    });
   }
 
   openCreate(): void {

@@ -35,3 +35,8 @@
 .page-card:not(.module-hero) {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 252, 0.98));
 }
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}

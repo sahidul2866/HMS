@@ -19,7 +19,9 @@ from app.models.patient import Patient
 from app.models.pharmacy import PharmacyMedicine, PharmacyPurchase
 from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage
 from app.models.user import User
+from app.modules.appointments.service import AppointmentsService
 from app.modules.auth.service import AuthService
+from app.schemas.appointment import AppointmentCreate
 from app.schemas.staff_bot import StaffBotDetailRow, StaffBotMessageCreate, StaffBotResetCreate, StaffBotResponse, StaffBotSettingsRead
 
 
@@ -45,6 +47,9 @@ INTENT_PERMISSIONS: dict[str, list[str]] = {
     "billing_due": ["billing.invoice.create"],
     "pending_payments": ["billing.invoice.create"],
     "appointment_status": ["appointment.view"],
+    "opd_booking": ["appointment.manage"],
+    "hospital_summary": ["dashboard.view"],
+    "revenue_analysis": ["reporting.view"],
     "permission_check": ["admin.user.manage", "roles.view", "permissions.view"],
 }
 
@@ -54,7 +59,7 @@ ROLE_QUICK_ACTIONS: list[tuple[str, list[str], list[str]]] = [
     ("Doctor", ["opd.view"], ["Show my appointments today", "Show waiting OPD patients", "Show admitted patients under me", "Show previous prescriptions"]),
     ("Pharmacist", ["pharmacy.view"], ["Check medicine stock", "Show low-stock medicines", "Show near-expiry medicines", "Search prescription"]),
     ("Billing", ["billing.invoice.create"], ["Search invoice", "Show pending payments", "Show today’s collection", "Show patient due"]),
-    ("Reception", ["appointment.view"], ["Show today's appointments", "Show today's OPD patients", "Find a doctor by department", "Register OPD visit"]),
+    ("Reception", ["appointment.view"], ["Show today's appointments", "Show today's OPD patients", "Find a doctor by department", "Register OPD visit", "Book OPD appointment"]),
 ]
 
 
@@ -183,6 +188,10 @@ class StaffBotService:
             ) from exc
 
     def _database_first_answer(self, intent: str, normalized: str, actor: User, conversation: StaffBotConversation) -> StaffBotResponse | None:
+        if intent == "hospital_summary":
+            return self._hospital_summary(actor, conversation)
+        if intent == "revenue_analysis":
+            return self._revenue_analysis(actor, conversation, normalized)
         if intent == "opd_today_summary":
             return self._opd_today_summary(actor, conversation)
         if intent == "ipd_bed_occupancy":
@@ -197,6 +206,8 @@ class StaffBotService:
             return self._pending_payments(actor, conversation, normalized)
         if intent == "appointment_status":
             return self._appointments_today(actor, conversation)
+        if intent == "opd_booking":
+            return self._book_opd_appointment(actor, conversation, normalized)
         if intent == "patient_info":
             return self._patient_lookup(actor, conversation, normalized)
         if intent == "general_health_guidance":
@@ -519,6 +530,202 @@ class StaffBotService:
             quick_replies=["Show OPD summary today", "Show my appointments today"],
         )
 
+    def _hospital_summary(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        today = date.today()
+        branch_id = actor.branch_id
+
+        opd_stmt = select(func.count(OPDVisit.id)).where(OPDVisit.visit_date == today)
+        apt_stmt = select(func.count(Appointment.id)).where(cast(Appointment.appointment_at, Date) == today)
+        due_stmt = select(func.coalesce(func.sum(BillingInvoice.due_amount), 0)).where(BillingInvoice.status == "posted")
+        collection_stmt = select(func.coalesce(func.sum(BillingPayment.amount), 0)).where(cast(BillingPayment.received_at, Date) == today)
+        occupied_stmt = select(func.count(IPDBed.id)).where(IPDBed.status.in_(["occupied", "booked"]))
+        bed_total_stmt = select(func.count(IPDBed.id))
+        low_stock_stmt = select(func.count(PharmacyMedicine.id)).where(PharmacyMedicine.stock_quantity <= PharmacyMedicine.reorder_level)
+
+        if branch_id:
+            opd_stmt = opd_stmt.where(OPDVisit.branch_id == branch_id)
+            apt_stmt = apt_stmt.where(Appointment.branch_id == branch_id)
+            due_stmt = due_stmt.where(BillingInvoice.branch_id == branch_id)
+            collection_stmt = collection_stmt.where(BillingPayment.branch_id == branch_id)
+            occupied_stmt = occupied_stmt.where(IPDBed.branch_id == branch_id)
+            bed_total_stmt = bed_total_stmt.where(IPDBed.branch_id == branch_id)
+            low_stock_stmt = low_stock_stmt.where(PharmacyMedicine.branch_id == branch_id)
+
+        opd_total = int(self.db.scalar(opd_stmt) or 0)
+        apt_total = int(self.db.scalar(apt_stmt) or 0)
+        due_total = float(self.db.scalar(due_stmt) or 0)
+        collection_total = float(self.db.scalar(collection_stmt) or 0)
+        occupied = int(self.db.scalar(occupied_stmt) or 0)
+        bed_total = int(self.db.scalar(bed_total_stmt) or 0)
+        low_stock = int(self.db.scalar(low_stock_stmt) or 0)
+        occupancy_pct = round((occupied / bed_total) * 100, 1) if bed_total else 0
+
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=(
+                f"Today summary: OPD {opd_total}, Appointments {apt_total}, "
+                f"Collection {collection_total:,.0f} BDT, Due {due_total:,.0f} BDT."
+            ),
+            intent="hospital_summary",
+            source_module="Dashboard Analytics",
+            used_database=True,
+            used_gemini=False,
+            details=[
+                StaffBotDetailRow(label="OPD visits (today)", value=str(opd_total)),
+                StaffBotDetailRow(label="Appointments (today)", value=str(apt_total)),
+                StaffBotDetailRow(label="IPD occupancy", value=f"{occupied}/{bed_total} ({occupancy_pct}%)"),
+                StaffBotDetailRow(label="Pharmacy low stock", value=str(low_stock)),
+                StaffBotDetailRow(label="Today collection", value=f"{collection_total:,.0f} BDT"),
+                StaffBotDetailRow(label="Total due", value=f"{due_total:,.0f} BDT"),
+            ],
+            next_action="Open Dashboard for full module-wise analysis.",
+            quick_replies=["Show revenue analysis", "Show pending payments", "Show IPD occupancy"],
+        )
+
+    def _revenue_analysis(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        scope_days = 30
+        if "weekly" in normalized or "week" in normalized:
+            scope_days = 7
+        elif "year" in normalized or "yearly" in normalized:
+            scope_days = 365
+        elif "month" in normalized or "monthly" in normalized:
+            scope_days = 30
+        start_date = date.today().fromordinal(date.today().toordinal() - scope_days + 1)
+
+        billed_stmt = select(func.coalesce(func.sum(BillingInvoice.total_amount), 0)).where(
+            BillingInvoice.status == "posted",
+            cast(BillingInvoice.created_at, Date) >= start_date,
+        )
+        discount_stmt = select(func.coalesce(func.sum(BillingInvoice.discount_amount), 0)).where(
+            BillingInvoice.status == "posted",
+            cast(BillingInvoice.created_at, Date) >= start_date,
+        )
+        collected_stmt = select(func.coalesce(func.sum(BillingPayment.amount), 0)).where(cast(BillingPayment.received_at, Date) >= start_date)
+        due_stmt = select(func.coalesce(func.sum(BillingInvoice.due_amount), 0)).where(BillingInvoice.status == "posted")
+        if actor.branch_id:
+            billed_stmt = billed_stmt.where(BillingInvoice.branch_id == actor.branch_id)
+            discount_stmt = discount_stmt.where(BillingInvoice.branch_id == actor.branch_id)
+            collected_stmt = collected_stmt.where(BillingPayment.branch_id == actor.branch_id)
+            due_stmt = due_stmt.where(BillingInvoice.branch_id == actor.branch_id)
+
+        billed = float(self.db.scalar(billed_stmt) or 0)
+        discount = float(self.db.scalar(discount_stmt) or 0)
+        collected = float(self.db.scalar(collected_stmt) or 0)
+        due = float(self.db.scalar(due_stmt) or 0)
+        realization_pct = round((collected / billed) * 100, 1) if billed else 0
+
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Revenue analysis ({scope_days} days): billed {billed:,.0f} BDT, collected {collected:,.0f} BDT, due {due:,.0f} BDT.",
+            intent="revenue_analysis",
+            source_module="Billing Analytics",
+            used_database=True,
+            used_gemini=False,
+            details=[
+                StaffBotDetailRow(label="Billed amount", value=f"{billed:,.0f} BDT"),
+                StaffBotDetailRow(label="Collected amount", value=f"{collected:,.0f} BDT"),
+                StaffBotDetailRow(label="Discount", value=f"{discount:,.0f} BDT"),
+                StaffBotDetailRow(label="Outstanding due", value=f"{due:,.0f} BDT"),
+                StaffBotDetailRow(label="Realization", value=f"{realization_pct}%"),
+            ],
+            next_action="Open Billing Overview for trend charts.",
+            quick_replies=["Show pending payments", "Show today's collection", "Show hospital summary"],
+        )
+
+    def _book_opd_appointment(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        context = dict(conversation.context or {})
+        booking = dict(context.get("opd_booking") or {})
+        booking["patient_token"] = booking.get("patient_token") or self._extract_patient_token(normalized)
+        booking["doctor_token"] = booking.get("doctor_token") or self._extract_doctor_token(normalized)
+        parsed_datetime = self._extract_datetime(normalized)
+        if parsed_datetime:
+            booking["slot_at"] = parsed_datetime.isoformat()
+        context["opd_booking"] = booking
+        conversation.context = context
+        self.db.commit()
+
+        missing: list[str] = []
+        if not booking.get("patient_token"):
+            missing.append("patient ID/number")
+        if not booking.get("doctor_token"):
+            missing.append("doctor name")
+        if not booking.get("slot_at"):
+            missing.append("date and time")
+        if missing:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message=f"To book OPD appointment, please provide: {', '.join(missing)}.",
+                intent="opd_booking",
+                source_module="Appointment / OPD Module",
+                used_database=False,
+                used_gemini=False,
+                follow_up=True,
+                required_fields=missing,
+                quick_replies=[
+                    "Book OPD for PAT-DEMO-0001 with Dr Rahman tomorrow 10:30",
+                    "Book OPD for PAT-DEMO-0002 with Dr Karim today 17:00",
+                ],
+            )
+
+        patient = self._find_patient(str(booking["patient_token"]), actor.branch_id)
+        if not patient:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message=f"Patient not found for “{booking['patient_token']}”. Please provide valid patient number/phone/name.",
+                intent="opd_booking",
+                source_module="Patient Module",
+                used_database=True,
+                used_gemini=False,
+                follow_up=True,
+                required_fields=["patient ID/number"],
+            )
+        doctor = self._find_doctor(str(booking["doctor_token"]), actor.branch_id)
+        if not doctor:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message=f"Doctor not found for “{booking['doctor_token']}”. Please provide a valid doctor name.",
+                intent="opd_booking",
+                source_module="Doctor / Department Module",
+                used_database=True,
+                used_gemini=False,
+                follow_up=True,
+                required_fields=["doctor name"],
+            )
+
+        slot_at = datetime.fromisoformat(str(booking["slot_at"]))
+        if slot_at.tzinfo is None:
+            slot_at = slot_at.replace(tzinfo=UTC)
+
+        created = AppointmentsService(self.db).create_appointment(
+            AppointmentCreate(
+                patient_id=patient.id,
+                doctor_user_id=doctor.id,
+                appointment_at=slot_at,
+                slot_start_at=slot_at,
+                reason="Booked from Staff Assistant",
+                note="Staff Assistant OPD booking",
+            ),
+            actor,
+        )
+        conversation.context = {**context, "active_patient_id": str(patient.id), "opd_booking": {}}
+        self.db.commit()
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"OPD appointment booked successfully. {created.appointment_number} at {created.appointment_at.isoformat()} with {created.doctor_name}.",
+            intent="opd_booking",
+            source_module="Appointment / OPD Module",
+            used_database=True,
+            used_gemini=False,
+            details=[
+                StaffBotDetailRow(label="Appointment", value=created.appointment_number),
+                StaffBotDetailRow(label="Patient", value=created.patient_name),
+                StaffBotDetailRow(label="Doctor", value=created.doctor_name),
+                StaffBotDetailRow(label="Time", value=created.appointment_at.isoformat()),
+            ],
+            next_action="Open Appointments list to confirm or check-in.",
+            quick_replies=["Show today's appointments", "Show OPD summary today", "Book another OPD appointment"],
+        )
+
     def _patient_lookup(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
         token = self._extract_patient_token(normalized) or (conversation.context or {}).get("active_patient_token")
         if not token:
@@ -625,6 +832,12 @@ class StaffBotService:
         return normalized
 
     def _detect_intent(self, normalized: str) -> str:
+        if any(key in normalized for key in ["hospital summary", "today summary", "overall summary", "dashboard summary"]):
+            return "hospital_summary"
+        if any(key in normalized for key in ["revenue analysis", "collection analysis", "billing analysis", "revenue trend"]):
+            return "revenue_analysis"
+        if any(key in normalized for key in ["book opd", "opd booking", "book appointment", "register opd visit"]):
+            return "opd_booking"
         if any(key in normalized for key in ["opd", "opd patients", "opd summary", "today opd"]):
             return "opd_today_summary" if "today" in normalized or "opd" in normalized else "opd_today_summary"
         if "occupied" in normalized and "bed" in normalized:
@@ -725,6 +938,20 @@ class StaffBotService:
         stmt = stmt.where(or_(Patient.phone == token, func.concat(Patient.first_name, " ", Patient.last_name).ilike(f"%{token}%")))
         return self.db.scalar(stmt)
 
+    def _find_doctor(self, token: str, branch_id: UUID | None) -> User | None:
+        token = token.strip()
+        stmt = select(User).where(User.is_active.is_(True))
+        if branch_id:
+            stmt = stmt.where(User.branch_id == branch_id)
+        if token.startswith("dr "):
+            token = token[3:]
+        stmt = stmt.where(User.full_name.ilike(f"%{token}%"))
+        doctors = list(self.db.scalars(stmt.limit(20)))
+        for doctor in doctors:
+            if any(role.is_doctor_role or role.code == "DOCTOR" for role in doctor.roles):
+                return doctor
+        return None
+
     @staticmethod
     def _extract_medicine_query(normalized: str) -> str | None:
         # Prefer quoted string if present
@@ -751,4 +978,32 @@ class StaffBotService:
         m = re.search(r"patient\s+([a-z0-9\-]{3,40})", normalized)
         if m:
             return m.group(1).strip().upper()
+        return None
+
+    @staticmethod
+    def _extract_doctor_token(normalized: str) -> str | None:
+        m = re.search(r"(?:dr\.?|doctor)\s+([a-z][a-z ]{1,40})", normalized)
+        if m:
+            return m.group(1).strip().title()
+        return None
+
+    @staticmethod
+    def _extract_datetime(normalized: str) -> datetime | None:
+        # yyyy-mm-dd hh:mm
+        iso_match = re.search(r"(20\d{2}-\d{2}-\d{2})\s+([01]\d|2[0-3]):([0-5]\d)", normalized)
+        if iso_match:
+            d = iso_match.group(1)
+            h = iso_match.group(2)
+            m = iso_match.group(3)
+            return datetime.fromisoformat(f"{d}T{h}:{m}:00+00:00")
+        # today/tomorrow HH:MM
+        rel_match = re.search(r"(today|tomorrow)\s+([01]?\d|2[0-3]):([0-5]\d)", normalized)
+        if rel_match:
+            day_key = rel_match.group(1)
+            hour = int(rel_match.group(2))
+            minute = int(rel_match.group(3))
+            base = date.today()
+            if day_key == "tomorrow":
+                base = date.fromordinal(base.toordinal() + 1)
+            return datetime(base.year, base.month, base.day, hour, minute, tzinfo=UTC)
         return None

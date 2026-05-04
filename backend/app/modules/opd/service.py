@@ -1,10 +1,12 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
-from app.models.encounter import OPDVisit, OPDVisitOrder
+from app.models.encounter import DoctorOPDSchedule, DoctorSlotBooking, OPDVisit, OPDVisitOrder
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
 from app.models.user import User
@@ -89,12 +91,22 @@ class OPDService:
                     consultation_fee = doctor.opd_consultation_fee
 
         visit_number = f"OPD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        slot_start_at = payload.slot_start_at
+        if slot_start_at and not slot_start_at.tzinfo:
+            slot_start_at = slot_start_at.replace(tzinfo=UTC)
+
+        if payload.doctor_user_id:
+            if not slot_start_at:
+                raise AppException(400, "slot_required", "Slot time is required when doctor is selected")
+            self._assert_slot_within_schedule(payload.doctor_user_id, slot_start_at)
+
         consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
         visit = OPDVisit(
-            **payload.model_dump(exclude={"doctor_user_id", "consultation_fee"}),
+            **payload.model_dump(exclude={"doctor_user_id", "consultation_fee", "slot_start_at"}),
             visit_number=visit_number,
             branch_id=patient.branch_id or actor.branch_id,
             consulting_doctor_user_id=consulting_doctor.id if consulting_doctor else None,
+            slot_start_at=slot_start_at,
             consultation_fee=consultation_fee,
             consultation_total=self._money(consultation_fee),
             registered_by_user_id=actor.id,
@@ -102,6 +114,13 @@ class OPDService:
             updated_by=actor.id,
         )
         self.repository.create_visit(visit)
+        if consulting_doctor and slot_start_at:
+            self._create_slot_booking_for_visit(
+                visit=visit,
+                doctor_user_id=consulting_doctor.id,
+                slot_start_at=slot_start_at,
+                actor=actor,
+            )
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.OPD_VISIT_CREATE,
@@ -118,7 +137,16 @@ class OPDService:
     def update_visit(self, visit_id, payload: OPDVisitUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
         consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
+        new_slot_start = payload.slot_start_at or visit.slot_start_at
+        if new_slot_start and not new_slot_start.tzinfo:
+            new_slot_start = new_slot_start.replace(tzinfo=UTC)
+        if consulting_doctor:
+            if not new_slot_start:
+                raise AppException(400, "slot_required", "Slot time is required when doctor is selected")
+            self._assert_slot_within_schedule(consulting_doctor.id, new_slot_start)
+
         visit.visit_date = payload.visit_date
+        visit.slot_start_at = new_slot_start
         visit.department_name = payload.department_name
         visit.consulting_doctor_user_id = consulting_doctor.id if consulting_doctor else None
         visit.consulting_doctor_name = payload.consulting_doctor_name
@@ -127,6 +155,18 @@ class OPDService:
         visit.consultation_total = self._money(max(payload.consultation_fee - (visit.consultation_discount or Decimal("0")), Decimal("0")))
         visit.note = payload.note
         visit.updated_by = actor.id
+        if consulting_doctor and new_slot_start:
+            self._upsert_slot_booking_for_visit(
+                visit=visit,
+                doctor_user_id=consulting_doctor.id,
+                slot_start_at=new_slot_start,
+                actor=actor,
+            )
+        elif not consulting_doctor:
+            booking = self.db.scalar(select(DoctorSlotBooking).where(DoctorSlotBooking.opd_visit_id == visit.id))
+            if booking:
+                self.db.delete(booking)
+                self.db.flush()
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.OPD_VISIT_STATUS_UPDATE,
@@ -377,3 +417,97 @@ class OPDService:
 
     def _money(self, value: Decimal) -> Decimal:
         return value.quantize(self.TWOPLACES)
+
+    def _assert_slot_within_schedule(self, doctor_user_id, slot_start_at: datetime) -> None:
+        schedule = self.db.scalar(
+            select(DoctorOPDSchedule).where(
+                DoctorOPDSchedule.doctor_user_id == doctor_user_id,
+                DoctorOPDSchedule.weekday == slot_start_at.date().weekday(),
+            )
+        )
+        if not schedule:
+            raise AppException(400, "schedule_not_configured", "Doctor schedule is not configured for this day")
+
+        start_hour, start_minute = [int(part) for part in schedule.start_time.split(":")]
+        end_hour, end_minute = [int(part) for part in schedule.end_time.split(":")]
+        start_dt = datetime.combine(slot_start_at.date(), time(start_hour, start_minute), tzinfo=UTC)
+        end_dt = datetime.combine(slot_start_at.date(), time(end_hour, end_minute), tzinfo=UTC)
+        step = timedelta(minutes=schedule.slot_duration_minutes + schedule.buffer_minutes)
+        slot_size = timedelta(minutes=schedule.slot_duration_minutes)
+
+        current = start_dt
+        while current + slot_size <= end_dt:
+            if current == slot_start_at:
+                return
+            current += step
+        raise AppException(400, "slot_not_in_schedule", "Selected slot is outside configured schedule")
+
+    def _create_slot_booking_for_visit(self, *, visit: OPDVisit, doctor_user_id, slot_start_at: datetime, actor: User) -> None:
+        schedule = self.db.scalar(
+            select(DoctorOPDSchedule).where(
+                DoctorOPDSchedule.doctor_user_id == doctor_user_id,
+                DoctorOPDSchedule.weekday == slot_start_at.date().weekday(),
+            )
+        )
+        if not schedule:
+            raise AppException(400, "schedule_not_configured", "Doctor schedule is not configured for this day")
+
+        slot_end_at = slot_start_at + timedelta(minutes=schedule.slot_duration_minutes)
+        existing_booking = self.db.scalar(
+            select(DoctorSlotBooking).where(
+                DoctorSlotBooking.appointment_id == visit.source_appointment_id,
+                DoctorSlotBooking.doctor_user_id == doctor_user_id,
+                DoctorSlotBooking.slot_start_at == slot_start_at,
+            )
+        )
+        if existing_booking:
+            existing_booking.opd_visit_id = visit.id
+            existing_booking.source_type = "visit"
+            existing_booking.updated_by = actor.id
+            return
+
+        booking = DoctorSlotBooking(
+            branch_id=visit.branch_id,
+            doctor_user_id=doctor_user_id,
+            patient_id=visit.patient_id,
+            slot_start_at=slot_start_at,
+            slot_end_at=slot_end_at,
+            source_type="visit",
+            appointment_id=visit.source_appointment_id,
+            opd_visit_id=visit.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.db.add(booking)
+        try:
+            self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise AppException(409, "slot_conflict", "Selected slot is already booked") from exc
+
+    def _upsert_slot_booking_for_visit(self, *, visit: OPDVisit, doctor_user_id, slot_start_at: datetime, actor: User) -> None:
+        booking = self.db.scalar(select(DoctorSlotBooking).where(DoctorSlotBooking.opd_visit_id == visit.id))
+        if not booking:
+            self._create_slot_booking_for_visit(visit=visit, doctor_user_id=doctor_user_id, slot_start_at=slot_start_at, actor=actor)
+            return
+        if booking.doctor_user_id == doctor_user_id and booking.slot_start_at == slot_start_at:
+            return
+
+        schedule = self.db.scalar(
+            select(DoctorOPDSchedule).where(
+                DoctorOPDSchedule.doctor_user_id == doctor_user_id,
+                DoctorOPDSchedule.weekday == slot_start_at.date().weekday(),
+            )
+        )
+        if not schedule:
+            raise AppException(400, "schedule_not_configured", "Doctor schedule is not configured for this day")
+
+        booking.doctor_user_id = doctor_user_id
+        booking.slot_start_at = slot_start_at
+        booking.slot_end_at = slot_start_at + timedelta(minutes=schedule.slot_duration_minutes)
+        booking.updated_by = actor.id
+        try:
+            self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise AppException(409, "slot_conflict", "Selected slot is already booked") from exc

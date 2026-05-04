@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.core.database import SessionLocal
-from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingService
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment
 from app.models.branch import Branch
 from app.models.encounter import Appointment, IPDAdmission, IPDAdmissionMovement, IPDBed, OPDVisit, OPDVisitOrder
 from app.models.pharmacy import (
@@ -46,8 +46,8 @@ def get_demo_context(session) -> dict[str, object]:
         for username in ("patient_fatema", "patient_rakib", "patient_sumaiya", "patient_arman")
     }
     services = {
-        code: get_required(session, BillingService, BillingService.service_code, code, "billing service")
-        for code in ("CONS-GEN", "CBC", "XR-CHEST")
+        code: get_required(session, BillingItemConfig, BillingItemConfig.service_code, code, "billing item config")
+        for code in ("OPD-CONS-GEN", "INV-LAB-CBC", "INV-RAD-CXR")
     }
     return {
         "branch": branch,
@@ -86,7 +86,7 @@ def build_invoice(
     accountant_id,
     invoice_number: str,
     note: str,
-    items: list[tuple[BillingService, Decimal]],
+    items: list[tuple[BillingItemConfig, Decimal]],
     paid_amount: Decimal,
 ) -> BillingInvoice:
     sub_total = sum(service.unit_price * quantity for service, quantity in items)
@@ -114,8 +114,9 @@ def build_invoice(
     )
     invoice.items = [
         BillingInvoiceItem(
-            billing_service_id=service.id,
-            service_name=service.name,
+            source_entity_id=service.source_entity_id,
+            source_module=service.source_module,
+            service_name=service.service_name,
             quantity=quantity,
             unit_price=service.unit_price,
             line_total=service.unit_price * quantity,
@@ -138,7 +139,7 @@ def seed_fatema_complete_journey() -> str:
         accountant: User = ctx["accountant"]  # type: ignore[assignment]
         pharmacist: User = ctx["pharmacist"]  # type: ignore[assignment]
         patient_user: User = ctx["patient_users"]["patient_fatema"]  # type: ignore[index]
-        services: dict[str, BillingService] = ctx["services"]  # type: ignore[assignment]
+        services: dict[str, BillingItemConfig] = ctx["services"]  # type: ignore[assignment]
 
         patient = patient_user.patient
         if patient is None:
@@ -246,9 +247,9 @@ def seed_fatema_complete_journey() -> str:
             invoice_number="INV-DEMO-FATEMA-001",
             note="Demo invoice linked to completed OPD visit",
             items=[
-                (services["CONS-GEN"], Decimal("1")),
-                (services["CBC"], Decimal("1")),
-                (services["XR-CHEST"], Decimal("1")),
+                (services["OPD-CONS-GEN"], Decimal("1")),
+                (services["INV-LAB-CBC"], Decimal("1")),
+                (services["INV-RAD-CXR"], Decimal("1")),
             ],
             paid_amount=Decimal("55.00"),
         )
@@ -385,7 +386,7 @@ def seed_sumaiya_ipd_journey() -> str:
         doctor: User = ctx["doctor"]  # type: ignore[assignment]
         accountant: User = ctx["accountant"]  # type: ignore[assignment]
         patient_user: User = ctx["patient_users"]["patient_sumaiya"]  # type: ignore[index]
-        services: dict[str, BillingService] = ctx["services"]  # type: ignore[assignment]
+        services: dict[str, BillingItemConfig] = ctx["services"]  # type: ignore[assignment]
         patient = patient_user.patient
         if patient is None:
             raise RuntimeError("patient_sumaiya is not linked to a patient")
@@ -465,9 +466,9 @@ def seed_sumaiya_ipd_journey() -> str:
             invoice_number="INV-DEMO-SUMAIYA-001",
             note="Final IPD discharge invoice",
             items=[
-                (services["CONS-GEN"], Decimal("1")),
-                (services["CBC"], Decimal("2")),
-                (services["XR-CHEST"], Decimal("1")),
+                (services["OPD-CONS-GEN"], Decimal("1")),
+                (services["INV-LAB-CBC"], Decimal("2")),
+                (services["INV-RAD-CXR"], Decimal("1")),
             ],
             paid_amount=Decimal("30.00"),
         )

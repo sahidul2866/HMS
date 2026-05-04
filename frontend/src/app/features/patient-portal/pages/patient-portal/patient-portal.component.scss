@@ -1,6 +1,6 @@
 .patient-app-shell {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
   color: #172033;
 }
 
@@ -17,7 +17,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.8rem;
   background:
     linear-gradient(135deg, rgba(236, 253, 245, 0.95), rgba(239, 246, 255, 0.9)),
     #fff;
@@ -78,10 +78,10 @@
 }
 
 button {
-  min-height: 38px;
+  min-height: 34px;
   border: 0;
   border-radius: 12px;
-  padding: 0.62rem 0.9rem;
+  padding: 0.5rem 0.75rem;
   background: #f1f5f9;
   color: #172033;
   font-weight: 700;
@@ -113,15 +113,15 @@ button:hover {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
 }
 
 .quick-card {
   display: grid;
   gap: 0.35rem;
-  min-height: 112px;
-  padding: 0.9rem;
+  min-height: 88px;
+  padding: 0.7rem;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: #fff;
@@ -177,11 +177,31 @@ button:hover {
 
 .portal-tabs {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.35rem;
   overflow-x: auto;
-  padding: 0.25rem;
+  padding: 0.2rem;
   border-radius: 16px;
   background: #eef2f7;
+}
+
+.portal-tab-groups {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.2rem;
+}
+
+.portal-tab-groups button {
+  min-height: 34px;
+  padding: 0.45rem 0.8rem;
+  background: #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.portal-tab-groups button.active {
+  background: #0f766e;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
 }
 
 .portal-tabs button {
@@ -197,10 +217,27 @@ button:hover {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
+.quick-action-modal {
+  width: min(680px, 100%);
+}
+
+.quick-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.quick-action-grid button {
+  text-align: left;
+  justify-content: flex-start;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+}
+
 .portal-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .portal-layout.wide-left {
@@ -209,23 +246,23 @@ button:hover {
 
 .panel-stack {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .portal-panel {
-  padding: 1rem;
+  padding: 0.8rem;
 }
 
 .panel-title-row {
   justify-content: space-between;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.65rem;
   flex-wrap: wrap;
 }
 
 .panel-title-row h2,
 .profile-panel h2 {
   margin: 0.15rem 0 0;
-  font-size: 1.15rem;
+  font-size: 1.03rem;
 }
 
 .panel-title-row.compact-row {
@@ -238,15 +275,15 @@ button:hover {
 .package-grid,
 .family-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.6rem;
 }
 
 .glance-grid article,
 .billing-summary article,
 .service-grid article,
 .family-grid article {
-  padding: 0.9rem;
+  padding: 0.75rem;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -275,8 +312,8 @@ button:hover {
 .family-actions,
 .hospital-info-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.55rem;
 }
 
 .action-grid button {
@@ -337,7 +374,7 @@ button:hover {
 .mini-timeline,
 .timeline-list {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .record-list article,

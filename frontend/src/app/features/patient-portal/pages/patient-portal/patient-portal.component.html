@@ -17,12 +17,8 @@
       <div class="home-actions">
         <button type="button" (click)="setTab('book')">Find Doctor</button>
         <button type="button" (click)="setTab('book')">Book Appointment</button>
-        <button type="button" (click)="setTab('reports')">View Reports</button>
-        <button type="button" (click)="setTab('prescriptions')">View Prescriptions</button>
-        <button type="button" (click)="setTab('billing')">View Bills</button>
-        <button type="button" (click)="setTab('documents')">Download Documents</button>
         <button type="button" (click)="setTab('assistant')">Health Assistant</button>
-        <button type="button" (click)="setTab('requests')">Request Support</button>
+        <button type="button" (click)="toggleQuickActionsModal()">More Actions</button>
       </div>
     </section>
 
@@ -58,8 +54,14 @@
       <div class="inline-message">{{ portalMessage }}</div>
     }
 
+    <nav class="portal-tab-groups" aria-label="Patient portal tab groups">
+      @for (group of tabGroups; track group.key) {
+        <button type="button" [class.active]="activeTabGroup === group.key" (click)="setTabGroup(group.key)">{{ group.label }}</button>
+      }
+    </nav>
+
     <nav class="portal-tabs" aria-label="Patient portal sections">
-      @for (tab of portalTabs; track tab.key) {
+      @for (tab of visiblePortalTabs; track tab.key) {
         <button type="button" [class.active]="activeTab === tab.key" (click)="setTab(tab.key)">{{ tab.label }}</button>
       }
     </nav>
@@ -894,5 +896,28 @@
         </div>
       </section>
     }
+  }
+
+  @if (quickActionsModalOpen) {
+    <div class="modal-backdrop" (click)="toggleQuickActionsModal()">
+      <section class="modal-card quick-action-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <h3>Quick Actions</h3>
+          </div>
+          <button class="icon-btn" type="button" (click)="toggleQuickActionsModal()">×</button>
+        </div>
+        <div class="quick-action-grid">
+          <button type="button" (click)="setTab('reports'); toggleQuickActionsModal()">View Reports</button>
+          <button type="button" (click)="setTab('prescriptions'); toggleQuickActionsModal()">View Prescriptions</button>
+          <button type="button" (click)="setTab('billing'); toggleQuickActionsModal()">View Bills</button>
+          <button type="button" (click)="setTab('documents'); toggleQuickActionsModal()">Documents</button>
+          <button type="button" (click)="setTab('family'); toggleQuickActionsModal()">Family Profiles</button>
+          <button type="button" (click)="setTab('requests'); toggleQuickActionsModal()">Request Support</button>
+          <button type="button" (click)="setTab('hospital'); toggleQuickActionsModal()">Hospital Info</button>
+          <button type="button" (click)="setTab('packages'); toggleQuickActionsModal()">Health Packages</button>
+        </div>
+      </section>
+    </div>
   }
 </div>

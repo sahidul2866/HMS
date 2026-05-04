@@ -22,20 +22,50 @@
 
   <section class="page-card">
     <h2 class="page-title">Appointment Queue</h2>
+    <div class="toolbar-row">
+      <label class="field" style="min-width: 220px;">
+        <span>Search</span>
+        <input type="text" [(ngModel)]="searchText" placeholder="No, patient, doctor, reason..." />
+      </label>
+      <label class="field" style="min-width: 200px;">
+        <span>Doctor</span>
+        <select [(ngModel)]="selectedDoctorUserId">
+          <option value="">All doctors</option>
+          @for (doctor of doctors; track doctor.id) {
+            <option [value]="doctor.id">{{ doctor.full_name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field" style="min-width: 180px;">
+        <span>Status</span>
+        <select [(ngModel)]="selectedStatus">
+          <option value="">All status</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="checked_in">Checked In</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </label>
+      <label class="field" style="min-width: 180px;">
+        <span>Date</span>
+        <input type="date" [(ngModel)]="selectedDate" />
+      </label>
+    </div>
     <table class="table">
       <thead>
         <tr>
-          <th>No</th>
-          <th>Patient</th>
-          <th>Doctor</th>
-          <th>Time</th>
-          <th>Status</th>
-          <th>Reason</th>
+          <th class="sortable-th" (click)="toggleSort('number')">No</th>
+          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" (click)="toggleSort('doctor')">Doctor</th>
+          <th class="sortable-th" (click)="toggleSort('time')">Time</th>
+          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+          <th class="sortable-th" (click)="toggleSort('reason')">Reason</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        @for (appointment of appointments; track appointment.id) {
+        @for (appointment of filteredAppointments; track appointment.id) {
           <tr>
             <td>{{ appointment.appointment_number }}</td>
             <td>{{ appointment.patient_name }}</td>

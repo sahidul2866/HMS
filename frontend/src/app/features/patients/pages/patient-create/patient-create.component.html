@@ -4,14 +4,6 @@
       <div>
         <div class="hero-kicker">Patient Registration</div>
         <h1 class="page-title">Create Patient Profile</h1>
-        <p class="page-subtitle">
-          Start with the mobile number, reuse family contact data when possible, and keep registration tight enough for front-desk staff.
-        </p>
-      </div>
-      <div class="hero-pills">
-        <span class="hero-pill">Mobile-first lookup</span>
-        <span class="hero-pill">Family autofill</span>
-        <span class="hero-pill">Fast handoff to OPD/IPD</span>
       </div>
     </div>
   </section>
@@ -20,9 +12,7 @@
     <section class="page-card form-card">
       <div class="section-intro">
         <div>
-          <div class="section-eyebrow">Step 1</div>
           <h2 class="section-title">Identity And Contact</h2>
-          <p class="section-copy">Search the mobile first. If family-linked records already exist, pull the shared details instead of retyping them.</p>
         </div>
         @if (mobileLookup) {
           <div class="lookup-chip" [class.lookup-chip--warn]="mobileUsageTone === 'warn'" [class.lookup-chip--full]="mobileUsageTone === 'full'">
@@ -34,10 +24,7 @@
 
       <form [formGroup]="form" (ngSubmit)="submit()">
         <div class="lookup-banner">
-          <div class="lookup-copy">
-            <div class="lookup-title">Mobile Lookup</div>
-            <p>Use the same mobile for family-linked patients. Shared address and emergency contact can be pulled into the new profile.</p>
-          </div>
+          <div class="lookup-title">Mobile Lookup</div>
           <div class="lookup-controls">
             <input type="text" formControlName="phone" placeholder="Enter mobile number" />
             <button class="secondary-btn" type="button" (click)="searchMobile()">Search</button>
@@ -50,7 +37,6 @@
 
         <div class="section-block">
           <div class="section-headline">
-            <div class="section-eyebrow">Step 2</div>
             <h3>Patient Basics</h3>
           </div>
           <div class="form-grid patient-grid">
@@ -123,7 +109,6 @@
 
         <div class="section-block">
           <div class="section-headline">
-            <div class="section-eyebrow">Step 3</div>
             <h3>Address And Emergency</h3>
           </div>
           <div class="form-grid patient-grid">
@@ -167,21 +152,12 @@
 
     <aside class="side-stack">
       <section class="page-card summary-card">
-        <div class="section-eyebrow">Registration Snapshot</div>
+        <div class="section-eyebrow">Snapshot</div>
         <h3>{{ patientDisplayName }}</h3>
         <ul class="summary-list">
           <li><span>Mobile</span><strong>{{ form.getRawValue().phone || 'Pending' }}</strong></li>
           <li><span>Email</span><strong>{{ form.getRawValue().email || 'Pending' }}</strong></li>
           <li><span>Emergency</span><strong>{{ form.getRawValue().emergency_contact_phone || 'Pending' }}</strong></li>
-        </ul>
-      </section>
-
-      <section class="page-card note-card">
-        <div class="section-eyebrow">Front Desk Tips</div>
-        <ul class="tip-list">
-          <li>Reuse the same mobile for family records if they share address and emergency contact.</li>
-          <li>Use the mobile lookup before creating another profile to avoid duplicates.</li>
-          <li>After save, the record can be handed back to OPD, appointments, or billing entry.</li>
         </ul>
       </section>
     </aside>
@@ -192,9 +168,7 @@
       <section class="modal-card" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
-            <p class="modal-label">Family-Linked Patients</p>
             <h3>Choose Existing Shared Details</h3>
-            <p class="modal-copy">Select a patient to reuse address and emergency contact information for this mobile number.</p>
           </div>
           <button class="icon-btn" type="button" (click)="closeLookupModal()">×</button>
         </div>

@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,6 +34,7 @@ class OPDVisit(Base, BaseModelMixin):
     converted_ipd_admission_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"))
     visit_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     visit_date: Mapped[date] = mapped_column(Date, nullable=False)
+    slot_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     department_name: Mapped[str] = mapped_column(String(120), nullable=False)
     consulting_doctor_name: Mapped[str] = mapped_column(String(150), nullable=False)
     visit_type: Mapped[str] = mapped_column(String(20), nullable=False, default="new")
@@ -205,6 +206,7 @@ class Appointment(Base, BaseModelMixin):
     doctor_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     appointment_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     appointment_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    slot_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="scheduled")
     reason: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
@@ -217,3 +219,40 @@ class Appointment(Base, BaseModelMixin):
     booked_by = relationship("User", foreign_keys=[booked_by_user_id])
     booked_by_patient_account = relationship("PatientPortalAccount", foreign_keys=[booked_by_patient_account_id])
     opd_visits = relationship("OPDVisit", back_populates="source_appointment")
+
+
+class DoctorOPDSchedule(Base, BaseModelMixin):
+    __tablename__ = "doctor_opd_schedules"
+    __table_args__ = (UniqueConstraint("doctor_user_id", "weekday", name="uq_doctor_opd_schedule_day"),)
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    doctor_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)  # Monday=0 ... Sunday=6
+    start_time: Mapped[str] = mapped_column(String(5), nullable=False)  # HH:MM
+    end_time: Mapped[str] = mapped_column(String(5), nullable=False)  # HH:MM
+    slot_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    buffer_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    branch = relationship("Branch")
+    doctor = relationship("User", foreign_keys=[doctor_user_id])
+
+
+class DoctorSlotBooking(Base, BaseModelMixin):
+    __tablename__ = "doctor_slot_bookings"
+    __table_args__ = (UniqueConstraint("doctor_user_id", "slot_start_at", name="uq_doctor_slot_start"),)
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    doctor_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
+    slot_start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    slot_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False, default="appointment")
+    appointment_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("appointments.id"))
+    opd_visit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visits.id"))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="booked")
+
+    branch = relationship("Branch")
+    doctor = relationship("User", foreign_keys=[doctor_user_id])
+    patient = relationship("Patient")
+    appointment = relationship("Appointment")
+    opd_visit = relationship("OPDVisit")

@@ -16,6 +16,7 @@ class VisitType(str, Enum):
 class OPDVisitCreate(BaseModel):
     patient_id: UUID
     visit_date: date
+    slot_start_at: datetime | None = None
     department_name: str = Field(min_length=2, max_length=120)
     doctor_user_id: UUID | None = None
     consulting_doctor_name: str = Field(min_length=2, max_length=150)
@@ -40,6 +41,7 @@ class OPDVisitConsultationUpdate(BaseModel):
 
 class OPDVisitUpdate(BaseModel):
     visit_date: date
+    slot_start_at: datetime | None = None
     department_name: str = Field(min_length=2, max_length=120)
     doctor_user_id: UUID | None = None
     consulting_doctor_name: str = Field(min_length=2, max_length=150)

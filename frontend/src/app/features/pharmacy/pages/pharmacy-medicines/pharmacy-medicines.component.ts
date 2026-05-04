@@ -33,6 +33,9 @@ export class PharmacyMedicinesComponent {
   pageSize = 10;
   total = 0;
   editingId: string | null = null;
+  sortField: 'name' | 'type' | 'generic' | 'company' | 'stock' | 'sale_price' = 'name';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly form = this.fb.group({
     medicine_type_id: ['', Validators.required],
@@ -84,6 +87,42 @@ export class PharmacyMedicinesComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacyMedicinesComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = 'asc';
+  }
+
+  get displayedMedicines(): PharmacyMedicine[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.medicines].sort((a, b) => {
+      switch (this.sortField) {
+        case 'type':
+          return dir * (a.medicine_type_name || '').localeCompare(b.medicine_type_name || '');
+        case 'generic':
+          return dir * (a.generic_name || '').localeCompare(b.generic_name || '');
+        case 'company':
+          return dir * (a.company_name || '').localeCompare(b.company_name || '');
+        case 'stock':
+          return dir * (Number(a.stock_quantity || 0) - Number(b.stock_quantity || 0));
+        case 'sale_price':
+          return dir * (Number(a.sale_price || 0) - Number(b.sale_price || 0));
+        case 'name':
+        default:
+          return dir * (a.name || '').localeCompare(b.name || '');
+      }
+    });
   }
 
   edit(item: PharmacyMedicine): void {

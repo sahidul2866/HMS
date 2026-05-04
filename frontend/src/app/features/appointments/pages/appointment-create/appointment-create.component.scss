@@ -122,6 +122,44 @@
   margin-top: 1rem;
 }
 
+.slot-grid-wrap {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.slot-grid-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 0.5rem;
+}
+
+.slot-chip {
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  border-radius: 12px;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.slot-chip--selected {
+  background: rgba(15, 118, 110, 0.14);
+}
+
+.slot-chip--booked {
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.1);
+}
+
 .field-wide {
   grid-column: 1 / -1;
 }

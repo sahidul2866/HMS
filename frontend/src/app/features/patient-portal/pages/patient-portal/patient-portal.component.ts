@@ -34,6 +34,7 @@ type PortalTab =
   | 'assistant'
   | 'hospital'
   | 'packages';
+type PortalTabGroup = 'essentials' | 'records' | 'support';
 
 interface PortalDocument {
   id: string;
@@ -118,6 +119,8 @@ export class PatientPortalComponent {
   reportType: 'all' | 'laboratory' | 'radiology' = 'all';
   selectedFamilyProfile = 'self';
   selectedDoctorId = '';
+  activeTabGroup: PortalTabGroup = 'essentials';
+  quickActionsModalOpen = false;
   botConversationId: string | null = null;
   botInput = '';
   botLoading = false;
@@ -158,6 +161,11 @@ export class PatientPortalComponent {
     { key: 'assistant', label: 'Assistant' },
     { key: 'hospital', label: 'Hospital' },
     { key: 'packages', label: 'Packages' },
+  ];
+  readonly tabGroups: Array<{ key: PortalTabGroup; label: string; tabs: PortalTab[] }> = [
+    { key: 'essentials', label: 'Essentials', tabs: ['home', 'book', 'appointments', 'assistant'] },
+    { key: 'records', label: 'Records', tabs: ['timeline', 'prescriptions', 'reports', 'billing', 'admissions', 'documents'] },
+    { key: 'support', label: 'Support', tabs: ['family', 'requests', 'hospital', 'packages'] },
   ];
 
   readonly requestTypes = [
@@ -357,7 +365,29 @@ export class PatientPortalComponent {
 
   setTab(tab: PortalTab): void {
     this.activeTab = tab;
+    const group = this.tabGroups.find((item) => item.tabs.includes(tab));
+    if (group) {
+      this.activeTabGroup = group.key;
+    }
     this.portalMessage = '';
+  }
+
+  setTabGroup(group: PortalTabGroup): void {
+    this.activeTabGroup = group;
+    const validTabs = this.tabGroups.find((item) => item.key === group)?.tabs || [];
+    if (!validTabs.includes(this.activeTab)) {
+      this.activeTab = validTabs[0] || 'home';
+    }
+    this.portalMessage = '';
+  }
+
+  get visiblePortalTabs(): Array<{ key: PortalTab; label: string }> {
+    const keys = this.tabGroups.find((item) => item.key === this.activeTabGroup)?.tabs || [];
+    return this.portalTabs.filter((tab) => keys.includes(tab.key));
+  }
+
+  toggleQuickActionsModal(): void {
+    this.quickActionsModalOpen = !this.quickActionsModalOpen;
   }
 
   selectDoctor(doctor: User): void {

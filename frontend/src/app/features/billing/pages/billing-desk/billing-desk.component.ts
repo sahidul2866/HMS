@@ -3,16 +3,19 @@ import { Component, ElementRef, ViewChild, inject } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { debounceTime } from 'rxjs';
 
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { UiStateService } from '../../../../core/services/ui-state.service';
 import { buildBarcodeSvg, escapePrintHtml } from '../../../../shared/utils/print-layout.utils';
+import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import {
   BillingInvoice,
   BillingInvoiceFilters,
   BillingInvoiceListItem,
+  BillingInvoiceSticker,
 } from '../../models/billing.models';
 import { BillingServiceApi } from '../../services/billing.service';
 
@@ -52,9 +55,13 @@ export class BillingDeskComponent {
     q: [''],
     internal_referral_user_id: [''],
     status: [''],
+    payment_status: [''],
+    source_module: [''],
     date_from: [''],
     date_to: [''],
   });
+  sortField: 'invoice_number' | 'patient' | 'status' | 'payment_status' | 'total_amount' | 'due_amount' | 'created_at' = 'created_at';
+  sortDirection: 'asc' | 'desc' = 'desc';
 
   readonly paymentForm = this.fb.group({
     amount: [0, [Validators.required, Validators.min(0.01)]],
@@ -83,6 +90,7 @@ export class BillingDeskComponent {
       }
     });
     this.invoiceFilterForm.valueChanges.subscribe(() => this.persistState());
+    this.invoiceFilterForm.valueChanges.pipe(debounceTime(250)).subscribe(() => this.loadInvoices());
   }
 
   loadDoctors(): void {
@@ -95,10 +103,40 @@ export class BillingDeskComponent {
       if (this.latestInvoice && !this.recentInvoices.find((invoice) => invoice.id === this.latestInvoice?.id)) {
         this.latestInvoice = null;
       }
-      if (!this.latestInvoice && this.recentInvoices.length) {
-        this.loadInvoiceDetail(this.recentInvoices[0].id);
+    });
+  }
+
+  get displayedInvoices(): BillingInvoiceListItem[] {
+    const rows = [...this.recentInvoices];
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return rows.sort((a, b) => {
+      switch (this.sortField) {
+        case 'invoice_number':
+          return dir * a.invoice_number.localeCompare(b.invoice_number);
+        case 'patient':
+          return dir * `${a.patient.first_name} ${a.patient.last_name}`.localeCompare(`${b.patient.first_name} ${b.patient.last_name}`);
+        case 'status':
+          return dir * a.status.localeCompare(b.status);
+        case 'payment_status':
+          return dir * a.payment_status.localeCompare(b.payment_status);
+        case 'total_amount':
+          return dir * (Number(a.total_amount || 0) - Number(b.total_amount || 0));
+        case 'due_amount':
+          return dir * (Number(a.due_amount || 0) - Number(b.due_amount || 0));
+        case 'created_at':
+        default:
+          return dir * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       }
     });
+  }
+
+  toggleSort(field: BillingDeskComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = field === 'created_at' ? 'desc' : 'asc';
   }
 
   navigateToNewPatient(): void {
@@ -179,6 +217,41 @@ export class BillingDeskComponent {
     this.openInvoicePreview(this.latestInvoice);
   }
 
+  printStickers(): void {
+    if (!this.latestInvoice) {
+      return;
+    }
+    this.printStickersByInvoiceId(this.latestInvoice.id, this.latestInvoice.invoice_number);
+  }
+
+  private printStickersByInvoiceId(invoiceId: string, invoiceNumber?: string): void {
+    this.billingService.getInvoiceStickers(invoiceId).subscribe({
+      next: (stickers) => {
+        if (!stickers.length) {
+          this.notificationService.warning('No sticker-ready billing items found in this invoice.');
+          return;
+        }
+        const printed = printInvestigationStickers(
+          stickers.map((item: BillingInvoiceSticker) => ({
+            module: String(item.source_module || 'billing').toUpperCase(),
+            token: item.token,
+            patientNumber: item.patient_number,
+            patientName: item.patient_name,
+            invoiceNumber: item.invoice_number,
+            testName: item.item_name,
+            roomNumber: item.room_number ?? null,
+            quantity: item.quantity,
+          })),
+          `Item Stickers - ${invoiceNumber || 'Invoice'}`
+        );
+        if (!printed) this.notificationService.warning('Unable to print item stickers.');
+      },
+      error: () => {
+        this.notificationService.error('Failed to load sticker data for this invoice.');
+      },
+    });
+  }
+
   private buildInvoicePrintHtml(invoice: BillingInvoice): string {
     const patientName = `${invoice.patient.first_name} ${invoice.patient.last_name}`.trim();
     const combinedBarcode = buildBarcodeSvg(`${invoice.patient.patient_number} | ${invoice.invoice_number}`, 'Patient + Invoice ID');
@@ -195,7 +268,10 @@ export class BillingDeskComponent {
         (item, index) => `
           <tr>
             <td>${index + 1}</td>
-            <td>${escapePrintHtml(item.service_name)}</td>
+            <td>
+              <div>${escapePrintHtml(item.service_name)}</div>
+              ${item.source_label ? `<small style="color:#475569;">${escapePrintHtml(item.source_label)}</small>` : ''}
+            </td>
             <td>${this.formatCurrency(item.unit_price)}</td>
             <td>${escapePrintHtml(item.discount_percentage)}</td>
             <td>${this.formatCurrency(item.line_total)}</td>
@@ -364,6 +440,10 @@ export class BillingDeskComponent {
     });
   }
 
+  closeInvoiceDetail(): void {
+    this.latestInvoice = null;
+  }
+
   collectPayment(): void {
     if (!this.latestInvoice || this.latestInvoice.status === 'void' || this.collectingPayment || this.paymentForm.invalid) {
       return;
@@ -480,6 +560,13 @@ export class BillingDeskComponent {
     frameWindow.print();
   }
 
+  printStickerPreview(): void {
+    if (!this.invoicePreviewInvoice) {
+      return;
+    }
+    this.printStickersByInvoiceId(this.invoicePreviewInvoice.id, this.invoicePreviewInvoice.invoice_number);
+  }
+
   formatCurrency(value: string | number): string {
     return new Intl.NumberFormat('en-BD', {
       style: 'currency',
@@ -494,6 +581,8 @@ export class BillingDeskComponent {
       q: raw.q?.trim() || undefined,
       internal_referral_user_id: raw.internal_referral_user_id || undefined,
       status: raw.status || undefined,
+      payment_status: raw.payment_status || undefined,
+      source_module: raw.source_module || undefined,
       date_from: raw.date_from || undefined,
       date_to: raw.date_to || undefined,
     };
@@ -509,6 +598,8 @@ export class BillingDeskComponent {
       q: state.filters.q ?? '',
       internal_referral_user_id: state.filters.internal_referral_user_id ?? '',
       status: state.filters.status ?? '',
+      payment_status: state.filters.payment_status ?? '',
+      source_module: state.filters.source_module ?? '',
       date_from: state.filters.date_from ?? '',
       date_to: state.filters.date_to ?? '',
     });

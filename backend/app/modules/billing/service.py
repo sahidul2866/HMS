@@ -1,19 +1,20 @@
 from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
-from uuid import UUID
+from uuid import UUID, NAMESPACE_DNS, uuid4, uuid5
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
-from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingService, ReferredDoctor
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, ReferredDoctor
 from app.models.billing import BillingRefund, BillingSetting
 from app.models.billing_links import BillingItemLink
-from app.models.encounter import IPDAdmission, OPDVisit, OPDVisitOrder
+from app.models.encounter import IPDAdmission, IPDBed, OPDVisit, OPDVisitOrder
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
 from app.models.patient import Patient
-from app.models.pharmacy import PharmacyInvestigationSetting, PharmacyMedicine
+from app.models.pharmacy import PharmacyDispense, PharmacyInvestigationSetting, PharmacyMedicine
+from app.models.inventory import InventoryItem
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.billing.repository import BillingRepository
@@ -35,6 +36,7 @@ from app.schemas.billing import (
     BillingSettingsRead,
     BillingSettingsUpdate,
     BillingServiceControlsUpdate,
+    BillingInvoiceStickerRead,
     BillingReferralSummaryRead,
     BillingSummaryRead,
     ReferredDoctorCreate,
@@ -60,63 +62,120 @@ class BillingServiceManager:
         self.patients_repository = PatientsRepository(db)
         self.users_repository = UsersRepository(db)
 
-    def list_services(self, actor: User) -> list[BillingService]:
-        return self.repository.list_services(actor.branch_id)
+    def list_services(self, actor: User) -> list[dict]:
+        self._sync_services_from_modules(actor)
+        configs = self.repository.list_item_configs(actor.branch_id)
+        return [
+            {
+                "id": item.id,
+                "branch_id": item.branch_id,
+                "service_code": item.service_code,
+                "name": item.service_name,
+                "description": item.billing_instruction,
+                "unit_price": item.unit_price,
+                "doctor_share_percentage": item.doctor_share_percentage,
+                "max_discount_percentage": item.max_discount_percentage,
+                "max_discount_amount": item.max_discount_amount,
+                "room_number": item.room_number,
+                "source_module": item.source_module,
+                "source_entity_id": item.source_entity_id,
+                "billing_instruction": item.billing_instruction,
+                "is_active": item.is_active,
+            }
+            for item in configs
+        ]
 
-    def create_service(self, payload: BillingServiceCreate, actor: User, context: dict[str, str | None]) -> BillingService:
-        if self.repository.find_service_by_code(payload.service_code, actor.branch_id):
+    def create_service(self, payload: BillingServiceCreate, actor: User, context: dict[str, str | None]) -> dict:
+        existing = next((item for item in self.repository.list_item_configs(actor.branch_id) if item.service_code == payload.service_code), None)
+        if existing:
             raise AppException(409, "billing_service_exists", "Billing service code already exists")
 
-        service = BillingService(
-            **payload.model_dump(),
+        config = BillingItemConfig(
             branch_id=payload.branch_id or actor.branch_id,
+            source_module="custom",
+            source_entity_id=uuid4(),
+            service_code=payload.service_code,
+            service_name=payload.name,
+            unit_price=self._money(payload.unit_price),
+            doctor_share_percentage=self._money(payload.doctor_share_percentage),
+            billing_instruction=payload.description,
             created_by=actor.id,
             updated_by=actor.id,
         )
-        self.repository.create_service(service)
+        self.repository.create_item_config(config)
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.BILLING_SERVICE_CREATE,
             module="billing",
             entity_type="billing_service",
-            entity_id=str(service.id),
-            detail={"service_code": service.service_code, "name": service.name},
+            entity_id=str(config.id),
+            detail={"service_code": config.service_code, "name": config.service_name},
             context=context,
         )
         self.db.commit()
-        self.db.refresh(service)
-        return service
+        self.db.refresh(config)
+        return {
+            "id": config.id,
+            "branch_id": config.branch_id,
+            "service_code": config.service_code,
+            "name": config.service_name,
+            "description": config.billing_instruction,
+            "unit_price": config.unit_price,
+            "doctor_share_percentage": config.doctor_share_percentage,
+            "max_discount_percentage": config.max_discount_percentage,
+            "max_discount_amount": config.max_discount_amount,
+            "room_number": config.room_number,
+            "source_module": config.source_module,
+            "source_entity_id": config.source_entity_id,
+            "billing_instruction": config.billing_instruction,
+            "is_active": config.is_active,
+        }
 
-    def update_service_controls(self, service_id: UUID, payload: BillingServiceControlsUpdate, actor: User, context: dict[str, str | None]) -> BillingService:
-        service = self.repository.get_service(service_id, actor.branch_id)
-        if not service:
-            raise AppException(404, "billing_service_not_found", "Billing service not found")
-        service.max_discount_percentage = self._money(payload.max_discount_percentage) if payload.max_discount_percentage is not None else None
-        service.max_discount_amount = self._money(payload.max_discount_amount) if payload.max_discount_amount is not None else None
-        service.doctor_share_percentage = self._money(payload.doctor_share_percentage)
-        service.room_number = payload.room_number.strip() if payload.room_number else None
+    def update_service_controls(self, service_id: UUID, payload: BillingServiceControlsUpdate, actor: User, context: dict[str, str | None]) -> dict:
+        config = self.repository.get_item_config(service_id, actor.branch_id)
+        if not config:
+            raise AppException(404, "billing_service_not_found", "Billing item config not found")
+        config.max_discount_percentage = self._money(payload.max_discount_percentage) if payload.max_discount_percentage is not None else None
+        config.max_discount_amount = self._money(payload.max_discount_amount) if payload.max_discount_amount is not None else None
+        config.doctor_share_percentage = self._money(payload.doctor_share_percentage)
+        config.room_number = payload.room_number.strip() if payload.room_number else None
         if payload.is_active is not None:
-            service.is_active = payload.is_active
-        service.updated_by = actor.id
+            config.is_active = payload.is_active
+        config.updated_by = actor.id
         self.db.flush()
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.BILLING_SETTINGS_UPDATE,
             module="billing",
             entity_type="billing_service",
-            entity_id=str(service.id),
+            entity_id=str(config.id),
             detail={
-                "service_code": service.service_code,
-                "max_discount_percentage": str(service.max_discount_percentage) if service.max_discount_percentage is not None else None,
-                "max_discount_amount": str(service.max_discount_amount) if service.max_discount_amount is not None else None,
-                "doctor_share_percentage": str(service.doctor_share_percentage),
-                "room_number": service.room_number,
+                "service_code": config.service_code,
+                "max_discount_percentage": str(config.max_discount_percentage) if config.max_discount_percentage is not None else None,
+                "max_discount_amount": str(config.max_discount_amount) if config.max_discount_amount is not None else None,
+                "doctor_share_percentage": str(config.doctor_share_percentage),
+                "room_number": config.room_number,
             },
             context=context,
         )
         self.db.commit()
-        self.db.refresh(service)
-        return service
+        self.db.refresh(config)
+        return {
+            "id": config.id,
+            "branch_id": config.branch_id,
+            "service_code": config.service_code,
+            "name": config.service_name,
+            "description": config.billing_instruction,
+            "unit_price": config.unit_price,
+            "doctor_share_percentage": config.doctor_share_percentage,
+            "max_discount_percentage": config.max_discount_percentage,
+            "max_discount_amount": config.max_discount_amount,
+            "room_number": config.room_number,
+            "source_module": config.source_module,
+            "source_entity_id": config.source_entity_id,
+            "billing_instruction": config.billing_instruction,
+            "is_active": config.is_active,
+        }
 
     def list_doctors(self, actor: User) -> list[ReferredDoctor]:
         return self.repository.list_doctors(actor.branch_id)
@@ -187,6 +246,56 @@ class BillingServiceManager:
             raise AppException(403, "forbidden", "Billing invoice belongs to a different branch")
         return invoice
 
+    def get_invoice_stickers(self, invoice_id: UUID, actor: User) -> list[BillingInvoiceStickerRead]:
+        invoice = self.get_invoice(invoice_id, actor)
+        patient_name = f"{invoice.patient.first_name} {invoice.patient.last_name}".strip()
+        stickers: list[BillingInvoiceStickerRead] = []
+        for index, item in enumerate(invoice.items, start=1):
+            module = self._normalize_module(item.source_module)
+            source_reference = None
+            if item.source_opd_visit_order_id:
+                order = self.db.get(OPDVisitOrder, item.source_opd_visit_order_id)
+                if order:
+                    source_reference = str(order.id)
+                    if order.lab_order_id:
+                        lab_order = self.db.get(LabOrder, order.lab_order_id)
+                        source_reference = lab_order.order_number if lab_order else source_reference
+                    elif order.radiology_order_id:
+                        radiology_order = self.db.get(RadiologyOrder, order.radiology_order_id)
+                        source_reference = radiology_order.order_number if radiology_order else source_reference
+            token = (
+                str(item.source_opd_visit_order_id).replace("-", "").upper()[:10]
+                if item.source_opd_visit_order_id
+                else f"{invoice.invoice_number}-{index}"
+            )
+            barcode_value = "|".join(
+                [
+                    invoice.invoice_number,
+                    invoice.patient.patient_number,
+                    module or "billing",
+                    token,
+                ]
+            )
+            stickers.append(
+                BillingInvoiceStickerRead(
+                    invoice_id=invoice.id,
+                    invoice_number=invoice.invoice_number,
+                    invoice_item_id=item.id,
+                    patient_id=invoice.patient_id,
+                    patient_number=invoice.patient.patient_number,
+                    patient_name=patient_name,
+                    item_name=item.service_name,
+                    source_module=module or "billing",
+                    source_reference=source_reference,
+                    quantity=item.quantity,
+                    room_number=item.room_number,
+                    token=token,
+                    barcode_value=barcode_value,
+                    created_at=item.created_at,
+                )
+            )
+        return stickers
+
     def get_summary(self, actor: User, filters: BillingInvoiceFilterParams | None = None) -> BillingSummaryRead:
         posted_invoice_count, void_invoice_count, gross_amount, discount_amount, net_amount, referred_doctor_amount = self.repository.get_summary(actor.branch_id, filters)
         return BillingSummaryRead(
@@ -233,7 +342,7 @@ class BillingServiceManager:
                     source_label=f"Consultation · {visit.consulting_doctor_name}",
                     source_module="opd_visit",
                     billing_service_id=consultation_service.id if consultation_service else None,
-                    billing_service_name=consultation_service.name if consultation_service else None,
+                    billing_service_name=consultation_service.service_name if consultation_service else None,
                     quantity=Decimal("1"),
                     warning=None if consultation_service else "Consultation service could not be matched automatically.",
                 )
@@ -268,7 +377,7 @@ class BillingServiceManager:
                     source_label=f"{order.order_type.title()} · {order.item_name}",
                     source_module=order.service_area if order.order_type == "investigation" and order.service_area else f"opd_{order.order_type}",
                     billing_service_id=service.id if service else None,
-                    billing_service_name=service.name if service else None,
+                    billing_service_name=service.service_name if service else None,
                     quantity=order.quantity,
                     source_opd_visit_order_id=order.id,
                     warning=None if service else f"No billing service matched {order.item_name}.",
@@ -325,7 +434,7 @@ class BillingServiceManager:
                     source_label=f"{stage.title()} Bed Charge · {admission.ward_name} / {admission.bed_number}",
                     source_module="ipd_bed_charge",
                     billing_service_id=service.id if service else None,
-                    billing_service_name=service.name if service else None,
+                    billing_service_name=service.service_name if service else None,
                     quantity=Decimal(str(billable_days)),
                     warning=warning,
                 )
@@ -373,56 +482,65 @@ class BillingServiceManager:
             updated_by=actor.id,
         )
 
-        services = {
-            service.id: service for service in self.repository.list_services_by_ids(
+        configs = {
+            config.id: config for config in self.repository.list_item_configs_by_ids(
                 [item.billing_service_id for item in resolved_items if item.billing_service_id],
                 actor.branch_id,
             )
         }
-        if len(services) != len({item.billing_service_id for item in resolved_items if item.billing_service_id}):
+        if len(configs) != len({item.billing_service_id for item in resolved_items if item.billing_service_id}):
             raise AppException(400, "billing_service_not_found", "One or more billing services could not be found")
 
         settings = self._get_settings_by_branch(actor.branch_id)
-        invoice.items = [
-            BillingInvoiceItem(
-                billing_service_id=item.billing_service_id,
-                source_opd_visit_order_id=item.source_opd_visit_order_id,
-                source_label=item.source_label,
-                source_module=item.source_module,
-                service_name=services[item.billing_service_id].name,
-                quantity=item.quantity,
-                unit_price=services[item.billing_service_id].unit_price,
-                discount_percentage=self._money(item.discount_percentage),
-                discount_amount=self._money(
-                    services[item.billing_service_id].unit_price * item.quantity * item.discount_percentage / Decimal("100")
-                ),
-                line_total=self._money(
-                    services[item.billing_service_id].unit_price * item.quantity
-                    - (services[item.billing_service_id].unit_price * item.quantity * item.discount_percentage / Decimal("100"))
-                ),
-                max_discount_percentage=services[item.billing_service_id].max_discount_percentage
-                if services[item.billing_service_id].max_discount_percentage is not None
-                else settings.max_item_discount_percentage,
-                max_discount_amount=services[item.billing_service_id].max_discount_amount
-                if services[item.billing_service_id].max_discount_amount is not None
-                else settings.max_item_discount_amount,
-                room_number=services[item.billing_service_id].room_number,
-                doctor_share_percentage=services[item.billing_service_id].doctor_share_percentage,
-                doctor_share_amount=self._money(
-                    (
-                        services[item.billing_service_id].unit_price * item.quantity
-                        - (services[item.billing_service_id].unit_price * item.quantity * item.discount_percentage / Decimal("100"))
-                    )
-                    * services[item.billing_service_id].doctor_share_percentage
-                    / Decimal("100")
-                ),
-                created_by=actor.id,
-                updated_by=actor.id,
+        invoice_items: list[BillingInvoiceItem] = []
+        for item in resolved_items:
+            config = configs[item.billing_service_id]
+            source_module = item.source_module or config.source_module
+            source_label = item.source_label
+            if config.billing_instruction:
+                source_label = f"{source_label} · {config.billing_instruction}" if source_label else config.billing_instruction
+            invoice_items.append(
+                BillingInvoiceItem(
+                    source_entity_id=config.source_entity_id,
+                    billing_instruction=config.billing_instruction,
+                    source_opd_visit_order_id=item.source_opd_visit_order_id,
+                    source_label=source_label,
+                    source_module=source_module,
+                    service_name=config.service_name,
+                    quantity=item.quantity,
+                    unit_price=config.unit_price,
+                    discount_percentage=self._money(item.discount_percentage),
+                    discount_amount=self._money(
+                        config.unit_price * item.quantity * item.discount_percentage / Decimal("100")
+                    ),
+                    line_total=self._money(
+                        config.unit_price * item.quantity
+                        - (config.unit_price * item.quantity * item.discount_percentage / Decimal("100"))
+                    ),
+                    max_discount_percentage=config.max_discount_percentage
+                    if config.max_discount_percentage is not None
+                    else settings.max_item_discount_percentage,
+                    max_discount_amount=config.max_discount_amount
+                    if config.max_discount_amount is not None
+                    else settings.max_item_discount_amount,
+                    room_number=config.room_number,
+                    doctor_share_percentage=config.doctor_share_percentage,
+                    doctor_share_amount=self._money(
+                        (
+                            config.unit_price * item.quantity
+                            - (config.unit_price * item.quantity * item.discount_percentage / Decimal("100"))
+                        )
+                        * config.doctor_share_percentage
+                        / Decimal("100")
+                    ),
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
             )
-            for item in resolved_items
-        ]
+        invoice.items = invoice_items
         self.repository.create_invoice(invoice)
         self._sync_invoice_items_to_worklists(invoice, resolved_items, patient, actor)
+        self._ensure_module_records_for_invoice_items(invoice, actor)
         # Create billing_item_links for domain records
         for index, item in enumerate(invoice.items):
             if item.source_opd_visit_order_id:
@@ -451,6 +569,25 @@ class BillingServiceManager:
                         updated_by=actor.id,
                     )
                     self.billing_links_repository.create_link(link)
+                else:
+                    pharmacy_dispense_id = self.db.scalar(
+                        select(PharmacyDispense.id).where(
+                            PharmacyDispense.source_visit_order_id == visit_order.id if visit_order else False,
+                            PharmacyDispense.is_active.is_(True),
+                        )
+                    )
+                    if pharmacy_dispense_id:
+                        link = BillingItemLink(
+                            invoice_item_id=item.id,
+                            branch_id=invoice.branch_id,
+                            source_module="pharmacy",
+                            source_entity_type="pharmacy_dispense",
+                            source_entity_id=pharmacy_dispense_id,
+                            meta={"invoice_number": invoice.invoice_number, "source_label": item.source_label},
+                            created_by=actor.id,
+                            updated_by=actor.id,
+                        )
+                        self.billing_links_repository.create_link(link)
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.BILLING_INVOICE_CREATE,
@@ -621,21 +758,21 @@ class BillingServiceManager:
         if actor.branch_id and entity.branch_id and actor.branch_id != entity.branch_id:
             raise AppException(403, "forbidden", "Source record belongs to a different branch")
 
-    def _match_billing_service(self, *, branch_id: UUID | None, keywords: list[str], exact_amount: Decimal | None = None) -> BillingService | None:
-        services = self.repository.list_services(branch_id)
-        ranked: list[tuple[int, BillingService]] = []
+    def _match_billing_service(self, *, branch_id: UUID | None, keywords: list[str], exact_amount: Decimal | None = None) -> BillingItemConfig | None:
+        services = self.repository.list_item_configs(branch_id)
+        ranked: list[tuple[int, BillingItemConfig]] = []
         normalized_keywords = [keyword.strip().lower() for keyword in keywords if keyword and keyword.strip()]
         for service in services:
             if not service.is_active:
                 continue
-            haystack = f"{service.service_code} {service.name} {service.description or ''}".lower()
+            haystack = f"{service.service_code} {service.service_name} {service.billing_instruction or ''}".lower()
             score = 0
             for keyword in normalized_keywords:
                 if keyword == haystack:
                     score += 10
                 elif keyword in haystack:
                     score += 4
-            if exact_amount is not None and Decimal(service.unit_price) == Decimal(exact_amount):
+            if exact_amount is not None and Decimal(service.unit_price or 0) == Decimal(exact_amount):
                 score += 6
             if score > 0:
                 ranked.append((score, service))
@@ -687,50 +824,21 @@ class BillingServiceManager:
         return " · ".join(note_parts)
 
     def _resolve_invoice_items(self, items, actor: User):
+        self._sync_services_from_modules(actor)
         for item in items:
             self._ensure_item_permission(item, actor)
-            if item.billing_service_id:
-                continue
-            source_type = item.source_item_type
-            if source_type == "medicine":
-                medicine = self.db.get(PharmacyMedicine, item.source_item_id) if item.source_item_id else None
-                if not medicine or not medicine.is_active:
-                    raise AppException(404, "medicine_not_found", "Medicine information not found")
-                if actor.branch_id and medicine.branch_id and actor.branch_id != medicine.branch_id:
-                    raise AppException(403, "forbidden", "Medicine belongs to a different branch")
-                item.billing_service_id = self._get_or_create_catalog_service(
-                    code=f"MED-{str(medicine.id)[:8]}",
-                    name=medicine.name,
-                    unit_price=medicine.sale_price,
-                    branch_id=actor.branch_id,
-                    actor=actor,
-                    description=f"Pharmacy medicine billing item · {medicine.generic.name if medicine.generic else ''}".strip(),
-                    referral_percentage=self._get_settings_by_branch(actor.branch_id).default_referral_percentage,
-                ).id
-                item.source_module = item.source_module or "pharmacy"
-                item.source_label = item.source_label or f"Medicine · {medicine.name}"
-                continue
-            if source_type == "investigation_setting":
-                setting = self.db.get(PharmacyInvestigationSetting, item.source_item_id) if item.source_item_id else None
-                if not setting or not setting.is_active:
-                    raise AppException(404, "investigation_setting_not_found", "Investigation setting not found")
-                if actor.branch_id and setting.branch_id and actor.branch_id != setting.branch_id:
-                    raise AppException(403, "forbidden", "Investigation setting belongs to a different branch")
-                item.billing_service_id = self._get_or_create_catalog_service(
-                    code=f"INV-{setting.code}",
-                    name=setting.test_name,
-                    unit_price=setting.fee,
-                    branch_id=actor.branch_id,
-                    actor=actor,
-                    description=f"{setting.service_area.title()} investigation billing item · {setting.category_name}",
-                    referral_percentage=self._get_settings_by_branch(actor.branch_id).default_referral_percentage,
-                    room_number=setting.room_number,
-                ).id
-                item.source_module = item.source_module or setting.service_area
-                room_suffix = f" · Room {setting.room_number}" if setting.room_number else ""
-                item.source_label = item.source_label or f"{setting.service_area.title()} · {setting.test_name}{room_suffix}"
-                continue
-            raise AppException(400, "billing_item_source_required", "Select a billing service, medicine, or investigation item")
+            config: BillingItemConfig | None = None
+            if item.source_item_id and item.source_module:
+                config = self.repository.find_item_config_by_source(self._normalize_module(item.source_module), item.source_item_id, actor.branch_id)
+            if not config and item.billing_service_id:
+                config = self.repository.get_item_config(item.billing_service_id, actor.branch_id)
+            if not config:
+                raise AppException(400, "billing_item_source_required", "Select a valid billable item from module catalog")
+            item.billing_service_id = config.id
+            item.source_module = config.source_module
+            room_suffix = f" · Room {config.room_number}" if config.room_number else ""
+            item.source_label = item.source_label or f"{config.service_name}{room_suffix}"
+            item.source_item_id = config.source_entity_id
         return items
 
     def _ensure_item_permission(self, item, actor: User) -> None:
@@ -745,7 +853,7 @@ class BillingServiceManager:
         source_module = (item.source_module or "").lower()
         if source_type == "medicine" or source_module == "pharmacy":
             return "billing.item.medicine"
-        if source_type == "investigation_setting" or source_module in {"laboratory", "radiology", "opd_investigation"}:
+        if source_type == "investigation_setting" or source_module in {"laboratory", "lab", "radiology", "opd_investigation"}:
             return "billing.item.investigation"
         if item.source_opd_visit_order_id:
             order = self.opd_repository.get_order(item.source_opd_visit_order_id)
@@ -762,58 +870,12 @@ class BillingServiceManager:
                 permissions.update(permission.code for permission in role.permissions if permission.is_active)
         return permissions
 
-    def _get_or_create_catalog_service(
-        self,
-        *,
-        code: str,
-        name: str,
-        unit_price: Decimal,
-        branch_id: UUID | None,
-        actor: User,
-        description: str | None = None,
-        referral_percentage: Decimal | None = None,
-        max_discount_percentage: Decimal | None = None,
-        room_number: str | None = None,
-    ) -> BillingService:
-        existing = self.repository.find_service_by_code(code, branch_id)
-        if existing:
-            if (
-                existing.unit_price != unit_price
-                or existing.name != name
-                or existing.room_number != room_number
-                or (referral_percentage is not None and existing.doctor_share_percentage != referral_percentage)
-                or existing.max_discount_percentage != max_discount_percentage
-            ):
-                existing.name = name
-                existing.unit_price = unit_price
-                existing.description = description
-                if referral_percentage is not None:
-                    existing.doctor_share_percentage = referral_percentage
-                existing.max_discount_percentage = max_discount_percentage
-                existing.room_number = room_number
-                existing.updated_by = actor.id
-                self.db.flush()
-            return existing
-        service = BillingService(
-            branch_id=branch_id,
-            service_code=code,
-            name=name,
-            description=description,
-            unit_price=unit_price,
-            doctor_share_percentage=referral_percentage or Decimal("0"),
-            max_discount_percentage=max_discount_percentage,
-            room_number=room_number,
-            created_by=actor.id,
-            updated_by=actor.id,
-        )
-        self.repository.create_service(service)
-        return service
 
     def _sync_invoice_items_to_worklists(self, invoice: BillingInvoice, items, patient: Patient, actor: User) -> None:
         handoff_items = [
             (index, item)
             for index, item in enumerate(items)
-            if not item.source_opd_visit_order_id and (item.source_module or "").lower() in {"laboratory", "radiology", "pharmacy"}
+            if not item.source_opd_visit_order_id and self._normalize_module(item.source_module) in {"laboratory", "radiology", "pharmacy"}
         ]
         if not handoff_items:
             return
@@ -841,7 +903,7 @@ class BillingServiceManager:
             invoice.source_opd_visit_id = visit.id
             invoice.source_module = invoice.source_module or "billing"
         for index, item in handoff_items:
-            module = (item.source_module or "").lower()
+            module = self._normalize_module(item.source_module)
             order = OPDVisitOrder(
                 visit_id=visit.id,
                 order_type="prescription" if module == "pharmacy" else "investigation",
@@ -895,6 +957,87 @@ class BillingServiceManager:
             if index < len(invoice.items):
                 invoice.items[index].source_opd_visit_order_id = order.id
 
+    def _ensure_module_records_for_invoice_items(self, invoice: BillingInvoice, actor: User) -> None:
+        for item in invoice.items:
+            if not item.source_opd_visit_order_id:
+                continue
+            order = self.db.get(OPDVisitOrder, item.source_opd_visit_order_id)
+            if not order:
+                continue
+            module = self._normalize_module(item.source_module or order.service_area)
+            if module == "laboratory" and not order.lab_order_id:
+                lab_order = LabOrder(
+                    branch_id=invoice.branch_id,
+                    patient_id=invoice.patient_id,
+                    visit_id=order.visit_id,
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(lab_order)
+                self.db.flush()
+                self.db.add(
+                    LabOrderItem(
+                        order_id=lab_order.id,
+                        test_name=order.item_name or item.service_name,
+                        quantity=order.quantity or item.quantity,
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                )
+                order.lab_order_id = lab_order.id
+            elif module == "radiology" and not order.radiology_order_id:
+                rad_order = RadiologyOrder(
+                    branch_id=invoice.branch_id,
+                    patient_id=invoice.patient_id,
+                    visit_id=order.visit_id,
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    study_description=order.item_name or item.service_name,
+                    status="pending",
+                    created_by=actor.id,
+                    updated_by=actor.id,
+                )
+                self.db.add(rad_order)
+                self.db.flush()
+                order.radiology_order_id = rad_order.id
+            elif module == "pharmacy":
+                existing_dispense = self.db.scalar(
+                    select(PharmacyDispense.id).where(
+                        PharmacyDispense.source_visit_order_id == order.id,
+                        PharmacyDispense.is_active.is_(True),
+                    )
+                )
+                if not existing_dispense:
+                    dispense = PharmacyDispense(
+                        patient_id=invoice.patient_id,
+                        branch_id=invoice.branch_id,
+                        source_visit_id=order.visit_id,
+                        source_visit_order_id=order.id,
+                        prescription_ref=invoice.invoice_number,
+                        medicine_name=order.item_name or item.service_name,
+                        requested_quantity=order.quantity or item.quantity,
+                        quantity=order.quantity or item.quantity,
+                        unit_price=item.unit_price,
+                        total_price=item.line_total,
+                        status="pending",
+                        note=f"Auto-created from invoice {invoice.invoice_number}",
+                        dispensed_by_user_id=actor.id,
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                    self.db.add(dispense)
+
+    @staticmethod
+    def _normalize_module(value: str | None) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized == "lab":
+            return "laboratory"
+        if normalized in {"medicine", "medicines"}:
+            return "pharmacy"
+        return normalized
+
+
     def _build_preview(self, discount_percentage: Decimal, items, branch_id: UUID | None) -> BillingInvoicePreview:
         settings = self._get_settings_by_branch(branch_id)
         if discount_percentage > settings.max_invoice_discount_percentage:
@@ -903,38 +1046,38 @@ class BillingServiceManager:
                 "billing_invoice_discount_limit_exceeded",
                 f"Invoice discount cannot exceed {settings.max_invoice_discount_percentage}%",
             )
-        services = {
-            service.id: service
-            for service in self.repository.list_services_by_ids([item.billing_service_id for item in items if item.billing_service_id], branch_id)
+        configs = {
+            config.id: config
+            for config in self.repository.list_item_configs_by_ids([item.billing_service_id for item in items if item.billing_service_id], branch_id)
         }
-        if len(services) != len({item.billing_service_id for item in items}):
+        if len(configs) != len({item.billing_service_id for item in items}):
             raise AppException(400, "billing_service_not_found", "One or more billing services could not be found")
 
         sub_total = Decimal("0.00")
         item_discount_amount = Decimal("0.00")
         referred_doctor_amount = Decimal("0.00")
         for item in items:
-            service = services[item.billing_service_id]
-            item_discount_cap = service.max_discount_percentage if service.max_discount_percentage is not None else settings.max_item_discount_percentage
+            config = configs[item.billing_service_id]
+            item_discount_cap = config.max_discount_percentage if config.max_discount_percentage is not None else settings.max_item_discount_percentage
             if item.discount_percentage > item_discount_cap:
                 raise AppException(
                     400,
                     "billing_item_discount_limit_exceeded",
-                    f"{service.name} discount cannot exceed {item_discount_cap}%",
+                    f"{config.service_name} discount cannot exceed {item_discount_cap}%",
                 )
-            gross_line_total = service.unit_price * item.quantity
+            gross_line_total = config.unit_price * item.quantity
             line_discount_amount = self._money(gross_line_total * item.discount_percentage / Decimal("100"))
-            item_discount_amount_cap = service.max_discount_amount if service.max_discount_amount is not None else settings.max_item_discount_amount
+            item_discount_amount_cap = config.max_discount_amount if config.max_discount_amount is not None else settings.max_item_discount_amount
             if item_discount_amount_cap is not None and line_discount_amount > item_discount_amount_cap:
                 raise AppException(
                     400,
                     "billing_item_discount_amount_limit_exceeded",
-                    f"{service.name} discount amount cannot exceed {item_discount_amount_cap}",
+                    f"{config.service_name} discount amount cannot exceed {item_discount_amount_cap}",
                 )
             net_line_total = self._money(gross_line_total - line_discount_amount)
             sub_total += net_line_total
             item_discount_amount += line_discount_amount
-            referred_doctor_amount += self._money(net_line_total * service.doctor_share_percentage / Decimal("100"))
+            referred_doctor_amount += self._money(net_line_total * config.doctor_share_percentage / Decimal("100"))
 
         sub_total = self._money(sub_total)
         item_discount_amount = self._money(item_discount_amount)
@@ -994,6 +1137,158 @@ class BillingServiceManager:
         if room_number:
             parts.append(f"Room {room_number}")
         return " · ".join(parts)
+
+    def _sync_services_from_modules(self, actor: User) -> None:
+        branch_id = actor.branch_id
+        default_referral = self._get_settings_by_branch(branch_id).default_referral_percentage
+
+        doctor_stmt = select(User).where(User.is_active.is_(True))
+        if branch_id:
+            doctor_stmt = doctor_stmt.where((User.branch_id == branch_id) | (User.branch_id.is_(None)))
+        for doctor in self.db.scalars(doctor_stmt).all():
+            if not any(role.is_doctor_role and role.is_active for role in doctor.roles):
+                continue
+            consult_source_id = uuid5(NAMESPACE_DNS, f"opd:{doctor.id}:consult")
+            followup_source_id = uuid5(NAMESPACE_DNS, f"opd:{doctor.id}:followup")
+            consult_fee = Decimal(doctor.opd_consultation_fee or Decimal("0"))
+            followup_fee = Decimal(doctor.opd_follow_up_fee or Decimal("0"))
+            self._upsert_item_config(
+                actor=actor,
+                source_module="opd",
+                source_entity_id=consult_source_id,
+                service_code=f"OPD-CONS-{doctor.username.upper()}",
+                service_name=f"OPD Consultation · {doctor.full_name}",
+                unit_price=consult_fee if consult_fee > 0 else Decimal("15.00"),
+                room_number=None,
+                instruction="OPD visit consultation fee",
+                default_referral=default_referral,
+            )
+            self._upsert_item_config(
+                actor=actor,
+                source_module="opd",
+                source_entity_id=followup_source_id,
+                service_code=f"OPD-FOLLOWUP-{doctor.username.upper()}",
+                service_name=f"OPD Follow-up · {doctor.full_name}",
+                unit_price=followup_fee if followup_fee > 0 else Decimal("10.00"),
+                room_number=None,
+                instruction="OPD follow-up visit fee",
+                default_referral=default_referral,
+            )
+
+        med_stmt = select(PharmacyMedicine).where(PharmacyMedicine.is_active.is_(True))
+        if branch_id:
+            med_stmt = med_stmt.where((PharmacyMedicine.branch_id == branch_id) | (PharmacyMedicine.branch_id.is_(None)))
+        for medicine in self.db.scalars(med_stmt).all():
+            self._upsert_item_config(
+                actor=actor,
+                source_module="pharmacy",
+                source_entity_id=medicine.id,
+                service_code=medicine.sku or medicine.barcode or f"MED-{str(medicine.id)[:8]}",
+                service_name=medicine.name,
+                unit_price=medicine.sale_price,
+                room_number=None,
+                instruction=medicine.description or f"Pharmacy medicine · {medicine.generic.name if medicine.generic else ''}",
+                default_referral=default_referral,
+            )
+
+        inv_stmt = select(PharmacyInvestigationSetting).where(PharmacyInvestigationSetting.is_active.is_(True))
+        if branch_id:
+            inv_stmt = inv_stmt.where((PharmacyInvestigationSetting.branch_id == branch_id) | (PharmacyInvestigationSetting.branch_id.is_(None)))
+        for setting in self.db.scalars(inv_stmt).all():
+            self._upsert_item_config(
+                actor=actor,
+                source_module=self._normalize_module(setting.service_area),
+                source_entity_id=setting.id,
+                service_code=setting.code,
+                service_name=setting.test_name,
+                unit_price=setting.fee,
+                room_number=setting.room_number,
+                instruction=setting.description or f"{setting.service_area.title()} · {setting.category_name}",
+                default_referral=default_referral,
+            )
+
+        bed_stmt = select(IPDBed).where(IPDBed.is_active.is_(True))
+        if branch_id:
+            bed_stmt = bed_stmt.where((IPDBed.branch_id == branch_id) | (IPDBed.branch_id.is_(None)))
+        for bed in self.db.scalars(bed_stmt).all():
+            self._upsert_item_config(
+                actor=actor,
+                source_module="ipd",
+                source_entity_id=bed.id,
+                service_code=bed.bed_number,
+                service_name=f"IPD Bed {bed.ward_name} {bed.bed_number}",
+                unit_price=bed.daily_rate,
+                room_number=bed.bed_number,
+                instruction=bed.note or f"IPD {bed.bed_type} bed charge",
+                default_referral=default_referral,
+            )
+
+        item_stmt = select(InventoryItem).where(InventoryItem.is_active.is_(True))
+        if branch_id:
+            item_stmt = item_stmt.where((InventoryItem.branch_id == branch_id) | (InventoryItem.branch_id.is_(None)))
+        for inv in self.db.scalars(item_stmt).all():
+            self._upsert_item_config(
+                actor=actor,
+                source_module="inventory",
+                source_entity_id=inv.id,
+                service_code=inv.item_code or inv.barcode or f"INV-{str(inv.id)[:8]}",
+                service_name=inv.name,
+                unit_price=Decimal(inv.stock_value / inv.stock_quantity) if inv.stock_quantity and inv.stock_quantity > 0 else Decimal("0.00"),
+                room_number=inv.storage_location,
+                instruction=inv.description or f"Inventory {inv.item_type}",
+                default_referral=default_referral,
+            )
+
+        legacy_opd = self.db.scalars(
+            select(BillingItemConfig).where(
+                BillingItemConfig.service_code.in_(["OPD-CONS-GEN", "OPD-FOLLOWUP"])
+            )
+        ).all()
+        for item in legacy_opd:
+            item.is_active = False
+            item.updated_by = actor.id
+
+        self.db.flush()
+
+    def _upsert_item_config(
+        self,
+        *,
+        actor: User,
+        source_module: str,
+        source_entity_id: UUID,
+        service_code: str,
+        service_name: str,
+        unit_price: Decimal,
+        room_number: str | None,
+        instruction: str | None,
+        default_referral: Decimal,
+    ) -> BillingItemConfig:
+        config = self.repository.find_item_config_by_source(source_module, source_entity_id, actor.branch_id)
+        if not config:
+            config = BillingItemConfig(
+                branch_id=actor.branch_id,
+                source_module=source_module,
+                source_entity_id=source_entity_id,
+                service_code=service_code,
+                service_name=service_name,
+                unit_price=self._money(unit_price),
+                room_number=room_number,
+                doctor_share_percentage=default_referral,
+                billing_instruction=instruction,
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+            self.repository.create_item_config(config)
+            return config
+        config.service_code = service_code
+        config.service_name = service_name
+        config.unit_price = self._money(unit_price)
+        config.room_number = room_number
+        if not config.billing_instruction:
+            config.billing_instruction = instruction
+        config.updated_by = actor.id
+        self.db.flush()
+        return config
 
     def _money(self, value: Decimal) -> Decimal:
         return value.quantize(TWOPLACES, rounding=ROUND_HALF_UP)

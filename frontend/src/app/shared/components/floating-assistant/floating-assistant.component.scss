@@ -61,6 +61,20 @@
   grid-template-rows: auto auto 1fr auto;
 }
 
+.assistant-panel.is-fullscreen {
+  position: fixed;
+  inset: 12px;
+  width: auto;
+  height: auto;
+  margin-top: 0;
+  border-radius: 16px;
+}
+
+.assistant-head-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .assistant-header {
   display: flex;
   align-items: center;

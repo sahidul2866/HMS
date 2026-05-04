@@ -12,25 +12,24 @@
   <div class="layout-shell">
     <section class="page-card">
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search return, sale, customer, medicine" />
-        <button class="secondary-btn" type="button" (click)="searchNow()">Search</button>
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search return, sale, customer, medicine" />
       </div>
 
       <table class="table">
         <thead>
           <tr>
-            <th>Return No</th>
-            <th>Sale No</th>
-            <th>Customer</th>
-            <th>Medicine</th>
+            <th class="sortable-th" (click)="toggleSort('return_number')">Return No</th>
+            <th class="sortable-th" (click)="toggleSort('sale_number')">Sale No</th>
+            <th class="sortable-th" (click)="toggleSort('customer')">Customer</th>
+            <th class="sortable-th" (click)="toggleSort('medicine')">Medicine</th>
             <th>Batch</th>
-            <th>Qty</th>
-            <th>Total</th>
+            <th class="sortable-th" (click)="toggleSort('quantity')">Qty</th>
+            <th class="sortable-th" (click)="toggleSort('total_amount')">Total</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of returns; track item.id) {
+          @for (item of displayedReturns; track item.id) {
             <tr>
               <td><strong>{{ item.return_number }}</strong><div class="muted-line">{{ item.returned_at }}</div></td>
               <td>{{ item.sale_number }}</td>

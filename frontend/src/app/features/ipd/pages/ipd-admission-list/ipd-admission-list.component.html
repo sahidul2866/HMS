@@ -1,0 +1,89 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">IPD Operations</div>
+        <h1 class="page-title">Admission List</h1>
+        <div class="page-subtitle">List-only page. Admission details open in modal.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+        <button class="primary-btn" type="button" (click)="navigateToAdmission()">Add New Admission</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-card">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Admissions</h2>
+        <div class="section-copy">Click a row to open admission details.</div>
+      </div>
+      <label class="field" style="min-width:260px;">
+        <span>Search</span>
+        <input type="text" [(ngModel)]="searchText" placeholder="Admission no, patient, doctor, ward/bed" />
+      </label>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="sortable-th" (click)="toggleSort('admission_number')">Admission No</th>
+          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" (click)="toggleSort('ward_bed')">Ward/Bed</th>
+          <th class="sortable-th" (click)="toggleSort('doctor')">Doctor</th>
+          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+          <th class="sortable-th" (click)="toggleSort('admitted_at')">Admitted At</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (admission of filteredAdmissions; track admission.id) {
+          <tr class="list-row" (click)="openAdmission(admission)">
+            <td>{{ admission.admission_number }}</td>
+            <td>{{ admission.patient.first_name }} {{ admission.patient.last_name }}</td>
+            <td>{{ admission.ward_name }} / {{ admission.bed_number }}</td>
+            <td>{{ admission.attending_doctor_name }}</td>
+            <td><span class="pill">{{ admission.status }}</span></td>
+            <td>{{ admission.admitted_at | date:'medium' }}</td>
+            <td>
+              <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openAdmission(admission)">Open</button>
+              @if (session.hasPermission(permissions.billingInvoiceCreate)) {
+                <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openBillingForAdmission(admission, 'interim')">Bill</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  @if (selectedAdmission) {
+    <div class="modal-backdrop" (click)="closeAdmission()">
+      <section class="page-card modal-card" (click)="$event.stopPropagation()">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">{{ selectedAdmission.admission_number }}</h2>
+            <div class="section-copy">{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }}</div>
+          </div>
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="closeAdmission()">Close</button>
+            @if (session.hasPermission(permissions.billingInvoiceCreate)) {
+              <button class="primary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Final Bill</button>
+            }
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div><strong>Doctor:</strong> {{ selectedAdmission.attending_doctor_name }}</div>
+          <div><strong>Status:</strong> {{ selectedAdmission.status }}</div>
+          <div><strong>Ward / Bed:</strong> {{ selectedAdmission.ward_name }} / {{ selectedAdmission.bed_number }}</div>
+          <div><strong>Admission Type:</strong> {{ selectedAdmission.admission_type }}</div>
+          <div><strong>Daily Charge:</strong> {{ selectedAdmission.daily_charge }}</div>
+          <div><strong>Advance:</strong> {{ selectedAdmission.advance_amount }}</div>
+          <div><strong>Expected Discharge:</strong> {{ selectedAdmission.expected_discharge_date || '-' }}</div>
+          <div><strong>Diagnosis:</strong> {{ selectedAdmission.diagnosis || '-' }}</div>
+        </div>
+      </section>
+    </div>
+  }
+</section>

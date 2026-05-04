@@ -51,9 +51,11 @@ IntentKey = Literal[
     "pending_payments",
     "doctor_guidance",
     "appointment_status",
+    "opd_booking",
+    "hospital_summary",
+    "revenue_analysis",
     "prescription_info",
     "permission_check",
     "general_health_guidance",
     "unknown",
 ]
-

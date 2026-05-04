@@ -69,25 +69,87 @@
       </div>
       <div class="hero-kicker">Live Catalog</div>
     </div>
+    <div class="module-filter-radio">
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="all" [(ngModel)]="serviceModuleFilter" /><span>All</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="laboratory" [(ngModel)]="serviceModuleFilter" /><span>Lab</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="radiology" [(ngModel)]="serviceModuleFilter" /><span>Radiology</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="pharmacy" [(ngModel)]="serviceModuleFilter" /><span>Pharmacy</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="ipd" [(ngModel)]="serviceModuleFilter" /><span>IPD</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="inventory" [(ngModel)]="serviceModuleFilter" /><span>Inventory</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="opd" [(ngModel)]="serviceModuleFilter" /><span>OPD</span></label>
+      <label class="radio-pill"><input type="radio" name="serviceModuleFilter" value="custom" [(ngModel)]="serviceModuleFilter" /><span>Custom</span></label>
+    </div>
 
     <table class="table">
       <thead>
         <tr>
-          <th>Code</th>
-          <th>Name</th>
-          <th>Price</th>
-          <th>Doctor Share</th>
+          <th class="sortable-th" (click)="toggleSort('code')">Code</th>
+          <th class="sortable-th" (click)="toggleSort('name')">Name</th>
+          <th class="sortable-th" (click)="toggleSort('module')">Module</th>
+          <th class="sortable-th" (click)="toggleSort('price')">Price</th>
+          <th class="sortable-th" (click)="toggleSort('doctor_share')">Doctor Share</th>
+          <th>Max Discount %</th>
+          <th>Max Discount Amt</th>
+          <th>Room</th>
+          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
           <th>Description</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        @for (service of services; track service.id) {
+        @for (service of filteredServices; track service.id) {
           <tr>
             <td><strong>{{ service.service_code }}</strong></td>
             <td>{{ service.name }}</td>
+            <td>{{ service.source_module || 'custom' }}</td>
             <td>{{ formatCurrency(service.unit_price) }}</td>
-            <td>{{ service.doctor_share_percentage }}%</td>
+            <td>
+              @if (editingServiceId === service.id) {
+                <input type="number" min="0" max="100" step="0.01" [(ngModel)]="editDraft.doctor_share_percentage" [name]="'share-'+service.id" />
+              } @else {
+                {{ service.doctor_share_percentage }}%
+              }
+            </td>
+            <td>
+              @if (editingServiceId === service.id) {
+                <input type="number" min="0" max="100" step="0.01" [(ngModel)]="editDraft.max_discount_percentage" [name]="'maxp-'+service.id" />
+              } @else {
+                {{ service.max_discount_percentage ?? '-' }}
+              }
+            </td>
+            <td>
+              @if (editingServiceId === service.id) {
+                <input type="number" min="0" step="0.01" [(ngModel)]="editDraft.max_discount_amount" [name]="'maxa-'+service.id" />
+              } @else {
+                {{ service.max_discount_amount ? formatCurrency(service.max_discount_amount) : '-' }}
+              }
+            </td>
+            <td>
+              @if (editingServiceId === service.id) {
+                <input type="text" [(ngModel)]="editDraft.room_number" [name]="'room-'+service.id" />
+              } @else {
+                {{ service.room_number || '-' }}
+              }
+            </td>
+            <td>
+              @if (editingServiceId === service.id) {
+                <label><input type="checkbox" [(ngModel)]="editDraft.is_active" [name]="'active-'+service.id" /> Active</label>
+              } @else {
+                {{ service.is_active ? 'Active' : 'Inactive' }}
+              }
+            </td>
             <td>{{ service.description || '-' }}</td>
+            <td class="table-actions">
+              @if (editingServiceId === service.id) {
+                <button type="button" class="primary-btn" (click)="saveEdit(service)" [disabled]="savingServiceId === service.id">
+                  {{ savingServiceId === service.id ? 'Saving...' : 'Save' }}
+                </button>
+                <button type="button" class="secondary-btn" (click)="cancelEdit()">Cancel</button>
+              } @else {
+                <button type="button" class="secondary-btn" (click)="startEdit(service)">Edit Billing</button>
+                <button type="button" class="secondary-btn" (click)="openSourceModule(service)">Open Module</button>
+              }
+            </td>
           </tr>
         }
       </tbody>

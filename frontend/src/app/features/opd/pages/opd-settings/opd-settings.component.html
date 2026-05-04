@@ -58,8 +58,10 @@
             <p class="page-subtitle">
               @if (isFeeEditor) {
                 Choose a doctor and update only the fee-related OPD values.
-              } @else {
+              } @else if (isHeaderEditor) {
                 Choose a doctor and update only the printable prescription header values.
+              } @else {
+                Configure doctor-wise OPD slot timings used by Appointment and OPD Visit booking.
               }
             </p>
           </div>
@@ -163,11 +165,94 @@
             </section>
           }
 
+          @if (selectedDoctor && isSlotEditor) {
+            <section class="editor-section">
+              <div class="editor-section__head">
+                <div>
+                  <p class="section-kicker">Slot Schedule</p>
+                  <h4>Weekly Slot Configuration</h4>
+                </div>
+                <p class="page-subtitle">Set day, time range, slot duration, and buffer.</p>
+              </div>
+
+              <div class="editor-grid editor-grid--fees">
+                <label class="field">
+                  <span>Weekdays</span>
+                  <div class="weekday-grid">
+                    @for (day of [0,1,2,3,4,5,6]; track day) {
+                      <button
+                        type="button"
+                        class="weekday-chip"
+                        [class.weekday-chip--active]="isWeekdaySelected(day)"
+                        (click)="toggleWeekday(day)"
+                      >
+                        {{ weekdayLabel(day) }}
+                      </button>
+                    }
+                  </div>
+                </label>
+                <label class="field">
+                  <span>Start Time</span>
+                  <input type="time" [formControl]="slotForm.controls.start_time" />
+                </label>
+                <label class="field">
+                  <span>End Time</span>
+                  <input type="time" [formControl]="slotForm.controls.end_time" />
+                </label>
+                <label class="field">
+                  <span>Slot Duration (min)</span>
+                  <input type="number" min="5" max="180" [formControl]="slotForm.controls.slot_duration_minutes" />
+                </label>
+                <label class="field">
+                  <span>Buffer (min)</span>
+                  <input type="number" min="0" max="60" [formControl]="slotForm.controls.buffer_minutes" />
+                </label>
+                <div class="field slot-actions">
+                  <span>&nbsp;</span>
+                  <button class="primary-btn" type="button" [disabled]="scheduleSaving || slotForm.invalid" (click)="saveSlotSettings()">
+                    {{ scheduleSaving ? 'Saving...' : 'Save Slot' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-shell">
+                <table class="settings-table slot-table">
+                  <thead>
+                    <tr>
+                      <th>Day</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Duration</th>
+                      <th>Buffer</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (schedule of doctorSchedules; track schedule.id) {
+                      <tr>
+                        <td><strong>{{ weekdayLabel(schedule.weekday) }}</strong></td>
+                        <td>{{ schedule.start_time }}</td>
+                        <td>{{ schedule.end_time }}</td>
+                        <td>{{ schedule.slot_duration_minutes }} min</td>
+                        <td>{{ schedule.buffer_minutes }} min</td>
+                        <td>
+                          <button class="secondary-btn" type="button" (click)="editSchedule(schedule)">Edit</button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          }
+
           <div class="editor-actions">
             <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
-            <button class="primary-btn" type="submit" [disabled]="saving || settingsForm.invalid || !selectedDoctor">
-              {{ saving ? 'Saving...' : 'Save OPD Settings' }}
-            </button>
+            @if (!isSlotEditor) {
+              <button class="primary-btn" type="submit" [disabled]="saving || settingsForm.invalid || !selectedDoctor">
+                {{ saving ? 'Saving...' : 'Save OPD Settings' }}
+              </button>
+            }
           </div>
         </form>
       </section>

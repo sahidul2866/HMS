@@ -14,7 +14,10 @@ import sys
 
 from app.core.database import SessionLocal
 from app.scripts.seed import seed
+from app.scripts.seed_configuration_demo import main as seed_configuration_demo
+from app.scripts.seed_dashboard_timeseries import seed_dashboard_timeseries
 from app.scripts.seed_lab_radiology_demo import seed as seed_lab_radiology
+from app.scripts.seed_patient_bot_demo import main as seed_patient_bot_demo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("reset_db")
@@ -58,6 +61,16 @@ def reset_db() -> None:
     logger.info("Running lab/radiology demo seed...")
     seed_lab_radiology()
     logger.info("Lab/radiology demo seed completed.")
+
+    logger.info("Running configuration + patient bot demo seed...")
+    seed_configuration_demo()
+    seed_patient_bot_demo()
+    logger.info("Configuration + patient bot demo seed completed.")
+
+    logger.info("Running dashboard timeseries seed...")
+    result_msg = seed_dashboard_timeseries(days=90)
+    logger.info(result_msg)
+    logger.info("Dashboard timeseries seed completed.")
 
     logger.warning("=== DATABASE RESET COMPLETED ===")
 

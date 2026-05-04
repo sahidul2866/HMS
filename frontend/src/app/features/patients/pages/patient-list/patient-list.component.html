@@ -20,18 +20,24 @@
   @if (loading) {
     <div class="muted">Loading patients...</div>
   } @else {
+    <div class="toolbar-row" style="margin-bottom:.75rem;">
+      <label class="field" style="min-width:260px;">
+        <span>Search</span>
+        <input type="text" [(ngModel)]="searchText" placeholder="Patient no, name, phone, email" />
+      </label>
+    </div>
     <table class="table">
       <thead>
         <tr>
-          <th>Patient No</th>
-          <th>Name</th>
-          <th>Phone</th>
-          <th>Email</th>
+          <th class="sortable-th" (click)="toggleSort('patient_number')">Patient No</th>
+          <th class="sortable-th" (click)="toggleSort('name')">Name</th>
+          <th class="sortable-th" (click)="toggleSort('phone')">Phone</th>
+          <th class="sortable-th" (click)="toggleSort('email')">Email</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        @for (patient of patients; track patient.id) {
+        @for (patient of displayedPatients; track patient.id) {
           <tr>
             <td>{{ patient.patient_number }}</td>
             <td>{{ patient.first_name }} {{ patient.last_name }}</td>

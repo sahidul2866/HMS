@@ -7,6 +7,7 @@ import {
   BillingInvoice,
   BillingInvoiceFilters,
   BillingInvoiceListItem,
+  BillingInvoiceSticker,
   BillingInvoicePreview,
   BillingDraft,
   BillingReferralSummary,
@@ -27,7 +28,7 @@ export class BillingServiceApi extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
 
   listServices(): Observable<BillingService[]> {
-    return this.cache.getPersistent('billing:services', () => this.http.get<BillingService[]>(this.url('/billing/services')));
+    return this.cache.getPersistent('billing:services:v2', () => this.http.get<BillingService[]>(this.url('/billing/services')));
   }
 
   getSettings(): Observable<BillingSettings> {
@@ -57,6 +58,8 @@ export class BillingServiceApi extends ApiBaseService {
     if (filters.q) params.set('q', filters.q);
     if (filters.internal_referral_user_id) params.set('internal_referral_user_id', filters.internal_referral_user_id);
     if (filters.status) params.set('status', filters.status);
+    if (filters.payment_status) params.set('payment_status', filters.payment_status);
+    if (filters.source_module) params.set('source_module', filters.source_module);
     if (filters.date_from) params.set('date_from', filters.date_from);
     if (filters.date_to) params.set('date_to', filters.date_to);
     const query = params.toString();
@@ -65,6 +68,10 @@ export class BillingServiceApi extends ApiBaseService {
 
   getInvoice(invoiceId: string): Observable<BillingInvoice> {
     return this.cache.get(`billing:invoice:${invoiceId}`, () => this.http.get<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}`)));
+  }
+
+  getInvoiceStickers(invoiceId: string): Observable<BillingInvoiceSticker[]> {
+    return this.http.get<BillingInvoiceSticker[]>(this.url(`/billing/invoices/${invoiceId}/stickers`));
   }
 
   previewInvoice(discount_percentage: number, items: BillingInvoiceItemPayload[]): Observable<BillingInvoicePreview> {
@@ -115,6 +122,7 @@ export class BillingServiceApi extends ApiBaseService {
 
   clearServicesCache(): void {
     this.cache.clear('billing:services');
+    this.cache.clear('billing:services:v2');
   }
 
   clearSettingsCache(): void {

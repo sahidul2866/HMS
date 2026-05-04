@@ -6,7 +6,7 @@
   </button>
 </div>
 
-<div class="assistant-panel" *ngIf="open">
+<div class="assistant-panel" *ngIf="open" [class.is-fullscreen]="fullscreen">
   <header class="assistant-header">
     <div class="assistant-title">
       <div class="assistant-badge">AI</div>
@@ -16,11 +16,21 @@
         <div class="assistant-subtitle" *ngIf="!loading">Type “start over” to reset</div>
       </div>
     </div>
-    <button type="button" class="assistant-close" (click)="close()" aria-label="Close assistant">×</button>
+    <div class="assistant-head-actions">
+      <button
+        type="button"
+        class="assistant-close"
+        (click)="toggleFullscreen()"
+        [attr.aria-label]="fullscreen ? 'Exit full screen' : 'Open full screen'"
+      >
+        {{ fullscreen ? '🗗' : '🗖' }}
+      </button>
+      <button type="button" class="assistant-close" (click)="close()" aria-label="Close assistant">×</button>
+    </div>
   </header>
 
-  <section class="assistant-quick" *ngIf="settings?.quick_actions?.length" (click)="$event.stopPropagation()">
-    <button type="button" class="assistant-quick-btn" *ngFor="let item of settings?.quick_actions?.slice(0, 8) || []" (click)="useQuick(item)">
+  <section class="assistant-quick" *ngIf="visibleQuickActions.length" (click)="$event.stopPropagation()">
+    <button type="button" class="assistant-quick-btn" *ngFor="let item of visibleQuickActions" (click)="useQuick(item)">
       {{ item }}
     </button>
   </section>
@@ -57,7 +67,7 @@
     <input
       class="assistant-input"
       type="text"
-      placeholder="Ask about billing, appointments, lab, pharmacy…"
+      [placeholder]="placeholder"
       [(ngModel)]="input"
       (keydown.enter)="send()"
       [disabled]="loading"

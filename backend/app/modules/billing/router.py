@@ -16,6 +16,7 @@ from app.schemas.billing import (
     BillingInvoicePreview,
     BillingInvoicePreviewRequest,
     BillingInvoiceRead,
+    BillingInvoiceStickerRead,
     BillingSettingsRead,
     BillingSettingsUpdate,
     BillingServiceControlsUpdate,
@@ -48,7 +49,7 @@ def update_billing_settings(
 
 @router.get("/services", response_model=list[BillingServiceRead], dependencies=[Depends(require_permissions("billing.view"))])
 def list_billing_services(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[BillingServiceRead]:
-    return [BillingServiceRead.model_validate(item, from_attributes=True) for item in BillingServiceManager(db).list_services(user)]
+    return [BillingServiceRead.model_validate(item) for item in BillingServiceManager(db).list_services(user)]
 
 
 @router.post(
@@ -63,7 +64,7 @@ def create_billing_service(
     db: Session = Depends(get_db),
 ) -> BillingServiceRead:
     service = BillingServiceManager(db).create_service(payload, user, context)
-    return BillingServiceRead.model_validate(service, from_attributes=True)
+    return BillingServiceRead.model_validate(service)
 
 
 @router.patch(
@@ -79,7 +80,7 @@ def update_billing_service_controls(
     db: Session = Depends(get_db),
 ) -> BillingServiceRead:
     service = BillingServiceManager(db).update_service_controls(service_id, payload, user, context)
-    return BillingServiceRead.model_validate(service, from_attributes=True)
+    return BillingServiceRead.model_validate(service)
 
 
 @router.get("/invoices", response_model=list[BillingInvoiceListItem], dependencies=[Depends(require_permissions("billing.view"))])
@@ -87,6 +88,8 @@ def list_billing_invoices(
     q: str | None = None,
     internal_referral_user_id: UUID | None = None,
     status: str | None = None,
+    payment_status: str | None = None,
+    source_module: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     user=Depends(get_current_user),
@@ -96,6 +99,8 @@ def list_billing_invoices(
         q=q,
         internal_referral_user_id=internal_referral_user_id,
         status=status,
+        payment_status=payment_status,
+        source_module=source_module,
         date_from=date_from,
         date_to=date_to,
     )
@@ -106,6 +111,15 @@ def list_billing_invoices(
 def get_billing_invoice(invoice_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> BillingInvoiceRead:
     invoice = BillingServiceManager(db).get_invoice(invoice_id, user)
     return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
+
+
+@router.get(
+    "/invoices/{invoice_id}/stickers",
+    response_model=list[BillingInvoiceStickerRead],
+    dependencies=[Depends(require_permissions("billing.sticker.print"))],
+)
+def get_billing_invoice_stickers(invoice_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[BillingInvoiceStickerRead]:
+    return BillingServiceManager(db).get_invoice_stickers(invoice_id, user)
 
 
 @router.get("/reports/summary", response_model=BillingSummaryRead, dependencies=[Depends(require_permissions("reporting.view"))])

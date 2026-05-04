@@ -22,6 +22,9 @@ class BillingServiceCreate(BaseModel):
 
 class BillingServiceRead(BillingServiceCreate):
     id: UUID
+    source_module: str | None = None
+    source_entity_id: UUID | None = None
+    billing_instruction: str | None = None
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -77,10 +80,12 @@ class BillingInvoiceCreate(BaseModel):
 
 class BillingInvoiceItemRead(BaseModel):
     id: UUID
-    billing_service_id: UUID
+    billing_service_id: UUID | None = None
+    source_entity_id: UUID | None = None
     source_opd_visit_order_id: UUID | None = None
     source_label: str | None = None
     source_module: str | None = None
+    billing_instruction: str | None = None
     service_name: str
     quantity: Decimal
     unit_price: Decimal
@@ -154,10 +159,29 @@ class BillingInvoiceListItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BillingInvoiceStickerRead(BaseModel):
+    invoice_id: UUID
+    invoice_number: str
+    invoice_item_id: UUID
+    patient_id: UUID
+    patient_number: str
+    patient_name: str
+    item_name: str
+    source_module: str
+    source_reference: str | None = None
+    quantity: Decimal
+    room_number: str | None = None
+    token: str
+    barcode_value: str
+    created_at: datetime
+
+
 class BillingInvoiceFilterParams(BaseModel):
     q: str | None = None
     internal_referral_user_id: UUID | None = None
     status: str | None = None
+    payment_status: str | None = None
+    source_module: str | None = None
     date_from: date | None = None
     date_to: date | None = None
 

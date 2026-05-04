@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models.billing import BillingService
 from app.models.branch import Branch
 from app.models.patient import Patient
 from app.models.pharmacy import (
@@ -515,19 +514,6 @@ def sync_investigations(session: Session, branch: Branch, actor: User) -> None:
         entity.requires_report = payload["requires_report"]
         stamp(entity, actor)
 
-        billing = session.scalar(select(BillingService).where(BillingService.service_code == payload["code"]))
-        if not billing:
-            billing = BillingService(service_code=payload["code"])
-            session.add(billing)
-        billing.branch_id = branch.id
-        billing.name = payload["test_name"]
-        billing.description = payload["description"]
-        billing.unit_price = decimal_value(payload["fee"])
-        billing.doctor_share_percentage = Decimal("10.00") if payload["service_area"] in {"laboratory", "radiology"} else Decimal("0.00")
-        billing.max_discount_percentage = Decimal("20.00")
-        billing.max_discount_amount = Decimal("300.00")
-        billing.room_number = payload["room_number"]
-        stamp(billing, actor)
 
 
 def main() -> None:

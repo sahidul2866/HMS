@@ -27,6 +27,9 @@ export class PharmacyInvestigationSettingsComponent {
   total = 0;
   editingId: string | null = null;
   editorOpen = false;
+  sortField: 'code' | 'test_name' | 'category' | 'service_area' | 'fee' | 'status' = 'test_name';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly form = this.fb.group({
     category_name: ['', Validators.required],
@@ -82,6 +85,42 @@ export class PharmacyInvestigationSettingsComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacyInvestigationSettingsComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = 'asc';
+  }
+
+  get displayedSettings(): PharmacyInvestigationSetting[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.settings].sort((a, b) => {
+      switch (this.sortField) {
+        case 'code':
+          return dir * (a.code || '').localeCompare(b.code || '');
+        case 'category':
+          return dir * (a.category_name || '').localeCompare(b.category_name || '');
+        case 'service_area':
+          return dir * (a.service_area || '').localeCompare(b.service_area || '');
+        case 'fee':
+          return dir * (Number(a.fee || 0) - Number(b.fee || 0));
+        case 'status':
+          return dir * Number(a.is_active) - dir * Number(b.is_active);
+        case 'test_name':
+        default:
+          return dir * (a.test_name || '').localeCompare(b.test_name || '');
+      }
+    });
   }
 
   openCreate(): void {

@@ -60,8 +60,8 @@ def seed_dashboard_timeseries(days: int = 30) -> str:
 
                 patient = patient_list[(offset + idx) % len(patient_list)]
                 items = [
-                    (services["CONS-GEN"], Decimal("1")),
-                    (services["CBC"], Decimal("1")) if idx == 1 else (services["XR-CHEST"], Decimal("1")),
+                    (services["OPD-CONS-GEN"], Decimal("1")),
+                    (services["INV-LAB-CBC"], Decimal("1")) if idx == 1 else (services["INV-RAD-CXR"], Decimal("1")),
                 ]
                 paid_amount = sum(service.unit_price * qty for service, qty in items)
 
@@ -138,4 +138,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

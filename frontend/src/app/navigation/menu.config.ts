@@ -9,7 +9,6 @@ export interface MenuItem {
 export const menuConfig: MenuItem[] = [
   { label: 'My Portal', icon: 'doctor', route: '/portal', permissions: ['patient.portal.view'] },
   { label: 'Dashboard', icon: 'dashboard', route: '/dashboard', permissions: ['dashboard.view'] },
-  { label: 'Appointments', icon: 'list', route: '/appointments', permissions: ['appointment.manage'] },
   {
     label: 'Patients',
     icon: 'patients',
@@ -24,7 +23,8 @@ export const menuConfig: MenuItem[] = [
     icon: 'billing',
     permissions: ['billing.view'],
     children: [
-      { label: 'Invoices', icon: 'receipt', route: '/billing', permissions: ['billing.invoice.create'] },
+      { label: 'Overview', icon: 'dashboard', route: '/billing', permissions: ['billing.invoice.create'] },
+      { label: 'Invoices', icon: 'receipt', route: '/billing/list', permissions: ['billing.invoice.create'] },
       { label: 'New Bill', icon: 'plus-user', route: '/billing/create', permissions: ['billing.invoice.create'] },
       { label: 'Due Payments', icon: 'list', route: '/billing/due-payments', permissions: ['billing.invoice.create'] },
       { label: 'Services', icon: 'service', route: '/billing/services', permissions: ['billing.service.manage'] },
@@ -36,12 +36,25 @@ export const menuConfig: MenuItem[] = [
     icon: 'opd',
     permissions: ['opd.view'],
     children: [
-      { label: 'Visits', icon: 'list', route: '/opd', permissions: ['opd.view'] },
+      { label: 'Dashboard', icon: 'dashboard', route: '/opd', permissions: ['opd.view'] },
+      { label: 'Visit List', icon: 'list', route: '/opd/visits', permissions: ['opd.view'] },
       { label: 'New Visit', icon: 'plus-user', route: '/opd/register', permissions: ['opd.view'] },
+      { label: 'Appointments', icon: 'calendar', route: '/appointments', permissions: ['appointment.manage'] },
+      { label: 'New Appointment', icon: 'plus-user', route: '/appointments/create', permissions: ['appointment.manage'] },
       { label: 'Settings', icon: 'settings', route: '/opd/settings', permissions: ['settings.user.manage'] },
     ],
   },
-  { label: 'IPD', icon: 'ipd', route: '/ipd', permissions: ['ipd.view'] },
+  {
+    label: 'IPD',
+    icon: 'ipd',
+    permissions: ['ipd.view'],
+    children: [
+      { label: 'Overview', icon: 'dashboard', route: '/ipd', permissions: ['ipd.view'] },
+      { label: 'Admission List', icon: 'list', route: '/ipd/admissions', permissions: ['ipd.view'] },
+      { label: 'New Admission', icon: 'plus-user', route: '/ipd/admit', permissions: ['ipd.admission.manage'] },
+      { label: 'Settings', icon: 'settings', route: '/ipd/settings', permissions: ['ipd.admission.manage'] },
+    ],
+  },
   {
     label: 'ER',
     icon: 'service',

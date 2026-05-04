@@ -29,14 +29,14 @@
   <div class="layout-shell">
     <section class="page-card investigation-ledger">
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search number, code, customer, test" />
-        <select [(ngModel)]="customerFilter" [ngModelOptions]="{ standalone: true }">
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search number, code, customer, test" />
+        <select [(ngModel)]="customerFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All customers</option>
           @for (item of customers; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
         </select>
-        <select [(ngModel)]="statusFilter" [ngModelOptions]="{ standalone: true }">
+        <select [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All statuses</option>
           <option value="ordered">Ordered</option>
           <option value="collected">Collected</option>
@@ -44,14 +44,13 @@
           <option value="completed">Completed</option>
           <option value="verified">Verified</option>
         </select>
-        <select [(ngModel)]="serviceAreaFilter" [ngModelOptions]="{ standalone: true }">
+        <select [(ngModel)]="serviceAreaFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All service areas</option>
           <option value="laboratory">Laboratory</option>
           <option value="radiology">Radiology</option>
         </select>
-        <input [(ngModel)]="dateFrom" [ngModelOptions]="{ standalone: true }" type="date" />
-        <input [(ngModel)]="dateTo" [ngModelOptions]="{ standalone: true }" type="date" />
-        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
+        <input [(ngModel)]="dateFrom" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" type="date" />
+        <input [(ngModel)]="dateTo" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" type="date" />
       </div>
 
       <div class="status-strip">
@@ -72,16 +71,16 @@
       <table class="table">
         <thead>
           <tr>
-            <th>No</th>
-            <th>Tests</th>
-            <th>Customer/Patient</th>
-            <th>Status</th>
-            <th>Total</th>
+            <th class="sortable-th" (click)="toggleSort('number')">No</th>
+            <th class="sortable-th" (click)="toggleSort('tests')">Tests</th>
+            <th class="sortable-th" (click)="toggleSort('customer')">Customer/Patient</th>
+            <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+            <th class="sortable-th" (click)="toggleSort('total_amount')">Total</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of investigations; track item.id) {
+          @for (item of displayedInvestigations; track item.id) {
             <tr>
               <td><strong>{{ item.investigation_number }}</strong><div class="muted-line">{{ item.ordered_at }}</div></td>
               <td>{{ item.setting_name || 'Investigation order' }}<div class="muted-line">{{ item.test_count }} test(s) · {{ item.service_area || '-' }}</div></td>

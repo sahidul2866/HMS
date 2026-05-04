@@ -48,3 +48,8 @@
 .page-card:last-child {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
 }
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}

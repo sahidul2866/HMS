@@ -25,8 +25,8 @@ export class AppLayoutComponent {
   readonly quickActions = [
     { label: 'New Bill', route: '/billing/create', permissions: [PERMISSIONS.billingInvoiceCreate], tone: 'primary' },
     { label: 'Due', route: '/billing/due-payments', permissions: [PERMISSIONS.billingInvoiceCreate] },
-    { label: 'OPD', route: '/opd/register', permissions: [PERMISSIONS.opdView] },
-    { label: 'IPD', route: '/ipd/admit', permissions: [PERMISSIONS.ipdAdmissionManage] },
+    { label: 'OPD List', route: '/opd/visits', permissions: [PERMISSIONS.opdView] },
+    { label: 'IPD List', route: '/ipd/admissions', permissions: [PERMISSIONS.ipdAdmissionManage] },
     { label: 'Diagnostics', route: '/diagnostics/orders', permissions: [PERMISSIONS.laboratoryView] },
     { label: 'Pharmacy Sale', route: '/pharmacy/sales', permissions: [PERMISSIONS.pharmacyView] },
   ];

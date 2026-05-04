@@ -51,32 +51,31 @@
       </div>
 
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search purchase or supplier" />
-        <select [(ngModel)]="medicineFilter" [ngModelOptions]="{ standalone: true }">
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search purchase or supplier" />
+        <select [(ngModel)]="medicineFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All medicines</option>
           @for (item of medicines; track item.id) {
             <option [value]="item.id">{{ item.name }}</option>
           }
         </select>
-        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
       </div>
 
       <table class="table">
         <thead>
           <tr>
-            <th>Purchase No</th>
-            <th>Medicine</th>
-            <th>Supplier</th>
+            <th class="sortable-th" (click)="toggleSort('purchase_number')">Purchase No</th>
+            <th class="sortable-th" (click)="toggleSort('medicine')">Medicine</th>
+            <th class="sortable-th" (click)="toggleSort('supplier')">Supplier</th>
             <th>Batch</th>
-            <th>Qty</th>
-            <th>Rate</th>
-            <th>Total</th>
-            <th>Date</th>
+            <th class="sortable-th" (click)="toggleSort('quantity')">Qty</th>
+            <th class="sortable-th" (click)="toggleSort('unit_cost')">Rate</th>
+            <th class="sortable-th" (click)="toggleSort('total_amount')">Total</th>
+            <th class="sortable-th" (click)="toggleSort('purchase_date')">Date</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of purchases; track item.id) {
+          @for (item of displayedPurchases; track item.id) {
             <tr>
               <td><strong>{{ item.purchase_number }}</strong><div class="muted-line">{{ item.invoice_number || '-' }}</div></td>
               <td>{{ item.medicine_name }}</td>

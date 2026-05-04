@@ -1,0 +1,88 @@
+:host {
+  display: block;
+}
+
+.module-hero {
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.2), transparent 30rem),
+    linear-gradient(135deg, rgba(30, 41, 59, 0.98), rgba(37, 99, 235, 0.9));
+  color: #f8fbff;
+}
+
+.kpi-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.kpi-card {
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.kpi-card span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.kpi-card strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: #0f172a;
+}
+
+.overview-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-wide {
+  grid-column: 1 / -1;
+}
+
+.due-list,
+.ref-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.due-item,
+.ref-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.due-item {
+  cursor: pointer;
+  text-align: left;
+}
+
+.due-item span,
+.ref-item span {
+  display: block;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.row-link {
+  cursor: pointer;
+}
+
+.row-link:hover {
+  background: rgba(239, 246, 255, 0.66);
+}
+
+@media (max-width: 920px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}

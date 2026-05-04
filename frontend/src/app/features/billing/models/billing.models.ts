@@ -5,6 +5,9 @@ export interface BillingService {
   service_code: string;
   name: string;
   description?: string | null;
+  source_module?: string | null;
+  source_entity_id?: string | null;
+  billing_instruction?: string | null;
   unit_price: string;
   doctor_share_percentage: string;
   max_discount_percentage?: string | null;
@@ -136,10 +139,12 @@ export interface BillingRefundPayload {
 
 export interface BillingInvoiceItem {
   id: string;
-  billing_service_id: string;
+  billing_service_id?: string | null;
+  source_entity_id?: string | null;
   source_opd_visit_order_id?: string | null;
   source_label?: string | null;
   source_module?: string | null;
+  billing_instruction?: string | null;
   service_name: string;
   quantity: string;
   unit_price: string;
@@ -205,10 +210,29 @@ export interface BillingInvoiceListItem {
   created_at: string;
 }
 
+export interface BillingInvoiceSticker {
+  invoice_id: string;
+  invoice_number: string;
+  invoice_item_id: string;
+  patient_id: string;
+  patient_number: string;
+  patient_name: string;
+  item_name: string;
+  source_module: string;
+  source_reference?: string | null;
+  quantity: string;
+  room_number?: string | null;
+  token: string;
+  barcode_value: string;
+  created_at: string;
+}
+
 export interface BillingInvoiceFilters {
   q?: string;
   internal_referral_user_id?: string;
   status?: string;
+  payment_status?: string;
+  source_module?: string;
   date_from?: string;
   date_to?: string;
 }

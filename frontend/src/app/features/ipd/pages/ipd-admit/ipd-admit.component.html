@@ -4,32 +4,12 @@
       <div>
         <div class="hero-kicker">IPD Admission</div>
         <h1 class="page-title">Admit Inpatient Patient</h1>
-        <p class="page-subtitle">Structured admission intake for patient identity, grantor details, bed allocation, and financial readiness before moving into the live IPD workspace.</p>
+        <p class="page-subtitle">Compact admission intake for patient, bed, doctor, and finance setup.</p>
       </div>
       <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="backToOverview()">Back To IPD Overview</button>
       </div>
-    </div>
-
-    <div class="hero-metrics">
-      <article class="hero-metric">
-        <span>Admission Progress</span>
-        <strong>{{ admissionProgress }}%</strong>
-        <div class="progress-track">
-          <span [style.width.%]="admissionProgress"></span>
-        </div>
-      </article>
-      <article class="hero-metric">
-        <span>Patient</span>
-        <strong>{{ patientDisplayName }}</strong>
-        <small>{{ selectedPatient?.patient_number || 'Search or select a patient' }}</small>
-      </article>
-      <article class="hero-metric">
-        <span>Bed Plan</span>
-        <strong>{{ selectedBedSummary }}</strong>
-        <small>{{ filteredBeds.length }} available in current filter</small>
-      </article>
     </div>
   </section>
 
@@ -39,7 +19,6 @@
         <div>
           <div class="section-eyebrow">Step 1</div>
           <h2 class="section-title">Patient Lookup And Intake</h2>
-          <p class="section-copy">Search the existing patient registry first. The remaining fields organize the admission intake around the selected patient and current bed availability.</p>
         </div>
         @if (selectedPatient) {
           <div class="selection-badge">
@@ -51,25 +30,35 @@
 
       <form [formGroup]="form" (ngSubmit)="submit()">
         <div class="lookup-banner">
-          <div class="lookup-head">
-            <div class="lookup-copy">
-              <div class="lookup-title">Existing Patient Search</div>
-              <p>Use patient number, name, phone, or email. Admission creation stays tied to the current backend-safe IPD payload.</p>
+          @if (selectedPatient && !showPatientLookup) {
+            <div class="selected-context-row">
+              <div class="selected-context-copy">
+                <strong>{{ selectedPatient.patient_number }} · {{ patientDisplayName }}</strong>
+                <span>{{ selectedPatient.phone || 'No mobile' }} · {{ selectedPatient.email || 'No email' }}</span>
+              </div>
+              <div class="lookup-actions">
+                <button class="secondary-btn" type="button" (click)="enablePatientLookup()">Change Patient</button>
+                <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+              </div>
             </div>
-            <div class="lookup-hint-card">
-              <strong>Legacy intake aligned</strong>
-              <span>The layout mirrors department, doctor, patient, grantor, and bed sections from the old workflow.</span>
+          } @else {
+            <div class="lookup-title">Find Existing Patient</div>
+            <div class="lookup-row">
+              <div class="search-stack">
+                <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
+                @if (patientSearchResults.length) {
+                  <div class="inline-search-card">
+                    @for (patient of patientSearchResults; track patient.id) {
+                      <button class="inline-result" type="button" (click)="applyPatient(patient)">
+                        <strong>{{ patient.patient_number }} - {{ patient.full_name }}</strong>
+                        <span>{{ patient.phone || 'No mobile' }} · {{ patient.email || 'No email' }}</span>
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
             </div>
-          </div>
-
-          <div class="lookup-row">
-            <input [formControl]="patientLookupControl" type="text" placeholder="Search by patient number, phone, email, or name" />
-            <button class="secondary-btn" type="button" (click)="searchPatients()">Search</button>
-            <button class="ghost-btn" type="button" [disabled]="!patientSearchResults.length" (click)="openPatientLookupModal()">View Matches</button>
-            @if (selectedPatient) {
-              <button class="danger-btn" type="button" (click)="clearPatientSelection()">Clear</button>
-            }
-          </div>
+          }
         </div>
 
         <div class="section-block">
@@ -139,18 +128,20 @@
           </div>
 
           <div class="form-grid ipd-grid compact-grid">
-            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.patient_id, submitted)">
-              <span>Selected Patient</span>
-              <select formControlName="patient_id" (change)="onPatientChanged()">
-                <option value="">Select patient</option>
-                @for (patient of patients; track patient.id) {
-                  <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+            @if (!selectedPatient || showPatientLookup) {
+              <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.patient_id, submitted)">
+                <span>Selected Patient</span>
+                <select formControlName="patient_id" (change)="onPatientChanged()">
+                  <option value="">Select patient</option>
+                  @for (patient of patients; track patient.id) {
+                    <option [value]="patient.id">{{ patient.patient_number }} - {{ patient.first_name }} {{ patient.last_name }}</option>
+                  }
+                </select>
+                @if (validation.isInvalid(form.controls.patient_id, submitted)) {
+                  <div class="field-error">{{ validation.errorMessage(form.controls.patient_id, 'Patient') }}</div>
                 }
-              </select>
-              @if (validation.isInvalid(form.controls.patient_id, submitted)) {
-                <div class="field-error">{{ validation.errorMessage(form.controls.patient_id, 'Patient') }}</div>
-              }
-            </label>
+              </label>
+            }
             <label class="field">
               <span>Booking Date</span>
               <input type="date" formControlName="booking_date" />
@@ -309,10 +300,12 @@
         <div class="section-eyebrow">Admission Snapshot</div>
         <h3>{{ patientDisplayName }}</h3>
         <ul class="summary-list">
+          <li><span>Progress</span><strong>{{ admissionProgress }}%</strong></li>
           <li><span>Patient ID</span><strong>{{ selectedPatient?.patient_number || 'Pending' }}</strong></li>
           <li><span>Doctor</span><strong>{{ selectedDoctorName }}</strong></li>
           <li><span>Department</span><strong>{{ form.getRawValue().department_name || 'Pending' }}</strong></li>
           <li><span>Ward / Bed</span><strong>{{ selectedBedSummary }}</strong></li>
+          <li><span>Available Beds</span><strong>{{ filteredBeds.length }}</strong></li>
           <li><span>Advance</span><strong>{{ form.getRawValue().advance_amount || 0 }}</strong></li>
         </ul>
         <div class="summary-meter">

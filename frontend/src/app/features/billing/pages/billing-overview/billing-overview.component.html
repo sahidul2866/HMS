@@ -1,0 +1,113 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Billing Dashboard</div>
+        <h1 class="page-title">Billing Overview</h1>
+        <div class="page-subtitle">Collection, due, refunds, and referral summary in one place.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="goToInvoiceList()">Invoice List</button>
+        <button class="secondary-btn" type="button" (click)="goToDueList()">Due Payments</button>
+        <button class="primary-btn" type="button" (click)="goToCreateInvoice()">Create Invoice</button>
+      </div>
+    </div>
+  </section>
+
+  @if (summary) {
+    <section class="kpi-grid">
+      <article class="kpi-card"><span>Posted Invoices</span><strong>{{ summary.posted_invoice_count }}</strong></article>
+      <article class="kpi-card"><span>Void Invoices</span><strong>{{ summary.void_invoice_count }}</strong></article>
+      <article class="kpi-card"><span>Gross Amount</span><strong>{{ formatCurrency(summary.gross_amount) }}</strong></article>
+      <article class="kpi-card"><span>Discount Amount</span><strong>{{ formatCurrency(summary.discount_amount) }}</strong></article>
+      <article class="kpi-card"><span>Net Amount</span><strong>{{ formatCurrency(summary.net_amount) }}</strong></article>
+      <article class="kpi-card"><span>Referral Amount</span><strong>{{ formatCurrency(summary.referred_doctor_amount) }}</strong></article>
+    </section>
+  }
+
+  <section class="overview-grid">
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Pending Due Queue</h2>
+          <div class="section-copy">Invoices with outstanding balance requiring follow-up.</div>
+        </div>
+      </div>
+      <div class="due-list">
+        @for (invoice of dueInvoices; track invoice.id) {
+          <button class="due-item" type="button" (click)="openInvoice(invoice.id)">
+            <div>
+              <strong>{{ invoice.invoice_number }}</strong>
+              <span>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</span>
+            </div>
+            <b>{{ formatCurrency(invoice.due_amount) }}</b>
+          </button>
+        }
+        @if (!dueInvoices.length) {
+          <div class="empty-state">No pending due invoices.</div>
+        }
+      </div>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Top Referral Doctors</h2>
+          <div class="section-copy">Referral contribution based on net billed amount.</div>
+        </div>
+      </div>
+      <div class="ref-list">
+        @for (row of referrals; track row.referred_doctor_name) {
+          <div class="ref-item">
+            <strong>{{ row.referred_doctor_name }}</strong>
+            <span>{{ row.invoice_count }} invoices</span>
+            <b>{{ formatCurrency(row.net_amount) }}</b>
+          </div>
+        }
+        @if (!referrals.length) {
+          <div class="empty-state">No referral data available.</div>
+        }
+      </div>
+    </section>
+
+    <section class="page-card overview-wide">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Recent Posted Invoices</h2>
+          <div class="section-copy">Quick access to latest billing activity.</div>
+        </div>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Patient</th>
+            <th>Total</th>
+            <th>Paid</th>
+            <th>Due</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invoice of recentInvoices; track invoice.id) {
+            <tr class="row-link" (click)="openInvoice(invoice.id)">
+              <td><strong>{{ invoice.invoice_number }}</strong></td>
+              <td>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</td>
+              <td>{{ formatCurrency(invoice.total_amount) }}</td>
+              <td>{{ formatCurrency(invoice.paid_amount) }}</td>
+              <td>{{ formatCurrency(invoice.due_amount) }}</td>
+              <td>{{ invoice.created_at | date:'medium' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  </section>
+</section>
+
+<app-floating-assistant
+  title="Billing Assistant"
+  context="billing-dashboard"
+  [quickActions]="assistantQuickActions"
+  placeholder="Ask about dues, invoices, refunds, collections..."
+></app-floating-assistant>

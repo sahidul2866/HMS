@@ -24,6 +24,9 @@ export class PharmacyReturnsComponent {
   page = 1;
   pageSize = 10;
   total = 0;
+  sortField: 'return_number' | 'sale_number' | 'customer' | 'medicine' | 'quantity' | 'total_amount' | 'returned_at' = 'returned_at';
+  sortDirection: 'asc' | 'desc' = 'desc';
+  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly form = this.fb.group({
     returned_at: ['', Validators.required],
@@ -50,6 +53,44 @@ export class PharmacyReturnsComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+    if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = setTimeout(() => this.loadPage(), 250);
+  }
+
+  toggleSort(field: PharmacyReturnsComponent['sortField']): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      return;
+    }
+    this.sortField = field;
+    this.sortDirection = field === 'returned_at' ? 'desc' : 'asc';
+  }
+
+  get displayedReturns(): PharmacyReturn[] {
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    return [...this.returns].sort((a, b) => {
+      switch (this.sortField) {
+        case 'return_number':
+          return dir * a.return_number.localeCompare(b.return_number);
+        case 'sale_number':
+          return dir * (a.sale_number || '').localeCompare(b.sale_number || '');
+        case 'customer':
+          return dir * (a.customer_name || '').localeCompare(b.customer_name || '');
+        case 'medicine':
+          return dir * (a.medicine_name || '').localeCompare(b.medicine_name || '');
+        case 'quantity':
+          return dir * (Number(a.quantity || 0) - Number(b.quantity || 0));
+        case 'total_amount':
+          return dir * (Number(a.total_amount || 0) - Number(b.total_amount || 0));
+        case 'returned_at':
+        default:
+          return dir * (a.returned_at || '').localeCompare(b.returned_at || '');
+      }
+    });
   }
 
   selectReturn(item: PharmacyReturn): void {

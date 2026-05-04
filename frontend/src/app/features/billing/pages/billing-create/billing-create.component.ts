@@ -605,6 +605,21 @@ export class BillingCreateComponent {
     this.persistState();
   }
 
+  selectCatalogOptionAndAddNext(index: number, option: BillingCatalogOption): void {
+    this.selectCatalogOption(index, option);
+    this.addItem();
+    this.activeItemSearchIndex = this.items.length - 1;
+  }
+
+  onCatalogTab(index: number, event: KeyboardEvent): void {
+    const options = this.filteredCatalogOptions(index);
+    if (!options.length) {
+      return;
+    }
+    event.preventDefault();
+    this.selectCatalogOptionAndAddNext(index, options[0]);
+  }
+
   get maxItemDiscountPercentage(): number {
     return Number(this.billingSettings?.max_item_discount_percentage ?? 100);
   }
@@ -690,7 +705,7 @@ export class BillingCreateComponent {
   }
 
   openBillingDesk(): void {
-    void this.router.navigate(['/billing']);
+    void this.router.navigate(['/billing/list']);
   }
 
   resetInvoiceDraft(): void {
@@ -774,7 +789,10 @@ export class BillingCreateComponent {
             this.clearDraftKeepContext();
             this.printInvestigationStickers(postedInvoice);
             this.notificationService.success(`Invoice ${postedInvoice.invoice_number} created successfully.`);
-            void this.router.navigate(['/billing/due-payments'], { queryParams: { invoiceId: postedInvoice.id, printInvoice: '1' } });
+            const hasDue = Number(postedInvoice.due_amount || 0) > 0;
+            void this.router.navigate([hasDue ? '/billing/due-payments' : '/billing/list'], {
+              queryParams: { invoiceId: postedInvoice.id, printInvoice: '1' },
+            });
           };
 
           const collectInitialPayment = () => {

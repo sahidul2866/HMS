@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { debounceTime, distinctUntilChanged } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize } from 'rxjs';
 
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
@@ -10,6 +10,8 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { CreatePatientPayload, Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
+import { DoctorSlotAvailability } from '../../../appointments/models/appointment.models';
+import { AppointmentsService } from '../../../appointments/services/appointments.service';
 import { CreateOPDVisitPayload } from '../../models/opd.models';
 import { OPDService } from '../../services/opd.service';
 
@@ -27,6 +29,7 @@ export class OPDRegisterComponent {
   private readonly opdService = inject(OPDService);
   private readonly patientService = inject(PatientService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
+  private readonly appointmentsService = inject(AppointmentsService);
   private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -38,11 +41,14 @@ export class OPDRegisterComponent {
   doctorDepartmentFilter = '';
   doctorView: 'cards' | 'list' = 'cards';
   selectedPatient: Patient | null = null;
+  showPatientLookup = true;
   activePatientSearchContext: PatientSearchContext = null;
   submitted = false;
   saving = false;
   isFollowUpAllowed = false;
-  submitMode: 'queue' | 'invoice' = 'queue';
+  loadingSlots = false;
+  slots: DoctorSlotAvailability[] = [];
+  selectedSlot: DoctorSlotAvailability | null = null;
 
   readonly form = this.fb.group({
     patient_id: [''],
@@ -56,6 +62,7 @@ export class OPDRegisterComponent {
     emergency_contact_name: [''],
     emergency_contact_phone: [''],
     visit_date: [new Date().toISOString().slice(0, 10), Validators.required],
+    slot_date: [new Date().toISOString().slice(0, 10), Validators.required],
     department_name: ['General OPD', Validators.required],
     doctor_user_id: [''],
     consulting_doctor_name: ['', Validators.required],
@@ -78,6 +85,8 @@ export class OPDRegisterComponent {
         this.loadPatientContext(patientId);
       }
     });
+    this.form.controls.doctor_user_id.valueChanges.subscribe(() => this.loadSlots());
+    this.form.controls.slot_date.valueChanges.subscribe(() => this.loadSlots());
   }
 
   loadFormData(): void {
@@ -101,6 +110,7 @@ export class OPDRegisterComponent {
 
   applyPatient(result: PatientLookupResult): void {
     this.patchPatientContext({ ...result } as Patient, result.full_name);
+    this.showPatientLookup = false;
     this.closePatientSearch();
     // Check follow-up eligibility if doctor is selected
     const doctorId = this.form.getRawValue().doctor_user_id;
@@ -115,6 +125,7 @@ export class OPDRegisterComponent {
   private loadPatientContext(patientId: string): void {
     this.patientService.get(patientId).subscribe((patient) => {
       this.patchPatientContext(patient);
+      this.showPatientLookup = false;
       const doctorId = this.form.getRawValue().doctor_user_id;
       const doctor = doctorId ? this.doctors.find((item) => item.id === doctorId) : null;
       if (doctor) {
@@ -145,6 +156,7 @@ export class OPDRegisterComponent {
 
   clearPatientSelection(): void {
     this.selectedPatient = null;
+    this.showPatientLookup = true;
     this.patientLookupControl.setValue('', { emitEvent: false });
     this.form.patchValue(
       {
@@ -169,6 +181,11 @@ export class OPDRegisterComponent {
     this.activePatientSearchContext = null;
   }
 
+  enablePatientLookup(): void {
+    this.showPatientLookup = true;
+    this.patientLookupControl.setValue('', { emitEvent: false });
+  }
+
   showSearchContext(context: PatientSearchContext): boolean {
     return this.activePatientSearchContext === context && this.patientSearchResults.length > 0;
   }
@@ -184,6 +201,7 @@ export class OPDRegisterComponent {
       consulting_doctor_name: doctor.full_name,
       consultation_fee: Number(doctor.opd_consultation_fee ?? 0),
     });
+    this.loadSlots();
     this.checkFollowUpEligibility(doctor);
   }
 
@@ -193,7 +211,36 @@ export class OPDRegisterComponent {
       consulting_doctor_name: doctor.full_name,
       consultation_fee: Number(doctor.opd_consultation_fee ?? 0),
     });
+    this.loadSlots();
     this.checkFollowUpEligibility(doctor);
+  }
+
+  loadSlots(): void {
+    const doctorId = this.form.controls.doctor_user_id.getRawValue();
+    const slotDate = this.form.controls.slot_date.getRawValue();
+    this.selectedSlot = null;
+    this.slots = [];
+    if (!doctorId || !slotDate) {
+      return;
+    }
+    this.loadingSlots = true;
+    this.appointmentsService
+      .getDoctorSlots(doctorId, slotDate)
+      .pipe(finalize(() => (this.loadingSlots = false)))
+      .subscribe((response) => {
+        this.slots = response.slots;
+      });
+  }
+
+  selectSlot(slot: DoctorSlotAvailability): void {
+    if (slot.status !== 'available') {
+      return;
+    }
+    this.selectedSlot = slot;
+  }
+
+  formatTime(value: string): string {
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   get filteredDoctors(): User[] {
@@ -272,10 +319,6 @@ export class OPDRegisterComponent {
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }
 
-  setSubmitMode(mode: 'queue' | 'invoice'): void {
-    this.submitMode = mode;
-  }
-
   onVisitTypeChanged(): void {
     const value = this.form.getRawValue();
     if (value.visit_type === 'follow_up' && !this.isFollowUpAllowed) {
@@ -340,12 +383,17 @@ export class OPDRegisterComponent {
       this.notificationService.error('Follow-up visit is not allowed for this patient and doctor combination.');
       return;
     }
+    if (value.doctor_user_id && !this.selectedSlot) {
+      this.notificationService.warning('Please select an available slot for this doctor.');
+      return;
+    }
 
     this.saving = true;
     const createVisit = (patientId: string) => {
       const payload: CreateOPDVisitPayload = {
         patient_id: patientId,
         visit_date: value.visit_date ?? new Date().toISOString().slice(0, 10),
+        slot_start_at: this.selectedSlot?.slot_start_at || null,
         department_name: value.department_name ?? 'General OPD',
         doctor_user_id: value.doctor_user_id || null,
         consulting_doctor_name: value.consulting_doctor_name ?? '',
@@ -360,11 +408,7 @@ export class OPDRegisterComponent {
           this.saving = false;
           this.submitted = false;
           this.notificationService.success(`OPD visit ${visit.visit_number} created.`);
-          if (this.submitMode === 'invoice') {
-            void this.router.navigate(['/billing/create'], { queryParams: { opdVisitId: visit.id } });
-          } else {
-            void this.router.navigate(['/opd'], { queryParams: { openVisit: visit.id } });
-          }
+          void this.router.navigate(['/opd/visits'], { queryParams: { openVisit: visit.id } });
           this.resetForm();
         },
         error: () => {
@@ -420,6 +464,7 @@ export class OPDRegisterComponent {
       emergency_contact_name: '',
       emergency_contact_phone: '',
       visit_date: new Date().toISOString().slice(0, 10),
+      slot_date: new Date().toISOString().slice(0, 10),
       department_name: 'General OPD',
       doctor_user_id: '',
       consulting_doctor_name: '',
@@ -432,5 +477,7 @@ export class OPDRegisterComponent {
     this.patientLookupControl.setValue('', { emitEvent: false });
     this.closePatientSearch();
     this.isFollowUpAllowed = false;
+    this.selectedSlot = null;
+    this.slots = [];
   }
 }

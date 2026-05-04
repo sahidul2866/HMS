@@ -2,9 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { filter } from 'rxjs';
 
 import { AuthService } from '../../../../core/services/auth.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { SessionService } from '../../../../core/services/session.service';
 
 @Component({
   selector: 'app-login',
@@ -17,6 +19,7 @@ export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly notificationService = inject(NotificationService);
+  private readonly sessionService = inject(SessionService);
   private readonly router = inject(Router);
 
   errorMessage = '';
@@ -27,6 +30,18 @@ export class LoginComponent {
     username_or_email: ['superadmin', [Validators.required]],
     password: ['Admin123!', [Validators.required, Validators.minLength(8)]],
   });
+
+  constructor() {
+    this.sessionService.state$
+      .pipe(filter((state) => state.initialized && state.authenticated))
+      .subscribe(() => {
+        void this.redirectFromLogin(this.sessionService.getLandingRoute());
+      });
+
+    if (this.sessionService.snapshot.authenticated) {
+      void this.redirectFromLogin(this.sessionService.getLandingRoute());
+    }
+  }
 
   togglePasswordVisibility(): void {
     this.showPassword = !this.showPassword;
@@ -43,12 +58,23 @@ export class LoginComponent {
       next: (user) => {
         this.loading = false;
         this.notificationService.success('Login successful.');
-        void this.router.navigate([this.authService.getLandingRoute(user)]);
+        void this.redirectFromLogin(this.authService.getLandingRoute(user));
       },
       error: (error) => {
         this.loading = false;
         this.errorMessage = error.message ?? 'Unable to login';
       },
     });
+  }
+
+  private async redirectFromLogin(route: string): Promise<void> {
+    if (!route || !this.router.url.startsWith('/auth/login')) {
+      return;
+    }
+    const navigated = await this.router.navigateByUrl(route);
+    if (navigated) {
+      return;
+    }
+    window.location.hash = `#${route.startsWith('/') ? route : `/${route}`}`;
   }
 }

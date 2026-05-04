@@ -186,7 +186,7 @@
             <div><span>{{ item.label }}</span><b>{{ item.value }}</b></div>
           }
         </div>
-        @if (analytics.appointment_analytics.upcoming?.length) {
+        @if (analytics.appointment_analytics.upcoming.length) {
           <div class="mini-list">
             @for (row of analytics.appointment_analytics.upcoming.slice(0, 3); track row.label + row.time) {
               <div><span>{{ row.label }}</span><small>{{ row.time }}</small></div>
@@ -318,7 +318,7 @@
     </section>
 
     <section class="module-access">
-      <a *appHasPermission="'billing.invoice.create'" routerLink="/billing">Billing <small>{{ kpiValue('Pending Bills') }} pending</small></a>
+      <a *appHasPermission="'billing.invoice.create'" routerLink="/billing/list">Billing <small>{{ kpiValue('Pending Bills') }} pending</small></a>
       <a *appHasPermission="'laboratory.view'" routerLink="/laboratory">Laboratory <small>{{ kpiValue('Lab Tests Today') }} today</small></a>
       <a *appHasPermission="'radiology.view'" routerLink="/radiology">Radiology <small>{{ analytics.lab_radiology_analytics.radiology_today }} today</small></a>
       <a *appHasPermission="'pharmacy.view'" routerLink="/pharmacy">Pharmacy <small>{{ formatMoney(analytics.pharmacy_inventory_analytics.sales_today) }}</small></a>

@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingPayment, BillingRefund, BillingService, ReferredDoctor, BillingSetting
+from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, BillingRefund, BillingService, ReferredDoctor, BillingSetting
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.billing import BillingInvoiceFilterParams
@@ -13,11 +13,58 @@ class BillingRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    @staticmethod
+    def _source_module_filter_values(value: str) -> list[str]:
+        normalized = (value or "").strip().lower()
+        if not normalized:
+            return []
+        mapping: dict[str, list[str]] = {
+            "laboratory": ["laboratory", "lab", "opd_investigation"],
+            "radiology": ["radiology"],
+            "pharmacy": ["pharmacy"],
+            "ipd": ["ipd", "ipd_bed_charge"],
+            "opd": ["opd", "opd_visit", "opd_orders", "opd_investigation"],
+            "inventory": ["inventory"],
+        }
+        return mapping.get(normalized, [normalized])
+
     def list_services(self, branch_id: UUID | None) -> list[BillingService]:
         stmt = select(BillingService).order_by(BillingService.name.asc())
         if branch_id:
             stmt = stmt.where((BillingService.branch_id == branch_id) | (BillingService.branch_id.is_(None)))
         return list(self.db.scalars(stmt))
+
+    def list_item_configs(self, branch_id: UUID | None) -> list[BillingItemConfig]:
+        stmt = select(BillingItemConfig).order_by(BillingItemConfig.service_name.asc())
+        if branch_id:
+            stmt = stmt.where((BillingItemConfig.branch_id == branch_id) | (BillingItemConfig.branch_id.is_(None)))
+        return list(self.db.scalars(stmt))
+
+    def list_item_configs_by_ids(self, config_ids: list[UUID], branch_id: UUID | None) -> list[BillingItemConfig]:
+        stmt = select(BillingItemConfig).where(BillingItemConfig.id.in_(config_ids))
+        if branch_id:
+            stmt = stmt.where((BillingItemConfig.branch_id == branch_id) | (BillingItemConfig.branch_id.is_(None)))
+        return list(self.db.scalars(stmt))
+
+    def get_item_config(self, config_id: UUID, branch_id: UUID | None) -> BillingItemConfig | None:
+        stmt = select(BillingItemConfig).where(BillingItemConfig.id == config_id)
+        if branch_id:
+            stmt = stmt.where((BillingItemConfig.branch_id == branch_id) | (BillingItemConfig.branch_id.is_(None)))
+        return self.db.scalar(stmt)
+
+    def find_item_config_by_source(self, source_module: str, source_entity_id: UUID, branch_id: UUID | None) -> BillingItemConfig | None:
+        stmt = select(BillingItemConfig).where(
+            BillingItemConfig.source_module == source_module,
+            BillingItemConfig.source_entity_id == source_entity_id,
+        )
+        if branch_id:
+            stmt = stmt.where((BillingItemConfig.branch_id == branch_id) | (BillingItemConfig.branch_id.is_(None)))
+        return self.db.scalar(stmt)
+
+    def create_item_config(self, config: BillingItemConfig) -> BillingItemConfig:
+        self.db.add(config)
+        self.db.flush()
+        return config
 
     def find_service_by_code(self, service_code: str, branch_id: UUID | None) -> BillingService | None:
         stmt = select(BillingService).where(BillingService.service_code == service_code)
@@ -88,6 +135,15 @@ class BillingRepository:
                 stmt = stmt.where(BillingInvoice.internal_referral_user_id == filters.internal_referral_user_id)
             if filters.status:
                 stmt = stmt.where(BillingInvoice.status == filters.status)
+            if filters.payment_status:
+                if filters.payment_status.strip().lower() == "due":
+                    stmt = stmt.where(BillingInvoice.due_amount > 0, BillingInvoice.status == "posted")
+                else:
+                    stmt = stmt.where(BillingInvoice.payment_status == filters.payment_status.strip().lower())
+            if filters.source_module:
+                module_values = self._source_module_filter_values(filters.source_module)
+                if module_values:
+                    stmt = stmt.join(BillingInvoice.items).where(func.lower(BillingInvoiceItem.source_module).in_(module_values))
             if filters.date_from:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) >= filters.date_from)
             if filters.date_to:

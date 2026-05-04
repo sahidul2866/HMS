@@ -116,6 +116,7 @@ class DashboardAnalyticsRead(BaseModel):
     bed_analytics: dict
     emergency_analytics: dict
     revenue_analytics: dict
+    finance_line: dict
     lab_radiology_analytics: dict
     pharmacy_inventory_analytics: dict
     ot_analytics: dict

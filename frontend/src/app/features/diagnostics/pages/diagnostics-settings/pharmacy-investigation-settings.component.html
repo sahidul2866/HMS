@@ -29,18 +29,17 @@
   <div class="grid-shell">
     <section class="page-card settings-catalog">
       <div class="filter-grid">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search test, code, category" />
-        <select [(ngModel)]="serviceAreaFilter" [ngModelOptions]="{ standalone: true }">
+        <input [(ngModel)]="search" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" placeholder="Search test, code, category" />
+        <select [(ngModel)]="serviceAreaFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="">All service areas</option>
           <option value="laboratory">Laboratory</option>
           <option value="radiology">Radiology</option>
         </select>
-        <select [(ngModel)]="activeFilter" [ngModelOptions]="{ standalone: true }">
+        <select [(ngModel)]="activeFilter" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }">
           <option value="true">Active</option>
           <option value="false">Inactive</option>
           <option value="">All statuses</option>
         </select>
-        <button class="secondary-btn" type="button" (click)="searchNow()">Apply</button>
       </div>
 
       <div class="status-strip">
@@ -61,19 +60,19 @@
       <table class="table">
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Test</th>
-            <th>Category</th>
-            <th>Area</th>
+            <th class="sortable-th" (click)="toggleSort('code')">Code</th>
+            <th class="sortable-th" (click)="toggleSort('test_name')">Test</th>
+            <th class="sortable-th" (click)="toggleSort('category')">Category</th>
+            <th class="sortable-th" (click)="toggleSort('service_area')">Area</th>
             <th>Room</th>
             <th>Range</th>
-            <th>Fee</th>
-            <th>Status</th>
+            <th class="sortable-th" (click)="toggleSort('fee')">Fee</th>
+            <th class="sortable-th" (click)="toggleSort('status')">Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of settings; track item.id) {
+          @for (item of displayedSettings; track item.id) {
             <tr>
               <td><strong>{{ item.code }}</strong></td>
               <td>

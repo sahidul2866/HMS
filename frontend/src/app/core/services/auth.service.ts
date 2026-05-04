@@ -250,6 +250,10 @@ export class AuthService {
   }
 
   getLandingRoute(user: User): string {
-    return user.effective_permissions.includes('patient.portal.view') && !!user.patient_id ? '/portal' : '/dashboard';
+    if (user.effective_permissions.includes('patient.portal.view') && !!user.patient_id) {
+      return '/portal';
+    }
+    this.sessionService.setUser(user);
+    return this.sessionService.getLandingRoute();
   }
 }

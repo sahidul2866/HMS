@@ -23,7 +23,25 @@ class BillingService(Base, BaseModelMixin):
     room_number: Mapped[str | None] = mapped_column(String(60))
 
     branch = relationship("Branch")
-    invoice_items = relationship("BillingInvoiceItem", back_populates="billing_service")
+
+
+class BillingItemConfig(Base, BaseModelMixin):
+    __tablename__ = "billing_item_configs"
+    __table_args__ = (UniqueConstraint("source_module", "source_entity_id", name="uq_billing_item_configs_source"),)
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    source_module: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_entity_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    service_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    service_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    room_number: Mapped[str | None] = mapped_column(String(60))
+    doctor_share_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
+    max_discount_percentage: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    max_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    billing_instruction: Mapped[str | None] = mapped_column(Text)
+
+    branch = relationship("Branch")
 
 
 class ReferredDoctor(Base, BaseModelMixin):
@@ -88,7 +106,8 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     __tablename__ = "billing_invoice_items"
 
     invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
-    billing_service_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_services.id"), nullable=False)
+    source_entity_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    billing_instruction: Mapped[str | None] = mapped_column(Text)
     source_opd_visit_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visit_orders.id"))
     source_label: Mapped[str | None] = mapped_column(String(180))
     source_module: Mapped[str | None] = mapped_column(String(40))
@@ -105,7 +124,6 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     doctor_share_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
     invoice = relationship("BillingInvoice", back_populates="items")
-    billing_service = relationship("BillingService", back_populates="invoice_items")
     source_opd_visit_order = relationship("OPDVisitOrder", foreign_keys=[source_opd_visit_order_id])
     item_links = relationship("BillingItemLink", back_populates="invoice_item", cascade="all, delete-orphan")
 

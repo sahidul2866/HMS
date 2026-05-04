@@ -2,10 +2,24 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
 
 import { NotificationService } from '../../../../core/services/notification.service';
+import { AppointmentsService } from '../../../appointments/services/appointments.service';
 import { AdminUser } from '../../../admin/models/admin.models';
 import { AdminUserService } from '../../../admin/services/admin-user.service';
+
+type OPDConfigType = 'fee' | 'header' | 'slot';
+
+interface DoctorSchedule {
+  id: string;
+  doctor_user_id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  slot_duration_minutes: number;
+  buffer_minutes: number;
+}
 
 @Component({
   selector: 'app-opd-settings',
@@ -17,6 +31,7 @@ import { AdminUserService } from '../../../admin/services/admin-user.service';
 export class OPDSettingsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly adminUserService = inject(AdminUserService);
+  private readonly appointmentsService = inject(AppointmentsService);
   private readonly notificationService = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -26,7 +41,9 @@ export class OPDSettingsComponent {
   saving = false;
   selectedDoctorId = '';
   editorOpen = false;
-  activeConfigType: 'fee' | 'header' = 'fee';
+  activeConfigType: OPDConfigType = 'fee';
+  scheduleSaving = false;
+  doctorSchedules: DoctorSchedule[] = [];
 
   readonly settingsForm = this.fb.group({
     opd_consultation_fee: [0, [Validators.required]],
@@ -39,6 +56,14 @@ export class OPDSettingsComponent {
     opd_prescription_header_chamber: [''],
     opd_prescription_header_phone: [''],
     opd_prescription_header_address: [''],
+  });
+
+  readonly slotForm = this.fb.group({
+    weekdays: this.fb.nonNullable.control<number[]>([0], [Validators.required]),
+    start_time: ['09:00', [Validators.required]],
+    end_time: ['17:00', [Validators.required]],
+    slot_duration_minutes: [15, [Validators.required, Validators.min(5), Validators.max(180)]],
+    buffer_minutes: [0, [Validators.required, Validators.min(0), Validators.max(60)]],
   });
 
   constructor() {
@@ -78,11 +103,14 @@ export class OPDSettingsComponent {
     return this.doctors.find((doctor) => doctor.id === this.selectedDoctorId) ?? null;
   }
 
-  openEditor(configType: 'fee' | 'header', doctorId: string): void {
+  openEditor(configType: OPDConfigType, doctorId: string): void {
     this.activeConfigType = configType;
     this.selectedDoctorId = doctorId;
     this.syncSelectedDoctor();
     this.editorOpen = true;
+    if (configType === 'slot') {
+      this.loadDoctorSchedules();
+    }
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { doctor: doctorId || null },
@@ -102,9 +130,16 @@ export class OPDSettingsComponent {
     return this.activeConfigType === 'header';
   }
 
+  get isSlotEditor(): boolean {
+    return this.activeConfigType === 'slot';
+  }
+
   onDoctorSelectionChanged(doctorId: string): void {
     this.selectedDoctorId = doctorId;
     this.syncSelectedDoctor();
+    if (this.isSlotEditor) {
+      this.loadDoctorSchedules();
+    }
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { doctor: doctorId || null },
@@ -145,6 +180,67 @@ export class OPDSettingsComponent {
     });
   }
 
+  saveSlotSettings(): void {
+    if (!this.selectedDoctor || this.slotForm.invalid || this.scheduleSaving) {
+      return;
+    }
+    const raw = this.slotForm.getRawValue();
+    const weekdays = (raw.weekdays ?? []).map((item) => Number(item)).filter((item) => item >= 0 && item <= 6);
+    if (!weekdays.length) {
+      this.notificationService.warning('Select at least one weekday.');
+      return;
+    }
+    this.scheduleSaving = true;
+    const requests = weekdays.map((weekday) =>
+      this.appointmentsService.upsertDoctorSchedule({
+        doctor_user_id: this.selectedDoctor!.id,
+        weekday,
+        start_time: raw.start_time || '09:00',
+        end_time: raw.end_time || '17:00',
+        slot_duration_minutes: Number(raw.slot_duration_minutes ?? 15),
+        buffer_minutes: Number(raw.buffer_minutes ?? 0),
+      })
+    );
+    forkJoin(requests)
+      .subscribe({
+        next: () => {
+          this.scheduleSaving = false;
+          this.notificationService.success('Doctor slot schedule saved for selected days.');
+          this.loadDoctorSchedules();
+        },
+        error: () => {
+          this.scheduleSaving = false;
+        },
+      });
+  }
+
+  editSchedule(schedule: DoctorSchedule): void {
+    this.slotForm.patchValue({
+      weekdays: [schedule.weekday],
+      start_time: schedule.start_time,
+      end_time: schedule.end_time,
+      slot_duration_minutes: schedule.slot_duration_minutes,
+      buffer_minutes: schedule.buffer_minutes,
+    });
+  }
+
+  isWeekdaySelected(value: number): boolean {
+    return (this.slotForm.controls.weekdays.value ?? []).includes(value);
+  }
+
+  toggleWeekday(value: number): void {
+    const current = this.slotForm.controls.weekdays.value ?? [];
+    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+    this.slotForm.controls.weekdays.setValue(next);
+    this.slotForm.controls.weekdays.markAsDirty();
+    this.slotForm.controls.weekdays.markAsTouched();
+  }
+
+  weekdayLabel(value: number): string {
+    const labels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return labels[value] ?? '-';
+  }
+
   getDoctorFee(user: AdminUser): string {
     const consultation = Number(user.opd_consultation_fee ?? 0).toFixed(2);
     const followUp = Number(user.opd_follow_up_fee ?? 0).toFixed(2);
@@ -173,7 +269,7 @@ export class OPDSettingsComponent {
     ];
   }
 
-  getConfigRows(): Array<{ key: 'fee' | 'header'; label: string; description: string }> {
+  getConfigRows(): Array<{ key: OPDConfigType; label: string; description: string }> {
     return [
       {
         key: 'fee',
@@ -185,7 +281,27 @@ export class OPDSettingsComponent {
         label: 'Prescription Header Settings',
         description: 'Doctor header name, credentials, specialty, workplace, chamber, phone, and address for printed prescriptions.',
       },
+      {
+        key: 'slot',
+        label: 'Doctor Slot Schedule',
+        description: 'Weekday-wise OPD slot configuration used for appointment and OPD visit booking.',
+      },
     ];
+  }
+
+  private loadDoctorSchedules(): void {
+    if (!this.selectedDoctor) {
+      this.doctorSchedules = [];
+      return;
+    }
+    this.appointmentsService.listDoctorSchedules(this.selectedDoctor.id).subscribe({
+      next: (schedules) => {
+        this.doctorSchedules = [...schedules].sort((a, b) => a.weekday - b.weekday);
+      },
+      error: () => {
+        this.doctorSchedules = [];
+      },
+    });
   }
 
   private syncSelectedDoctor(): void {
