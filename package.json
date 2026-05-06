@@ -14,7 +14,7 @@
     "dev:viewer:bg": "nohup python3 infra/pacs/viewer_server.py --port 8080 --orthanc http://localhost:8042 >/tmp/hms_viewer.log 2>&1 & sleep 1 && curl -fsS http://localhost:8080/ >/dev/null && echo '✓ Viewer started on http://localhost:8080'",
     "dev:pacs:check": "curl -fsS http://localhost:8042/studies >/dev/null && curl -fsS http://localhost:8080/orthanc/studies >/dev/null && curl -fsS http://localhost:8080/ >/dev/null && echo '✓ PACS check passed (Orthanc + Viewer + Proxy)'",
     "test:viewer": "bash infra/pacs/test_viewer.sh",
-    "deploy:backend:render": "test -n \"$RENDER_DEPLOY_HOOK_URL\" || (echo \"Set RENDER_DEPLOY_HOOK_URL to your Render deploy hook URL\" && exit 1); curl -fsS -X POST \"$RENDER_DEPLOY_HOOK_URL\" && echo \"Render backend deploy triggered\"",
+    "deploy:backend:render": "if [ -z \"$RENDER_DEPLOY_HOOK_URL\" ]; then echo \"Set RENDER_DEPLOY_HOOK_URL to your Render deploy hook URL\"; exit 1; fi; curl -fsS -X POST \"$RENDER_DEPLOY_HOOK_URL\" && echo \"Render backend deploy triggered\"",
     "kill:ports": "echo '🔌 Cleaning up ports 4200, 8000 and 8080...' && lsof -ti:4200,8000,8080 | xargs kill -9 2>/dev/null || true"
   },
   "devDependencies": {
