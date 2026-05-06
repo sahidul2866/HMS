@@ -1,7 +1,7 @@
 import { HttpClient, HttpEvent, HttpRequest } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
+import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, switchMap, tap, throwError, timeout } from 'rxjs';
 
 import { ApiError, LoginResponse, TokenPair, User } from '../models/auth.models';
 import { runtimeConfig } from '../config/runtime-config';
@@ -15,6 +15,7 @@ import { ApiCacheService } from './api-cache.service';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private static readonly SKIP_AUTH_REFRESH_HEADER = 'X-Skip-Auth-Refresh';
+  private static readonly BOOTSTRAP_REQUEST_TIMEOUT_MS = 5000;
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly sessionService = inject(SessionService);
@@ -36,7 +37,9 @@ export class AuthService {
     }
 
     try {
-      const user = await firstValueFrom(this.currentUserService.getCurrentUser());
+      const user = await firstValueFrom(
+        this.currentUserService.getCurrentUser().pipe(timeout({ first: AuthService.BOOTSTRAP_REQUEST_TIMEOUT_MS }))
+      );
       this.sessionService.initialize(user);
     } catch {
       if (!refreshToken) {
@@ -46,7 +49,9 @@ export class AuthService {
       }
 
       try {
-        const result = await firstValueFrom(this.refreshAccessToken());
+        const result = await firstValueFrom(
+          this.refreshAccessToken().pipe(timeout({ first: AuthService.BOOTSTRAP_REQUEST_TIMEOUT_MS }))
+        );
         this.persistTokens(result.tokens);
         this.sessionService.initialize(result.user);
       } catch {

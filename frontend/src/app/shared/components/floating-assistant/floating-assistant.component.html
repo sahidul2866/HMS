@@ -35,6 +35,161 @@
     </button>
   </section>
 
+  <section class="assistant-workbench">
+    <div class="assistant-mode-tabs">
+      <button type="button" [class.active]="mode === 'chat'" (click)="setMode('chat')">Chat</button>
+      <button type="button" *ngFor="let task of taskCards" [class.active]="mode === task.mode" (click)="setMode(task.mode)">
+        {{ task.title }}
+      </button>
+    </div>
+
+    <div class="assistant-task-grid" *ngIf="mode === 'chat'">
+      <button type="button" *ngFor="let task of taskCards" (click)="setMode(task.mode)">
+        <strong>{{ task.title }}</strong>
+        <span>{{ task.description }}</span>
+      </button>
+    </div>
+
+    <div class="assistant-tool" *ngIf="mode === 'booking'">
+      <div class="assistant-tool-head">
+        <div>
+          <strong>Appointment Booking</strong>
+          <span>{{ selectedPatient ? selectedPatient.full_name : 'Choose patient' }} · {{ selectedDoctor ? selectedDoctor.full_name : 'Choose doctor' }}</span>
+        </div>
+        <button type="button" (click)="createBooking()" [disabled]="!bookingReady">{{ bookingSaving ? 'Booking...' : 'Book' }}</button>
+      </div>
+
+      <div class="assistant-form-grid">
+        <label>
+          <span>Patient</span>
+          <input type="search" [(ngModel)]="patientSearch" (ngModelChange)="onPatientSearchChanged()" placeholder="Search patient no, name, phone" />
+        </label>
+        <label>
+          <span>Date</span>
+          <input type="date" [(ngModel)]="slotDate" (change)="loadSlots()" />
+        </label>
+      </div>
+
+      <div class="assistant-search-results" *ngIf="patientsLoading || patientResults.length">
+        <button type="button" *ngFor="let patient of patientResults" [class.active]="selectedPatient?.id === patient.id" (click)="selectPatient(patient)">
+          <strong>{{ patient.full_name }}</strong>
+          <span>{{ patient.patient_number }} · {{ patient.phone || 'No phone' }}</span>
+        </button>
+        <span *ngIf="patientsLoading">Searching patients...</span>
+      </div>
+
+      <div class="assistant-doctor-grid">
+        <label class="assistant-wide">
+          <span>Doctor</span>
+          <input type="search" [(ngModel)]="doctorSearch" placeholder="Search doctor or specialty" />
+        </label>
+        <button type="button" *ngFor="let doctor of filteredDoctors" [class.active]="selectedDoctor?.id === doctor.id" (click)="selectDoctor(doctor)">
+          <strong>{{ doctor.full_name }}</strong>
+          <span>{{ doctor.opd_prescription_header_specialty || doctor.opd_prescription_header_degrees || 'Consultant' }}</span>
+          <small>Fee {{ doctor.opd_consultation_fee || 'N/A' }}</small>
+        </button>
+        <span *ngIf="doctorsLoading">Loading doctors...</span>
+      </div>
+
+      <div class="assistant-slot-grid" *ngIf="selectedDoctor">
+        <button
+          type="button"
+          *ngFor="let slot of slots"
+          [disabled]="slot.status !== 'available'"
+          [class.active]="selectedSlot?.slot_start_at === slot.slot_start_at"
+          (click)="selectSlot(slot)"
+        >
+          <strong>{{ formatSlotTime(slot.slot_start_at) }}</strong>
+          <span>{{ slot.status }}</span>
+        </button>
+        <span *ngIf="slotsLoading">Loading slots...</span>
+        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date.</span>
+      </div>
+
+      <div class="assistant-form-grid">
+        <label>
+          <span>Reason</span>
+          <input type="text" [(ngModel)]="bookingReason" placeholder="Chief concern or visit reason" />
+        </label>
+        <label>
+          <span>Note</span>
+          <input type="text" [(ngModel)]="bookingNote" placeholder="Internal booking note" />
+        </label>
+      </div>
+
+      <div class="assistant-success" *ngIf="recentAppointment">
+        Last booking: <strong>{{ recentAppointment.appointment_number }}</strong> · {{ recentAppointment.appointment_at | date: 'short' }}
+      </div>
+    </div>
+
+    <div class="assistant-tool" *ngIf="mode === 'patients'">
+      <div class="assistant-tool-head">
+        <div>
+          <strong>Searchable Patient Box</strong>
+          <span>Use patient number, name, phone, or email.</span>
+        </div>
+      </div>
+      <label class="assistant-wide">
+        <span>Patient Search</span>
+        <input type="search" [(ngModel)]="patientSearch" (ngModelChange)="onPatientSearchChanged()" placeholder="Type at least 2 characters" />
+      </label>
+      <div class="assistant-search-results patient-list">
+        <button type="button" *ngFor="let patient of patientResults" [class.active]="selectedPatient?.id === patient.id" (click)="selectPatient(patient)">
+          <strong>{{ patient.full_name }}</strong>
+          <span>{{ patient.patient_number }} · {{ patient.phone || patient.email || 'No contact' }}</span>
+        </button>
+        <span *ngIf="patientsLoading">Searching patients...</span>
+      </div>
+    </div>
+
+    <div class="assistant-tool" *ngIf="mode === 'doctors'">
+      <div class="assistant-tool-head">
+        <div>
+          <strong>Doctor Grid</strong>
+          <span>Select a doctor to inspect available booking slots.</span>
+        </div>
+      </div>
+      <label class="assistant-wide">
+        <span>Search</span>
+        <input type="search" [(ngModel)]="doctorSearch" placeholder="Name, specialty, workplace" />
+      </label>
+      <div class="assistant-doctor-grid">
+        <button type="button" *ngFor="let doctor of filteredDoctors" [class.active]="selectedDoctor?.id === doctor.id" (click)="selectDoctor(doctor)">
+          <strong>{{ doctor.full_name }}</strong>
+          <span>{{ doctor.opd_prescription_header_specialty || doctor.opd_prescription_header_degrees || doctor.email }}</span>
+          <small>Consultation {{ doctor.opd_consultation_fee || 'N/A' }}</small>
+        </button>
+      </div>
+      <div class="assistant-slot-grid" *ngIf="selectedDoctor">
+        <button
+          type="button"
+          *ngFor="let slot of slots"
+          [disabled]="slot.status !== 'available'"
+          [class.active]="selectedSlot?.slot_start_at === slot.slot_start_at"
+          (click)="selectSlot(slot)"
+        >
+          <strong>{{ formatSlotTime(slot.slot_start_at) }}</strong>
+          <span>{{ slot.status }}</span>
+        </button>
+        <span *ngIf="slotsLoading">Loading slots...</span>
+        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date.</span>
+      </div>
+    </div>
+
+    <div class="assistant-tool" *ngIf="mode === 'operations'">
+      <div class="assistant-ops-grid">
+        <button type="button" (click)="useQuick('Show today’s hospital summary')">Hospital summary</button>
+        <button type="button" (click)="useQuick('Show pending payments')">Billing dues</button>
+        <button type="button" (click)="useQuick('Show IPD occupancy')">IPD beds</button>
+        <button type="button" (click)="useQuick('Show pending lab tests')">Lab queue</button>
+        <button type="button" (click)="useQuick('Show low-stock medicines')">Pharmacy stock</button>
+        <button type="button" (click)="useQuick('Find low-stock items')">Inventory</button>
+        <button type="button" (click)="useQuick('Review payroll exceptions')">Payroll</button>
+        <button type="button" (click)="useQuick('Show operational alerts')">Alerts</button>
+      </div>
+    </div>
+  </section>
+
   <section class="assistant-body" role="log" aria-live="polite">
     <div class="assistant-error" *ngIf="error">{{ error }}</div>
     <div class="assistant-msg" *ngFor="let msg of messages; trackBy: trackByIndex" [class.is-user]="msg.sender === 'user'">

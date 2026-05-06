@@ -3,8 +3,10 @@ export const runtimeConfig = {
 };
 
 export async function loadRuntimeConfig(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 3000);
   try {
-    const response = await fetch('assets/app-config.json', { cache: 'no-store' });
+    const response = await fetch('assets/app-config.json', { cache: 'no-store', signal: controller.signal });
     if (!response.ok) {
       return;
     }
@@ -15,5 +17,7 @@ export async function loadRuntimeConfig(): Promise<void> {
     }
   } catch {
     // Fall back to the default local API base URL.
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }

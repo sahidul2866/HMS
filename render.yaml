@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: hms
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./scripts/start-render.sh
+    healthCheckPath: /health/live
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: AUTO_DB_BOOTSTRAP
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: FRONTEND_ORIGINS
+        value: https://sahidul2866.github.io,http://localhost:4200,http://127.0.0.1:4200
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
