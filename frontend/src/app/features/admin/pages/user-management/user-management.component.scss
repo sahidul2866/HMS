@@ -291,28 +291,11 @@
 }
 
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.58);
-  backdrop-filter: blur(7px);
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
   z-index: 1000;
 }
 
 .modal-card {
-  width: min(640px, 100%);
-  max-height: min(88vh, 860px);
-  overflow: auto;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(14, 116, 144, 0.1), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(243, 248, 255, 0.97));
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
-  padding: 1.4rem;
-  display: grid;
-  gap: 1rem;
+  border-radius: 8px;
 }
 
 .modal-card--opd-settings {
@@ -320,10 +303,7 @@
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: start;
+  margin-bottom: 0.85rem;
 }
 
 .modal-label {
@@ -429,9 +409,7 @@
 }
 
 .modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 1120px) {

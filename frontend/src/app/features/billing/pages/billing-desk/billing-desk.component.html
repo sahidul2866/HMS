@@ -16,7 +16,7 @@
             <button class="secondary-btn" type="button" (click)="printStickers()">Print Stickers</button>
           }
           @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
-            <button class="danger-btn" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
+            <button class="danger-btn is-destructive" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
           }
         </div>
       </div>
@@ -93,7 +93,7 @@
                 <textarea rows="2" formControlName="note" placeholder="Receipt note or reference"></textarea>
               </label>
               <div style="grid-column:1/-1;">
-                <button class="primary-btn" type="submit">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
+                <button class="primary-btn" type="submit" [disabled]="collectingPayment || paymentForm.invalid" [attr.aria-busy]="collectingPayment">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
               </div>
             </form>
           } @else {
@@ -129,7 +129,7 @@
                 <textarea rows="2" formControlName="reason" placeholder="Why this refund is being issued"></textarea>
               </label>
               <div style="grid-column:1/-1;">
-                <button class="danger-btn" type="submit">{{ refunding ? 'Refunding...' : 'Post Refund' }}</button>
+                <button class="danger-btn is-destructive" type="submit" [disabled]="refunding || refundForm.invalid" [attr.aria-busy]="refunding">{{ refunding ? 'Refunding...' : 'Post Refund' }}</button>
               </div>
             </form>
           } @else {
@@ -246,7 +246,7 @@
       </label>
       <label class="field" style="grid-column:1/-1;">
         <span class="compact-label">Module</span>
-        <div class="toggle-group" (change)="searchInvoices()">
+        <div class="toggle-group">
           <label><input type="radio" formControlName="source_module" value="" /> All</label>
           <label><input type="radio" formControlName="source_module" value="laboratory" /> Lab</label>
           <label><input type="radio" formControlName="source_module" value="radiology" /> Radiology</label>
@@ -265,22 +265,25 @@
         <input type="date" formControlName="date_to" />
       </label>
       <div class="toolbar-row billing-filter-actions">
-        <button class="secondary-btn" type="button" (click)="searchInvoices()">Search</button>
+        <span class="table-meta"><strong>{{ displayedInvoices.length }}</strong> records</span>
+        <button class="secondary-btn" type="button" (click)="exportInvoicesCsv()">Export CSV</button>
+        <button class="secondary-btn" type="button" (click)="clearInvoiceFilters()">Clear Filters</button>
       </div>
     </form>
 
+    @if (displayedInvoices.length) {
     <table class="table">
       <thead>
         <tr>
-          <th class="sortable-th" (click)="toggleSort('invoice_number')">Invoice No</th>
-          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
-          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
-          <th class="sortable-th" (click)="toggleSort('payment_status')">Payment</th>
+          <th class="sortable-th" [ngClass]="sortClass('invoice_number')" (click)="toggleSort('invoice_number')">Invoice No</th>
+          <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
+          <th class="sortable-th" [ngClass]="sortClass('payment_status')" (click)="toggleSort('payment_status')">Payment</th>
           <th>Doctor</th>
-          <th class="sortable-th" (click)="toggleSort('total_amount')">Total</th>
+          <th class="sortable-th" [ngClass]="sortClass('total_amount')" (click)="toggleSort('total_amount')">Total</th>
           <th>Refunded</th>
-          <th class="sortable-th" (click)="toggleSort('due_amount')">Due</th>
-          <th class="sortable-th" (click)="toggleSort('created_at')">Date</th>
+          <th class="sortable-th" [ngClass]="sortClass('due_amount')" (click)="toggleSort('due_amount')">Due</th>
+          <th class="sortable-th" [ngClass]="sortClass('created_at')" (click)="toggleSort('created_at')">Date</th>
         </tr>
       </thead>
       <tbody>
@@ -299,6 +302,9 @@
         }
       </tbody>
     </table>
+    } @else {
+      <div class="table-empty">No invoices match the selected filters.</div>
+    }
   </section>
 
   @if (invoicePreviewInvoice && invoicePreviewHtml && invoicePreviewUrl) {

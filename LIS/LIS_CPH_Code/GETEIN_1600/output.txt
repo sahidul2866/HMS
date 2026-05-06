@@ -1,0 +1,9 @@
+message:  \x02\x01O\x00\x81|I1003567|29107|5|7|PCT|ng/mL|0.34|0.05|50.00|0.50|1|0|2023-08-01 11:10:06|0|9|
+message:  \x02\x01O\x00\x81|I1003567|29107|5|7|PCT|ng/mL|0.34|0.05|50.00|0.50|1|0|2023-08-01 11:10:06|0|9|
+message:  \x02\x01O\x00\x7f|I1003423|29106|4|7|PCT|ng/mL|0.00|0.05|50.00|0.50|1|0|2023-08-01 09:55:42|0|9|
+
+
+
+Final Result:  {'sampleId': 'I1003567', 'result': {'1': ['1', 'PCT', '0.34', 'ng/mL']}}
+successfully sent to server
+01-08-2023 17:16:02 [SUCCESS] : Data Processed and Sent it to Server

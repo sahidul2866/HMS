@@ -1,21 +1,18 @@
-<section class="hr-shell">
-  <header class="hr-topbar">
-    <div>
-      <div class="eyebrow">HR & Payroll</div>
-      <h1>Hospital Workforce Desk</h1>
+<section class="workspace-shell hr-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">HR & Payroll</div>
+        <h1 class="page-title">Hospital Workforce Desk</h1>
+        <div class="page-subtitle">Employees, attendance, shifts, leave and payroll in one place.</div>
+      </div>
+      <div class="toolbar-row top-actions">
+        <button class="primary-btn" type="button" (click)="openModal('employee')">Add Employee</button>
+        <button class="secondary-btn" type="button" (click)="openModal('attendance')">Mark Attendance</button>
+        <button class="secondary-btn" type="button" (click)="openModal('payroll')">Run Payroll</button>
+      </div>
     </div>
-    <div class="top-actions">
-      <button type="button" (click)="openModal('employee')">Add Employee</button>
-      <button type="button" (click)="openModal('attendance')">Mark Attendance</button>
-      <button type="button" (click)="openModal('payroll')">Run Payroll</button>
-    </div>
-  </header>
-
-  <nav class="tab-strip" aria-label="HR sections">
-    @for (item of tabs; track item.key) {
-      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item)">{{ item.label }}</button>
-    }
-  </nav>
+  </section>
 
   @if (error) { <div class="alert error">{{ error }}</div> }
   @if (success) { <div class="alert success">{{ success }}</div> }

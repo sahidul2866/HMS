@@ -1,0 +1,160 @@
+B7472696
+
+
+D:\DRIVE_3\LIS\LIS_CODE\venv\Scripts\python.exe D:\DRIVE_3\LIS\LIS_CODE\ATELICA_SOLUTION\server_ATILICA_SOLUTION.py 
+Connected to MySQL Server version  5.5.5-10.4.24-MariaDB
+You're connected to database:  ('chp_lis',)
+Initiating clients
+Connection from: ('192.168.1.106', 64239)
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183636+0600||OUL^R22^OUL_R22|f17829d4641e4a288d2d41059fb79a95|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I472780^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I472780\rOBR|1|""||PRL^PRL^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|PRL.COFF^PRL^99SiemensHDXTestCode|2^1|1.00|ng/mL^ng/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183337||||||||||RSLT\rTCD|PRL^PRL^99SiemensHDXTestCode\rOBX|2|NM|PRL.RLU^PRL^99SiemensHDXTestCode|2^1|392992|ng/mL^ng/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183337||||||||||RSLT\rTCD|PRL^PRL^99SiemensHDXTestCode\rOBX|3|NM|PRL.DOSE^PRL^99SiemensHDXTestCode|2^1|40.36|ng/mL^ng/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183337||326417||||||||RSLT\rTCD|PRL^PRL^99SiemensHDXTestCode\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183636+0600||OUL^R22^OUL_R22|58fa6d5310dc4971b38ae44ffb4d7c1b|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473255^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473255\rOBR|1|""||HBsII^HBsII^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|HBsII.COFF^HBsII^99SiemensHDXTestCode|1^1|1.00|Index^Index^UCUM||<^Off scale low^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625182317||||||||||RSLT\rTCD|HBsII^HBsII^99SiemensHDXTestCode\rNTE|1|Z|< Measuring Interval|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|2|ST|HBsII.INTR^HBsII^99SiemensHDXTestCode|1^1|NR|Index^Index^UCUM||<^Off scale low^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625182317||||||||||RSLT\rTCD|HBsII^HBsII^99SiemensHDXTestCode\rNTE|1|Z|< Measuring Interval|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|3|NM|HBsII.RLU^HBsII^99SiemensHDXTestCode|1^1|2699|Index^Index^UCUM||<^Off scale low^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625182317||||||||||RSLT\rTCD|HBsII^HBsII^99SiemensHDXTestCode\rNTE|1|Z|< Measuring Interval|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|4|ST|HBsII.INDX^HBsII^99SiemensHDXTestCode|1^1|< 0.10|Index^Index^UCUM||<^Off scale low^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625182317||326416||||||||RSLT\rTCD|HBsII^HBsII^99SiemensHDXTestCode\rNTE|1|Z|< Measuring Interval|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\r\x1c\r'
+Data Saved to Database
+Result Received: 
+
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183706+0600||OUL^R22^OUL_R22|8d2e38b2448b485185aebcd99da876f6|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473261^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473261\rOBR|1|""||FT3^FT3^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|FT3.COFF^FT3^99SiemensHDXTestCode|1^1|1.00|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183705||||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\rOBX|2|NM|FT3.RLU^FT3^99SiemensHDXTestCode|1^1|149870|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183705||||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\rOBX|3|NM|FT3.DOSE^FT3^99SiemensHDXTestCode|1^1|3.50|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183705||326418||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\r\x1c\r'
+
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183729+0600||OUL^R22^OUL_R22|d9876fb0c9c14fcbac00711bd2565b60|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473261^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473261\rOBR|1|""||FT4^FT4^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|FT4.COFF^FT4^99SiemensHDXTestCode|1^1|1.00|ng/dL^ng/dL^UCUM|([ Normal : 0.89 - 1.76 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183729||||||||||RSLT\rTCD|FT4^FT4^99SiemensHDXTestCode\rOBX|2|NM|FT4.RLU^FT4^99SiemensHDXTestCode|1^1|68336|ng/dL^ng/dL^UCUM|([ Normal : 0.89 - 1.76 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183729||||||||||RSLT\rTCD|FT4^FT4^99SiemensHDXTestCode\rOBX|3|NM|FT4.DOSE^FT4^99SiemensHDXTestCode|1^1|1.31|ng/dL^ng/dL^UCUM|([ Normal : 0.89 - 1.76 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625183729||326419||||||||RSLT\rTCD|FT4^FT4^99SiemensHDXTestCode\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183803+0600||OUL^R22^OUL_R22|036314492b444f7b93517f4397d25647|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473224^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473224\rOBR|1|""||aHCV^aHCV^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|aHCV.COFF^aHCV^99SiemensHDXTestCode|1^1|1.00|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171651||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|2|ST|aHCV.INTR^aHCV^99SiemensHDXTestCode|1^1|NR|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171651||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|3|NM|aHCV.RLU^aHCV^99SiemensHDXTestCode|1^1|24727|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171651||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|4|NM|aHCV.INDX^aHCV^99SiemensHDXTestCode|1^1|0.12|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171651||326402||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183803+0600||OUL^R22^OUL_R22|f4008ef91cd042339967b9a3ffb51d87|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473228^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473228\rOBR|1|""||aHCV^aHCV^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|aHCV.COFF^aHCV^99SiemensHDXTestCode|1^1|1.00|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171643||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|2|ST|aHCV.INTR^aHCV^99SiemensHDXTestCode|1^1|NR|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171643||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|3|NM|aHCV.RLU^aHCV^99SiemensHDXTestCode|1^1|19798|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171643||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|4|NM|aHCV.INDX^aHCV^99SiemensHDXTestCode|1^1|0.11|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625171643||326400||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\r\x1c\r'
+Data Saved to Database
+
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183906+0600||OUL^R22^OUL_R22|2f89878bbb024898a295d494dc792d3d|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473112^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473112\rOBR|1|""||aHCV^aHCV^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|aHCV.COFF^aHCV^99SiemensHDXTestCode|1^1|1.00|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625160227||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|2|ST|aHCV.INTR^aHCV^99SiemensHDXTestCode|1^1|NR|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625160227||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|3|NM|aHCV.RLU^aHCV^99SiemensHDXTestCode|1^1|18287|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625160227||||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\rOBX|4|NM|aHCV.INDX^aHCV^99SiemensHDXTestCode|1^1|0.10|Index^Index^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625160227||326373||||||||RSLT\rTCD|aHCV^aHCV^99SiemensHDXTestCode\rNTE|1|Z|Below Check|FLAG^^99SiemensHDXResultFlag\rNTE|2|Z|Final Result Ru|FLAG^^99SiemensHDXResultFlag\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183906+0600||OUL^R22^OUL_R22|d6a1f846ca5c48d9acaa759a8dcee534|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473138^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473138\rOBR|1|""||tIgE^tIgE^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|tIgE.COFF^tIgE^99SiemensHDXTestCode|1^1|1.00|IU/mL^IU/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152823||||||||||RSLT\rTCD|tIgE^tIgE^99SiemensHDXTestCode\rOBX|2|NM|tIgE.RLU^tIgE^99SiemensHDXTestCode|1^1|156084|IU/mL^IU/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152823||||||||||RSLT\rTCD|tIgE^tIgE^99SiemensHDXTestCode\rOBX|3|NM|tIgE.DOSE^tIgE^99SiemensHDXTestCode|1^1|563.6|IU/mL^IU/mL^UCUM||""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152823||326319||||||||RSLT\rTCD|tIgE^tIgE^99SiemensHDXTestCode\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183906+0600||OUL^R22^OUL_R22|eef3b43f663f42fcab7e27a54d579593|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I473103^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I473103\rOBR|1|""||TSH3UL^TSH3UL^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|TSH3UL.COFF^TSH3UL^99SiemensHDXTestCode|1^1|1.00|uIU/mL^uIU/mL^UCUM|([ Normal : 0.35 - 5.5 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152623||||||||||RSLT\rTCD|TSH3UL^TSH3UL^99SiemensHDXTestCode\rOBX|2|NM|TSH3UL.RLU^TSH3UL^99SiemensHDXTestCode|1^1|286968|uIU/mL^uIU/mL^UCUM|([ Normal : 0.35 - 5.5 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152623||||||||||RSLT\rTCD|TSH3UL^TSH3UL^99SiemensHDXTestCode\rOBX|3|NM|TSH3UL.DOSE^TSH3UL^99SiemensHDXTestCode|1^1|1.53|uIU/mL^uIU/mL^UCUM|([ Normal : 0.35 - 5.5 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152623||326313||||||||RSLT\rTCD|TSH3UL^TSH3UL^99SiemensHDXTestCode\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183907+0600||OUL^R22^OUL_R22|95c3f7770fbd41298afa6ed2270e2951|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-29^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rSPM|1|I472939^""|""^""|SER^Serum^HL70487|||||||P^Patient specimen^HL70369\rSAC|||I472939\rOBR|1|""||FT3^FT3^99SiemensHDXTestCode\rORC|OK||||CM\rTQ1|||||||||R^Routine^HL70486\rOBX|1|NM|FT3.COFF^FT3^99SiemensHDXTestCode|1^1|1.00|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152207||||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\rOBX|2|NM|FT3.RLU^FT3^99SiemensHDXTestCode|1^1|170427|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152207||||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\rOBX|3|NM|FT3.DOSE^FT3^99SiemensHDXTestCode|1^1|3.10|pg/mL^pg/mL^UCUM|([ Normal : 1.5 - 4.2 ] )|""^""^HL70078|||F|||||System~LabManager||NextGenAnalyzer^SiemensHDX~DL00519^SystemSN~IH01507^ModuleSN|20230625152207||326305||||||||RSLT\rTCD|FT3^FT3^99SiemensHDXTestCode\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183955+0600||QBP^Q11^QBP_Q11|bdec5530316b4e6db8d9c4b4aafe7704|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-27^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rQPD|WOS^Work Order Step^IHELAW|1b1cf84e23b84663a970b496789120a8|I5473242\rRCP|I||R^Real Time^HL70394\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625183957+0600||QBP^Q11^QBP_Q11|cacc2543eca348698b6c2f770684abd3|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-27^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rQPD|WOS^Work Order Step^IHELAW|a49824c907b241ffb9e1afd181d2878e|I5473232\rRCP|I||R^Real Time^HL70394\r\x1c\r'
+Data Saved to Database
+Result Received: 
+b'\x0bMSH|^~\\&|UIW_LIS|AA|LIS_ID|BB|20230625184105+0600||QBP^Q11^QBP_Q11|b1bdb00dbc1f4970be258c4643c42fbe|P|2.5.1|||NE|AL||UNICODE UTF-8|||LAB-27^IHE~LAW_REFLEX^IHE~LAW_SPECIMEN^IHE~LAW_RERUN^IHE~LAW_CONTAINER^IHE~LAW_DILUTIONS^IHE~LAW_PAT_DEM^IHE\rQPD|WOS^Work Order Step^IHELAW|757f0fbe44874a339dd19c9e41934cfa|B7472696\rRCP|I||R^Real Time^HL70394\r\x1c\r'
+Data Saved to Database
+
+
+
+OUL^R22^=> result here
+
+
+
+
+
+
+
+
+
+
+Traceback (most recent call last):
+  File "C:\Users\User\PycharmProjects\pythonProject\ATELICA_SOLUTION\server_ATILICA_SOLUTION.py", line 48, in <module>
+    MSH_ID = sigmentMessage[0].split('|')[9]
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Traceback (most recent call last):
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connection.py", line 203, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\util\connection.py", line 85, in create_connection
+    raise err
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\util\connection.py", line 73, in create_connection
+    sock.connect(sa)
+TimeoutError: [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connectionpool.py", line 790, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connectionpool.py", line 496, in _make_request
+    conn.request(
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connection.py", line 395, in request
+    self.endheaders()
+  File "C:\Users\User\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 1281, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 1041, in _send_output
+    self.send(msg)
+  File "C:\Users\User\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 979, in send
+    self.connect()
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connection.py", line 243, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connection.py", line 212, in _new_conn
+    raise ConnectTimeoutError(
+urllib3.exceptions.ConnectTimeoutError: (<urllib3.connection.HTTPConnection object at 0x00000074A61D2990>, 'Connection to 103.237.37.108 timed out. (connect timeout=None)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\requests\adapters.py", line 486, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\connectionpool.py", line 844, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\urllib3\util\retry.py", line 515, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='103.237.37.108', port=9561): Max retries exceeded with url: /CPH/APIResponse/ (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x00000074A61D2990>, 'Connection to 103.237.37.108 timed out. (connect timeout=None)'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\PycharmProjects\pythonProject\ATELICA_SOLUTION\server_ATILICA_SOLUTION.py", line 43, in <module>
+    hl7MessageParse(mainMessage)
+  File "C:\Users\User\PycharmProjects\pythonProject\ATELICA_SOLUTION\HL7Parse.py", line 41, in hl7MessageParse
+    resultSendToServer('Atellica Solution',sampleWiseResult)
+  File "C:\Users\User\PycharmProjects\pythonProject\API_CONNECTION\apiCURLFunction.py", line 58, in resultSendToServer
+    response = requests.request("POST", url, headers=headers, data=payload, files=files)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\requests\api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\requests\sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\requests\sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\PycharmProjects\pythonProject\venv\Lib\site-packages\requests\adapters.py", line 507, in send
+    raise ConnectTimeout(e, request=request)
+requests.exceptions.ConnectTimeout: HTTPConnectionPool(host='103.237.37.108', port=9561): Max retries exceeded with url: /CPH/APIResponse/ (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x00000074A61D2990>, 'Connection to 103.237.37.108 timed out. (connect timeout=None)'))
+
+Process finished with exit code 1

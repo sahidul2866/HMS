@@ -54,6 +54,9 @@ class RadiologyAttachmentRead(BaseModel):
 class PACSLinkRead(BaseModel):
     id: UUID
     study_uid: str
+    orthanc_study_id: str | None = None
+    accession_number: str | None = None
+    dicom_patient_id: str | None = None
     series_uid: str | None = None
     viewer_url: str | None = None
     pacs_provider: str | None = None
@@ -86,3 +89,73 @@ class RadiologyOrderRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RadiologyOrderCreate(BaseModel):
+    patient_id: UUID
+    study_description: str
+    modality: str | None = None
+    body_part: str | None = None
+    priority: str = "routine"
+    visit_id: UUID | None = None
+    note: str | None = None
+
+
+class PACSLinkCreate(BaseModel):
+    order_id: UUID
+    study_uid: str
+    orthanc_study_id: str | None = None
+    accession_number: str | None = None
+    dicom_patient_id: str | None = None
+    series_uid: str | None = None
+    viewer_url: str | None = None
+    status: str = "uploaded"
+
+
+class PACSUploadResponse(BaseModel):
+    order_id: UUID
+    pacs_link: PACSLinkRead
+
+
+class RadiologyReportUpsert(BaseModel):
+    order_id: UUID
+    findings: str
+    impression: str | None = None
+    recommendation: str | None = None
+
+
+class RadiologyViewerRead(BaseModel):
+    order_id: UUID
+    study_uid: str
+    viewer_url: str
+
+
+class RadiologySimulatorMachineRead(BaseModel):
+    code: str
+    name: str
+    modality: str
+    status: str
+    sample_source: str
+
+
+class RadiologySimulatorFeedRequest(BaseModel):
+    machine_code: str
+    note: str | None = None
+
+
+class RadiologySimulatorFeedResponse(BaseModel):
+    order_id: UUID
+    machine_code: str
+    machine_name: str
+    study_uid: str
+    orthanc_study_id: str | None = None
+    viewer_url: str
+    note: str | None = None
+
+
+class RadiologyMachineIngestResponse(BaseModel):
+    order_id: UUID
+    machine_code: str
+    study_uid: str
+    viewer_url: str
+    note: str | None = None

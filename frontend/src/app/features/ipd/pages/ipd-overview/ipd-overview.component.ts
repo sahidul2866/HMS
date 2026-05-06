@@ -3,19 +3,19 @@ import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { PERMISSIONS } from '../../../../core/constants/permissions';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
-import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
 import { IPDAdmission, IPDBed, IPDSummary } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
 @Component({
   selector: 'app-ipd-overview',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FloatingAssistantComponent],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './ipd-overview.component.html',
   styleUrls: ['./ipd-overview.component.scss'],
 })
@@ -24,6 +24,7 @@ export class IPDOverviewComponent {
   private readonly ipdService = inject(IPDService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
   readonly sessionService = inject(SessionService);
   readonly permissions = PERMISSIONS;
   private readonly router = inject(Router);
@@ -34,17 +35,6 @@ export class IPDOverviewComponent {
   beds: IPDBed[] = [];
   doctors: User[] = [];
   selectedAdmission: IPDAdmission | null = null;
-  readonly assistantQuickActions = [
-    'Show IPD occupancy',
-    'Show admitted patients under me',
-    'Show active admissions',
-    'Show discharge-ready patients',
-    'Show hospital summary',
-    'Show revenue analysis',
-    'Check interim billing for admission',
-    'Show available beds by ward',
-  ];
-
   readonly transferForm = this.fb.group({
     bed_id: [''],
     ward_name: ['', Validators.required],
@@ -98,10 +88,13 @@ export class IPDOverviewComponent {
   }
 
   discharge(admission: IPDAdmission): void {
+    if (!this.confirmationService.confirmImportant(`Finalize discharge for ${admission.admission_number}?\n\nConfirm only after clinical and billing readiness has been reviewed.`)) {
+      return;
+    }
     this.ipdService.discharge(admission.id, this.dischargeForm.getRawValue() as never).subscribe((updated) => {
       this.selectedAdmission = updated;
       this.loadAll();
-      this.notificationService.success(`Admission ${admission.admission_number} discharged.`);
+      this.notificationService.success(`Admission ${admission.admission_number} discharged. Final billing can now be reviewed.`);
     });
   }
 

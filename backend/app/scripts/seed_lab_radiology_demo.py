@@ -19,7 +19,7 @@ from app.models.branch import Branch
 from app.models.encounter import OPDVisit, OPDVisitOrder
 from app.models.laboratory import LabAttachment, LabOrder, LabOrderItem, LabResult, LabResultItem
 from app.models.patient import Patient
-from app.models.radiology import PACSLink, RadiologyAttachment, RadiologyOrder, RadiologyReport, RadiologyReportSection
+from app.models.radiology import RadiologyAttachment, RadiologyOrder, RadiologyReport, RadiologyReportSection
 from app.models.user import User
 
 logging.basicConfig(level=logging.INFO)
@@ -161,7 +161,6 @@ def seed() -> None:
                     url=f"/uploads/lab/{scenario['order_number']}_report.pdf",
                     file_size_bytes=12400,
                     created_by_user_id=ctx["user_id"],
-                    created_by=ctx["user_id"],
                     updated_by=ctx["user_id"],
                 )
                 session.add(att)
@@ -189,7 +188,7 @@ def seed() -> None:
                 "modality": "X-Ray",
                 "study": "Chest X-Ray PA",
                 "body_part": "Chest",
-                "status": "verified",
+                "status": "report_completed",
                 "sections": [
                     ("Clinical History", "Patient presented with cough and mild fever."),
                     ("Technique", "PA and lateral chest radiographs obtained."),
@@ -202,7 +201,7 @@ def seed() -> None:
                 "modality": "CT",
                 "study": "CT Brain Plain",
                 "body_part": "Brain",
-                "status": "completed",
+                "status": "ready_for_review",
                 "sections": [
                     ("Clinical History", "Headache for 3 days."),
                     ("Technique", "Non-contrast axial CT brain."),
@@ -215,7 +214,7 @@ def seed() -> None:
                 "modality": "MRI",
                 "study": "MRI Lumbar Spine",
                 "body_part": "Lumbar Spine",
-                "status": "pending",
+                "status": "pending_study",
                 "sections": [],
             },
             {
@@ -223,7 +222,7 @@ def seed() -> None:
                 "modality": "Ultrasound",
                 "study": "Ultrasound Whole Abdomen",
                 "body_part": "Abdomen",
-                "status": "collected",
+                "status": "study_uploaded",
                 "sections": [],
             },
         ]
@@ -240,8 +239,8 @@ def seed() -> None:
                 body_part=scenario["body_part"],
                 status=scenario["status"],
                 priority="routine",
-                performed_at=now - timedelta(hours=3) if scenario["status"] in {"collected", "in_progress", "completed", "verified"} else None,
-                completed_at=now - timedelta(hours=2) if scenario["status"] in {"completed", "verified"} else None,
+                performed_at=now - timedelta(hours=3) if scenario["status"] in {"study_uploaded", "ready_for_review", "report_completed", "verified"} else None,
+                completed_at=now - timedelta(hours=2) if scenario["status"] in {"report_completed", "verified"} else None,
                 verified_at=now - timedelta(hours=1) if scenario["status"] == "verified" else None,
                 created_by=ctx["user_id"],
                 updated_by=ctx["user_id"],
@@ -254,7 +253,7 @@ def seed() -> None:
                     id=uuid4(),
                     order_id=rad_order.id,
                     report_number=f"RR-{scenario['order_number']}",
-                    status="final" if scenario["status"] == "verified" else "preliminary",
+                    status="final" if scenario["status"] in {"report_completed", "verified"} else "preliminary",
                     overall_findings=next((s[1] for s in scenario["sections"] if s[0] == "Findings"), None),
                     impression=next((s[1] for s in scenario["sections"] if s[0] == "Impression"), None),
                     created_by=ctx["user_id"],
@@ -275,20 +274,7 @@ def seed() -> None:
                     )
                     session.add(section)
 
-            # PACS link placeholder
-            if scenario["status"] in {"completed", "verified"}:
-                pacs = PACSLink(
-                    id=uuid4(),
-                    order_id=rad_order.id,
-                    study_uid=f"1.2.826.0.1.3680043.8.498.{scenario['order_number']}",
-                    series_uid=f"1.2.826.0.1.3680043.8.498.{scenario['order_number']}.1",
-                    viewer_url=f"https://pacs.example.com/viewer/{scenario['order_number']}",
-                    pacs_provider="demo-pacs",
-                    created_by=ctx["user_id"],
-                    updated_by=ctx["user_id"],
-                )
-                session.add(pacs)
-
+            if scenario["status"] in {"study_uploaded", "ready_for_review", "report_completed", "verified"}:
                 att = RadiologyAttachment(
                     id=uuid4(),
                     order_id=rad_order.id,
@@ -297,7 +283,6 @@ def seed() -> None:
                     url=f"/uploads/rad/{scenario['order_number']}_image.dcm",
                     file_size_bytes=256000,
                     created_by_user_id=ctx["user_id"],
-                    created_by=ctx["user_id"],
                     updated_by=ctx["user_id"],
                 )
                 session.add(att)

@@ -9,8 +9,6 @@
 }
 
 .settings-head,
-.hero-main,
-.modal-header,
 .editor-actions {
   display: flex;
   align-items: center;
@@ -31,13 +29,7 @@
 }
 
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
   z-index: 2000;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgba(15, 23, 42, 0.45);
 }
 
 .billing-editor-card {

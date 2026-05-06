@@ -33,6 +33,8 @@ export class OPDVisitListComponent {
   selectedPayment = '';
   selectedDate = '';
   selectedVisit: OPDVisit | null = null;
+  page = 1;
+  pageSize = 12;
   sortField: 'visit_number' | 'patient' | 'department' | 'doctor' | 'fee' | 'payment' | 'status' = 'visit_number';
   sortDirection: 'asc' | 'desc' = 'desc';
 
@@ -76,7 +78,7 @@ export class OPDVisitListComponent {
   }
 
   openPayment(visit: OPDVisit): void {
-    if (!this.session.hasPermission(PERMISSIONS.billingInvoiceCreate)) return;
+    if (!this.session.hasPermission(PERMISSIONS.billingPaymentCollect)) return;
     void this.router.navigate(['/billing/create'], { queryParams: { opdVisitId: visit.id } });
   }
 
@@ -90,7 +92,7 @@ export class OPDVisitListComponent {
 
   get filteredVisits(): OPDVisit[] {
     const search = this.searchText.trim().toLowerCase();
-    const filtered = this.visits.filter((visit) => {
+    return this.visits.filter((visit) => {
       const statusMatch = !this.selectedStatus || visit.status === this.selectedStatus;
       const paymentStatus = (visit.consultation_payment_status || 'unpaid').toLowerCase();
       const paymentMatch = !this.selectedPayment || paymentStatus === this.selectedPayment;
@@ -104,8 +106,11 @@ export class OPDVisitListComponent {
         (visit.department_name || '').toLowerCase().includes(search);
       return statusMatch && paymentMatch && dateMatch && searchMatch;
     });
+  }
+
+  get sortedVisits(): OPDVisit[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
-    return [...filtered].sort((a, b) => {
+    return [...this.filteredVisits].sort((a, b) => {
       switch (this.sortField) {
         case 'patient':
           return dir * `${a.patient.first_name} ${a.patient.last_name}`.localeCompare(`${b.patient.first_name} ${b.patient.last_name}`);
@@ -126,13 +131,48 @@ export class OPDVisitListComponent {
     });
   }
 
+  get displayedVisits(): OPDVisit[] {
+    const start = (this.page - 1) * this.pageSize;
+    return this.sortedVisits.slice(start, start + this.pageSize);
+  }
+
+  get totalPages(): number {
+    return Math.max(Math.ceil(this.filteredVisits.length / this.pageSize), 1);
+  }
+
+  get rangeStart(): number {
+    return this.filteredVisits.length ? (this.page - 1) * this.pageSize + 1 : 0;
+  }
+
+  get rangeEnd(): number {
+    return Math.min(this.page * this.pageSize, this.filteredVisits.length);
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+  }
+
   toggleSort(field: OPDVisitListComponent['sortField']): void {
     if (this.sortField === field) {
       this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.page = 1;
       return;
     }
     this.sortField = field;
     this.sortDirection = field === 'visit_number' ? 'desc' : 'asc';
+    this.page = 1;
+  }
+
+  sortClass(field: OPDVisitListComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
+  }
+
+  previousPage(): void {
+    this.page = Math.max(this.page - 1, 1);
+  }
+
+  nextPage(): void {
+    this.page = Math.min(this.page + 1, this.totalPages);
   }
 
   get canFilterByDoctor(): boolean {

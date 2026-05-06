@@ -10,7 +10,7 @@ export class SessionService {
     { permission: 'opd.view', route: '/opd' },
     { permission: 'appointment.view', route: '/appointments' },
     { permission: 'ipd.view', route: '/ipd' },
-    { permission: 'billing.invoice.create', route: '/billing' },
+    { permission: 'billing.view', route: '/billing' },
     { permission: 'patient.view', route: '/patients' },
     { permission: 'laboratory.view', route: '/laboratory' },
     { permission: 'radiology.view', route: '/radiology' },
@@ -63,6 +63,12 @@ export class SessionService {
     const userPermissions = new Set(this.snapshot.user?.effective_permissions ?? []);
     const required = Array.isArray(permission) ? permission : [permission];
     return required.every((item) => userPermissions.has(item));
+  }
+
+  hasAnyPermission(permission: string | string[]): boolean {
+    const userPermissions = new Set(this.snapshot.user?.effective_permissions ?? []);
+    const required = Array.isArray(permission) ? permission : [permission];
+    return required.some((item) => userPermissions.has(item));
   }
 
   getLandingRoute(): string {

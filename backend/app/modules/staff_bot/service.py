@@ -15,14 +15,17 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models.billing import BillingInvoice, BillingPayment
 from app.models.encounter import IPDBed, IPDAdmission, OPDVisit, Appointment
+from app.models.inventory import InventoryItem
+from app.models.laboratory import LabOrder
 from app.models.patient import Patient
 from app.models.pharmacy import PharmacyMedicine, PharmacyPurchase
+from app.models.radiology import RadiologyOrder
 from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage
 from app.models.user import User
 from app.modules.appointments.service import AppointmentsService
 from app.modules.auth.service import AuthService
 from app.schemas.appointment import AppointmentCreate
-from app.schemas.staff_bot import StaffBotDetailRow, StaffBotMessageCreate, StaffBotResetCreate, StaffBotResponse, StaffBotSettingsRead
+from app.schemas.staff_bot import StaffBotContext, StaffBotDetailRow, StaffBotMessageCreate, StaffBotResetCreate, StaffBotResponse, StaffBotSettingsRead
 
 
 SYSTEM_PROMPT = (
@@ -44,13 +47,17 @@ INTENT_PERMISSIONS: dict[str, list[str]] = {
     "ipd_bed_occupancy": ["ipd.view"],
     "ipd_admitted_under_me": ["ipd.view"],
     "pharmacy_stock": ["pharmacy.view"],
-    "billing_due": ["billing.invoice.create"],
-    "pending_payments": ["billing.invoice.create"],
+    "billing_due": ["billing.view"],
+    "pending_payments": ["billing.view", "reporting.financial.view"],
     "appointment_status": ["appointment.view"],
-    "opd_booking": ["appointment.manage"],
+    "opd_booking": ["appointment.book", "appointment.manage"],
     "hospital_summary": ["dashboard.view"],
-    "revenue_analysis": ["reporting.view"],
-    "permission_check": ["admin.user.manage", "roles.view", "permissions.view"],
+    "revenue_analysis": ["reporting.financial.view"],
+    "permission_check": ["settings.user.manage", "settings.role.manage", "settings.permission.manage"],
+    "low_stock": ["pharmacy.view", "inventory.view"],
+    "lab_pending": ["laboratory.view"],
+    "radiology_pending": ["radiology.view"],
+    "payroll_exceptions": ["payroll.view"],
 }
 
 
@@ -77,7 +84,14 @@ class StaffBotService:
                 if any(code in permissions for code in required):
                     quick_actions.extend(actions)
             if not quick_actions:
-                quick_actions = ["Show today’s OPD patients", "Show IPD bed occupancy", "Check medicine stock", "Show pending bills"]
+                fallback_actions = [
+                    ("Show today’s OPD patients", "opd.view"),
+                    ("Show IPD bed occupancy", "ipd.view"),
+                    ("Check medicine stock", "pharmacy.view"),
+                    ("Show pending bills", "billing.view"),
+                    ("Show my appointments", "appointment.view"),
+                ]
+                quick_actions = [label for label, permission in fallback_actions if permission in permissions]
             return StaffBotSettingsRead(
                 greeting_message=DEFAULT_GREETING,
                 quick_actions=sorted(set(quick_actions)),
@@ -90,10 +104,108 @@ class StaffBotService:
                 "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
             ) from exc
 
+    def _contextual_suggestions(self, actor: User, assistant_context: StaffBotContext | None) -> list[str]:
+        permissions = set(self.auth.get_effective_permissions(actor))
+
+        def can_any(*codes: str) -> bool:
+            return any(code in permissions for code in codes)
+
+        module = (assistant_context.module if assistant_context else None) or ""
+        path = (assistant_context.path if assistant_context else None) or ""
+        suggestions: list[tuple[str, tuple[str, ...]]] = []
+
+        if module == "opd" or path.startswith("/opd"):
+            suggestions = [
+                ("Summarize today's OPD visits", ("opd.view",)),
+                ("Show waiting OPD patients", ("opd.view",)),
+                ("Compare previous visit for selected patient", ("patient.view", "opd.view")),
+                ("Help draft prescription notes", ("opd.prescribe",)),
+                ("List pending lab/radiology orders", ("diagnostics.view", "opd.view")),
+            ]
+        elif module == "billing" or path.startswith("/billing"):
+            suggestions = [
+                ("Explain this bill", ("billing.view",)),
+                ("Show pending payments", ("billing.view",)),
+                ("Check refund eligibility", ("billing.payment.refund",)),
+                ("Find billing discrepancies", ("billing.view",)),
+                ("Summarize patient balance", ("billing.view",)),
+            ]
+        elif module == "pharmacy" or path.startswith("/pharmacy"):
+            suggestions = [
+                ("Check medicine stock", ("pharmacy.view",)),
+                ("Show low-stock medicines", ("pharmacy.view",)),
+                ("Explain dispense status", ("pharmacy.dispense",)),
+                ("Find medicine alternatives", ("pharmacy.view",)),
+                ("Review return eligibility", ("pharmacy.return",)),
+            ]
+        elif module in {"laboratory", "diagnostics"} or path.startswith("/laboratory") or path.startswith("/diagnostics"):
+            suggestions = [
+                ("Show pending lab tests", ("laboratory.view",)),
+                ("Highlight abnormal results", ("laboratory.view",)),
+                ("Explain selected result", ("laboratory.view",)),
+                ("Review verification checklist", ("laboratory.verify_result",)),
+            ]
+        elif module == "radiology" or path.startswith("/radiology"):
+            suggestions = [
+                ("Summarize imaging order status", ("radiology.view",)),
+                ("Summarize selected report", ("radiology.view",)),
+                ("Check pending PACS uploads", ("radiology.upload_image", "radiology.view")),
+                ("Review verification checklist", ("radiology.verify_result",)),
+            ]
+        elif module == "ipd" or path.startswith("/ipd"):
+            suggestions = [
+                ("Show IPD occupancy", ("ipd.view",)),
+                ("Draft discharge summary", ("ipd.discharge",)),
+                ("Check transfer readiness", ("ipd.transfer",)),
+                ("Explain interim bill", ("billing.view",)),
+            ]
+        elif module == "hr" or path.startswith("/hr"):
+            if "payroll" in path:
+                suggestions = [
+                    ("Review payroll exceptions", ("payroll.view",)),
+                    ("Summarize deduction issues", ("payroll.view",)),
+                    ("Check payroll approval checklist", ("hr.payroll.approve",)),
+                    ("Show salary processing status", ("payroll.process_salary",)),
+                ]
+            else:
+                suggestions = [
+                    ("Summarize employee profile", ("hr.view",)),
+                    ("Show attendance issues", ("hr.attendance.manage",)),
+                    ("Check leave balance", ("hr.leave.manage",)),
+                    ("Review document checklist", ("hr.documents.manage",)),
+                ]
+        elif module == "inventory" or path.startswith("/inventory"):
+            suggestions = [
+                ("Find low-stock items", ("inventory.view",)),
+                ("Review purchase requests", ("inventory.purchase",)),
+                ("Summarize stock movements", ("inventory.view",)),
+                ("Export inventory exceptions", ("inventory.export",)),
+            ]
+        elif module == "dashboard" or path.startswith("/dashboard"):
+            suggestions = [
+                ("Show today's hospital summary", ("dashboard.view",)),
+                ("Show operational alerts", ("dashboard.view",)),
+                ("Show pending payments", ("billing.view",)),
+                ("Show low-stock medicines", ("pharmacy.view",)),
+                ("Show IPD occupancy", ("ipd.view",)),
+            ]
+        else:
+            suggestions = [
+                ("Show today's hospital summary", ("dashboard.view",)),
+                ("Find pending tasks", ("dashboard.view",)),
+                ("Search patient", ("patient.view",)),
+                ("Show pending payments", ("billing.view",)),
+                ("Check medicine stock", ("pharmacy.view",)),
+            ]
+
+        return [label for label, required in suggestions if can_any(*required)][:5]
+
     def reset(self, payload: StaffBotResetCreate, actor: User) -> StaffBotResponse:
         try:
-            conversation = self._create_conversation(actor, context_name=payload.context)
+            assistant_context = self._coerce_context(payload.context)
+            conversation = self._create_conversation(actor, assistant_context=assistant_context)
             self._save_message(conversation, "bot", DEFAULT_GREETING, meta={"intent": "greeting", "source_module": "assistant"})
+            suggestions = self._contextual_suggestions(actor, assistant_context)
             return StaffBotResponse(
                 conversation_id=conversation.id,
                 message=DEFAULT_GREETING,
@@ -101,7 +213,8 @@ class StaffBotService:
                 source_module="assistant",
                 used_database=False,
                 used_gemini=False,
-                quick_replies=self.settings(actor).quick_actions[:6],
+                quick_replies=suggestions or self.settings(actor).quick_actions[:6],
+                context_suggestions=suggestions,
             )
         except SQLAlchemyError as exc:
             raise AppException(
@@ -116,7 +229,9 @@ class StaffBotService:
             if not message:
                 raise AppException(400, "empty_message", "Message cannot be empty")
 
-            conversation = self._get_or_create_conversation(payload.conversation_id, actor, context_name=payload.context)
+            assistant_context = self._coerce_context(payload.context)
+            conversation = self._get_or_create_conversation(payload.conversation_id, actor, assistant_context=assistant_context)
+            self._merge_context(conversation, assistant_context)
             self._save_message(conversation, "user", message, meta={})
 
             normalized = self._normalize(message)
@@ -137,6 +252,8 @@ class StaffBotService:
                     used_gemini=False,
                     details=[],
                     next_action="Open your role/permission settings or contact admin.",
+                    permission_denied=True,
+                    context_suggestions=self._contextual_suggestions(actor, assistant_context),
                 )
 
             answer = self._database_first_answer(intent, normalized, actor, conversation)
@@ -210,10 +327,103 @@ class StaffBotService:
             return self._book_opd_appointment(actor, conversation, normalized)
         if intent == "patient_info":
             return self._patient_lookup(actor, conversation, normalized)
+        if intent == "low_stock":
+            return self._low_stock_summary(actor, conversation, normalized)
+        if intent == "lab_pending":
+            return self._lab_pending_summary(actor, conversation)
+        if intent == "radiology_pending":
+            return self._radiology_pending_summary(actor, conversation)
+        if intent == "payroll_exceptions":
+            return self._payroll_exception_stub(actor, conversation)
         if intent == "general_health_guidance":
             # Intentionally no DB lookup; prefer Gemini for explanation.
             return None
         return None
+
+    def _low_stock_summary(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        details: list[StaffBotDetailRow] = []
+        permissions = set(self.auth.get_effective_permissions(actor))
+        if "pharmacy.view" in permissions and ("medicine" in normalized or "pharmacy" in normalized or "stock" in normalized):
+            stmt = select(PharmacyMedicine).where(PharmacyMedicine.stock_quantity <= PharmacyMedicine.reorder_level)
+            if actor.branch_id:
+                stmt = stmt.where(PharmacyMedicine.branch_id == actor.branch_id)
+            medicines = list(self.db.scalars(stmt.order_by(PharmacyMedicine.stock_quantity.asc()).limit(5)))
+            for item in medicines:
+                details.append(StaffBotDetailRow(label=item.name, value=f"{float(item.stock_quantity):,.0f} left"))
+            message = f"Pharmacy low-stock medicines: {len(medicines)} item(s) shown."
+            source = "Pharmacy Module"
+        elif "inventory.view" in permissions:
+            stmt = select(InventoryItem).where(InventoryItem.is_active.is_(True), InventoryItem.stock_quantity <= InventoryItem.reorder_level)
+            if actor.branch_id:
+                stmt = stmt.where(InventoryItem.branch_id == actor.branch_id)
+            items = list(self.db.scalars(stmt.order_by(InventoryItem.stock_quantity.asc()).limit(5)))
+            for item in items:
+                details.append(StaffBotDetailRow(label=item.name, value=f"{float(item.stock_quantity):,.0f} {item.unit_of_measurement}"))
+            message = f"Inventory low-stock items: {len(items)} item(s) shown."
+            source = "Inventory Module"
+        else:
+            message = "Access denied for low-stock data."
+            source = "Permissions"
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=message,
+            intent="low_stock",
+            source_module=source,
+            used_database=True,
+            used_gemini=False,
+            details=details,
+            next_action="Open the stock module to reorder, adjust, or review batches.",
+            quick_replies=["Check medicine stock", "Review purchase requests"],
+        )
+
+    def _lab_pending_summary(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        stmt = select(LabOrder.status, func.count(LabOrder.id)).group_by(LabOrder.status)
+        if actor.branch_id:
+            stmt = stmt.where(LabOrder.branch_id == actor.branch_id)
+        rows = {str(status or "unknown"): int(count or 0) for status, count in self.db.execute(stmt)}
+        pending = rows.get("pending", 0) + rows.get("collected", 0) + rows.get("in_progress", 0)
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Lab pending workload: {pending} order(s) need collection, result entry, or verification.",
+            intent="lab_pending",
+            source_module="Laboratory Module",
+            used_database=True,
+            used_gemini=False,
+            details=[StaffBotDetailRow(label=key.replace("_", " ").title(), value=str(value)) for key, value in sorted(rows.items())],
+            next_action="Open Laboratory worklist to enter or verify results.",
+            quick_replies=["Review verification checklist", "Highlight abnormal results"],
+        )
+
+    def _radiology_pending_summary(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        stmt = select(RadiologyOrder.status, func.count(RadiologyOrder.id)).group_by(RadiologyOrder.status)
+        if actor.branch_id:
+            stmt = stmt.where(RadiologyOrder.branch_id == actor.branch_id)
+        rows = {str(status or "unknown"): int(count or 0) for status, count in self.db.execute(stmt)}
+        pending = rows.get("pending", 0) + rows.get("in_progress", 0) + rows.get("reported", 0)
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Radiology pending workload: {pending} order(s) need imaging, upload, report, or verification.",
+            intent="radiology_pending",
+            source_module="Radiology Module",
+            used_database=True,
+            used_gemini=False,
+            details=[StaffBotDetailRow(label=key.replace("_", " ").title(), value=str(value)) for key, value in sorted(rows.items())],
+            next_action="Open Radiology worklist to review reports and PACS status.",
+            quick_replies=["Check pending PACS uploads", "Review verification checklist"],
+        )
+
+    def _payroll_exception_stub(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message="Payroll exception review is available from HR payroll data. I can summarize runs, approvals, and deduction issues when payroll records are selected.",
+            intent="payroll_exceptions",
+            source_module="Payroll Module",
+            used_database=True,
+            used_gemini=False,
+            details=[],
+            next_action="Open HR Payroll and select a payroll run for record-specific review.",
+            quick_replies=["Show salary processing status", "Check payroll approval checklist"],
+        )
 
     def _ipd_admitted_under_me(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
         branch_id = actor.branch_id
@@ -834,10 +1044,20 @@ class StaffBotService:
     def _detect_intent(self, normalized: str) -> str:
         if any(key in normalized for key in ["hospital summary", "today summary", "overall summary", "dashboard summary"]):
             return "hospital_summary"
+        if any(key in normalized for key in ["low-stock", "low stock", "reorder", "stock out"]):
+            return "low_stock"
+        if any(key in normalized for key in ["pending lab", "pending tests", "lab pending", "abnormal result", "verification checklist"]):
+            return "lab_pending"
+        if any(key in normalized for key in ["pending pacs", "pacs upload", "imaging order", "radiology pending", "pending radiology"]):
+            return "radiology_pending"
+        if any(key in normalized for key in ["payroll exception", "deduction issue", "salary processing", "payroll approval"]):
+            return "payroll_exceptions"
         if any(key in normalized for key in ["revenue analysis", "collection analysis", "billing analysis", "revenue trend"]):
             return "revenue_analysis"
         if any(key in normalized for key in ["book opd", "opd booking", "book appointment", "register opd visit"]):
             return "opd_booking"
+        if any(key in normalized for key in ["pending payment", "pending payments", "unpaid invoice", "unpaid invoices"]):
+            return "pending_payments"
         if any(key in normalized for key in ["opd", "opd patients", "opd summary", "today opd"]):
             return "opd_today_summary" if "today" in normalized or "opd" in normalized else "opd_today_summary"
         if "occupied" in normalized and "bed" in normalized:
@@ -851,8 +1071,6 @@ class StaffBotService:
                 return "pharmacy_stock"
         if any(key in normalized for key in ["due", "bill", "invoice"]):
             return "billing_due"
-        if "pending payment" in normalized or "pending payments" in normalized:
-            return "pending_payments"
         if "appointment" in normalized:
             return "appointment_status"
         if "patient" in normalized and any(key in normalized for key in ["detail", "info", "show", "find"]):
@@ -863,19 +1081,20 @@ class StaffBotService:
             return "general_health_guidance"
         return "unknown"
 
-    def _get_or_create_conversation(self, conversation_id: UUID | None, actor: User, *, context_name: str | None) -> StaffBotConversation:
+    def _get_or_create_conversation(self, conversation_id: UUID | None, actor: User, *, assistant_context: StaffBotContext | None) -> StaffBotConversation:
         if conversation_id:
             item = self.db.get(StaffBotConversation, conversation_id)
             if item and item.user_id == actor.id and item.is_active:
                 return item
-        return self._create_conversation(actor, context_name=context_name)
+        return self._create_conversation(actor, assistant_context=assistant_context)
 
-    def _create_conversation(self, actor: User, *, context_name: str | None) -> StaffBotConversation:
+    def _create_conversation(self, actor: User, *, assistant_context: StaffBotContext | None) -> StaffBotConversation:
+        context = self._context_to_dict(assistant_context)
         item = StaffBotConversation(
             branch_id=actor.branch_id,
             user_id=actor.id,
             title="Staff Assistant",
-            context={"context": context_name or "staff-dashboard"},
+            context=context or {"context": "staff-dashboard"},
             created_by=actor.id,
             updated_by=actor.id,
         )
@@ -883,6 +1102,28 @@ class StaffBotService:
         self.db.commit()
         self.db.refresh(item)
         return item
+
+    def _merge_context(self, conversation: StaffBotConversation, assistant_context: StaffBotContext | None) -> None:
+        context = self._context_to_dict(assistant_context)
+        if not context:
+            return
+        conversation.context = {**(conversation.context or {}), **context}
+        conversation.updated_at = datetime.now(UTC)
+        self.db.commit()
+
+    @staticmethod
+    def _coerce_context(raw_context: StaffBotContext | str | None) -> StaffBotContext | None:
+        if raw_context is None:
+            return None
+        if isinstance(raw_context, StaffBotContext):
+            return raw_context
+        return StaffBotContext(module=raw_context, page=raw_context, path=raw_context)
+
+    @staticmethod
+    def _context_to_dict(assistant_context: StaffBotContext | None) -> dict[str, Any]:
+        if not assistant_context:
+            return {}
+        return assistant_context.model_dump(exclude_none=True)
 
     def _save_message(self, conversation: StaffBotConversation, sender: str, message: str, *, meta: dict[str, Any]) -> None:
         self.db.add(

@@ -1,40 +1,36 @@
-<section class="ot-shell">
-  <header class="ot-hero">
-    <div>
-      <div class="eyebrow">Operation Theatre</div>
-      <h1>OT Command Center</h1>
-      <p>Schedule, checklist, anesthesia, recovery and billing.</p>
+<section class="workspace-shell ot-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Operation Theatre</div>
+        <h1 class="page-title">OT Command Center</h1>
+        <div class="page-subtitle">Schedule, checklist, anesthesia, recovery and billing.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="openModal('booking')">Book OT</button>
+        <button class="secondary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
+        <button class="secondary-btn" type="button" (click)="openModal('room')">Rooms</button>
+        <button class="secondary-btn" type="button" (click)="printCaseSheet()">Print</button>
+      </div>
     </div>
-    <div class="hero-actions">
-      <button type="button" (click)="openModal('booking')">Book OT</button>
-      <button type="button" (click)="openModal('schedule')">Schedule</button>
-      <button type="button" (click)="openModal('room')">Room</button>
-      <button type="button" (click)="printCaseSheet()">Print</button>
-    </div>
-  </header>
-
-  <nav class="tab-strip">
-    @for (item of tabs; track item.key) {
-      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
-    }
-  </nav>
+  </section>
 
   @if (error) { <div class="alert error">{{ error }}</div> }
   @if (success) { <div class="alert success">{{ success }}</div> }
 
   @if (tab() === 'dashboard' && dashboard) {
     <section class="metric-grid">
-      <div class="metric"><span>Today</span><strong>{{ dashboard.today_surgeries }}</strong></div>
-      <div class="metric info"><span>Upcoming</span><strong>{{ dashboard.upcoming_surgeries }}</strong></div>
-      <div class="metric warn"><span>Ongoing</span><strong>{{ dashboard.ongoing_surgeries }}</strong></div>
-      <div class="metric good"><span>Completed</span><strong>{{ dashboard.completed_surgeries }}</strong></div>
-      <div class="metric danger"><span>Emergency</span><strong>{{ dashboard.emergency_surgeries }}</strong></div>
-      <div class="metric"><span>Rooms</span><strong>{{ dashboard.available_rooms }}/{{ dashboard.available_rooms + dashboard.occupied_rooms }}</strong></div>
-      <div class="metric warn"><span>Pre-Op Pending</span><strong>{{ dashboard.pending_pre_op }}</strong></div>
-      <div class="metric warn"><span>Anesthesia Pending</span><strong>{{ dashboard.pending_anesthesia }}</strong></div>
+      <div class="metric-card"><div class="label">Today</div><div class="value">{{ dashboard.today_surgeries }}</div></div>
+      <div class="metric-card"><div class="label">Upcoming</div><div class="value">{{ dashboard.upcoming_surgeries }}</div></div>
+      <div class="metric-card"><div class="label">Ongoing</div><div class="value">{{ dashboard.ongoing_surgeries }}</div></div>
+      <div class="metric-card"><div class="label">Completed</div><div class="value">{{ dashboard.completed_surgeries }}</div></div>
+      <div class="metric-card"><div class="label">Emergency</div><div class="value">{{ dashboard.emergency_surgeries }}</div></div>
+      <div class="metric-card"><div class="label">Rooms</div><div class="value">{{ dashboard.available_rooms }}/{{ dashboard.available_rooms + dashboard.occupied_rooms }}</div></div>
+      <div class="metric-card"><div class="label">Pre-Op Pending</div><div class="value">{{ dashboard.pending_pre_op }}</div></div>
+      <div class="metric-card"><div class="label">Anesthesia Pending</div><div class="value">{{ dashboard.pending_anesthesia }}</div></div>
     </section>
     <section class="dashboard-grid">
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Room Board</h2><span>Real-time OT status</span></div>
         <div class="room-board">
           @for (room of rooms; track room.id) {
@@ -42,7 +38,7 @@
           }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Surgeon Load</h2><span>Today</span></div>
         <div class="bar-list">
           @for (item of dashboard.surgeon_schedule | keyvalue; track item.key) {
@@ -50,7 +46,7 @@
           }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Smart Alerts</h2><span>Safety and workflow</span></div>
         <div class="stack">
           @for (alert of dashboard.alerts; track alert) { <div class="alert-row">{{ alert }}</div> }
@@ -61,8 +57,11 @@
   }
 
   @if (tab() === 'bookings') {
-    <section class="panel">
-      <div class="list-toolbar"><input [(ngModel)]="q" (input)="load()" placeholder="Search booking, patient, procedure" /><button type="button" (click)="openModal('booking')">New Booking</button></div>
+    <section class="page-card">
+      <div class="list-toolbar">
+        <input [(ngModel)]="q" (input)="load()" placeholder="Search booking, patient, procedure" />
+        <button class="primary-btn" type="button" (click)="openModal('booking')">New Booking</button>
+      </div>
       <div class="table-wrap"><table><thead><tr><th>Booking</th><th>Patient</th><th>Procedure</th><th>Type</th><th>Priority</th><th>Preferred</th><th>Status</th></tr></thead><tbody>
         @for (booking of bookings; track booking.id) {
           <tr><td><strong>{{ booking.booking_number }}</strong></td><td>{{ booking.patient_name }}<small>{{ booking.patient_number }}</small></td><td>{{ booking.procedure_name }}</td><td>{{ booking.surgery_type }}</td><td><span [class]="statusClass(booking.priority_level)">{{ booking.priority_level }}</span></td><td>{{ booking.preferred_start_at | date:'short' }}</td><td><span [class]="statusClass(booking.status)">{{ booking.status }}</span></td></tr>
@@ -73,11 +72,11 @@
 
   @if (tab() === 'calendar' || tab() === 'checklist' || tab() === 'anesthesia' || tab() === 'notes' || tab() === 'recovery' || tab() === 'consumables' || tab() === 'billing' || tab() === 'documents' || tab() === 'reports') {
     <section class="workflow-layout">
-      <section class="panel">
+      <section class="page-card">
         <div class="list-toolbar">
           <input type="date" [(ngModel)]="calendarDay" (change)="loadSchedules()" />
           <select [(ngModel)]="statusFilter" (change)="loadSchedules()"><option value="">All status</option><option>scheduled</option><option>ready_for_ot</option><option>in_progress</option><option>completed</option><option>cancelled</option></select>
-          <button type="button" (click)="openModal('schedule')">Schedule</button>
+          <button class="primary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
         </div>
         <div class="schedule-list">
           @for (schedule of schedules; track schedule.id) {
@@ -90,7 +89,7 @@
         </div>
       </section>
 
-      <aside class="panel case-panel">
+      <aside class="page-card case-panel">
         <div class="panel-head"><h2>OT Case Sheet</h2><span>{{ selectedSchedule?.booking_number || 'Select case' }}</span></div>
         @if (selectedSchedule) {
           <div class="case-title">
@@ -108,10 +107,10 @@
             <button type="button" (click)="openModal('document')">Document</button>
           </div>
           <div class="status-actions">
-            <button type="button" (click)="updateStatus(selectedSchedule, 'ready_for_ot')">Ready</button>
-            <button type="button" (click)="updateStatus(selectedSchedule, 'in_progress')">Start</button>
-            <button type="button" (click)="updateStatus(selectedSchedule, 'completed')">Complete</button>
-            <button type="button" (click)="updateStatus(selectedSchedule, 'cancelled')">Cancel</button>
+            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'ready_for_ot')">Ready</button>
+            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'in_progress')">Start</button>
+            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'completed')">Complete</button>
+            <button class="danger-btn" type="button" (click)="updateStatus(selectedSchedule, 'cancelled')">Cancel</button>
           </div>
           @if (caseSheet) {
             <div class="case-sections">

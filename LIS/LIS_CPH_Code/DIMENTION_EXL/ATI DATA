@@ -1,0 +1,50 @@
+26 Jul 2023 12:20:24 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:20:24 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:20:24 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:20:39 INFO   (JMModel.java:261) - R*12312310111612260723118AHDL10TGL10CHOL10AST10ALTI10URCA10BUN10CRE21013
+26 Jul 2023 12:20:39 INFO   (JMModel.java:408) - MAE2
+26 Jul 2023 12:20:40 INFO   (JMModel.java:258) - 6
+26 Jul 2023 12:20:40 INFO   (JMModel.java:261) - I123456B6
+26 Jul 2023 12:20:40 INFO   (JMModel.java:324) - Sample No :123456
+26 Jul 2023 12:20:40 ERROR  (SampleTestSQL.java:67) - Exception=java.sql.SQLException: Io exception: The Network Adapter could not establish the connection
+26 Jul 2023 12:20:40 ERROR  (JMModel.java:437) - Exception :java.lang.NullPointerException
+26 Jul 2023 12:21:10 INFO   (JMModel.java:261) - PDIM11048
+26 Jul 2023 12:21:10 INFO   (JMModel.java:287) - N6A
+26 Jul 2023 12:21:10 INFO   (JMModel.java:289) - 6
+26 Jul 2023 12:21:25 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:21:25 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:21:25 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:21:40 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:21:40 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:21:40 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:21:55 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:21:55 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:21:55 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:22:10 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:22:10 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:22:10 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:22:26 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:22:26 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:22:26 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:22:41 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:22:41 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:22:41 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:22:56 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:22:56 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:22:56 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:23:11 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:23:11 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:23:11 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:23:26 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:23:26 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:23:26 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:23:41 INFO   (JMModel.java:261) - PDIM01047
+26 Jul 2023 12:23:41 INFO   (JMModel.java:295) - N6A
+26 Jul 2023 12:23:41 INFO   (JMModel.java:297) - 6
+26 Jul 2023 12:35:21 INFO   (MachineConfigation.java:60) - COM6
+26 Jul 2023 12:35:21 INFO   (MachineConfigation.java:60) - COM7
+26 Jul 2023 12:35:21 INFO   (MachineConfigation.java:65) - true
+26 Jul 2023 12:45:26 INFO   (MachineConfigation.java:60) - COM5
+26 Jul 2023 12:45:26 INFO   (MachineConfigation.java:60) - COM6
+26 Jul 2023 12:45:26 INFO   (MachineConfigation.java:60) - COM7
+26 Jul 2023 12:45:26 INFO   (MachineConfigation.java:65) - true

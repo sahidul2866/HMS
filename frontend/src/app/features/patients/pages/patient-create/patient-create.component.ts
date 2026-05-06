@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { debounceTime, distinctUntilChanged } from 'rxjs';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
@@ -25,6 +26,7 @@ export class PatientCreateComponent {
 
   saving = false;
   submitted = false;
+  private completed = false;
   lookupModalOpen = false;
   mobileLookup: PatientMobileLookup | null = null;
   mobileSearchResults: PatientLookupResult[] = [];
@@ -42,12 +44,19 @@ export class PatientCreateComponent {
     emergency_contact_phone: [''],
   });
 
-  searchMobile(): void {
+  constructor() {
+    this.form.controls.phone.valueChanges
+      .pipe(debounceTime(350), distinctUntilChanged())
+      .subscribe(() => this.searchMobile(false));
+  }
+
+  searchMobile(openMatches = true): void {
     const mobile = (this.form.getRawValue().phone || '').trim();
     if (mobile.length < 6) {
       this.mobileLookup = null;
       this.mobileSearchResults = [];
       this.mobileLookupMessage = '';
+      this.lookupModalOpen = false;
       return;
     }
     this.patientService.lookupByMobile(mobile).subscribe({
@@ -57,7 +66,7 @@ export class PatientCreateComponent {
         this.mobileLookupMessage = lookup.patients.length
           ? `${lookup.current_patient_count} of ${lookup.max_patients_allowed} patient slots already used for this mobile.`
           : `No patient found for this mobile yet. Limit is ${lookup.max_patients_allowed}.`;
-        this.lookupModalOpen = lookup.patients.length > 0;
+        this.lookupModalOpen = openMatches && lookup.patients.length > 0;
       },
       error: () => {
         this.mobileLookup = null;
@@ -92,6 +101,10 @@ export class PatientCreateComponent {
 
   cancel(): void {
     void this.router.navigate(['/patients']);
+  }
+
+  hasUnsavedChanges(): boolean {
+    return !this.completed && !this.saving && this.form.dirty;
   }
 
   get patientDisplayName(): string {
@@ -131,6 +144,8 @@ export class PatientCreateComponent {
       next: (patient) => {
         this.saving = false;
         this.submitted = false;
+        this.completed = true;
+        this.form.markAsPristine();
         this.notificationService.success(`Patient ${patient.patient_number} created successfully.`);
         const returnTo = this.route.snapshot.queryParamMap.get('returnTo');
         if (returnTo) {

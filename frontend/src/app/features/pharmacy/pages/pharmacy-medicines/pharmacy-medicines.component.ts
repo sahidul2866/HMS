@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { PharmacyCompany, PharmacyGeneric, PharmacyMedicine, PharmacyMedicineType } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -18,6 +19,7 @@ export class PharmacyMedicinesComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
   private readonly router = inject(Router);
 
   medicines: PharmacyMedicine[] = [];
@@ -104,6 +106,10 @@ export class PharmacyMedicinesComponent {
     this.sortDirection = 'asc';
   }
 
+  sortClass(field: PharmacyMedicinesComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
+  }
+
   get displayedMedicines(): PharmacyMedicine[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
     return [...this.medicines].sort((a, b) => {
@@ -123,6 +129,26 @@ export class PharmacyMedicinesComponent {
           return dir * (a.name || '').localeCompare(b.name || '');
       }
     });
+  }
+
+  exportCsv(): void {
+    const header = ['Name', 'Type', 'Generic', 'Company', 'Stock', 'Sale Price'];
+    const rows = this.displayedMedicines.map((item) => [
+      item.name,
+      item.medicine_type_name || '',
+      item.generic_name || '',
+      item.company_name || '',
+      item.stock_quantity,
+      item.sale_price,
+    ]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'medicine-list.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   edit(item: PharmacyMedicine): void {
@@ -171,18 +197,19 @@ export class PharmacyMedicinesComponent {
       ? this.pharmacyService.updateMedicine(this.editingId, payload as never)
       : this.pharmacyService.createMedicine(payload as never);
     request.subscribe(() => {
-      this.notificationService.success(`Medicine ${this.editingId ? 'updated' : 'created'} successfully.`);
+      const action = this.editingId ? 'updated' : 'created';
+      this.notificationService.success(`Medicine ${action}. You can continue editing catalog or open purchase from row actions.`);
       this.resetForm();
       this.loadPage();
     });
   }
 
   remove(item: PharmacyMedicine): void {
-    if (!window.confirm(`Delete ${item.name}?`)) {
+    if (!this.confirmationService.confirmDestructive(item.name)) {
       return;
     }
     this.pharmacyService.deleteMedicine(item.id).subscribe(() => {
-      this.notificationService.success('Medicine deleted successfully.');
+      this.notificationService.success(`${item.name} deleted from catalog.`);
       this.loadPage();
     });
   }

@@ -25,16 +25,19 @@
           <option value="partially_returned">Partially Returned</option>
           <option value="returned">Returned</option>
         </select>
+        <span class="table-meta"><strong>{{ total }}</strong> records</span>
+        <button class="secondary-btn" type="button" (click)="exportCsv()">Export CSV</button>
       </div>
 
+      @if (displayedSales.length) {
       <table class="table">
         <thead>
           <tr>
-            <th class="sortable-th" (click)="toggleSort('sale_number')">Sale No</th>
-            <th class="sortable-th" (click)="toggleSort('customer')">Customer</th>
-            <th class="sortable-th" (click)="toggleSort('status')">Status</th>
-            <th class="sortable-th" (click)="toggleSort('subtotal')">Subtotal</th>
-            <th class="sortable-th" (click)="toggleSort('net_payable')">Net</th>
+            <th class="sortable-th" [ngClass]="sortClass('sale_number')" (click)="toggleSort('sale_number')">Sale No</th>
+            <th class="sortable-th" [ngClass]="sortClass('customer')" (click)="toggleSort('customer')">Customer</th>
+            <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
+            <th class="sortable-th" [ngClass]="sortClass('subtotal')" (click)="toggleSort('subtotal')">Subtotal</th>
+            <th class="sortable-th" [ngClass]="sortClass('net_payable')" (click)="toggleSort('net_payable')">Net</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -47,14 +50,22 @@
               <td>{{ formatCurrency(sale.subtotal) }}</td>
               <td>{{ formatCurrency(sale.net_payable) }}</td>
               <td class="action-cell">
-                <button class="secondary-btn" type="button" (click)="openSale(sale)">Details</button>
-                <button class="secondary-btn" type="button" (click)="navigateToEdit(sale)">Edit</button>
-                <button class="danger-btn" type="button" (click)="deleteSale(sale)">Delete</button>
+                <details class="row-action-menu">
+                  <summary>Actions</summary>
+                  <div class="row-action-menu__panel">
+                    <button type="button" (click)="openSale(sale)">Details</button>
+                    <button type="button" (click)="navigateToEdit(sale)">Edit</button>
+                    <button class="danger-action" type="button" (click)="deleteSale(sale)">Delete</button>
+                  </div>
+                </details>
               </td>
             </tr>
           }
         </tbody>
       </table>
+      } @else {
+        <div class="table-empty">No sales match the selected filters.</div>
+      }
 
       <div class="pager-row">
         <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>

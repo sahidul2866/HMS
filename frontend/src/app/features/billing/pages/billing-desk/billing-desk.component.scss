@@ -221,25 +221,13 @@
 }
 
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
   z-index: 50;
-  display: grid;
-  place-items: center;
-  padding: 1.25rem;
-  background: rgba(15, 23, 42, 0.56);
-  backdrop-filter: blur(10px);
 }
 
 .invoice-preview-modal {
   width: min(1180px, 100%);
   max-height: min(92vh, 980px);
   overflow: hidden;
-  padding: 1.25rem;
-  border-radius: 26px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(241, 248, 255, 0.97));
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.22);
   display: grid;
   gap: 1rem;
 }
@@ -252,10 +240,6 @@
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
   flex-wrap: wrap;
 }
 

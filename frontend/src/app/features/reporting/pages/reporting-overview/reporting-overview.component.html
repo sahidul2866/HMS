@@ -3,8 +3,8 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">Executive View</div>
-        <h1 class="page-title">Report Center</h1>
-        <p class="page-subtitle">Hospital-wide reports with filters, print and export shortcuts.</p>
+        <h1 class="page-title">{{ pageTitle }}</h1>
+        <p class="page-subtitle">{{ pageSubtitle }}</p>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="loadReports()">Refresh Reports</button>
@@ -22,216 +22,199 @@
       </label>
     </form>
 
-    @if (summary) {
-      <div class="hero-summary">
-        <div class="hero-stat">
-          <div class="label">Posted Invoices</div>
-          <div class="value">{{ summary.posted_invoice_count }}</div>
-        </div>
-        <div class="hero-stat">
-          <div class="label">Void Invoices</div>
-          <div class="value">{{ summary.void_invoice_count }}</div>
-        </div>
-        <div class="hero-stat">
-          <div class="label">Net Revenue</div>
-          <div class="value">{{ formatCurrency(summary.net_amount) }}</div>
-        </div>
-        <div class="hero-stat">
-          <div class="label">Referral Payout</div>
-          <div class="value">{{ formatCurrency(summary.referred_doctor_amount) }}</div>
-        </div>
-      </div>
-    }
   </section>
 
-  @if (summary) {
-    <section class="metric-grid">
-      <div class="metric-card">
-        <div class="label">Gross Amount</div>
-        <div class="value">{{ formatCurrency(summary.gross_amount) }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="label">Discount Total</div>
-        <div class="value">{{ formatCurrency(summary.discount_amount) }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="label">Revenue After Discount</div>
-        <div class="value">{{ formatCurrency(summary.net_amount) }}</div>
-      </div>
-      <div class="metric-card">
-        <div class="label">Doctor Payout Exposure</div>
-        <div class="value">{{ formatCurrency(summary.referred_doctor_amount) }}</div>
-      </div>
-    </section>
-  }
-
-  @if (clinicalSummary) {
-    <section class="soft-panel data-panel">
-      <div class="panel-head">
-        <div>
-          <h2 class="section-title">Clinical Operations</h2>
-          <div class="section-copy">A live operations view over outpatient load, inpatient occupancy, investigations, and medication fulfillment.</div>
+  @if (showLibrary && catalog) {
+    <section class="report-workspace">
+      <aside class="soft-panel report-picker">
+        <div class="panel-head compact">
+          <div>
+            <h2 class="section-title">Report Library</h2>
+            <div class="section-copy">Choose one report, then run or export it.</div>
+          </div>
         </div>
-        <div class="hero-kicker">Cross-Module Activity</div>
-      </div>
-
-      <section class="metric-grid">
-        <div class="metric-card">
-          <div class="label">OPD Visits</div>
-          <div class="value">{{ clinicalSummary.opd_visits }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Billed OPD</div>
-          <div class="value">{{ clinicalSummary.opd_billed_visits }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Completed OPD</div>
-          <div class="value">{{ clinicalSummary.opd_completed_visits }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Active IPD</div>
-          <div class="value">{{ clinicalSummary.ipd_active_admissions }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Discharged IPD</div>
-          <div class="value">{{ clinicalSummary.ipd_discharged_admissions }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Pending Lab</div>
-          <div class="value">{{ clinicalSummary.pending_laboratory }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Pending Radiology</div>
-          <div class="value">{{ clinicalSummary.pending_radiology }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Pending Prescriptions</div>
-          <div class="value">{{ clinicalSummary.pending_prescriptions }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Pharmacy Dispenses</div>
-          <div class="value">{{ clinicalSummary.pharmacy_dispenses }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Outstanding Due</div>
-          <div class="value">{{ formatCurrency(clinicalSummary.outstanding_due_amount) }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Collected Amount</div>
-          <div class="value">{{ formatCurrency(clinicalSummary.collected_amount) }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Refunded Amount</div>
-          <div class="value">{{ formatCurrency(clinicalSummary.refunded_amount) }}</div>
-        </div>
-      </section>
-
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Workflow</th>
-            <th>Pending</th>
-            <th>Completed / Active</th>
-            <th>Verified / Cancelled</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of clinicalWorkflowRows; track row.workflow) {
-            <tr>
-              <td>{{ row.workflow }}</td>
-              <td>{{ row.pending }}</td>
-              <td>{{ row.active }}</td>
-              <td>{{ row.verified }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-
-      <section class="metric-grid" style="margin-top:1rem;">
-        <div class="metric-card">
-          <div class="label">Scheduled Appointments</div>
-          <div class="value">{{ clinicalSummary.scheduled_appointments }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Completed Appointments</div>
-          <div class="value">{{ clinicalSummary.completed_appointments }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Cancelled Appointments</div>
-          <div class="value">{{ clinicalSummary.cancelled_appointments }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Payment Receipts</div>
-          <div class="value">{{ clinicalSummary.payment_receipts }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Unpaid Invoices</div>
-          <div class="value">{{ clinicalSummary.unpaid_invoices }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="label">Partial Invoices</div>
-          <div class="value">{{ clinicalSummary.partial_invoices }}</div>
-        </div>
-      </section>
-    </section>
-  }
-
-  @if (catalog) {
-    <section class="soft-panel data-panel">
-      <div class="panel-head">
-        <div>
-          <h2 class="section-title">Report Library</h2>
-          <div class="section-copy">Finance, patient, appointment, IPD, ER, OT, lab, pharmacy, inventory, HR and management reports.</div>
-        </div>
-        <select [(ngModel)]="selectedCategory">
-          @for (category of catalog.categories; track category) {
-            <option [value]="category">{{ category }}</option>
-          }
-        </select>
-      </div>
-      <div class="report-library">
-        @for (report of filteredReports; track report.name) {
-          <a class="report-card" [routerLink]="report.route">
-            <strong>{{ report.name }}</strong>
-            <span>{{ report.description }}</span>
-          </a>
+        @if (!categoryLocked) {
+          <label class="field compact-field">
+            <span>Category</span>
+            <select [ngModel]="selectedCategory" (ngModelChange)="onCategoryChange($event)">
+              @for (category of catalog.categories; track category) {
+                <option [value]="category">{{ category }}</option>
+              }
+            </select>
+          </label>
         }
-      </div>
+        <div class="report-library">
+          @for (report of filteredReports; track report.name) {
+            <button class="report-card" type="button" [class.active]="selectedReport?.name === report.name" (click)="selectReport(report)">
+              <strong>{{ report.name }}</strong>
+              <span>{{ report.description }}</span>
+            </button>
+          }
+        </div>
+      </aside>
+
+      @if (selectedReport) {
+        <section class="soft-panel report-focus" aria-live="polite">
+          <div>
+            <div class="hero-kicker">{{ selectedReport.category }}</div>
+            <h3>{{ selectedReport.name }}</h3>
+            <p>{{ selectedReport.description }}</p>
+          </div>
+
+          <div class="insight-list">
+            @for (insight of reportInsights(); track insight) {
+              <div>{{ insight }}</div>
+            }
+          </div>
+
+          <div class="report-mode-toggle" role="tablist" aria-label="Report output view">
+            <button type="button" [class.active]="reportMode === 'data'" (click)="setReportMode('data')">Data</button>
+            <button type="button" [class.active]="reportMode === 'chart'" (click)="setReportMode('chart')">Chart</button>
+          </div>
+
+          @if (reportMode === 'data') {
+            <div class="table-wrap report-output">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                    <th>Insight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (metric of selectedReportMetrics(); track metric.label) {
+                    <tr>
+                      <td><strong>{{ metric.label }}</strong></td>
+                      <td>{{ metric.value }}</td>
+                      <td>{{ metric.note }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="chart-output report-output" aria-label="Report chart">
+              @for (metric of selectedReportMetrics(); track metric.label) {
+                <div class="chart-row">
+                  <div class="chart-label">
+                    <span>{{ metric.label }}</span>
+                    <strong>{{ metric.value }}</strong>
+                  </div>
+                  <div class="chart-track">
+                    <i [style.width.%]="chartWidth(metric)"></i>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="loadReports()">Run Report</button>
+            <button class="secondary-btn" type="button" (click)="printSelectedReport()">Print</button>
+            <button class="primary-btn" type="button" (click)="exportSelectedReport()">Export CSV</button>
+          </div>
+        </section>
+      }
     </section>
   }
 
-  <section class="soft-panel data-panel">
-    <div class="panel-head">
-      <div>
-        <h2 class="section-title">Doctor Referral Summary</h2>
-        <div class="section-copy">Compare who is driving revenue and where referral payouts are accumulating.</div>
-      </div>
-      <div class="hero-kicker">Referral Performance</div>
-    </div>
-
-    @if (referralSummary.length) {
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Doctor</th>
-            <th>Invoices</th>
-            <th>Net Amount</th>
-            <th>Referral Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of referralSummary; track item.referred_doctor_name) {
-            <tr>
-              <td><strong>{{ item.referred_doctor_name }}</strong></td>
-              <td>{{ item.invoice_count }}</td>
-              <td>{{ formatCurrency(item.net_amount) }}</td>
-              <td>{{ formatCurrency(item.referred_doctor_amount) }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    } @else {
-      <div class="empty-state">No referral activity is available for the selected range.</div>
+  @if (!showLibrary) {
+    <section class="report-review">
+    @if (showFinance && summary) {
+      <details class="soft-panel review-section" open>
+        <summary>
+          <span>Financial Snapshot</span>
+          <strong>{{ formatCurrency(summary.net_amount) }}</strong>
+        </summary>
+        <div class="compact-metrics">
+          <div><span>Posted Invoices</span><strong>{{ summary.posted_invoice_count }}</strong></div>
+          <div><span>Void Invoices</span><strong>{{ summary.void_invoice_count }}</strong></div>
+          <div><span>Gross Amount</span><strong>{{ formatCurrency(summary.gross_amount) }}</strong></div>
+          <div><span>Discount</span><strong>{{ formatCurrency(summary.discount_amount) }}</strong></div>
+          <div><span>Net Revenue</span><strong>{{ formatCurrency(summary.net_amount) }}</strong></div>
+          <div><span>Referral Payout</span><strong>{{ formatCurrency(summary.referred_doctor_amount) }}</strong></div>
+        </div>
+      </details>
     }
-  </section>
+
+    @if (showClinical && clinicalSummary) {
+      <details class="soft-panel review-section" open>
+        <summary>
+          <span>Clinical Operations</span>
+          <strong>{{ clinicalSummary.opd_visits }} OPD</strong>
+        </summary>
+        <div class="compact-metrics">
+          <div><span>OPD Visits</span><strong>{{ clinicalSummary.opd_visits }}</strong></div>
+          <div><span>Completed OPD</span><strong>{{ clinicalSummary.opd_completed_visits }}</strong></div>
+          <div><span>Active IPD</span><strong>{{ clinicalSummary.ipd_active_admissions }}</strong></div>
+          <div><span>Pending Lab</span><strong>{{ clinicalSummary.pending_laboratory }}</strong></div>
+          <div><span>Pending Radiology</span><strong>{{ clinicalSummary.pending_radiology }}</strong></div>
+          <div><span>Pending Prescriptions</span><strong>{{ clinicalSummary.pending_prescriptions }}</strong></div>
+          <div><span>Collected</span><strong>{{ formatCurrency(clinicalSummary.collected_amount) }}</strong></div>
+          <div><span>Outstanding Due</span><strong>{{ formatCurrency(clinicalSummary.outstanding_due_amount) }}</strong></div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Pending</th>
+                <th>Completed / Active</th>
+                <th>Verified / Cancelled</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of clinicalWorkflowRows; track row.workflow) {
+                <tr>
+                  <td>{{ row.workflow }}</td>
+                  <td>{{ row.pending }}</td>
+                  <td>{{ row.active }}</td>
+                  <td>{{ row.verified }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </details>
+    }
+
+    @if (showReferrals) {
+    <details class="soft-panel review-section" open>
+      <summary>
+        <span>Doctor Referral Summary</span>
+        <strong>{{ referralSummary.length }} doctor(s)</strong>
+      </summary>
+
+      @if (referralSummary.length) {
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Doctor</th>
+                <th>Invoices</th>
+                <th>Net Amount</th>
+                <th>Referral Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of referralSummary; track item.referred_doctor_name) {
+                <tr>
+                  <td><strong>{{ item.referred_doctor_name }}</strong></td>
+                  <td>{{ item.invoice_count }}</td>
+                  <td>{{ formatCurrency(item.net_amount) }}</td>
+                  <td>{{ formatCurrency(item.referred_doctor_amount) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="empty-state">No referral activity is available for the selected range.</div>
+      }
+    </details>
+    }
+    </section>
+  }
 </div>

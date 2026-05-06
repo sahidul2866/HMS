@@ -4,7 +4,6 @@
       <div>
         <div class="hero-kicker">OPD Operations</div>
         <h1 class="page-title">Visit List</h1>
-        <div class="page-subtitle">List-only view. Click any row to open visit details in a modal.</div>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
@@ -17,66 +16,72 @@
     <div class="section-header">
       <div>
         <h2 class="section-title">Visit Queue</h2>
-        <div class="section-copy">No inline detail panels are shown on this page.</div>
       </div>
-      <div class="toolbar-row">
-        <label class="field" style="min-width: 220px;">
-          <span>Search</span>
-          <input type="text" [(ngModel)]="searchText" placeholder="Visit no, patient, doctor..." />
-        </label>
-        <label class="field" style="min-width: 180px;">
-          <span>Status</span>
-          <select [(ngModel)]="selectedStatus">
-            <option value="">All status</option>
-            <option value="waiting">Waiting</option>
-            <option value="in_consultation">In consultation</option>
-            <option value="prescribed">Prescribed</option>
-            <option value="billed">Billed</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <label class="field" style="min-width: 180px;">
-          <span>Payment</span>
-          <select [(ngModel)]="selectedPayment">
-            <option value="">All</option>
-            <option value="paid">Paid</option>
-            <option value="unpaid">Unpaid</option>
-          </select>
-        </label>
-        <label class="field" style="min-width: 180px;">
-          <span>Visit Date</span>
-          <input type="date" [(ngModel)]="selectedDate" />
-        </label>
-      </div>
-      @if (canFilterByDoctor) {
-        <label class="field" style="min-width: 280px;">
-          <span>Doctor Filter</span>
-          <select [(ngModel)]="selectedDoctorUserId" (change)="loadVisits()">
-            <option value="">All doctors</option>
-            @for (doctor of doctors; track doctor.id) {
-              <option [value]="doctor.id">{{ doctor.full_name }}</option>
-            }
-          </select>
-        </label>
-      }
+      <span class="table-meta"><strong>{{ filteredVisits.length }}</strong> records · {{ rangeStart }}-{{ rangeEnd }}</span>
     </div>
 
+    <div class="table-toolbar opd-filter-toolbar">
+      <div class="table-toolbar__main">
+        <div class="table-toolbar__filters">
+          <label class="field">
+            <span>Search</span>
+            <input type="search" [(ngModel)]="searchText" (ngModelChange)="onFiltersChanged()" placeholder="Visit no, patient, doctor..." />
+          </label>
+          <label class="field">
+            <span>Status</span>
+            <select [(ngModel)]="selectedStatus" (ngModelChange)="onFiltersChanged()">
+              <option value="">All status</option>
+              <option value="waiting">Waiting</option>
+              <option value="in_consultation">In consultation</option>
+              <option value="prescribed">Prescribed</option>
+              <option value="billed">Billed</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Payment</span>
+            <select [(ngModel)]="selectedPayment" (ngModelChange)="onFiltersChanged()">
+              <option value="">All</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Visit Date</span>
+            <input type="date" [(ngModel)]="selectedDate" (ngModelChange)="onFiltersChanged()" />
+          </label>
+          @if (canFilterByDoctor) {
+            <label class="field">
+              <span>Doctor</span>
+              <select [(ngModel)]="selectedDoctorUserId" (change)="onFiltersChanged(); loadVisits()">
+                <option value="">All doctors</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+            </label>
+          }
+        </div>
+      </div>
+    </div>
+
+    @if (displayedVisits.length) {
     <table class="table">
       <thead>
         <tr>
-          <th class="sortable-th" (click)="toggleSort('visit_number')">Visit No</th>
-          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
-          <th class="sortable-th" (click)="toggleSort('department')">Department</th>
-          <th class="sortable-th" (click)="toggleSort('doctor')">Doctor</th>
-          <th class="sortable-th" (click)="toggleSort('fee')">Fee</th>
-          <th class="sortable-th" (click)="toggleSort('payment')">Payment</th>
-          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
+          <th class="sortable-th" [ngClass]="sortClass('visit_number')" (click)="toggleSort('visit_number')">Visit No</th>
+          <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
+          <th class="sortable-th" [ngClass]="sortClass('department')" (click)="toggleSort('department')">Department</th>
+          <th class="sortable-th" [ngClass]="sortClass('doctor')" (click)="toggleSort('doctor')">Doctor</th>
+          <th class="sortable-th" [ngClass]="sortClass('fee')" (click)="toggleSort('fee')">Fee</th>
+          <th class="sortable-th" [ngClass]="sortClass('payment')" (click)="toggleSort('payment')">Payment</th>
+          <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        @for (visit of filteredVisits; track visit.id) {
+        @for (visit of displayedVisits; track visit.id) {
           <tr class="list-row" (click)="openVisit(visit.id)">
             <td>{{ visit.visit_number }}</td>
             <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
@@ -87,20 +92,33 @@
               <div>{{ formatCurrency(visit.consultation_total || visit.consultation_fee) }}</div>
               <span class="page-subtitle">{{ visit.consultation_payment_status || 'unpaid' }}</span>
             </td>
-            <td><span class="pill">{{ visit.status.replace('_', ' ') }}</span></td>
-            <td>
-              @if (canStartVisit && isPaymentDone(visit)) {
-                <button class="primary-btn" type="button" (click)="$event.stopPropagation(); startVisit(visit)">Start Visit</button>
-              }
-              @if (!isPaymentDone(visit) && session.hasPermission(permissions.billingInvoiceCreate)) {
-                <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openPayment(visit)">Pay</button>
-              }
-              <button class="secondary-btn" type="button" (click)="$event.stopPropagation(); openVisit(visit.id)">Open</button>
+            <td><span class="status-chip">{{ visit.status.replace('_', ' ') }}</span></td>
+            <td class="action-cell">
+              <details class="row-action-menu" (click)="$event.stopPropagation()">
+                <summary>Actions</summary>
+                <div class="row-action-menu__panel">
+                  <button type="button" (click)="openVisit(visit.id)">Open</button>
+                  @if (canStartVisit && isPaymentDone(visit)) {
+                    <button type="button" (click)="startVisit(visit)">Start Visit</button>
+                  }
+                  @if (!isPaymentDone(visit) && session.hasPermission(permissions.billingPaymentCollect)) {
+                    <button type="button" (click)="openPayment(visit)">Collect Payment</button>
+                  }
+                </div>
+              </details>
             </td>
           </tr>
         }
       </tbody>
     </table>
+    <div class="pager-row">
+      <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+      <span>Page {{ page }} of {{ totalPages }}</span>
+      <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+    </div>
+    } @else {
+      <div class="table-empty">No OPD visits match the selected filters.</div>
+    }
   </section>
 
   @if (selectedVisit) {

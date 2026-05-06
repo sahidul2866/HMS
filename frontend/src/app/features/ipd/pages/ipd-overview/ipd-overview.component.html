@@ -212,7 +212,7 @@
                 <label class="field" style="grid-column:1/-1;"><span>Discharge Summary</span><textarea rows="3" formControlName="discharge_summary"></textarea></label>
                 <label class="field" style="grid-column:1/-1;"><span>Discharge Note</span><textarea rows="2" formControlName="discharge_note"></textarea></label>
                 <div class="control-actions" style="grid-column:1/-1;">
-                  <button class="danger-btn" type="submit">Finalize Discharge</button>
+                  <button class="danger-btn is-destructive" type="submit">Finalize Discharge</button>
                   @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
                     <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Final Bill</button>
                   }
@@ -262,10 +262,3 @@
     </aside>
   </section>
 </section>
-
-<app-floating-assistant
-  title="IPD Assistant"
-  context="ipd-dashboard"
-  [quickActions]="assistantQuickActions"
-  placeholder="Ask about admissions, beds, discharge, and IPD billing…"
-></app-floating-assistant>

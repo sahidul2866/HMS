@@ -5,6 +5,8 @@ class AuditAction(StrEnum):
     LOGIN = "auth.login"
     LOGOUT = "auth.logout"
     USER_CREATE = "settings.user.create"
+    USER_UPDATE = "settings.user.update"
+    ROLE_CREATE = "settings.role.create"
     ROLE_PERMISSION_UPDATE = "settings.role.permissions.update"
     PATIENT_CREATE = "patient.create"
     BILLING_SERVICE_CREATE = "billing.service.create"

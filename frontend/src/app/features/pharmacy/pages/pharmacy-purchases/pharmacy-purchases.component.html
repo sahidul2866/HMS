@@ -86,8 +86,13 @@
               <td>{{ formatCurrency(item.total_amount) }}</td>
               <td>{{ item.purchase_date }}</td>
               <td class="action-cell">
-                <button class="secondary-btn" type="button" (click)="edit(item)">Edit</button>
-                <button class="danger-btn" type="button" (click)="remove(item)">Delete</button>
+                <details class="row-action-menu">
+                  <summary>Actions</summary>
+                  <div class="row-action-menu__panel">
+                    <button type="button" (click)="edit(item)">Edit</button>
+                    <button class="danger-action" type="button" (click)="remove(item)">Delete</button>
+                  </div>
+                </details>
               </td>
             </tr>
           }

@@ -1,32 +1,28 @@
-<section class="accounting-shell">
-  <header class="accounting-hero">
-    <div>
-      <div class="eyebrow">Accounting</div>
-      <h1>Finance Control Center</h1>
-      <p>Revenue, dues, payables, payroll, cash, bank and journals.</p>
+<section class="workspace-shell accounting-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Accounting</div>
+        <h1 class="page-title">Finance Control Center</h1>
+        <div class="page-subtitle">Revenue, dues, payables, payroll, cash, bank and journals.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="openModal('advance')">Advance</button>
+        <button class="secondary-btn" type="button" (click)="openModal('expense')">Expense</button>
+        <button class="primary-btn" type="button" (click)="openModal('journal')">Journal</button>
+        <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
+      </div>
     </div>
-    <div class="hero-actions">
-      <button type="button" (click)="openModal('advance')">Advance</button>
-      <button type="button" (click)="openModal('expense')">Expense</button>
-      <button type="button" (click)="openModal('journal')">Journal</button>
-      <button type="button" (click)="load()">Refresh</button>
-    </div>
-  </header>
-
-  <nav class="tab-strip">
-    @for (item of tabs; track item.key) {
-      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
-    }
-  </nav>
+  </section>
 
   @if (error) { <div class="alert error">{{ error }}</div> }
 
   @if (dashboard) {
-    <section class="kpi-grid">
+    <section class="metric-grid">
       @for (kpi of dashboard.kpis; track kpi.label) {
-        <article [class]="'kpi ' + kpi.tone">
-          <span>{{ kpi.label }}</span>
-          <strong>{{ money(kpi.value) }}</strong>
+        <article class="metric-card">
+          <div class="label">{{ kpi.label }}</div>
+          <div class="value">{{ money(kpi.value) }}</div>
         </article>
       }
     </section>
@@ -34,7 +30,7 @@
 
   @if (tab() === 'dashboard' && dashboard) {
     <section class="dashboard-grid">
-      <article class="panel span-2">
+      <article class="page-card span-2">
         <div class="panel-head"><h2>Revenue vs Expense</h2><span>This month</span></div>
         <div class="bar-list">
           @for (point of dashboard.revenue_vs_expense; track point.label) {
@@ -42,7 +38,7 @@
           }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Payment Mix</h2><span>Collections</span></div>
         <div class="compact-list">
           @for (point of dashboard.payment_methods; track point.label) {
@@ -50,7 +46,7 @@
           }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Smart Alerts</h2><span>Finance risk</span></div>
         <div class="alert-list">
           @for (alert of dashboard.alerts; track alert.title) {
@@ -59,7 +55,7 @@
           @if (!dashboard.alerts.length) { <div class="empty">No finance alerts.</div> }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Department Revenue</h2><span>Source module</span></div>
         <div class="bar-list">
           @for (point of dashboard.department_revenue; track point.label) {
@@ -67,7 +63,7 @@
           }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Due Aging</h2><span>Patients</span></div>
         <div class="compact-list">
           @for (point of dashboard.due_aging; track point.label) {
@@ -79,8 +75,8 @@
   }
 
   @if (tab() === 'accounts' && workspace) {
-    <section class="panel">
-      <div class="list-toolbar"><button type="button" (click)="openModal('account')">Add Account</button></div>
+    <section class="page-card">
+      <div class="list-toolbar"><button class="primary-btn" type="button" (click)="openModal('account')">Add Account</button></div>
       <div class="table-wrap"><table><thead><tr><th>Code</th><th>Account</th><th>Category</th><th>Module</th><th>Balance</th><th>Status</th></tr></thead><tbody>
         @for (account of workspace.accounts; track account.id) {
           <tr><td><strong>{{ account.account_code }}</strong></td><td>{{ account.name }}</td><td>{{ account.category }}</td><td>{{ account.module_key || '-' }}</td><td>{{ money(account.current_balance) }}</td><td><span [class]="account.is_active ? 'badge good' : 'badge danger'">{{ account.is_active ? 'active' : 'inactive' }}</span></td></tr>
@@ -90,14 +86,14 @@
   }
 
   @if (tab() !== 'dashboard' && tab() !== 'accounts' && tab() !== 'journals' && tab() !== 'reports' && tab() !== 'audit') {
-    <section class="panel">
+    <section class="page-card">
       <div class="list-toolbar">
-        <button type="button" (click)="openModal('advance')" *ngIf="tab() === 'collections'">Collect Advance</button>
-        <button type="button" (click)="openModal('insurance')" *ngIf="tab() === 'receivables'">Insurance Claim</button>
-        <button type="button" (click)="openModal('supplier')" *ngIf="tab() === 'payables'">Supplier Bill</button>
-        <button type="button" (click)="openModal('expense')" *ngIf="tab() === 'expenses'">New Expense</button>
-        <button type="button" (click)="openModal('refund')" *ngIf="tab() === 'receivables'">Refund</button>
-        <button type="button" (click)="openModal('discount')" *ngIf="tab() === 'receivables'">Discount</button>
+        <button class="primary-btn" type="button" (click)="openModal('advance')" *ngIf="tab() === 'collections'">Collect Advance</button>
+        <button class="primary-btn" type="button" (click)="openModal('insurance')" *ngIf="tab() === 'receivables'">Insurance Claim</button>
+        <button class="primary-btn" type="button" (click)="openModal('supplier')" *ngIf="tab() === 'payables'">Supplier Bill</button>
+        <button class="primary-btn" type="button" (click)="openModal('expense')" *ngIf="tab() === 'expenses'">New Expense</button>
+        <button class="primary-btn" type="button" (click)="openModal('refund')" *ngIf="tab() === 'receivables'">Refund</button>
+        <button class="primary-btn" type="button" (click)="openModal('discount')" *ngIf="tab() === 'receivables'">Discount</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Name</th><th>Category</th><th>Amount</th><th>Paid</th><th>Due/Diff</th><th>Status</th></tr></thead><tbody>
         @for (record of recordsForTab(); track record.id) {
@@ -109,8 +105,8 @@
   }
 
   @if (tab() === 'journals' && workspace) {
-    <section class="panel">
-      <div class="list-toolbar"><button type="button" (click)="openModal('journal')">Post Journal</button></div>
+    <section class="page-card">
+      <div class="list-toolbar"><button class="primary-btn" type="button" (click)="openModal('journal')">Post Journal</button></div>
       <div class="table-wrap"><table><thead><tr><th>No</th><th>Date</th><th>Narration</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead><tbody>
         @for (entry of workspace.journal_entries; track entry.id) {
           <tr><td><strong>{{ entry.journal_number }}</strong></td><td>{{ entry.journal_date }}</td><td>{{ entry.narration }}</td><td>{{ money(entry.total_debit) }}</td><td>{{ money(entry.total_credit) }}</td><td><span [class]="statusClass(entry.status)">{{ entry.status }}</span></td></tr>

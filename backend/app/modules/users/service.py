@@ -85,7 +85,7 @@ class UsersService:
         user.updated_by = actor_id
         AuditService(self.db).log(
             user_id=actor_id,
-            action=AuditAction.USER_CREATE,
+            action=AuditAction.USER_UPDATE,
             module="admin",
             entity_type="user",
             entity_id=str(user.id),

@@ -1,0 +1,37 @@
+HOST_IP :
+PORT:
+MACHINE_IP :
+
+
+
+
+
+output:
+
+
+/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||WBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||CRY^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CRY^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOx^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOxm^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOxd^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.TRI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.URI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.U-AMO^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.P-AMO^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||HYA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||PAT^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.PAT^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.C-GRA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.C-RBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.C-WBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||EPI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||YEA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||MUC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||SPRM^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||TRV^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0||||\x0384\r\n'
+frame:  ['2S2', 'URP04200190', '161', '23072410229', '0', '-', '6', '1', 'Service', '2023/07/24', '17:30:39', '1', '1', '1.00', '', '0', '0^-1', '1^Automatic validated^Service^Service^-^-', '2', '', '', '', '', '', '', 'RBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'WBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'CRY^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CRY^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOx^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOxm^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOxd^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.TRI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.URI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.U-AMO^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.P-AMO^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'HYA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'PAT^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.PAT^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.C-GRA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.C-RBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.C-WBC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'EPI^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'YEA^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'MUC^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'SPRM^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'TRV^N/A^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '384\\r\\n']
+b'\x02CH2|URP04200190|162|23072410229|0|6|1|Service|2023/07/24|17:30:39|0|0|1^Automatic validated^Service^Service^-^-|1|-^|0|1.025^0^Very turbid^0^Pale yellow^0||||BIL^neg^mg/dl^neg^umol/l^neg^^0|||||UBG^norm^mg/dl^norm^umol/l^norm^^0|||||KET^neg^mg/dl^neg^mmol/l^neg^^0|||||ASC^neg^mg/dl^neg^g/l^neg^^0|||||GLU^norm^mg/dl^norm^mmol/l^norm^^0|||||PRO^30^mg/dl^0.3^g/l^+^^0|||||BLD^neg^Ery/ul^neg^Ery/ul^neg^^0|||||PH^5^^5^^5^^0|||||NIT^neg^^neg^^neg^^0|||||LEU^neg^Leu/ul^neg^Leu/ul^neg^^0||||\x03B3\r\n'
+frame:  ['2CH2', 'URP04200190', '162', '23072410229', '0', '6', '1', 'Service', '2023/07/24', '17:30:39', '0', '0', '1^Automatic validated^Service^Service^-^-', '1', '-^', '0', '1.025^0^Very turbid^0^Pale yellow^0', '', '', '', 'BIL^neg^mg/dl^neg^umol/l^neg^^0', '', '', '', '', 'UBG^norm^mg/dl^norm^umol/l^norm^^0', '', '', '', '', 'KET^neg^mg/dl^neg^mmol/l^neg^^0', '', '', '', '', 'ASC^neg^mg/dl^neg^g/l^neg^^0', '', '', '', '', 'GLU^norm^mg/dl^norm^mmol/l^norm^^0', '', '', '', '', 'PRO^30^mg/dl^0.3^g/l^+^^0', '', '', '', '', 'BLD^neg^Ery/ul^neg^Ery/ul^neg^^0', '', '', '', '', 'PH^5^^5^^5^^0', '', '', '', '', 'NIT^neg^^neg^^neg^^0', '', '', '', '', 'LEU^neg^Leu/ul^neg^Leu/ul^neg^^0', '', '', '', '3B3\\r\\n']
+b'\x02S2|URP04200190|163|23072410229|0|-|9|2|Service|2023/07/24|17:54:02|1|0|1.00||0|0^-1|1^Automatic validated^Service^Service^-^-|1|||||||RBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||WBC^+^^2.85^p/HPF^12.54^p/ul^5.70^^0|||||CRY^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CRY^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOx^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOxm^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.CaOxd^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.TRI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.URI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.U-AMO^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.P-AMO^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||HYA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||PAT^-^^0.50^p/HPF^2.20^p/ul^1.00^^0|||||.PAT^-^^0.50^p/HPF^2.20^p/ul^1.00^^0|||||.C-GRA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.C-RBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||.C-WBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||EPI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||YEA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||MUC^-^^21.50^p/HPF^94.60^p/ul^43.00^^0|||||SPRM^-^^0.00^p/HPF^0.00^p/ul^0.00^^0|||||TRV^-^^0.00^p/HPF^0.00^p/ul^0.00^^0||||\x0329\r\n'
+frame:  ['2S2', 'URP04200190', '163', '23072410229', '0', '-', '9', '2', 'Service', '2023/07/24', '17:54:02', '1', '0', '1.00', '', '0', '0^-1', '1^Automatic validated^Service^Service^-^-', '1', '', '', '', '', '', '', 'RBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'WBC^+^^2.85^p/HPF^12.54^p/ul^5.70^^0', '', '', '', '', 'CRY^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CRY^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOx^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOxm^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.CaOxd^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.TRI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.URI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.U-AMO^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.P-AMO^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'HYA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'PAT^-^^0.50^p/HPF^2.20^p/ul^1.00^^0', '', '', '', '', '.PAT^-^^0.50^p/HPF^2.20^p/ul^1.00^^0', '', '', '', '', '.C-GRA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.C-RBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', '.C-WBC^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'EPI^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'YEA^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'MUC^-^^21.50^p/HPF^94.60^p/ul^43.00^^0', '', '', '', '', 'SPRM^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '', 'TRV^-^^0.00^p/HPF^0.00^p/ul^0.00^^0', '', '', '', '329\\r\\n']
+
+
+
+
+
+
+
+
+
+                    if resultValue != "----":
+                        resultValue=round(float(resultValue))
+
+                        resultName = resultName.replace("#","")
+                        resultName = resultName.replace("%", "")
+
+                        singleResultItem.append(resultID)
+                        singleResultItem.append(resultName)
+                        singleResultItem.append(resultValue)
+                        singleResultItem.append(resultUnit)
+                        resultDataDic[resultID] = singleResultItem

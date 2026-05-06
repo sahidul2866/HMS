@@ -1,0 +1,23 @@
+D:\DRIVE_3\LIS\LIS_CODE\venv\Scripts\python.exe D:\DRIVE_3\LIS\LIS_CODE\VIVA_PROE\serverVIVAProE.py
+Connected to MySQL Server version  5.5.5-10.4.24-MariaDB
+You're connected to database:  ('chp_lis',)
+Searial Data : b'\x05'
+\x05
+\x05
+Searial Data : b'\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626185206\rQ|1|^DU123456||ALL||||||||O\rL|1|F\r\x03FE\r\n'
+\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626185206\rQ|1|^DU123456||ALL||||||||O\rL|1|F\r\x03FE\r\n
+\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626185206\rQ|1|^DU123456||ALL||||||||O\rL|1|F\r\x03FE\r\n
+Searial Data : b'\x04'
+\x04
+\x04
+521H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626185206\rQ|1|^DU123456||ALL||||||||O\rL|1|F\r3FE\r\n4
+Searial Data : b'\x05'
+\x05
+\x05
+Searial Data : b'\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626191519\rP|1||||||00010101|M\rO|1|DU123456|||R||||||||||Urine||||||||||F\rR|1|^^^QBEN^q Benzodiaz|< 15^NEGATIVE|ng/mL|300|^-||F||admin||20230626191519\rL|1|F\r\x0340\r\n'
+\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626191519\rP|1||||||00010101|M\rO|1|DU123456|||R||||||||||Urine||||||||||F\rR|1|^^^QBEN^q Benzodiaz|< 15^NEGATIVE|ng/mL|300|^-||F||admin||20230626191519\rL|1|F\r\x0340\r\n
+\x021H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626191519\rP|1||||||00010101|M\rO|1|DU123456|||R||||||||||Urine||||||||||F\rR|1|^^^QBEN^q Benzodiaz|< 15^NEGATIVE|ng/mL|300|^-||F||admin||20230626191519\rL|1|F\r\x0340\r\n
+Searial Data : b'\x04'
+\x04
+\x04
+521H|\\^&|||VIVA^2.5.3270.91||||2.2|ATI||P|LIS2-A|20230626191519\rP|1||||||00010101|M\rO|1|DU123456|||R||||||||||Urine||||||||||F\rR|1|^^^QBEN^q Benzodiaz|< 15^NEGATIVE|ng/mL|300|^-||F||admin||20230626191519\rL|1|F\r340\r\n4

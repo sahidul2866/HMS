@@ -1,8 +1,13 @@
-<div class="tab-strip">
-  @for (tab of tabService.tabs(); track tab.path) {
-    <button class="tab-button" [class.active]="tab.path === tabService.activePath()" type="button" (click)="activate(tab.path)">
-      <span>{{ tab.label }}</span>
-      <span class="tab-close" (click)="close($event, tab.path)">x</span>
-    </button>
-  }
-</div>
+@if (tabService.tabs().length) {
+  <nav class="workspace-tabs" aria-label="Open and recently used pages">
+    <span class="workspace-tabs__label">Open Pages</span>
+    <div class="tab-strip">
+      @for (tab of tabService.tabs(); track tab.path) {
+        <button class="tab-button" [class.active]="tab.path === tabService.activePath()" type="button" (click)="activate(tab.path)">
+          <span>{{ tab.label }}</span>
+          <span class="tab-close" (click)="close($event, tab.path)" aria-label="Close page">×</span>
+        </button>
+      }
+    </div>
+  </nav>
+}

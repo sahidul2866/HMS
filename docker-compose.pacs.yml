@@ -1,0 +1,29 @@
+services:
+  orthanc:
+    image: jodogne/orthanc:latest
+    platform: linux/amd64
+    container_name: hms-orthanc
+    restart: unless-stopped
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    volumes:
+      - ./infra/pacs/orthanc.json:/etc/orthanc/orthanc.json:ro
+      - orthanc-db:/var/lib/orthanc/db
+    networks:
+      - pacs-network
+    environment:
+      - ORTHANC_JSON=/etc/orthanc/orthanc.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/api/system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  orthanc-db:
+
+networks:
+  pacs-network:
+    driver: bridge

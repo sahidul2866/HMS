@@ -7,6 +7,9 @@
         <p class="page-subtitle">Handle sample collection, result processing, and verification in a dedicated lab workflow screen.</p>
       </div>
       <div class="toolbar-row">
+        @if (canPrintReport) {
+          <button class="primary-btn" type="button" (click)="printReport()">Print A4 Report</button>
+        }
         <button class="secondary-btn" type="button" (click)="openQueue()">Back To Queue</button>
       </div>
     </div>
@@ -17,6 +20,12 @@
       <div class="empty-state">Loading laboratory work item...</div>
     </section>
   } @else if (selectedItem) {
+    <app-patient-context-panel
+      [patientId]="selectedItem.patient_id"
+      contextLabel="Laboratory Patient"
+      [compact]="true"
+    ></app-patient-context-panel>
+
     <section class="workbench-grid">
       <section class="page-card soft-panel">
         <div class="panel-head">
@@ -90,7 +99,7 @@
             <span>Result</span>
             <textarea rows="8" formControlName="result_text" placeholder="Structured result or narrative interpretation"></textarea>
           </label>
-          @if (sessionService.hasPermission('laboratory.manage')) {
+          @if (sessionService.hasAnyPermission(['laboratory.result.enter', 'laboratory.verify_result'])) {
             <div style="grid-column:1/-1;">
               <button class="primary-btn" type="submit">Save Laboratory Update</button>
             </div>

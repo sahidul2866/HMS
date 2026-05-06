@@ -1,25 +1,17 @@
 .profile-page {
   display: grid;
-  gap: 1rem;
-}
-
-.profile-hero,
-.profile-card {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--surface) 94%, white 6%);
-  box-shadow: var(--shadow);
+  gap: 0.75rem;
 }
 
 .profile-hero {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 1rem;
+  padding: 0;
+}
+
+.profile-identity {
+  display: flex;
   align-items: center;
-  padding: 1rem;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, var(--surface) 88%), color-mix(in srgb, var(--surface) 92%, white 8%)),
-    var(--surface);
+  gap: 1rem;
+  min-width: 0;
 }
 
 .profile-avatar {
@@ -43,44 +35,11 @@
   text-transform: uppercase;
 }
 
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-h1 {
-  margin-top: 0.15rem;
-  font-size: clamp(1.35rem, 2vw, 2rem);
-}
-
-p {
-  color: var(--text-muted);
-}
-
 .profile-actions {
   display: flex;
   gap: 0.55rem;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-button {
-  min-height: 40px;
-  border: 0;
-  border-radius: 12px;
-  padding: 0.6rem 0.85rem;
-  font-weight: 900;
-}
-
-.primary-action {
-  background: var(--primary);
-  color: #fff;
-}
-
-.danger-action {
-  background: #fee2e2;
-  color: #b91c1c;
 }
 
 .profile-grid {
@@ -92,7 +51,6 @@ button {
 .profile-card {
   display: grid;
   gap: 0.85rem;
-  padding: 1rem;
 }
 
 .profile-card--wide {

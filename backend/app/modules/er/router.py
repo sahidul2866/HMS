@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_any_permissions, require_permissions
+from app.dependencies.permissions import require_permissions
 from app.modules.er.service import ERService
 from app.schemas.encounter import (
     ERVisitAmbulanceCreate,
@@ -86,7 +86,7 @@ def treat_er_visit(
     return ERVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.put("/visits/{visit_id}/status", response_model=ERVisitRead, dependencies=[Depends(require_any_permissions("er.visit.manage", "er.view"))])
+@router.put("/visits/{visit_id}/status", response_model=ERVisitRead, dependencies=[Depends(require_permissions("er.visit.manage"))])
 def update_er_visit_status(
     visit_id: UUID,
     payload: ERVisitStatusUpdate,
@@ -110,7 +110,7 @@ def create_er_ambulance(
     return ERVisitAmbulanceRead.model_validate(record, from_attributes=True)
 
 
-@router.post("/visits/{visit_id}/convert-to-ipd", response_model=ERVisitRead, dependencies=[Depends(require_permissions("ipd.admission.manage"))])
+@router.post("/visits/{visit_id}/convert-to-ipd", response_model=ERVisitRead, dependencies=[Depends(require_permissions("ipd.admit"))])
 def convert_er_to_ipd(
     visit_id: UUID,
     payload: ERVisitConvertToIPD,

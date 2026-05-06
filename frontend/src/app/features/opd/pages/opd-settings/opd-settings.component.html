@@ -1,10 +1,10 @@
 <section class="workspace-shell">
   <div class="page-card module-hero">
-    <div class="hero-main">
+    <div class="hero-row">
       <div>
         <div class="hero-kicker">OPD Settings</div>
         <h1 class="page-title">Doctor Configuration Desk</h1>
-        <p class="page-subtitle">The base page lists all configurable OPD items. Editing happens inside one popup where the doctor is selected and values are managed together.</p>
+        <div class="page-subtitle">The base page lists all configurable OPD items. Editing happens inside one popup where the doctor is selected and values are managed together.</div>
       </div>
       <div class="toolbar-row">
         <button class="primary-btn" type="button" (click)="openEditor('fee', selectedDoctorId || (doctors.length ? doctors[0].id : ''))" [disabled]="loading || !doctors.length">

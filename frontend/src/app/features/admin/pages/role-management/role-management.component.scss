@@ -252,33 +252,15 @@
 }
 
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.54);
-  backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
   z-index: 1000;
 }
 
 .modal-card {
-  width: min(560px, 100%);
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(14, 116, 144, 0.1), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(243, 248, 255, 0.97));
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
-  padding: 1.4rem;
-  display: grid;
-  gap: 1rem;
+  border-radius: 8px;
 }
 
 .modal-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: start;
+  margin-bottom: 0.85rem;
 }
 
 .modal-header h3 {
@@ -292,17 +274,11 @@
 .icon-btn {
   width: 40px;
   height: 40px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: var(--surface-soft);
   font-size: 1.5rem;
-  line-height: 1;
 }
 
 .modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 1080px) {

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { InvestigationSettingPayload, PharmacyInvestigationSetting } from '../../../pharmacy/models/pharmacy.models';
 import { PharmacyService } from '../../../pharmacy/services/pharmacy.service';
@@ -17,6 +18,7 @@ export class PharmacyInvestigationSettingsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   settings: PharmacyInvestigationSetting[] = [];
   search = '';
@@ -206,18 +208,18 @@ export class PharmacyInvestigationSettingsComponent {
       ? this.pharmacyService.updateInvestigationSetting(this.editingId, payload)
       : this.pharmacyService.createInvestigationSetting(payload);
     request.subscribe(() => {
-      this.notificationService.success(`Investigation setting ${this.editingId ? 'updated' : 'created'} successfully.`);
+      this.notificationService.success(`Investigation setting ${this.editingId ? 'updated' : 'created'}. Billing and diagnostic queues use the updated setup.`);
       this.closeEditor();
       this.loadPage();
     });
   }
 
   remove(item: PharmacyInvestigationSetting): void {
-    if (!window.confirm(`Delete ${item.test_name}?`)) {
+    if (!this.confirmationService.confirmDestructive(item.test_name)) {
       return;
     }
     this.pharmacyService.deleteInvestigationSetting(item.id).subscribe(() => {
-      this.notificationService.success('Investigation setting deleted successfully.');
+      this.notificationService.success(`${item.test_name} deleted from investigation settings.`);
       this.loadPage();
     });
   }

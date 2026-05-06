@@ -7,7 +7,7 @@
         <div class="page-subtitle">Manage doctor appointments and convert arrivals into OPD visits without re-entering patient context.</div>
       </div>
       <div class="toolbar-row">
-        @if (sessionService.hasPermission('appointment.manage')) {
+        @if (sessionService.hasPermission('appointment.book')) {
           <button class="primary-btn" type="button" (click)="navigateToCreateAppointment()">Create Appointment</button>
         }
       </div>
@@ -22,68 +22,87 @@
 
   <section class="page-card">
     <h2 class="page-title">Appointment Queue</h2>
-    <div class="toolbar-row">
-      <label class="field" style="min-width: 220px;">
-        <span>Search</span>
-        <input type="text" [(ngModel)]="searchText" placeholder="No, patient, doctor, reason..." />
-      </label>
-      <label class="field" style="min-width: 200px;">
-        <span>Doctor</span>
-        <select [(ngModel)]="selectedDoctorUserId">
-          <option value="">All doctors</option>
-          @for (doctor of doctors; track doctor.id) {
-            <option [value]="doctor.id">{{ doctor.full_name }}</option>
-          }
-        </select>
-      </label>
-      <label class="field" style="min-width: 180px;">
-        <span>Status</span>
-        <select [(ngModel)]="selectedStatus">
-          <option value="">All status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="checked_in">Checked In</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </label>
-      <label class="field" style="min-width: 180px;">
-        <span>Date</span>
-        <input type="date" [(ngModel)]="selectedDate" />
-      </label>
-    </div>
-    <table class="table">
-      <thead>
-        <tr>
-          <th class="sortable-th" (click)="toggleSort('number')">No</th>
-          <th class="sortable-th" (click)="toggleSort('patient')">Patient</th>
-          <th class="sortable-th" (click)="toggleSort('doctor')">Doctor</th>
-          <th class="sortable-th" (click)="toggleSort('time')">Time</th>
-          <th class="sortable-th" (click)="toggleSort('status')">Status</th>
-          <th class="sortable-th" (click)="toggleSort('reason')">Reason</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (appointment of filteredAppointments; track appointment.id) {
-          <tr>
-            <td>{{ appointment.appointment_number }}</td>
-            <td>{{ appointment.patient_name }}</td>
-            <td>{{ appointment.doctor_name }}</td>
-            <td>{{ appointment.appointment_at | date:'medium' }}</td>
-            <td><span class="pill">{{ appointment.status }}</span></td>
-            <td>{{ appointment.reason || '-' }}</td>
-            <td>
-              <button class="secondary-btn" type="button" (click)="selectAppointment(appointment)">Open</button>
-              @if (sessionService.hasPermission('appointment.manage')) {
-                <button class="secondary-btn" type="button" (click)="updateStatus(appointment, 'confirmed')">Confirm</button>
-                <button class="danger-btn" type="button" (click)="updateStatus(appointment, 'cancelled')">Cancel</button>
+    <div class="table-toolbar">
+      <div class="table-toolbar__main">
+        <div class="table-toolbar__filters">
+          <label class="field">
+            <span>Search</span>
+            <input type="search" [(ngModel)]="searchText" (ngModelChange)="onFiltersChanged()" placeholder="No, patient, doctor, reason..." />
+          </label>
+          <label class="field">
+            <span>Doctor</span>
+            <select [(ngModel)]="selectedDoctorUserId" (ngModelChange)="onFiltersChanged()">
+              <option value="">All doctors</option>
+              @for (doctor of doctors; track doctor.id) {
+                <option [value]="doctor.id">{{ doctor.full_name }}</option>
               }
-            </td>
+            </select>
+          </label>
+          <label class="field">
+            <span>Status</span>
+            <select [(ngModel)]="selectedStatus" (ngModelChange)="onFiltersChanged()">
+              <option value="">All status</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="checked_in">Checked In</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Date</span>
+            <input type="date" [(ngModel)]="selectedDate" (ngModelChange)="onFiltersChanged()" />
+          </label>
+        </div>
+        <span class="table-meta"><strong>{{ filteredAppointments.length }}</strong> records · {{ rangeStart }}-{{ rangeEnd }}</span>
+      </div>
+    </div>
+    @if (displayedAppointments.length) {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="sortable-th" [ngClass]="sortClass('number')" (click)="toggleSort('number')">No</th>
+            <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
+            <th class="sortable-th" [ngClass]="sortClass('doctor')" (click)="toggleSort('doctor')">Doctor</th>
+            <th class="sortable-th" [ngClass]="sortClass('time')" (click)="toggleSort('time')">Time</th>
+            <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
+            <th class="sortable-th" [ngClass]="sortClass('reason')" (click)="toggleSort('reason')">Reason</th>
+            <th>Actions</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (appointment of displayedAppointments; track appointment.id) {
+            <tr>
+              <td><strong>{{ appointment.appointment_number }}</strong></td>
+              <td>{{ appointment.patient_name }}</td>
+              <td>{{ appointment.doctor_name }}</td>
+              <td>{{ appointment.appointment_at | date:'medium' }}</td>
+              <td><span class="status-chip">{{ appointment.status.replace('_', ' ') }}</span></td>
+              <td>{{ appointment.reason || '-' }}</td>
+              <td class="action-cell">
+                <details class="row-action-menu">
+                  <summary>Actions</summary>
+                  <div class="row-action-menu__panel">
+                    <button type="button" (click)="selectAppointment(appointment)">Open</button>
+                    @if (sessionService.hasPermission('appointment.manage')) {
+                      <button type="button" (click)="updateStatus(appointment, 'confirmed')">Confirm</button>
+                      <button class="danger-action" type="button" (click)="updateStatus(appointment, 'cancelled')">Cancel</button>
+                    }
+                  </div>
+                </details>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="pager-row">
+        <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+        <span>Page {{ page }} of {{ totalPages }}</span>
+        <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+      </div>
+    } @else {
+      <div class="table-empty">No appointments match the selected filters.</div>
+    }
   </section>
 
   @if (selectedAppointment && sessionService.hasPermission('appointment.manage')) {

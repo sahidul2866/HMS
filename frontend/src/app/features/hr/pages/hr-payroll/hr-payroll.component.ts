@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 
 import {
   HRAttendance,
@@ -28,21 +28,8 @@ type HRTab = 'dashboard' | 'employees' | 'attendance' | 'roster' | 'leave' | 'pa
 export class HRPayrollComponent {
   private readonly hrService = inject(HRService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
 
   readonly tab = signal<HRTab>('dashboard');
-  readonly tabs: { key: HRTab; label: string; route: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', route: '/hr' },
-    { key: 'employees', label: 'Employees', route: '/hr/employees' },
-    { key: 'attendance', label: 'Attendance', route: '/hr/attendance' },
-    { key: 'roster', label: 'Roster', route: '/hr/roster' },
-    { key: 'leave', label: 'Leave', route: '/hr/leave' },
-    { key: 'payroll', label: 'Payroll', route: '/hr/payroll' },
-    { key: 'recruitment', label: 'Hiring', route: '/hr/recruitment' },
-    { key: 'performance', label: 'Performance', route: '/hr/performance' },
-    { key: 'reports', label: 'Reports', route: '/hr/reports' },
-    { key: 'settings', label: 'Settings', route: '/hr/settings' },
-  ];
 
   loading = false;
   saving = false;
@@ -138,10 +125,6 @@ export class HRPayrollComponent {
 
   loadSettings(): void {
     this.hrService.listSettings().subscribe({ next: (rows) => (this.settings = rows), error: (error) => this.showError(error) });
-  }
-
-  openTab(item: { route: string }): void {
-    void this.router.navigate([item.route]);
   }
 
   openModal(name: typeof this.modal, employee?: HREmployee, setting?: HRSetting): void {

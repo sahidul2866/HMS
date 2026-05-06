@@ -62,6 +62,31 @@ export class BillingOverviewComponent {
     void this.router.navigate(['/billing/list'], { queryParams: { invoiceId } });
   }
 
+  get revenueCards(): Array<{ label: string; value: string; detail: string }> {
+    if (!this.summary) return [];
+    return [
+      { label: 'Net Collection', value: this.formatCurrency(this.summary.net_amount), detail: `${this.summary.posted_invoice_count} posted invoices` },
+      { label: 'Outstanding Due', value: this.formatCurrency(this.dueQueueTotal), detail: `${this.dueInvoices.length} invoices need follow-up` },
+      { label: 'Discounts', value: this.formatCurrency(this.summary.discount_amount), detail: `${this.discountRate}% of gross` },
+      { label: 'Referral Exposure', value: this.formatCurrency(this.summary.referred_doctor_amount), detail: 'Doctor payout review' },
+    ];
+  }
+
+  get dueQueueTotal(): number {
+    return this.dueInvoices.reduce((sum, invoice) => sum + Number(invoice.due_amount || 0), 0);
+  }
+
+  get discountRate(): number {
+    const gross = Number(this.summary?.gross_amount || 0);
+    return gross ? Math.round((Number(this.summary?.discount_amount || 0) / gross) * 100) : 0;
+  }
+
+  get collectionRate(): number {
+    const net = Number(this.summary?.net_amount || 0);
+    const due = this.dueQueueTotal;
+    return net + due ? Math.round((net / (net + due)) * 100) : 100;
+  }
+
   formatCurrency(value: string | number | null | undefined): string {
     return `BDT ${Number(value || 0).toFixed(2)}`;
   }

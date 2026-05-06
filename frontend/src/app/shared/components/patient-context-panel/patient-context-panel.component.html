@@ -1,0 +1,74 @@
+@if (activePatient) {
+  <section class="patient-context" [class.patient-context--compact]="compact">
+    <div class="patient-context__header">
+      <div>
+        <div class="hero-kicker">{{ contextLabel }}</div>
+        <h2>{{ patientName }}</h2>
+        <p>{{ activePatient.patient_number }} · {{ activePatient.phone || 'No phone' }} · {{ ageGenderLabel }}</p>
+      </div>
+      <div class="patient-context__actions">
+        @for (link of quickLinks.slice(0, compact ? 5 : 9); track link.label) {
+          <a class="secondary-btn compact-btn" [routerLink]="link.route" [queryParams]="link.queryParams || null">{{ link.label }}</a>
+        }
+      </div>
+    </div>
+
+    @if (loading) {
+      <div class="patient-context__loading">Loading patient context...</div>
+    } @else {
+      <div class="patient-context__summary">
+        <article>
+          <span>Appointment</span>
+          <strong>{{ activeAppointment ? (activeAppointment.appointment_number + ' · ' + activeAppointment.status) : 'No active appointment' }}</strong>
+        </article>
+        <article>
+          <span>Admission</span>
+          <strong>{{ activeAdmission ? (activeAdmission.admission_number + ' · ' + activeAdmission.ward_name + '/' + activeAdmission.bed_number) : 'Not admitted' }}</strong>
+        </article>
+        <article>
+          <span>Outstanding</span>
+          <strong>{{ formatCurrency(outstandingAmount) }}</strong>
+        </article>
+        <article>
+          <span>Pending Diagnostics</span>
+          <strong>Lab {{ pendingLabOrders.length }} · Rad {{ pendingRadiologyOrders.length }}</strong>
+        </article>
+      </div>
+
+      <div class="patient-context__body">
+        <div>
+          <div class="patient-context__section-title">Recent Visits</div>
+          <div class="patient-mini-list">
+            @for (visit of recentVisits; track visit.id) {
+              <div>
+                <strong>{{ visit.visit_number }}</strong>
+                <span>{{ visit.visit_date }} · {{ visit.consulting_doctor_name }} · {{ visit.status }}</span>
+              </div>
+            } @empty {
+              <div><strong>No OPD visits</strong><span>Register OPD to start clinical timeline.</span></div>
+            }
+          </div>
+        </div>
+
+        <div>
+          <div class="patient-context__section-title">Prescriptions & Alerts</div>
+          <div class="patient-mini-list">
+            @for (order of currentPrescriptions; track order.id) {
+              <div>
+                <strong>{{ order.item_name }}</strong>
+                <span>{{ order.quantity }} · {{ order.status }} · {{ order.instructions || 'No instructions' }}</span>
+              </div>
+            } @empty {
+              <div><strong>No current prescriptions</strong><span>Prescriptions from OPD visits appear here.</span></div>
+            }
+          </div>
+          <div class="patient-alert-row">
+            @for (alert of alerts; track alert.label) {
+              <span [class]="'patient-alert patient-alert--' + alert.tone">{{ alert.label }}</span>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  </section>
+}

@@ -1,0 +1,11 @@
+H|\^&|||||||||||E1394-97<CR>
+P|1|||100|^Jim^Brown||20010820|
+M|||||^Dr.1||||||||||||^^^WEST<CR> C|1||Patient
+Comments<CR>
+O|1|2^1^ 1234567890^B||^^^^WBC\^^^^RBC\^^^^HGB
+\^^^^HCT\^^^^MCV\^^^^MCH\^^^^MCHC\^^^^PLT\^^^^NEUT
+%\^^^^LYMPH%\^^^^MONO%\^^^^EO%\^^^^BASO%\^^^^NEUT#
+\^^^^LYMPH#\^^^^MONO#\^^^^EO#\^^^^BASO#\^^^^RDW-SD
+\^^^^RDW-CV\^^^^PDW\^^^^MPV\^^^^P-LCR\^^^^PCT||200
+10807101000|||||N||||||||||||||Q<CR>
+C|1||Sample Comments<CR>L|1|N<CR>

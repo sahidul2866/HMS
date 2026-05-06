@@ -36,8 +36,13 @@
         <label class="field"><span>Sale Price</span><input type="number" formControlName="sale_price" /></label>
         <label class="field"><span>Reorder Level</span><input type="number" formControlName="reorder_level" /></label>
         <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea rows="3" formControlName="description"></textarea></label>
-        <div class="toolbar-row" style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit">{{ editingId ? 'Update Medicine' : 'Save Medicine' }}</button>
+        @if (form.invalid && form.touched) {
+          <div class="inline-alert inline-alert--warning" style="grid-column:1/-1;">
+            <div><strong>Complete required catalog fields</strong><span>Medicine type, generic, company, name, price, and reorder level are required.</span></div>
+          </div>
+        }
+        <div class="form-actions" style="grid-column:1/-1;">
+          <button class="primary-btn" type="submit" [disabled]="form.invalid">{{ editingId ? 'Update Medicine' : 'Save Medicine' }}</button>
           @if (editingId) {
             <button class="secondary-btn" type="button" (click)="resetForm()">Cancel Edit</button>
           }
@@ -68,17 +73,20 @@
           }
         </select>
         <label class="checkbox-line"><input type="checkbox" [(ngModel)]="lowStockOnly" (ngModelChange)="onFiltersChanged()" [ngModelOptions]="{ standalone: true }" /> Low stock only</label>
+        <span class="table-meta"><strong>{{ total }}</strong> records</span>
+        <button class="secondary-btn" type="button" (click)="exportCsv()">Export CSV</button>
       </div>
 
+      @if (displayedMedicines.length) {
       <table class="table">
         <thead>
           <tr>
-            <th class="sortable-th" (click)="toggleSort('name')">Name</th>
-            <th class="sortable-th" (click)="toggleSort('type')">Type</th>
-            <th class="sortable-th" (click)="toggleSort('generic')">Generic</th>
-            <th class="sortable-th" (click)="toggleSort('company')">Company</th>
-            <th class="sortable-th" (click)="toggleSort('stock')">Stock</th>
-            <th class="sortable-th" (click)="toggleSort('sale_price')">Sale Price</th>
+            <th class="sortable-th" [ngClass]="sortClass('name')" (click)="toggleSort('name')">Name</th>
+            <th class="sortable-th" [ngClass]="sortClass('type')" (click)="toggleSort('type')">Type</th>
+            <th class="sortable-th" [ngClass]="sortClass('generic')" (click)="toggleSort('generic')">Generic</th>
+            <th class="sortable-th" [ngClass]="sortClass('company')" (click)="toggleSort('company')">Company</th>
+            <th class="sortable-th" [ngClass]="sortClass('stock')" (click)="toggleSort('stock')">Stock</th>
+            <th class="sortable-th" [ngClass]="sortClass('sale_price')" (click)="toggleSort('sale_price')">Sale Price</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -92,15 +100,23 @@
               <td><span [class.low-stock]="isLowStock(item)">{{ item.stock_quantity }}</span></td>
               <td>{{ formatCurrency(item.sale_price) }}</td>
               <td class="action-cell">
-                <button class="secondary-btn" type="button" (click)="edit(item)">Edit</button>
-                <button class="secondary-btn" type="button" (click)="openPurchase(item)">Purchase</button>
-                <button class="secondary-btn" type="button" (click)="openSale(item)">Sell</button>
-                <button class="danger-btn" type="button" (click)="remove(item)">Delete</button>
+                <details class="row-action-menu">
+                  <summary>Actions</summary>
+                  <div class="row-action-menu__panel">
+                    <button type="button" (click)="edit(item)">Edit</button>
+                    <button type="button" (click)="openPurchase(item)">Purchase</button>
+                    <button type="button" (click)="openSale(item)">Sell</button>
+                    <button class="danger-action" type="button" (click)="remove(item)">Delete</button>
+                  </div>
+                </details>
               </td>
             </tr>
           }
         </tbody>
       </table>
+      } @else {
+        <div class="table-empty">No medicines match the selected filters.</div>
+      }
 
       <div class="pager-row">
         <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>

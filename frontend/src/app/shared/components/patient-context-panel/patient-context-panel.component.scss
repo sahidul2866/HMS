@@ -1,0 +1,162 @@
+.patient-context {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--primary) 12%, transparent), transparent 28%),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: 0 12px 30px rgba(16, 33, 50, 0.07);
+  padding: 0.85rem;
+}
+
+.patient-context__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.patient-context h2 {
+  margin: 0.35rem 0 0.2rem;
+  color: var(--ink-deep);
+  font-size: 1.1rem;
+}
+
+.patient-context p {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.patient-context__actions,
+.patient-alert-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.patient-context__summary {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.patient-context__summary article {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  padding: 0.55rem 0.65rem;
+}
+
+.patient-context__summary span,
+.patient-context__section-title {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.patient-context__summary strong {
+  display: block;
+  margin-top: 0.12rem;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patient-context__body {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.patient-mini-list {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.patient-mini-list div {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 0.5rem 0.6rem;
+}
+
+.patient-mini-list strong,
+.patient-mini-list span {
+  display: block;
+}
+
+.patient-mini-list strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.patient-mini-list span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.12rem;
+}
+
+.patient-alert-row {
+  justify-content: flex-start;
+  margin-top: 0.45rem;
+}
+
+.patient-alert {
+  border-radius: 999px;
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.24rem 0.55rem;
+}
+
+.patient-alert--warning {
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
+}
+
+.patient-alert--info {
+  background: var(--badge-info-bg);
+  color: var(--badge-info-text);
+}
+
+.patient-alert--critical {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 82%, black);
+}
+
+.patient-alert--good {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+}
+
+.patient-context__loading {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.patient-context--compact .patient-context__body {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 980px) {
+  .patient-context__header,
+  .patient-context__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .patient-context__summary,
+  .patient-context__body {
+    grid-template-columns: 1fr;
+  }
+}

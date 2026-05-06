@@ -28,6 +28,14 @@
         </div>
 
         <div class="context-stack">
+          @if (form.getRawValue().patient_id) {
+            <app-patient-context-panel
+              [patientId]="form.getRawValue().patient_id"
+              contextLabel="Pharmacy Patient"
+              [compact]="true"
+            ></app-patient-context-panel>
+          }
+
           @if (selectedPrescription) {
             <div class="context-card active">
               <div>

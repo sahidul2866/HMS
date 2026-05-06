@@ -7,6 +7,7 @@ import { debounceTime, distinctUntilChanged, finalize } from 'rxjs';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { CreatePatientPayload, Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
@@ -20,7 +21,7 @@ type PatientSearchContext = 'lookup' | 'phone' | 'email' | null;
 @Component({
   selector: 'app-opd-register',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './opd-register.component.html',
   styleUrls: ['./opd-register.component.scss'],
 })
@@ -45,6 +46,7 @@ export class OPDRegisterComponent {
   activePatientSearchContext: PatientSearchContext = null;
   submitted = false;
   saving = false;
+  private completed = false;
   isFollowUpAllowed = false;
   loadingSlots = false;
   slots: DoctorSlotAvailability[] = [];
@@ -362,6 +364,10 @@ export class OPDRegisterComponent {
     void this.router.navigate(['/opd']);
   }
 
+  hasUnsavedChanges(): boolean {
+    return !this.completed && !this.saving && (this.form.dirty || this.patientLookupControl.dirty || !!this.selectedSlot);
+  }
+
   resetPage(): void {
     this.resetForm();
   }
@@ -407,6 +413,9 @@ export class OPDRegisterComponent {
         next: (visit) => {
           this.saving = false;
           this.submitted = false;
+          this.completed = true;
+          this.form.markAsPristine();
+          this.patientLookupControl.markAsPristine();
           this.notificationService.success(`OPD visit ${visit.visit_number} created.`);
           void this.router.navigate(['/opd/visits'], { queryParams: { openVisit: visit.id } });
           this.resetForm();

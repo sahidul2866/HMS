@@ -17,10 +17,10 @@
           @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
             <button class="primary-btn" type="button" (click)="openBilling()">New Bill</button>
           }
-          @if (sessionService.hasPermission(permissions.opdView)) {
+          @if (sessionService.hasPermission(permissions.opdVisitCreate)) {
             <button class="secondary-btn" type="button" (click)="openOpdRegistration()">New OPD</button>
           }
-          @if (sessionService.hasPermission(permissions.ipdAdmissionManage)) {
+          @if (sessionService.hasPermission(permissions.ipdAdmit)) {
             <button class="secondary-btn" type="button" (click)="openIpdAdmission()">Admit IPD</button>
           }
           <button class="secondary-btn" type="button" (click)="openList()">Back To Patient List</button>
@@ -37,8 +37,19 @@
       </div>
     </section>
 
-    <section class="page-card" style="margin-top:1rem;">
-      <h2 class="page-title">OPD Timeline</h2>
+    <app-patient-context-panel
+      [history]="history"
+      [patient]="history.patient"
+      contextLabel="Selected Patient"
+    ></app-patient-context-panel>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">OPD Timeline</h2>
+          <div class="section-copy">Clinical notes and orders summary per visit.</div>
+        </div>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -72,9 +83,9 @@
                 }
               </td>
             </tr>
-            <tr>
-              <td colspan="8" style="background:rgba(148,163,184,0.06);">
-                <div style="display:grid;gap:0.75rem;padding:0.5rem 0;">
+            <tr class="detail-row">
+              <td colspan="8">
+                <div class="detail-stack">
                   <div><strong>Chief Complaint:</strong> {{ visit.chief_complaint || '-' }}</div>
                   <div><strong>HPI:</strong> {{ visit.history_of_present_illness || '-' }}</div>
                   <div><strong>Past History:</strong> {{ visit.past_history || '-' }}</div>
@@ -90,8 +101,13 @@
       </table>
     </section>
 
-    <section class="page-card" style="margin-top:1rem;">
-      <h2 class="page-title">Investigation & Prescription Details</h2>
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Investigation & Prescription Details</h2>
+          <div class="section-copy">All ordered items across OPD visits.</div>
+        </div>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -120,8 +136,13 @@
       </table>
     </section>
 
-    <section class="page-card" style="margin-top:1rem;">
-      <h2 class="page-title">Appointments & Follow-Up</h2>
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Appointments & Follow-Up</h2>
+          <div class="section-copy">Upcoming and past appointment records.</div>
+        </div>
+      </div>
       <table class="table">
         <thead>
           <tr>
@@ -146,8 +167,13 @@
       </table>
     </section>
 
-    <section class="page-card" style="margin-top:1rem;">
-      <h2 class="page-title">Billing & Pharmacy</h2>
+    <section class="page-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Billing & Pharmacy</h2>
+          <div class="section-copy">Invoices, receipts, and dispensed medicines.</div>
+        </div>
+      </div>
       <table class="table">
         <thead>
           <tr>

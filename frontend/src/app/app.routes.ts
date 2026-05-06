@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/guards/auth.guard';
 import { permissionGuard } from './core/guards/permission.guard';
+import { unsavedChangesGuard } from './core/guards/unsaved-changes.guard';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { AppLayoutComponent } from './layouts/app-layout/app-layout.component';
 import { LoginComponent } from './features/auth/pages/login/login.component';
@@ -24,6 +25,7 @@ import { EROverviewComponent } from './features/er/pages/er-overview/er-overview
 import { ERRegisterComponent } from './features/er/pages/er-register/er-register.component';
 import { LaboratoryOverviewComponent } from './features/laboratory/pages/laboratory-overview/laboratory-overview.component';
 import { LaboratoryWorkbenchComponent } from './features/laboratory/pages/laboratory-workbench/laboratory-workbench.component';
+import { LISSimulatorComponent } from './features/lis/pages/lis-simulator/lis-simulator.component';
 import { InventoryManagementComponent } from './features/inventory/pages/inventory-management/inventory-management.component';
 import { OPDOverviewComponent } from './features/opd/pages/opd-overview/opd-overview.component';
 import { OPDVisitListComponent } from './features/opd/pages/opd-visit-list/opd-visit-list.component';
@@ -96,7 +98,8 @@ export const appRoutes: Routes = [
         path: 'appointments/create',
         component: AppointmentCreateComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['appointment.manage'], tabLabel: 'Create Appointment' },
+        canDeactivate: [unsavedChangesGuard],
+        data: { permissions: ['appointment.book'], tabLabel: 'Create Appointment' },
       },
       {
         path: 'patients',
@@ -108,6 +111,7 @@ export const appRoutes: Routes = [
         path: 'patients/new',
         component: PatientCreateComponent,
         canActivate: [permissionGuard],
+        canDeactivate: [unsavedChangesGuard],
         data: { permissions: ['patient.create'], tabLabel: 'New Patient' },
       },
       {
@@ -120,24 +124,25 @@ export const appRoutes: Routes = [
         path: 'billing',
         component: BillingOverviewComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing Overview' },
+        data: { permissions: ['billing.view'], tabLabel: 'Billing Overview' },
       },
       {
         path: 'billing/list',
         component: BillingDeskComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['billing.invoice.create'], tabLabel: 'Billing List', billingView: 'all' },
+        data: { permissions: ['billing.view'], tabLabel: 'Billing List', billingView: 'all' },
       },
       {
         path: 'billing/due-payments',
         component: BillingDeskComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['billing.invoice.create'], tabLabel: 'Due Payment List', billingView: 'due' },
+        data: { permissions: ['billing.view'], tabLabel: 'Due Payment List', billingView: 'due' },
       },
       {
         path: 'billing/create',
         component: BillingCreateComponent,
         canActivate: [permissionGuard],
+        canDeactivate: [unsavedChangesGuard],
         data: { permissions: ['billing.invoice.create'], tabLabel: 'Create Invoice' },
       },
       {
@@ -168,13 +173,20 @@ export const appRoutes: Routes = [
         path: 'opd/register',
         component: OPDRegisterComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['opd.view'], tabLabel: 'Register OPD Visit' },
+        canDeactivate: [unsavedChangesGuard],
+        data: { permissions: ['opd.visit.create'], tabLabel: 'Register OPD Visit' },
       },
       {
         path: 'opd/settings',
         component: OPDSettingsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['settings.user.manage'], tabLabel: 'OPD Settings' },
+        data: { permissions: ['opd.settings.manage'], tabLabel: 'OPD Settings' },
+      },
+      {
+        path: 'opd/configuration',
+        component: ConfigurationWorkspaceComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['opd.settings.manage'], tabLabel: 'OPD Configuration', configurationContext: 'opd' },
       },
       {
         path: 'ipd',
@@ -192,7 +204,8 @@ export const appRoutes: Routes = [
         path: 'ipd/admit',
         component: IPDAdmitComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['ipd.view'], tabLabel: 'New Admission' },
+        canDeactivate: [unsavedChangesGuard],
+        data: { permissions: ['ipd.admit'], tabLabel: 'New Admission' },
       },
       {
         path: 'ipd/settings',
@@ -222,7 +235,7 @@ export const appRoutes: Routes = [
         path,
         component: InventoryManagementComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['inventory.view'], tabLabel, inventoryTab },
+        data: { permissions: [inventoryTab === 'requests' ? 'inventory.purchase' : inventoryTab === 'reports' ? 'inventory.reports.view' : 'inventory.view'], tabLabel, inventoryTab },
       })),
       ...[
         ['ot', 'OT Dashboard', 'dashboard', 'ot.view'],
@@ -256,6 +269,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['laboratory.view'], tabLabel: 'Laboratory Workbench' },
       },
       {
+        path: 'laboratory/lis-simulator',
+        component: LISSimulatorComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['laboratory.view'], tabLabel: 'LIS Simulator' },
+      },
+      {
         path: 'radiology',
         component: RadiologyOverviewComponent,
         canActivate: [permissionGuard],
@@ -267,12 +286,18 @@ export const appRoutes: Routes = [
         canActivate: [permissionGuard],
         data: { permissions: ['radiology.view'], tabLabel: 'Radiology Workbench' },
       },
-      {
-        path: 'reporting',
+      { path: 'reporting', redirectTo: 'reporting/library', pathMatch: 'full' },
+      ...[
+        ['reporting/library', 'Report Library', 'library', 'reporting.view'],
+        ['reporting/finance', 'Financial Summary', 'finance', 'reporting.financial.view'],
+        ['reporting/clinical', 'Clinical Operations', 'clinical', 'reporting.view'],
+        ['reporting/doctor-referrals', 'Doctor Referral Summary', 'referrals', 'reporting.financial.view'],
+      ].map(([path, tabLabel, reportingPage, permission]) => ({
+        path,
         component: ReportingOverviewComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['reporting.view'], tabLabel: 'Reporting' },
-      },
+        data: { permissions: [permission], tabLabel, reportingPage },
+      })),
       {
         path: 'pharmacy',
         component: PharmacyOverviewComponent,
@@ -295,14 +320,14 @@ export const appRoutes: Routes = [
         path: 'pharmacy/settings',
         component: PharmacySettingsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['pharmacy.view'], tabLabel: 'Pharmacy Settings' },
+        data: { permissions: ['pharmacy.settings.manage'], tabLabel: 'Pharmacy Settings' },
       },
       {
         path: 'pharmacy/medicine-types',
         component: PharmacyMasterPageComponent,
         canActivate: [permissionGuard],
         data: {
-          permissions: ['pharmacy.view'],
+          permissions: ['pharmacy.settings.manage'],
           tabLabel: 'Medicine Type',
           config: {
             entityKey: 'medicine-types',
@@ -327,7 +352,7 @@ export const appRoutes: Routes = [
         component: PharmacyMasterPageComponent,
         canActivate: [permissionGuard],
         data: {
-          permissions: ['pharmacy.view'],
+          permissions: ['pharmacy.settings.manage'],
           tabLabel: 'Generic Information',
           config: {
             entityKey: 'generics',
@@ -352,7 +377,7 @@ export const appRoutes: Routes = [
         component: PharmacyMasterPageComponent,
         canActivate: [permissionGuard],
         data: {
-          permissions: ['pharmacy.view'],
+          permissions: ['pharmacy.settings.manage'],
           tabLabel: 'Medicine Company Info',
           config: {
             entityKey: 'companies',
@@ -383,7 +408,7 @@ export const appRoutes: Routes = [
         component: PharmacyMasterPageComponent,
         canActivate: [permissionGuard],
         data: {
-          permissions: ['pharmacy.view'],
+          permissions: ['pharmacy.sale.create'],
           tabLabel: 'Customer Information',
           config: {
             entityKey: 'customers',
@@ -418,13 +443,13 @@ export const appRoutes: Routes = [
         path: 'pharmacy/purchases',
         component: PharmacyPurchasesComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['pharmacy.view'], tabLabel: 'Purchase History' },
+        data: { permissions: ['pharmacy.purchase.manage'], tabLabel: 'Purchase History' },
       },
       {
         path: 'pharmacy/sales',
         component: PharmacySalesEditorComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Sales' },
+        data: { permissions: ['pharmacy.sale.create'], tabLabel: 'Medicine Sales' },
       },
       {
         path: 'pharmacy/sales/list',
@@ -436,19 +461,19 @@ export const appRoutes: Routes = [
         path: 'pharmacy/returns',
         component: PharmacyReturnsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['pharmacy.view'], tabLabel: 'Medicine Return List' },
+        data: { permissions: ['pharmacy.return'], tabLabel: 'Medicine Return List' },
       },
       {
         path: 'diagnostics/settings',
         component: PharmacyInvestigationSettingsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['laboratory.view'], tabLabel: 'Diagnostics Settings' },
+        data: { permissions: ['diagnostics.settings.manage'], tabLabel: 'Diagnostics Settings' },
       },
       {
         path: 'diagnostics/orders',
         component: PharmacyInvestigationsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['laboratory.view'], tabLabel: 'Diagnostics Orders' },
+        data: { permissions: ['diagnostics.order.manage'], tabLabel: 'Diagnostics Orders' },
       },
       {
         path: 'pharmacy/investigation-settings',
@@ -494,7 +519,7 @@ export const appRoutes: Routes = [
         path: 'hr/payroll',
         component: HRPayrollComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['hr.payroll.manage'], tabLabel: 'Payroll', hrTab: 'payroll' },
+        data: { permissions: ['payroll.view'], tabLabel: 'Payroll', hrTab: 'payroll' },
       },
       {
         path: 'hr/recruitment',
@@ -532,8 +557,8 @@ export const appRoutes: Routes = [
         ['accounting/cash-closing', 'Cash Closing', 'cash', 'accounting.view'],
         ['accounting/bank', 'Bank Reconciliation', 'bank', 'accounting.view'],
         ['accounting/journals', 'Journal Entries', 'journals', 'accounting.journal.post'],
-        ['accounting/reports', 'Finance Reports', 'reports', 'accounting.reports.view'],
-        ['accounting/audit', 'Finance Audit', 'audit', 'accounting.approve'],
+        ['accounting/reports', 'Finance Reports', 'reports', 'reporting.financial.view'],
+        ['accounting/audit', 'Finance Audit', 'audit', 'audit.view'],
         ['accounting/journal', 'Journal Entries', 'journals', 'accounting.journal.post'],
       ].map(([path, tabLabel, accountingTab, permission]) => ({
         path,
@@ -545,7 +570,7 @@ export const appRoutes: Routes = [
         path: 'configuration',
         component: ConfigurationWorkspaceComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['settings.configuration.manage'], tabLabel: 'Configuration Center' },
+        data: { permissions: ['settings.configuration.manage'], tabLabel: 'Configuration Center', configurationContext: 'admin' },
       },
       {
         path: 'admin/users',

@@ -11,7 +11,7 @@
 
 .soft-panel,
 .data-panel {
-  border-radius: 22px;
+  border-radius: 8px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 252, 246, 0.95));
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
 }
@@ -19,7 +19,7 @@
 .soft-panel .form-grid {
   padding: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 24px;
+  border-radius: 8px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(236, 253, 245, 0.92));
 }
 

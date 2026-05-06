@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { AccountingDashboard, AccountingWorkspace, ChartPoint, FinanceRecord } from '../../models/accounting.models';
@@ -20,24 +20,8 @@ export class AccountingJournalComponent {
   private readonly accountingService = inject(AccountingService);
   private readonly notificationService = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
 
   readonly tab = signal<AccountingTab>('dashboard');
-  readonly tabs: { key: AccountingTab; label: string; route: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', route: '/accounting' },
-    { key: 'accounts', label: 'Accounts', route: '/accounting/accounts' },
-    { key: 'collections', label: 'Collection', route: '/accounting/collections' },
-    { key: 'receivables', label: 'Receivables', route: '/accounting/receivables' },
-    { key: 'payables', label: 'Payables', route: '/accounting/payables' },
-    { key: 'expenses', label: 'Expenses', route: '/accounting/expenses' },
-    { key: 'payroll', label: 'Payroll', route: '/accounting/payroll' },
-    { key: 'doctor', label: 'Doctor Share', route: '/accounting/doctor-commission' },
-    { key: 'cash', label: 'Cash Closing', route: '/accounting/cash-closing' },
-    { key: 'bank', label: 'Bank', route: '/accounting/bank' },
-    { key: 'journals', label: 'Journals', route: '/accounting/journals' },
-    { key: 'reports', label: 'Reports', route: '/accounting/reports' },
-    { key: 'audit', label: 'Audit', route: '/accounting/audit' },
-  ];
 
   loading = false;
   error = '';
@@ -77,10 +61,6 @@ export class AccountingJournalComponent {
       },
     });
     this.accountingService.workspace().subscribe((workspace) => (this.workspace = workspace));
-  }
-
-  openTab(route: string): void {
-    this.router.navigateByUrl(route);
   }
 
   openModal(modal: typeof this.modal): void {

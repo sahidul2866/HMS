@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 
 import {
   InventoryDashboardSummary,
@@ -25,16 +25,8 @@ type InventoryTab = 'dashboard' | 'items' | 'reagents' | 'requests' | 'reports';
 export class InventoryManagementComponent {
   private readonly inventoryService = inject(InventoryService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
 
   readonly tab = signal<InventoryTab>('dashboard');
-  readonly tabs: { key: InventoryTab; label: string; route: string }[] = [
-    { key: 'dashboard', label: 'Overview', route: '/inventory' },
-    { key: 'items', label: 'Items', route: '/inventory/items' },
-    { key: 'reagents', label: 'Reagents', route: '/inventory/reagents' },
-    { key: 'requests', label: 'Requests', route: '/inventory/requests' },
-    { key: 'reports', label: 'Reports', route: '/inventory/reports' },
-  ];
 
   loading = false;
   error = '';
@@ -75,10 +67,6 @@ export class InventoryManagementComponent {
     this.inventoryService.listSuppliers().subscribe((response) => (this.suppliers = response.items));
     this.inventoryService.listReagents(this.query).subscribe((response) => (this.reagents = response.items));
     this.inventoryService.listPurchaseRequests().subscribe((response) => (this.requests = response.items));
-  }
-
-  openTab(route: string): void {
-    this.router.navigateByUrl(route);
   }
 
   num(value: string | number | null | undefined): number {

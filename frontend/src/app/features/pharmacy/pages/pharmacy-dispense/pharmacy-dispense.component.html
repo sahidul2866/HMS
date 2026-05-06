@@ -41,6 +41,14 @@
     }
   </section>
 
+  @if (contextPatientId) {
+    <app-patient-context-panel
+      [patientId]="contextPatientId"
+      contextLabel="Pharmacy Patient"
+      [compact]="true"
+    ></app-patient-context-panel>
+  }
+
   <section class="spotlight-grid">
     <section class="page-card soft-panel">
       <div class="section-header">

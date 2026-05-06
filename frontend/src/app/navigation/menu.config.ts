@@ -6,64 +6,88 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-export const menuConfig: MenuItem[] = [
-  { label: 'My Portal', icon: 'doctor', route: '/portal', permissions: ['patient.portal.view'] },
-  { label: 'Dashboard', icon: 'dashboard', route: '/dashboard', permissions: ['dashboard.view'] },
+export interface MenuSection {
+  label: string;
+  items: MenuItem[];
+}
+
+export const menuSections: MenuSection[] = [
   {
-    label: 'Patients',
-    icon: 'patients',
-    permissions: ['patient.view'],
-    children: [
-      { label: 'All Patients', icon: 'list', route: '/patients', permissions: ['patient.view'] },
-      { label: 'New Patient', icon: 'plus-user', route: '/patients/new', permissions: ['patient.create'] },
+    label: 'Workspace',
+    items: [
+      { label: 'My Portal', icon: 'doctor', route: '/portal', permissions: ['patient.portal.view'] },
+      { label: 'Dashboard', icon: 'dashboard', route: '/dashboard', permissions: ['dashboard.view'] },
     ],
   },
   {
-    label: 'Billing',
-    icon: 'billing',
-    permissions: ['billing.view'],
-    children: [
-      { label: 'Overview', icon: 'dashboard', route: '/billing', permissions: ['billing.invoice.create'] },
-      { label: 'Invoices', icon: 'receipt', route: '/billing/list', permissions: ['billing.invoice.create'] },
-      { label: 'New Bill', icon: 'plus-user', route: '/billing/create', permissions: ['billing.invoice.create'] },
-      { label: 'Due Payments', icon: 'list', route: '/billing/due-payments', permissions: ['billing.invoice.create'] },
-      { label: 'Services', icon: 'service', route: '/billing/services', permissions: ['billing.service.manage'] },
-      { label: 'Settings', icon: 'settings', route: '/billing/settings', permissions: ['billing.service.manage'] },
+    label: 'Patient Flow',
+    items: [
+      {
+        label: 'Patients',
+        icon: 'patients',
+        permissions: ['patient.view'],
+        children: [
+          { label: 'All Patients', icon: 'list', route: '/patients', permissions: ['patient.view'] },
+          { label: 'New Patient', icon: 'plus-user', route: '/patients/new', permissions: ['patient.create'] },
+        ],
+      },
+      {
+        label: 'OPD',
+        icon: 'opd',
+        permissions: ['opd.view'],
+        children: [
+          { label: 'Overview', icon: 'dashboard', route: '/opd', permissions: ['opd.view'] },
+          { label: 'Visits', icon: 'list', route: '/opd/visits', permissions: ['opd.view'] },
+          { label: 'New Visit', icon: 'plus-user', route: '/opd/register', permissions: ['opd.visit.create'] },
+          { label: 'Appointments', icon: 'calendar', route: '/appointments', permissions: ['appointment.view'] },
+          { label: 'New Appointment', icon: 'plus-user', route: '/appointments/create', permissions: ['appointment.book'] },
+          { label: 'Doctor Settings', icon: 'settings', route: '/opd/settings', permissions: ['opd.settings.manage'] },
+          { label: 'Configuration', icon: 'settings', route: '/opd/configuration', permissions: ['opd.settings.manage'] },
+        ],
+      },
+      {
+        label: 'IPD',
+        icon: 'ipd',
+        permissions: ['ipd.view'],
+        children: [
+          { label: 'Overview', icon: 'dashboard', route: '/ipd', permissions: ['ipd.view'] },
+          { label: 'Admissions', icon: 'list', route: '/ipd/admissions', permissions: ['ipd.view'] },
+          { label: 'New Admission', icon: 'plus-user', route: '/ipd/admit', permissions: ['ipd.admit'] },
+          { label: 'Settings', icon: 'settings', route: '/ipd/settings', permissions: ['ipd.admission.manage'] },
+        ],
+      },
+      {
+        label: 'ER',
+        icon: 'service',
+        permissions: ['er.view'],
+        children: [
+          { label: 'Overview', icon: 'dashboard', route: '/er', permissions: ['er.view'] },
+          { label: 'New Arrival', icon: 'plus-user', route: '/er/register', permissions: ['er.visit.manage'] },
+        ],
+      },
     ],
   },
   {
-    label: 'OPD',
-    icon: 'opd',
-    permissions: ['opd.view'],
-    children: [
-      { label: 'Dashboard', icon: 'dashboard', route: '/opd', permissions: ['opd.view'] },
-      { label: 'Visit List', icon: 'list', route: '/opd/visits', permissions: ['opd.view'] },
-      { label: 'New Visit', icon: 'plus-user', route: '/opd/register', permissions: ['opd.view'] },
-      { label: 'Appointments', icon: 'calendar', route: '/appointments', permissions: ['appointment.manage'] },
-      { label: 'New Appointment', icon: 'plus-user', route: '/appointments/create', permissions: ['appointment.manage'] },
-      { label: 'Settings', icon: 'settings', route: '/opd/settings', permissions: ['settings.user.manage'] },
+    label: 'Revenue',
+    items: [
+      {
+        label: 'Billing',
+        icon: 'billing',
+        permissions: ['billing.view'],
+        children: [
+          { label: 'Overview', icon: 'dashboard', route: '/billing', permissions: ['billing.view'] },
+          { label: 'Invoices', icon: 'receipt', route: '/billing/list', permissions: ['billing.view'] },
+          { label: 'New Bill', icon: 'plus-user', route: '/billing/create', permissions: ['billing.invoice.create'] },
+          { label: 'Due Payments', icon: 'list', route: '/billing/due-payments', permissions: ['billing.view'] },
+          { label: 'Services', icon: 'service', route: '/billing/services', permissions: ['billing.service.manage'] },
+          { label: 'Settings', icon: 'settings', route: '/billing/settings', permissions: ['billing.service.manage'] },
+        ],
+      },
     ],
   },
   {
-    label: 'IPD',
-    icon: 'ipd',
-    permissions: ['ipd.view'],
-    children: [
-      { label: 'Overview', icon: 'dashboard', route: '/ipd', permissions: ['ipd.view'] },
-      { label: 'Admission List', icon: 'list', route: '/ipd/admissions', permissions: ['ipd.view'] },
-      { label: 'New Admission', icon: 'plus-user', route: '/ipd/admit', permissions: ['ipd.admission.manage'] },
-      { label: 'Settings', icon: 'settings', route: '/ipd/settings', permissions: ['ipd.admission.manage'] },
-    ],
-  },
-  {
-    label: 'ER',
-    icon: 'service',
-    permissions: ['er.view'],
-    children: [
-      { label: 'Overview', icon: 'dashboard', route: '/er', permissions: ['er.view'] },
-      { label: 'Arrival', icon: 'plus-user', route: '/er/register', permissions: ['er.visit.manage'] },
-    ],
-  },
+    label: 'Clinical Services',
+    items: [
   {
     label: 'OT',
     icon: 'calendar',
@@ -84,6 +108,38 @@ export const menuConfig: MenuItem[] = [
     ],
   },
   {
+    label: 'Diagnostics',
+    icon: 'lab',
+    permissions: ['laboratory.view'],
+    children: [
+      { label: 'Lab Worklist', icon: 'lab', route: '/laboratory', permissions: ['laboratory.view'] },
+      { label: 'LIS Simulator', icon: 'service', route: '/laboratory/lis-simulator', permissions: ['laboratory.view'] },
+      { label: 'Radiology', icon: 'radiology', route: '/radiology', permissions: ['radiology.view'] },
+      { label: 'Orders', icon: 'list', route: '/diagnostics/orders', permissions: ['diagnostics.order.manage'] },
+      { label: 'Settings', icon: 'settings', route: '/diagnostics/settings', permissions: ['diagnostics.settings.manage'] },
+    ],
+  },
+    ],
+  },
+  {
+    label: 'Pharmacy & Stock',
+    items: [
+  {
+    label: 'Pharmacy',
+    icon: 'pharmacy',
+    permissions: ['pharmacy.view'],
+    children: [
+      { label: 'Overview', icon: 'dashboard', route: '/pharmacy', permissions: ['pharmacy.view'] },
+      { label: 'Sale', icon: 'billing', route: '/pharmacy/sales', permissions: ['pharmacy.sale.create'] },
+      { label: 'Sales List', icon: 'list', route: '/pharmacy/sales/list', permissions: ['pharmacy.view'] },
+      { label: 'Medicines', icon: 'service', route: '/pharmacy/medicines', permissions: ['pharmacy.view'] },
+      { label: 'Purchases', icon: 'receipt', route: '/pharmacy/purchases', permissions: ['pharmacy.purchase.manage'] },
+      { label: 'Returns', icon: 'list', route: '/pharmacy/returns', permissions: ['pharmacy.return'] },
+      { label: 'Dispense', icon: 'pharmacy', route: '/pharmacy/dispense', permissions: ['pharmacy.dispense'] },
+      { label: 'Settings', icon: 'settings', route: '/pharmacy/settings', permissions: ['pharmacy.settings.manage'] },
+    ],
+  },
+  {
     label: 'Inventory',
     icon: 'service',
     permissions: ['inventory.view'],
@@ -91,37 +147,15 @@ export const menuConfig: MenuItem[] = [
       { label: 'Overview', icon: 'dashboard', route: '/inventory', permissions: ['inventory.view'] },
       { label: 'Items', icon: 'list', route: '/inventory/items', permissions: ['inventory.view'] },
       { label: 'Reagents', icon: 'lab', route: '/inventory/reagents', permissions: ['inventory.view'] },
-      { label: 'Requests', icon: 'receipt', route: '/inventory/requests', permissions: ['inventory.view'] },
-      { label: 'Reports', icon: 'reporting', route: '/inventory/reports', permissions: ['inventory.view'] },
+      { label: 'Requests', icon: 'receipt', route: '/inventory/requests', permissions: ['inventory.purchase'] },
+      { label: 'Reports', icon: 'reporting', route: '/inventory/reports', permissions: ['inventory.reports.view'] },
+    ],
+  },
     ],
   },
   {
-    label: 'Diagnostics',
-    icon: 'lab',
-    permissions: ['laboratory.view'],
-    children: [
-      { label: 'Lab Worklist', icon: 'lab', route: '/laboratory', permissions: ['laboratory.view'] },
-      { label: 'Radiology', icon: 'radiology', route: '/radiology', permissions: ['radiology.view'] },
-      { label: 'Orders', icon: 'list', route: '/diagnostics/orders', permissions: ['laboratory.view'] },
-      { label: 'Settings', icon: 'settings', route: '/diagnostics/settings', permissions: ['laboratory.view'] },
-    ],
-  },
-  { label: 'Reporting', icon: 'reporting', route: '/reporting', permissions: ['reporting.view'] },
-  {
-    label: 'Pharmacy',
-    icon: 'pharmacy',
-    permissions: ['pharmacy.view'],
-    children: [
-      { label: 'Overview', icon: 'dashboard', route: '/pharmacy', permissions: ['pharmacy.view'] },
-      { label: 'Sale', icon: 'billing', route: '/pharmacy/sales', permissions: ['pharmacy.view'] },
-      { label: 'Sales List', icon: 'list', route: '/pharmacy/sales/list', permissions: ['pharmacy.view'] },
-      { label: 'Medicines', icon: 'service', route: '/pharmacy/medicines', permissions: ['pharmacy.view'] },
-      { label: 'Purchases', icon: 'receipt', route: '/pharmacy/purchases', permissions: ['pharmacy.view'] },
-      { label: 'Returns', icon: 'list', route: '/pharmacy/returns', permissions: ['pharmacy.view'] },
-      { label: 'Dispense', icon: 'pharmacy', route: '/pharmacy/dispense', permissions: ['pharmacy.dispense'] },
-      { label: 'Settings', icon: 'settings', route: '/pharmacy/settings', permissions: ['pharmacy.view'] },
-    ],
-  },
+    label: 'People & Finance',
+    items: [
   {
     label: 'HR & Payroll',
     icon: 'users',
@@ -132,7 +166,7 @@ export const menuConfig: MenuItem[] = [
       { label: 'Attendance', icon: 'list', route: '/hr/attendance', permissions: ['hr.attendance.manage'] },
       { label: 'Duty Roster', icon: 'calendar', route: '/hr/roster', permissions: ['hr.shift.manage'] },
       { label: 'Leave', icon: 'list', route: '/hr/leave', permissions: ['hr.leave.manage'] },
-      { label: 'Payroll', icon: 'billing', route: '/hr/payroll', permissions: ['hr.payroll.manage'] },
+      { label: 'Payroll', icon: 'billing', route: '/hr/payroll', permissions: ['payroll.view'] },
       { label: 'Recruitment', icon: 'plus-user', route: '/hr/recruitment', permissions: ['hr.recruitment.manage'] },
       { label: 'Performance', icon: 'reporting', route: '/hr/performance', permissions: ['hr.performance.manage'] },
       { label: 'Reports', icon: 'reporting', route: '/hr/reports', permissions: ['hr.reports.view'] },
@@ -153,9 +187,25 @@ export const menuConfig: MenuItem[] = [
       { label: 'Payroll', icon: 'users', route: '/accounting/payroll', permissions: ['accounting.view'] },
       { label: 'Cash/Bank', icon: 'accounting', route: '/accounting/cash-closing', permissions: ['accounting.view'] },
       { label: 'Journals', icon: 'list', route: '/accounting/journals', permissions: ['accounting.journal.post'] },
-      { label: 'Reports', icon: 'reporting', route: '/accounting/reports', permissions: ['accounting.reports.view'] },
+      { label: 'Reports', icon: 'reporting', route: '/accounting/reports', permissions: ['reporting.financial.view'] },
     ],
   },
+    ],
+  },
+  {
+    label: 'Management',
+    items: [
+      {
+        label: 'Reporting',
+        icon: 'reporting',
+        permissions: ['reporting.view'],
+        children: [
+          { label: 'Report Library', icon: 'reporting', route: '/reporting/library', permissions: ['reporting.view'] },
+          { label: 'Financial Summary', icon: 'accounting', route: '/reporting/finance', permissions: ['reporting.financial.view'] },
+          { label: 'Clinical Operations', icon: 'dashboard', route: '/reporting/clinical', permissions: ['reporting.view'] },
+          { label: 'Doctor Referrals', icon: 'users', route: '/reporting/doctor-referrals', permissions: ['reporting.financial.view'] },
+        ],
+      },
   {
     label: 'Administration',
     icon: 'admin',
@@ -166,4 +216,8 @@ export const menuConfig: MenuItem[] = [
       { label: 'Roles', icon: 'shield', route: '/admin/roles', permissions: ['settings.role.manage'] },
     ],
   },
+    ],
+  },
 ];
+
+export const menuConfig: MenuItem[] = menuSections.flatMap((section) => section.items);

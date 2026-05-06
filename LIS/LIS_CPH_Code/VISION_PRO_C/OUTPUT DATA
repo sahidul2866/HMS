@@ -1,0 +1,9 @@
+"C:\Users\CPH LAB\PycharmProjects\pythonProject3\venv\Scripts\python.exe" H:\Polash\CHP-LIS\VISION_PRO_C\serverVisionProC.py
+21-07-2023 20:44:43 [INFO]    : ........ Starting XN 1000 LIS ..........
+21-07-2023 20:44:43 [INFO]    : LIS HOST: 192.168.1.7 PORT: 7050
+21-07-2023 20:44:43 [INFO]    : Initiating clients ......
+21-07-2023 20:44:43 [SUCCESS] : Connection from: ('192.168.1.9', 59069)
+21-07-2023 20:44:43 [SUCCESS] : Result Received
+b'\x0bMSH|^~\\&|YHLO|VP30003995|||20230721205025||ORU^R01|1|P|2.3.1||||0||ASCII|||\rPID|1|||||||U|||||||||||||||||||||||\rOBR|1||H488577|YHLO^VP30003995|N||||30.250000|16||||||||||||||||||||||||||||||||||||||\rOBX|1|BOTH|1|ESR|8|mm/h|2.000000-20.000000|N|27.9375\\S\\0.25|4|F|||20230720185135||||\rOBX|2|BOTH|2|KATZ|12|mm/h|||27.9375\\S\\0.25||F|||20230720185135||||\r\x1c\r'
+21-07-2023 20:44:43 [INFO]    : \x0bMSH|^~\\&|YHLO|VP30003995|||20230721205025||ORU^R01|1|P|2.3.1||||0||ASCII|||\rPID|1|||||||U|||||||||||||||||||||||\rOBR|1||H488577|YHLO^VP30003995|N||||30.250000|16||||||||||||||||||||||||||||||||||||||\rOBX|1|BOTH|1|ESR|8|mm/h|2.000000-20.000000|N|27.9375\\S\\0.25|4|F|||20230720185135||||\rOBX|2|BOTH|2|KATZ|12|mm/h|||27.9375\\S\\0.25||F|||20230720185135||||\r\x1c\r
+21-07-2023 20:44:43 [SUCCESS] : Data Processed and Sent it to Server

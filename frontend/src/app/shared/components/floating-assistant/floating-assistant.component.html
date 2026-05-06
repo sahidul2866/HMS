@@ -13,7 +13,7 @@
       <div>
         <div class="assistant-name">{{ title }}</div>
         <div class="assistant-subtitle" *ngIf="loading">Thinking…</div>
-        <div class="assistant-subtitle" *ngIf="!loading">Type “start over” to reset</div>
+        <div class="assistant-subtitle" *ngIf="!loading">{{ contextLabel }}</div>
       </div>
     </div>
     <div class="assistant-head-actions">
@@ -46,6 +46,15 @@
           <span class="assistant-chip good" *ngIf="msg.response.used_database">DB</span>
         </div>
         <div class="assistant-bubble-text">{{ msg.text }}</div>
+        <button
+          *ngIf="msg.sender === 'bot'"
+          type="button"
+          class="assistant-copy"
+          (click)="copyResponse(msg.text)"
+          aria-label="Copy assistant response"
+        >
+          Copy
+        </button>
         <div class="assistant-detail" *ngIf="msg.sender === 'bot' && msg.response?.details?.length">
           <div class="assistant-row" *ngFor="let row of msg.response?.details || []">
             <span>{{ row.label }}</span>
@@ -55,6 +64,9 @@
         <div class="assistant-next" *ngIf="msg.sender === 'bot' && msg.response?.next_action">
           <span>Next:</span>
           <b>{{ msg.response?.next_action }}</b>
+        </div>
+        <div class="assistant-denied" *ngIf="msg.sender === 'bot' && msg.response?.permission_denied">
+          Permission denied. Restricted data and actions are blocked by backend RBAC.
         </div>
         <div class="assistant-replies" *ngIf="msg.sender === 'bot' && msg.response?.quick_replies?.length">
           <button type="button" *ngFor="let item of msg.response?.quick_replies || []" (click)="useQuick(item)">{{ item }}</button>

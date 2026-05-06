@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMS DICOM Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .status {
+            font-size: 12px;
+            color: #ccc;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+        }
+        .main {
+            display: flex;
+            flex: 1;
+            gap: 10px;
+            padding: 10px;
+        }
+        .sidebar {
+            width: 240px;
+            min-width: 220px;
+            background: #2a2a2a;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            overflow-y: auto;
+        }
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #444;
+        }
+        .sidebar-section h3 {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .search-box {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+        }
+        .search-box::placeholder {
+            color: #666;
+        }
+        .study-list {
+            list-style: none;
+            font-size: 12px;
+        }
+        .study-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #1a1a1a;
+            border-left: 3px solid #667eea;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        .study-item:hover {
+            background: #333;
+            border-left-color: #764ba2;
+        }
+        .study-item.selected {
+            background: #333;
+            border-left-color: #00d4ff;
+        }
+        .viewport-container {
+            flex: 1;
+            background: #000;
+            border-radius: 5px;
+            position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #dicomImage {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tools {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 5px;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        button {
+            padding: 8px 12px;
+            background: #667eea;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button.active {
+            background: #00d4ff;
+            color: #000;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .info-panel {
+            font-size: 11px;
+            color: #aaa;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            margin-top: auto;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .success-message {
+            background: #51cf66;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .image-counter {
+            font-size: 11px;
+            color: #aaa;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 HMS DICOM Viewer</h1>
+            <div class="controls">
+                <div class="status">
+                    Orthanc: <span id="orthancStatus">Connecting...</span>
+                </div>
+                <div class="image-counter" id="imageCounter" style="display:none;">
+                    Images: <span id="currentImage">0</span>/<span id="totalImages">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <div id="errorContainer"></div>
+                    <h3>Search</h3>
+                    <input type="text" class="search-box" id="patientSearch" placeholder="Patient Name or ID">
+                </div>
+                <div class="sidebar-section" style="flex: 1; overflow-y: auto;">
+                    <h3>Studies</h3>
+                    <ul class="study-list" id="studiesList">
+                        <li class="study-item" style="padding: 20px; text-align: center; color: #666;">
+                            Loading studies...
+                        </li>
+                    </ul>
+                </div>
+                <div class="sidebar-section">
+                    <div class="info-panel">
+                        <div class="info-item">
+                            <span>Patient:</span>
+                            <span id="patientName">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span>Study Date:</span>
+                            <span id="studyDate">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span>Modality:</span>
+                            <span id="modality">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span>Series:</span>
+                            <span id="seriesCount">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div class="viewport-container">
+                    <div id="dicomImage"></div>
+                </div>
+
+                <div class="tools">
+                    <button onclick="zoomOut()" title="Zoom out">- Zoom</button>
+                    <button onclick="zoomIn()" title="Zoom in">+ Zoom</button>
+                    <button onclick="resetViewport()" title="Reset view">Reset</button>
+                    <button onclick="fitToWindow()" title="Fit to window">Fit</button>
+                    <button onclick="prevImage()" id="prevBtn" title="Previous image">← Prev</button>
+                    <button onclick="nextImage()" id="nextBtn" title="Next image">Next →</button>
+                    <button onclick="location.reload()" title="Refresh viewer">↻ Refresh</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const query = new URLSearchParams(window.location.search);
+        const PRESELECT_STUDY_UID = query.get('StudyInstanceUID') || query.get('study_uid') || '';
+        const PRESELECT_ORTHANC_STUDY_ID = query.get('orthancStudyId') || query.get('orthanc_study_id') || '';
+        const ORTHANC_DIRECT_URL = (query.get('orthanc') || `http://${window.location.hostname}:8042`).replace(/\/+$/, '');
+        const ORTHANC_URL = `${window.location.origin}/orthanc`;
+        
+        let currentInstance = null;
+        let currentStudy = null;
+        let instances = [];
+        let currentImageIndex = 0;
+        let currentZoom = 1;
+        const ZOOM_STEP = 0.15;
+        const MIN_ZOOM = 0.3;
+        const MAX_ZOOM = 5;
+
+        function openOrthancStudyFallback() {
+            if (PRESELECT_ORTHANC_STUDY_ID) {
+                window.location.href = `${ORTHANC_DIRECT_URL}/app/explorer.html#study?uuid=${encodeURIComponent(PRESELECT_ORTHANC_STUDY_ID)}`;
+                return;
+            }
+            if (PRESELECT_STUDY_UID) {
+                window.location.href = `${ORTHANC_DIRECT_URL}/app/explorer.html`;
+                return;
+            }
+            window.location.href = `${ORTHANC_DIRECT_URL}/app/explorer.html`;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Viewer initialized, Orthanc URL:', ORTHANC_URL);
+
+            await checkOrthancStatus();
+            await loadStudies();
+
+            const viewport = document.getElementById('dicomImage');
+            viewport.addEventListener('wheel', (event) => {
+                event.preventDefault();
+                if (event.deltaY < 0) {
+                    zoomIn();
+                } else {
+                    zoomOut();
+                }
+            }, { passive: false });
+        });
+
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="success-message">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 3000);
+        }
+
+        async function checkOrthancStatus() {
+            try {
+                console.log('Checking Orthanc at:', ORTHANC_URL);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
+                const response = await fetch(`${ORTHANC_URL}/studies`, {
+                    signal: controller.signal,
+                    method: 'GET'
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    document.getElementById('orthancStatus').textContent = '✓ Connected';
+                    document.getElementById('orthancStatus').style.color = '#00d4ff';
+                    showSuccess('✓ Connected to Orthanc PACS');
+                    return true;
+                }
+            } catch (err) {
+                console.error('Orthanc connection error:', err);
+                if (err.name === 'AbortError') {
+                    document.getElementById('orthancStatus').textContent = '✗ Timeout';
+                    showError(`Connection timeout. Orthanc may not be running at ${ORTHANC_URL}`);
+                } else {
+                    document.getElementById('orthancStatus').textContent = '✗ Offline';
+                    showError(`Cannot connect to Orthanc at ${ORTHANC_URL}`);
+                }
+                document.getElementById('orthancStatus').style.color = '#ff6b6b';
+                return false;
+            }
+        }
+
+        async function fetchWithTimeout(url, timeout = 8000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (err) {
+                clearTimeout(timeoutId);
+                throw err;
+            }
+        }
+
+        async function loadStudies() {
+            try {
+                const response = await fetchWithTimeout(`${ORTHANC_URL}/studies`, 8000);
+                if (!response.ok) throw new Error('Failed to fetch studies');
+                
+                const studies = await response.json();
+                const list = document.getElementById('studiesList');
+                list.innerHTML = '';
+                let autoSelected = false;
+
+                if (studies.length === 0) {
+                    list.innerHTML = '<li class="study-item" style="padding: 20px; text-align: center; color: #666;">No studies found</li>';
+                    return;
+                }
+
+                for (const studyId of studies) {
+                    try {
+                        const studyData = await fetchWithTimeout(`${ORTHANC_URL}/studies/${studyId}`).then(r => r.json());
+                        const li = document.createElement('li');
+                        li.className = 'study-item';
+                        
+                        const patient = studyData.PatientMainDicomTags?.PatientName || 'Unknown';
+                        const date = studyData.MainDicomTags?.StudyDate || 'No date';
+                        const seriesCount = studyData.Series?.length || 0;
+                        
+                        li.innerHTML = `
+                            <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                ${patient}
+                            </div>
+                            <div style="color: #888; font-size: 11px; margin-top: 3px;">
+                                ${date} (${seriesCount} series)
+                            </div>
+                        `;
+                        li.onclick = () => loadStudyInstances(studyId, studyData);
+                        list.appendChild(li);
+
+                        const studyInstanceUID = studyData.MainDicomTags?.StudyInstanceUID || '';
+                        const shouldAutoOpen =
+                            (!autoSelected && PRESELECT_ORTHANC_STUDY_ID && studyId === PRESELECT_ORTHANC_STUDY_ID) ||
+                            (!autoSelected && PRESELECT_STUDY_UID && studyInstanceUID === PRESELECT_STUDY_UID);
+                        if (shouldAutoOpen) {
+                            autoSelected = true;
+                            li.classList.add('active');
+                            await loadStudyInstances(studyId, studyData);
+                        }
+                    } catch (err) {
+                        console.error('Error loading study:', studyId, err);
+                    }
+                }
+
+                if ((PRESELECT_STUDY_UID || PRESELECT_ORTHANC_STUDY_ID) && !autoSelected) {
+                    showError('Requested study not found in Orthanc.');
+                }
+            } catch (err) {
+                console.error('Error loading studies:', err);
+                showError('Error loading studies: ' + err.message);
+                document.getElementById('studiesList').innerHTML = '<li class="study-item" style="padding: 20px; color: #ff6b6b;">Error loading studies</li>';
+            }
+        }
+
+        async function loadStudyInstances(studyId, studyData) {
+            try {
+                currentStudy = studyId;
+                currentImageIndex = 0;
+                instances = [];
+
+                document.getElementById('patientName').textContent = studyData.PatientMainDicomTags?.PatientName || '-';
+                document.getElementById('studyDate').textContent = studyData.MainDicomTags?.StudyDate || '-';
+                document.getElementById('seriesCount').textContent = (studyData.Series?.length || 0) + ' series';
+
+                // Get all instances from study
+                const response = await fetchWithTimeout(`${ORTHANC_URL}/studies/${studyId}/instances`, 8000);
+                if (!response.ok) throw new Error('Failed to fetch instances');
+                
+                instances = await response.json();
+
+                if (instances.length > 0) {
+                    document.getElementById('imageCounter').style.display = 'block';
+                    await loadInstance(0);
+                    showSuccess(`Loaded ${instances.length} images`);
+                } else {
+                    showError('No images found in this study');
+                }
+            } catch (err) {
+                console.error('Error loading instances:', err);
+                showError('Error loading study: ' + err.message);
+            }
+        }
+
+        async function loadInstance(index) {
+            try {
+                if (index < 0 || index >= instances.length) return;
+
+                currentImageIndex = index;
+                const instanceId = instances[index].ID || instances[index];
+                
+                // Update UI
+                document.getElementById('currentImage').textContent = index + 1;
+                document.getElementById('totalImages').textContent = instances.length;
+                document.getElementById('prevBtn').disabled = index === 0;
+                document.getElementById('nextBtn').disabled = index === instances.length - 1;
+
+                const element = document.getElementById('dicomImage');
+                const previewUrl = `${ORTHANC_URL}/instances/${instanceId}/preview`;
+
+                try {
+                    element.innerHTML = `
+                        <img
+                          id="dicomPreview"
+                          src="${previewUrl}"
+                          alt="DICOM Preview"
+                          style="width:100%;height:100%;object-fit:contain;transform:scale(${currentZoom});transform-origin:center center;"
+                        />
+                    `;
+                    
+                    // Get metadata
+                    const data = await fetchWithTimeout(`${ORTHANC_URL}/instances/${instanceId}`).then(r => r.json());
+                    document.getElementById('modality').textContent = data.MainDicomTags?.Modality || '-';
+                } catch (imgErr) {
+                    console.error('Preview load error:', imgErr);
+                    element.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6b6b;">
+                        Failed to load image: ${imgErr.message}
+                    </div>`;
+                }
+            } catch (err) {
+                console.error('Error loading image:', err);
+                showError('Error loading image: ' + err.message);
+            }
+        }
+
+        function nextImage() {
+            if (currentImageIndex < instances.length - 1) {
+                loadInstance(currentImageIndex + 1);
+            }
+        }
+
+        function prevImage() {
+            if (currentImageIndex > 0) {
+                loadInstance(currentImageIndex - 1);
+            }
+        }
+
+        function resetViewport() {
+            currentZoom = 1;
+            applyZoom();
+        }
+
+        function fitToWindow() {
+            resetViewport();
+        }
+
+        function applyZoom() {
+            const image = document.getElementById('dicomPreview');
+            if (image) {
+                image.style.transform = `scale(${currentZoom})`;
+            }
+        }
+
+        function zoomIn() {
+            currentZoom = Math.min(MAX_ZOOM, +(currentZoom + ZOOM_STEP).toFixed(2));
+            applyZoom();
+        }
+
+        function zoomOut() {
+            currentZoom = Math.max(MIN_ZOOM, +(currentZoom - ZOOM_STEP).toFixed(2));
+            applyZoom();
+        }
+
+        document.getElementById('patientSearch').addEventListener('input', (e) => {
+            const search = e.target.value.toLowerCase();
+            document.querySelectorAll('.study-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(search) ? 'block' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>

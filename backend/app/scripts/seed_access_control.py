@@ -45,6 +45,7 @@ def get_or_create_department(session, branch_id, code: str, name: str, descripti
 
 def sync_permissions(session) -> dict[str, Permission]:
     permission_map: dict[str, Permission] = {}
+    catalog_codes = {code for code, *_ in PERMISSION_CATALOG}
     for code, module, action, description in PERMISSION_CATALOG:
         permission = session.scalar(select(Permission).where(Permission.code == code))
         if not permission:
@@ -57,6 +58,8 @@ def sync_permissions(session) -> dict[str, Permission]:
             permission.description = description
             permission.is_active = True
         permission_map[code] = permission
+    for permission in session.scalars(select(Permission).where(Permission.code.notin_(catalog_codes))):
+        permission.is_active = False
     return permission_map
 
 

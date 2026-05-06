@@ -6,14 +6,30 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class StaffBotContext(BaseModel):
+    module: str | None = None
+    page: str | None = None
+    path: str | None = None
+    record_type: str | None = None
+    record_id: str | None = None
+    selected_label: str | None = None
+    patient_id: str | None = None
+    employee_id: str | None = None
+    invoice_id: str | None = None
+    visit_id: str | None = None
+    appointment_id: str | None = None
+    order_id: str | None = None
+    filters: dict[str, Any] = {}
+
+
 class StaffBotMessageCreate(BaseModel):
     message: str = Field(min_length=1)
     conversation_id: UUID | None = None
-    context: str | None = None
+    context: StaffBotContext | str | None = None
 
 
 class StaffBotResetCreate(BaseModel):
-    context: str | None = None
+    context: StaffBotContext | str | None = None
 
 
 class StaffBotDetailRow(BaseModel):
@@ -33,6 +49,8 @@ class StaffBotResponse(BaseModel):
     quick_replies: list[str] = []
     follow_up: bool = False
     required_fields: list[str] = []
+    permission_denied: bool = False
+    context_suggestions: list[str] = []
 
 
 class StaffBotSettingsRead(BaseModel):

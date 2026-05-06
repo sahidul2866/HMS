@@ -1,7 +1,14 @@
 @if (!sessionService.snapshot.initialized) {
   <div class="loading-screen">Loading session...</div>
 } @else {
-  <div class="shell" [class.collapsed-shell]="sidebarCollapsed && !isMobileViewport" [class.mobile-shell]="isMobileViewport">
+  <div
+    class="shell"
+    [class.collapsed-shell]="sidebarCollapsed && !isMobileViewport"
+    [class.mobile-shell]="isMobileViewport"
+    [class.chrome-full]="chromeDensity === 'full'"
+    [class.chrome-compact]="chromeDensity === 'compact'"
+    [class.chrome-focus]="chromeDensity === 'focus'"
+  >
     @if (isMobileViewport && mobileSidebarOpen) {
       <button class="sidebar-overlay" type="button" (click)="closeMobileSidebar()" aria-label="Close navigation"></button>
     }
@@ -20,15 +27,43 @@
               <span></span>
             </button>
           }
-        <button class="topbar-user" type="button" (click)="openProfile()">
-          <span class="account-avatar">{{ userInitials() || 'U' }}</span>
-          <span>
-            <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
-            <span class="muted">{{ accountTypeLabel() }}</span>
-          </span>
-        </button>
+          <button class="topbar-user" type="button" (click)="openProfile()">
+            <span class="account-avatar">{{ userInitials() || 'U' }}</span>
+            <span>
+              <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+              <span class="muted">{{ accountTypeLabel() }}</span>
+            </span>
+          </button>
         </div>
         <div class="topbar-actions">
+          <div class="chrome-density" role="group" aria-label="Page space">
+            @for (option of chromeDensityOptions; track option.value) {
+              <button
+                type="button"
+                [class.active]="chromeDensity === option.value"
+                [attr.aria-pressed]="chromeDensity === option.value"
+                [title]="option.title"
+                (click)="setChromeDensity(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            }
+          </div>
+          <div class="shortcut-menu" [class.open]="shortcutsOpen">
+            <button class="shortcut-btn" type="button" (click)="toggleShortcuts()" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">
+              Keys
+            </button>
+            @if (shortcutsOpen) {
+              <div class="shortcut-panel" role="dialog" aria-label="Keyboard shortcuts">
+                @for (shortcut of keyboardShortcuts; track shortcut.key) {
+                  <div class="shortcut-row">
+                    <kbd>{{ shortcut.key }}</kbd>
+                    <span>{{ shortcut.label }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
           <label class="theme-picker">
             <span>Theme</span>
             <select [value]="themeService.activeTheme()" (change)="themeService.setTheme($any($event.target).value)">
@@ -69,22 +104,90 @@
         </div>
       </header>
 
-      @if (visibleQuickActions().length) {
-        <nav class="quick-flow" aria-label="Fast module actions">
-          <span class="quick-flow__label">Fast flow</span>
-          <div class="quick-flow__actions">
-            @for (action of visibleQuickActions(); track action.route) {
+      <app-breadcrumbs></app-breadcrumbs>
+
+      @if (activeModuleActions().length || visibleQuickActions().length || recentPages().length) {
+        <nav class="quick-flow" aria-label="Context navigation and fast actions">
+          @if (activeModuleActions().length) {
+            <div class="quick-flow__group" [class.quick-flow__group--collapsed]="isQuickFlowGroupCollapsed('module')">
               <button
-                class="quick-flow__action"
-                [class.quick-flow__action--primary]="action.tone === 'primary'"
-                [class.active]="isQuickActionActive(action.route)"
+                class="quick-flow__toggle"
                 type="button"
-                (click)="navigate(action.route)"
+                [attr.aria-expanded]="!isQuickFlowGroupCollapsed('module')"
+                (click)="toggleQuickFlowGroup('module')"
               >
-                {{ action.label }}
+                <span class="quick-flow__label">{{ activeModule()?.label }} Actions</span>
+                <span class="quick-flow__count">{{ quickFlowGroupCount('module') }}</span>
+                <span class="quick-flow__chevron">⌄</span>
               </button>
-            }
-          </div>
+              @if (!isQuickFlowGroupCollapsed('module')) {
+                <div class="quick-flow__actions">
+                  @for (action of activeModuleActions(); track action.route) {
+                    <button
+                      class="quick-flow__action"
+                      [class.active]="isQuickActionActive(action.route || '')"
+                      type="button"
+                      (click)="navigate(action.route || '/')"
+                    >
+                      {{ action.label }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+          @if (visibleQuickActions().length) {
+            <div class="quick-flow__group" [class.quick-flow__group--collapsed]="isQuickFlowGroupCollapsed('fast')">
+              <button
+                class="quick-flow__toggle"
+                type="button"
+                [attr.aria-expanded]="!isQuickFlowGroupCollapsed('fast')"
+                (click)="toggleQuickFlowGroup('fast')"
+              >
+                <span class="quick-flow__label">Fast Actions</span>
+                <span class="quick-flow__count">{{ quickFlowGroupCount('fast') }}</span>
+                <span class="quick-flow__chevron">⌄</span>
+              </button>
+              @if (!isQuickFlowGroupCollapsed('fast')) {
+                <div class="quick-flow__actions">
+                  @for (action of visibleQuickActions(); track action.route) {
+                    <button
+                      class="quick-flow__action"
+                      [class.quick-flow__action--primary]="action.tone === 'primary'"
+                      [class.active]="isQuickActionActive(action.route)"
+                      type="button"
+                      (click)="navigate(action.route)"
+                    >
+                      {{ action.label }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+          @if (recentPages().length) {
+            <div class="quick-flow__group quick-flow__group--recent" [class.quick-flow__group--collapsed]="isQuickFlowGroupCollapsed('recent')">
+              <button
+                class="quick-flow__toggle"
+                type="button"
+                [attr.aria-expanded]="!isQuickFlowGroupCollapsed('recent')"
+                (click)="toggleQuickFlowGroup('recent')"
+              >
+                <span class="quick-flow__label">Recent</span>
+                <span class="quick-flow__count">{{ quickFlowGroupCount('recent') }}</span>
+                <span class="quick-flow__chevron">⌄</span>
+              </button>
+              @if (!isQuickFlowGroupCollapsed('recent')) {
+                <div class="quick-flow__actions">
+                  @for (page of recentPages(); track page.path) {
+                    <button class="quick-flow__action" type="button" (click)="navigate(page.path)">
+                      {{ page.label }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
         </nav>
       }
 
@@ -93,6 +196,10 @@
       <section class="page-body">
         <router-outlet></router-outlet>
       </section>
+
+      @if (showStaffAssistant()) {
+        <app-floating-assistant title="Hospital Assistant"></app-floating-assistant>
+      }
     </main>
   </div>
 }

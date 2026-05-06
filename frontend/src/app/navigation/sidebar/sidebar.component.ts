@@ -4,7 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/ro
 import { filter } from 'rxjs';
 
 import { SessionService } from '../../core/services/session.service';
-import { MenuItem, menuConfig } from '../menu.config';
+import { MenuItem, MenuSection, menuSections } from '../menu.config';
 
 @Component({
   selector: 'app-sidebar',
@@ -23,12 +23,14 @@ export class SidebarComponent {
   @Output() collapsedChange = new EventEmitter<boolean>();
   @Output() mobileOpenChange = new EventEmitter<boolean>();
 
+  sections: MenuSection[] = [];
   items: MenuItem[] = [];
   expandedGroups = new Set<string>();
 
   constructor() {
     this.sessionService.state$.subscribe(() => {
-      this.items = this.filterItems(menuConfig);
+      this.sections = this.filterSections(menuSections);
+      this.items = this.sections.flatMap((section) => section.items);
       this.expandActiveGroups();
     });
     this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe(() => {
@@ -68,7 +70,11 @@ export class SidebarComponent {
   }
 
   isRouteActive(route?: string): boolean {
-    return !!route && this.router.url.startsWith(route);
+    if (!route) {
+      return false;
+    }
+    const currentPath = this.router.url.split('?')[0];
+    return currentPath === route || currentPath.startsWith(`${route}/`);
   }
 
   getIconPath(icon: string): string {
@@ -111,6 +117,15 @@ export class SidebarComponent {
         }
         return this.sessionService.hasPermission(item.permissions);
       });
+  }
+
+  private filterSections(sections: MenuSection[]): MenuSection[] {
+    return sections
+      .map((section) => ({
+        ...section,
+        items: this.filterItems(section.items),
+      }))
+      .filter((section) => section.items.length > 0);
   }
 
   private expandActiveGroups(): void {

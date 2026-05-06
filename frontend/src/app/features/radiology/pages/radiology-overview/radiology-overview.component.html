@@ -20,6 +20,38 @@
     }
   </section>
 
+  @if (contextPatientId) {
+    <app-patient-context-panel
+      [patientId]="contextPatientId"
+      contextLabel="Radiology Patient"
+      [compact]="true"
+    ></app-patient-context-panel>
+  }
+
+  @if (summary) {
+    <section class="decision-grid">
+      <article class="page-card chart-panel">
+        <div class="chart-panel__head"><div><h2>Imaging Queue Health</h2><span>Readiness, reporting, and verification</span></div></div>
+        <div class="mini-bar-list">
+          @for (item of queueHealthItems; track item.label) {
+            <div class="mini-bar-row">
+              <span>{{ item.label }}</span>
+              <span class="mini-bar-row__track"><span class="mini-bar-row__fill" [style.width]="item.width" [style.background]="item.tone"></span></span>
+              <b>{{ item.value }}</b>
+            </div>
+          }
+        </div>
+      </article>
+      <article class="page-card dashboard-panel">
+        <div class="chart-panel__head"><div><h2>Quick Decisions</h2><span>Open studies only when reporting work is needed</span></div></div>
+        <div class="task-list">
+          <div class="task-item warning"><span><strong>Pending Studies</strong><span>Awaiting upload, readiness, or report</span></span><b>{{ summary.pending_orders + summary.ready_orders }}</b></div>
+          <div class="task-item good"><span><strong>Verified Reports</strong><span>Ready for release</span></span><b>{{ summary.verified_orders }}</b></div>
+        </div>
+      </article>
+    </section>
+  }
+
   <section class="radiology-grid">
     <section class="page-card soft-panel">
       <div class="panel-head">
@@ -60,13 +92,20 @@
                 </div>
                 <div class="card-actions">
                   <button class="secondary-btn" type="button" (click)="printSticker(item)">Sticker</button>
-                  <button class="secondary-btn" type="button" (click)="openWorkbench(item)">Open Workbench</button>
+                  @if (canViewStudy) {
+                    <button class="secondary-btn" type="button" (click)="openDetails(item)">Open Simulator</button>
+                  }
                 </div>
               </div>
               <div class="pill-row">
-                <span class="pill">{{ item.status === 'collected' ? 'ready' : item.status }}</span>
+                <span class="pill">{{ statusLabel(item.status) }}</span>
                 <span class="pill">{{ item.visit_date | date:'mediumDate' }}</span>
                 <span class="pill">{{ item.consulting_doctor_name }}</span>
+                @if (item.has_pacs_link && item.pacs_study_uid) {
+                  <span class="pill pill--pacs" [title]="item.pacs_study_uid">PACS Linked · {{ shortStudyUid(item.pacs_study_uid) }}</span>
+                } @else {
+                  <span class="pill pill--muted">PACS Pending</span>
+                }
                 @if (item.room_number) {
                   <span class="pill">Room {{ item.room_number }}</span>
                 }
@@ -84,4 +123,107 @@
       }
     </section>
   </section>
+
+  @if (selectedItem) {
+    <div class="modal-backdrop" (click)="closeDetails()">
+      <section class="page-card modal-card" (click)="$event.stopPropagation()">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">{{ selectedItem.item_name }}</h2>
+            <div class="section-copy">{{ selectedItem.patient_number }} · {{ selectedItem.patient_name }} · {{ selectedItem.visit_number }}</div>
+            <div class="section-copy"><strong>Radiology Machine Simulator</strong> · Feed Study to PACS, open viewer, save note, and print report.</div>
+          </div>
+          <div class="pill-row">
+            @if (canPrintReport) {
+              <button class="primary-btn" type="button" (click)="printReport()">Print A4 Report</button>
+            }
+            <button class="secondary-btn" type="button" (click)="closeDetails()">Close</button>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <label class="field">
+            <span>Study UID</span>
+            <input type="text" [(ngModel)]="studyUid" [ngModelOptions]="{ standalone: true }" placeholder="Paste StudyInstanceUID" />
+          </label>
+          <div class="pill-row">
+            @if (canUploadDicom) {
+              <button class="secondary-btn" type="button" (click)="linkStudy()">Link Study</button>
+            }
+            @if (canViewStudy) {
+              <button class="secondary-btn" type="button" (click)="openViewer()">Open Viewer</button>
+            }
+          </div>
+        </div>
+
+        @if (canUploadDicom) {
+          <div class="detail-grid">
+            <label class="field">
+              <span>Simulator Machine</span>
+              <select [(ngModel)]="selectedMachineCode" [ngModelOptions]="{ standalone: true }">
+                @for (machine of simulatorMachines; track machine.code) {
+                  <option [value]="machine.code">{{ machine.name }} · {{ machine.modality }}</option>
+                }
+              </select>
+            </label>
+            <div class="pill-row">
+              <button class="secondary-btn" type="button" [disabled]="!selectedMachineCode" (click)="simulateMachineFeed()">Feed Study to PACS</button>
+            </div>
+          </div>
+        }
+
+        @if (canUploadDicom) {
+          <div class="detail-grid">
+            <label class="field">
+              <span>Upload DICOM</span>
+              <input type="file" accept=".dcm,application/dicom" (change)="onPickFile($event)" />
+            </label>
+            <div class="pill-row">
+              <button class="secondary-btn" type="button" (click)="uploadDicom()" [disabled]="!uploadFile">Upload DICOM</button>
+            </div>
+          </div>
+        }
+
+        <div class="detail-grid">
+          <label class="field" style="grid-column:1/-1;">
+            <span>Findings</span>
+            <textarea rows="4" [(ngModel)]="reportFindings" [ngModelOptions]="{ standalone: true }"></textarea>
+          </label>
+          <label class="field">
+            <span>Impression</span>
+            <textarea rows="3" [(ngModel)]="reportImpression" [ngModelOptions]="{ standalone: true }"></textarea>
+          </label>
+          <label class="field">
+            <span>Recommendation</span>
+            <textarea rows="3" [(ngModel)]="reportRecommendation" [ngModelOptions]="{ standalone: true }"></textarea>
+          </label>
+          <label class="field" style="grid-column:1/-1;">
+            <span>Technician / Staff Note</span>
+            <textarea rows="3" [(ngModel)]="staffNote" [ngModelOptions]="{ standalone: true }"></textarea>
+          </label>
+          <div class="pill-row">
+            @if (canAddReport) {
+              <button class="primary-btn" type="button" (click)="saveReport()">Add Report</button>
+              <button class="secondary-btn" type="button" (click)="saveStaffNote()">Save Note</button>
+            }
+            @if (canMarkCompleted) {
+              <button class="secondary-btn" type="button" (click)="markCompleted()">Mark Completed</button>
+            }
+          </div>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (viewerModalUrl) {
+    <div class="modal-backdrop" (click)="closeViewerModal()">
+      <section class="page-card modal-card modal-card--viewer" (click)="$event.stopPropagation()">
+        <div class="panel-head">
+          <h2 class="section-title">Orthanc Viewer</h2>
+          <button class="secondary-btn" type="button" (click)="closeViewerModal()">Close</button>
+        </div>
+        <iframe [src]="viewerModalUrl" title="Orthanc Viewer" class="viewer-frame"></iframe>
+      </section>
+    </div>
+  }
 </section>

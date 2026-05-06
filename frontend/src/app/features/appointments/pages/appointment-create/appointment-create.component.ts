@@ -7,6 +7,7 @@ import { debounceTime, distinctUntilChanged, finalize } from 'rxjs';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { CreatePatientPayload, Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
@@ -16,7 +17,7 @@ import { DoctorSlotAvailability } from '../../models/appointment.models';
 @Component({
   selector: 'app-appointment-create',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './appointment-create.component.html',
   styleUrls: ['./appointment-create.component.scss'],
 })
@@ -40,6 +41,7 @@ export class AppointmentCreateComponent {
   selectedSlot: DoctorSlotAvailability | null = null;
   saving = false;
   submitted = false;
+  private completed = false;
 
   readonly patientLookupControl = this.fb.nonNullable.control('');
 
@@ -122,7 +124,7 @@ export class AppointmentCreateComponent {
     }
     this.patientService.search(query).subscribe((results) => {
       this.patientSearchResults = results;
-      this.patientLookupModalOpen = results.length > 0;
+      this.patientLookupModalOpen = false;
     });
   }
 
@@ -187,6 +189,10 @@ export class AppointmentCreateComponent {
     void this.router.navigate(['/appointments']);
   }
 
+  hasUnsavedChanges(): boolean {
+    return !this.completed && !this.saving && (this.form.dirty || this.patientLookupControl.dirty || !!this.selectedSlot);
+  }
+
   submit(): void {
     this.submitted = true;
     if (this.form.invalid || this.saving) {
@@ -214,6 +220,9 @@ export class AppointmentCreateComponent {
           next: (appointment) => {
             this.saving = false;
             this.submitted = false;
+            this.completed = true;
+            this.form.markAsPristine();
+            this.patientLookupControl.markAsPristine();
             this.notificationService.success(`Appointment ${appointment.appointment_number} created successfully.`);
             void this.router.navigate(['/appointments']);
           },

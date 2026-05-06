@@ -1,0 +1,50 @@
+.machine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.machine-card {
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 0.85rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-main);
+}
+
+.machine-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.machine-card span,
+.machine-card small {
+  color: var(--text-muted);
+}
+
+.log-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.log-stack article {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.log-stack span,
+.log-stack small {
+  color: var(--text-muted);
+}
+
+.analyte-table {
+  margin-top: 0.35rem;
+  font-size: 0.86rem;
+}

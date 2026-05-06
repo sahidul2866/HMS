@@ -98,6 +98,9 @@ class PACSLink(Base, BaseModelMixin):
 
     order_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("radiology_orders.id"), nullable=False)
     study_uid: Mapped[str] = mapped_column(String(255), nullable=False)
+    orthanc_study_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    accession_number: Mapped[str | None] = mapped_column(String(120), index=True)
+    dicom_patient_id: Mapped[str | None] = mapped_column(String(120))
     series_uid: Mapped[str | None] = mapped_column(String(255))
     viewer_url: Mapped[str | None] = mapped_column(Text)
     pacs_provider: Mapped[str | None] = mapped_column(String(60))

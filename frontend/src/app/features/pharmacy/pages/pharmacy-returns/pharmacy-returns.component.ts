@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { PharmacyReturn } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -17,6 +18,7 @@ export class PharmacyReturnsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   returns: PharmacyReturn[] = [];
   selectedReturn: PharmacyReturn | null = null;
@@ -112,18 +114,18 @@ export class PharmacyReturnsComponent {
       ...this.form.getRawValue(),
     };
     this.pharmacyService.updateReturn(this.selectedReturn.id, payload as never).subscribe((item) => {
-      this.notificationService.success(`Return ${item.return_number} updated successfully.`);
+      this.notificationService.success(`Return ${item.return_number} updated. Refund and stock context are refreshed.`);
       this.selectedReturn = item;
       this.loadPage();
     });
   }
 
   deleteReturn(item: PharmacyReturn): void {
-    if (!window.confirm(`Delete return ${item.return_number}?`)) {
+    if (!this.confirmationService.confirmDestructive(item.return_number, 'delete return')) {
       return;
     }
     this.pharmacyService.deleteReturn(item.id).subscribe(() => {
-      this.notificationService.success('Return deleted successfully.');
+      this.notificationService.success(`Return ${item.return_number} deleted.`);
       this.selectedReturn = this.selectedReturn?.id === item.id ? null : this.selectedReturn;
       this.loadPage();
     });

@@ -1,0 +1,152 @@
+C:\Users\AMIN\AppData\Local\Programs\Python\Python39\python.exe E:/Python/CPH_LIS/cph-lis/BACK_MAN_DXI_600/serverBackManDXI_600.py
+While...
+
+messageRawdata:
+\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230723154057\r\x0336\r\n
+\x022P|1|\r\x03BB\r\n
+\x023O|1|I485846|^6^1|^^^TSH3^1|||||||||||Serum||||||||||F\r\x03AB\r\n
+\x024R|1|^^^TSH3^1|17.51|uIU/mL||N||F||||20230719100857|901894\r\x0375\r\n
+\x025L|1|F\r\x0300\r\n
+
+messageRawdata:
+\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230723154244\r\x0334\r\n
+\x022P|1|\r\x03BB\r\n
+\x023O|1|I486425|^10^1|^^^TSH3^1|||||||||||Serum||||||||||F\r\x03D0\r\n
+\x024R|1|^^^TSH3^1|>48.80|uIU/mL||>||F||||20230719094421|901894\r\x03A8\r\n
+\x025C|1|I|OVR|I\r\x0332\r\n
+\x026L|1|F\r\x0301\r\n
+
+messageRawdata:
+\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230723154331\r\x0331\r\n
+\x022P|1|\r\x03BB\r\n
+\x023O|1|I486425|^10^1|^^^TSH3d^1|||||||||||Serum||||||||||F\r\x0334\r\n
+\x024R|1|^^^TSH3d^1|>488.00|uIU/mL||>||F||||20230719101157|901894\r\x0337\r\n
+\x025C|1|I|OVR;RFX|I\r\x035D\r\n
+\x026L|1|F\r\x0301\r\n
+
++++++++++++++++++++++++++++++++++++++++++FFT4->FRT4+++++++++++++++++++++++++++++++++++++++++++++++
+messageRawdata:
+\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230723154957\r\x033F\r\n
+\x022P|1|\r\x03BB\r\n
+\x023O|1|I486479|^6^1|^^^FRT4^1|||||||||||Serum||||||||||F\r\x03AC\r\n          XXXXXXXXXXXXXXXXXXX
+\x024R|1|^^^FRT4^1|1.10|ng/dL||N||F||||20230719095357|901894\r\x03F8\r\n        XXXXXXXXXXXXXXxXXXX
+\x025L|1|F\r\x0300\r\n
+
+messageRawdata:
+\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230723161509\r\x0336\r\n
+\x022P|1|\r\x03BB\r\n
+\x023O|1|I486479|^6^1|^^^FFT4^1|||||||||||Serum||||||||||F\r\x03A0\r\n
+\x024R|1|^^^FFT4^1|1.77|ng/dL||N||F||||20230719095338|901894\r\x03F8\r\n
+\x025L|1|F\r\x0300\r\n
+
+
+
+
+Sample:
+
+messageRawdata:  \x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724185018\r\x0338\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^Testo^1|||||||||||Serum||||||||||F\r\x033F\r\n
+appended
+messageRawdata:  \x024R|1|^^^Testo^1|8.49|ng/mL||N||F||||20230724185036|901894\r\x03F9\r\n
+appended
+messageRawdata:  \x025L|1|F\r\x0300\r\n
+appended
+messageRawdata:  \x04
+hl7open
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724185018\\r\\x0338\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^Testo^1|||||||||||Serum||||||||||F\\r\\x033F\\r\\n', '\\x024R|1|^^^Testo^1|8.49|ng/mL||N||F||||20230724185036|901894\\r\\x03F9\\r\\n', '\\x025L|1|F\\r\\x0300\\r\\n']
+result=> ['\\x024R', '1', '^^^Testo^1', '8.49', 'ng/mL', '', 'N', '', 'F', '', '', '', '20230724185036', '901894\\r\\x03F9\\r\\n']
+SampleId =  23072410646
+hl7close
+messageRawdata:  \x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724185712\r\x0339\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^TSH3^1|||||||||||Serum||||||||||F\r\x0352\r\n
+appended
+messageRawdata:  \x024R|1|^^^TSH3^1|3.73|uIU/mL||N||F||||20230724185730|901894\r\x0343\r\n
+appended
+messageRawdata:  \x025L|1|F\r\x0300\r\n
+appended
+messageRawdata:  \x04
+hl7open
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724185712\\r\\x0339\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^TSH3^1|||||||||||Serum||||||||||F\\r\\x0352\\r\\n', '\\x024R|1|^^^TSH3^1|3.73|uIU/mL||N||F||||20230724185730|901894\\r\\x0343\\r\\n', '\\x025L|1|F\\r\\x0300\\r\\n']
+result=> ['\\x024R', '1', '^^^TSH3^1', '3.73', 'uIU/mL', '', 'N', '', 'F', '', '', '', '20230724185730', '901894\\r\\x0343\\r\\n']
+SampleId =  23072410646
+hl7close
+messageRawdata:  \x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724185918\r\x0341\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^FRT4^1|||||||||||Serum||||||||||F\r\x0350\r\n
+appended
+messageRawdata:  \x024R|1|^^^FRT4^1|0.89|ng/dL||N||F||||20230724185936|901894\r\x0306\r\n
+appended
+messageRawdata:  \x025L|1|F\r\x0300\r\n
+appended
+messageRawdata:  \x04\x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724185918\r\x0341\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^FFT4^1|||||||||||Serum||||||||||F\r\x0344\r\n
+appended
+messageRawdata:  \x024R|1|^^^FFT4^1|1.43|ng/dL||N||F||||20230724185918|901894\r\x03F1\r\n
+appended
+messageRawdata:  \x025L|1|F\r\x0300\r\n
+appended
+messageRawdata:  \x04
+hl7open
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724185918\\r\\x0341\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^FRT4^1|||||||||||Serum||||||||||F\\r\\x0350\\r\\n', '\\x024R|1|^^^FRT4^1|0.89|ng/dL||N||F||||20230724185936|901894\\r\\x0306\\r\\n', '\\x025L|1|F\\r\\x0300\\r\\n', '\\x04\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724185918\\r\\x0341\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^FFT4^1|||||||||||Serum||||||||||F\\r\\x0344\\r\\n', '\\x024R|1|^^^FFT4^1|1.43|ng/dL||N||F||||20230724185918|901894\\r\\x03F1\\r\\n', '\\x025L|1|F\\r\\x0300\\r\\n']
+result=> ['\\x024R', '1', '^^^FRT4^1', '0.89', 'ng/dL', '', 'N', '', 'F', '', '', '', '20230724185936', '901894\\r\\x0306\\r\\n']
+result=> ['\\x024R', '1', '^^^FFT4^1', '1.43', 'ng/dL', '', 'N', '', 'F', '', '', '', '20230724185918', '901894\\r\\x03F1\\r\\n']
+SampleId =  23072410646
+hl7close
+messageRawdata:  \x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724185936\r\x0341\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^FT3^1|||||||||||Serum||||||||||F\r\x03FD\r\n
+appended
+messageRawdata:  \x024R|1|^^^FT3^1|3.79|pg/mL||N||F||||20230724185954|901894\r\x03C0\r\n
+appended
+messageRawdata:  \x025L|1|F\r\x0300\r\n
+appended
+messageRawdata:  \x04
+hl7open
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724185936\\r\\x0341\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^FT3^1|||||||||||Serum||||||||||F\\r\\x03FD\\r\\n', '\\x024R|1|^^^FT3^1|3.79|pg/mL||N||F||||20230724185954|901894\\r\\x03C0\\r\\n', '\\x025L|1|F\\r\\x0300\\r\\n']
+result=> ['\\x024R', '1', '^^^FT3^1', '3.79', 'pg/mL', '', 'N', '', 'F', '', '', '', '20230724185954', '901894\\r\\x03C0\\r\\n']
+SampleId =  23072410646
+hl7close
+messageRawdata:  \x05
+appended
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230724191306\r\x0335\r\n
+appended
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+appended
+messageRawdata:  \x023O|1|23072410646|^6^1|^^^BR15-3Ag^1|||||||||||Serum||||||||||F\r\x0332\r\n
+appended
+messageRawdata:  \x024R|1|^^^BR15-3Ag^1|5.8|U/mL||N||F||||20230724191324|901894\r\x0331\r\n
+appended
+messageRawdata:  \x025C|1|I|CEX|I\r\x031B\r\n
+appended
+messageRawdata:  \x026L|1|F\r\x0301\r\n
+appended
+messageRawdata:  \x04
+hl7open
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230724191306\\r\\x0335\\r\\n', '\\x022P|1|\\r\\x03BB\\r\\n', '\\x023O|1|23072410646|^6^1|^^^BR15-3Ag^1|||||||||||Serum||||||||||F\\r\\x0332\\r\\n', '\\x024R|1|^^^BR15-3Ag^1|5.8|U/mL||N||F||||20230724191324|901894\\r\\x0331\\r\\n', '\\x025C|1|I|CEX|I\\r\\x031B\\r\\n', '\\x026L|1|F\\r\\x0301\\r\\n']
+result=> ['\\x024R', '1', '^^^BR15-3Ag^1', '5.8', 'U/mL', '', 'N', '', 'F', '', '', '', '20230724191324', '901894\\r\\x0331\\r\\n']
+SampleId =  23072410646
+hl7close
+

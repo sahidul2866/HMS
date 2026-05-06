@@ -1,9 +1,13 @@
 <section class="workspace-shell intake-page">
   <section class="page-card module-hero intake-hero">
-    <div class="hero-main">
+    <div class="hero-row">
       <div>
         <div class="hero-kicker">Patient Registration</div>
         <h1 class="page-title">Create Patient Profile</h1>
+        <div class="page-subtitle">Register patient identity, contact, emergency and demographic details.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="ghost-btn" type="button" (click)="cancel()">Back To Patients</button>
       </div>
     </div>
   </section>
@@ -27,8 +31,9 @@
           <div class="lookup-title">Mobile Lookup</div>
           <div class="lookup-controls">
             <input type="text" formControlName="phone" placeholder="Enter mobile number" />
-            <button class="secondary-btn" type="button" (click)="searchMobile()">Search</button>
-            <button class="ghost-btn" type="button" [disabled]="!mobileSearchResults.length" (click)="openLookupModal()">View Matches</button>
+            @if (mobileSearchResults.length) {
+              <button class="ghost-btn" type="button" (click)="openLookupModal()">View Matches</button>
+            }
           </div>
           @if (mobileLookupMessage) {
             <div class="lookup-feedback">{{ mobileLookupMessage }}</div>
@@ -143,7 +148,8 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="form-actions sticky-actions">
+          <span class="form-helper">{{ form.dirty ? 'Unsaved patient draft' : 'No unsaved changes' }}</span>
           <button class="ghost-btn" type="button" (click)="cancel()">Cancel</button>
           <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Patient' }}</button>
         </div>

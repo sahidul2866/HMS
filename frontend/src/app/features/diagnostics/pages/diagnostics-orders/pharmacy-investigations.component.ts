@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormArray, FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { Patient } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
@@ -21,6 +22,7 @@ export class PharmacyInvestigationsComponent {
   private readonly pharmacyService = inject(PharmacyService);
   private readonly patientService = inject(PatientService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -289,7 +291,7 @@ export class PharmacyInvestigationsComponent {
       ? this.pharmacyService.updateInvestigation(this.selectedInvestigation.id, payload)
       : this.pharmacyService.createInvestigation(payload);
     request.subscribe((item) => {
-      this.notificationService.success(`Investigation ${this.selectedInvestigation ? 'updated' : 'created'} successfully.`);
+      this.notificationService.success(`Investigation ${this.selectedInvestigation ? 'updated' : 'created'}. Worklist and billing context are refreshed.`);
       this.selectedInvestigation = item;
       this.selectInvestigation(item);
       this.draftMessage = '';
@@ -300,11 +302,11 @@ export class PharmacyInvestigationsComponent {
   }
 
   remove(item: PharmacyInvestigation): void {
-    if (!window.confirm(`Delete ${item.investigation_number}?`)) {
+    if (!this.confirmationService.confirmDestructive(item.investigation_number)) {
       return;
     }
     this.pharmacyService.deleteInvestigation(item.id).subscribe(() => {
-      this.notificationService.success('Investigation deleted successfully.');
+      this.notificationService.success(`Investigation ${item.investigation_number} deleted.`);
       this.selectedInvestigation = this.selectedInvestigation?.id === item.id ? null : this.selectedInvestigation;
       this.loadPage();
     });

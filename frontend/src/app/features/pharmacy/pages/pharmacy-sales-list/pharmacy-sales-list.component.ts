@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { PharmacyCustomer, PharmacyReturn, PharmacySale } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -20,6 +21,7 @@ export class PharmacySalesListComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   sales: PharmacySale[] = [];
   customers: PharmacyCustomer[] = [];
@@ -99,6 +101,10 @@ export class PharmacySalesListComponent {
     this.sortDirection = field === 'sale_date' ? 'desc' : 'asc';
   }
 
+  sortClass(field: PharmacySalesListComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
+  }
+
   get displayedSales(): PharmacySale[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
     return [...this.sales].sort((a, b) => {
@@ -120,6 +126,26 @@ export class PharmacySalesListComponent {
     });
   }
 
+  exportCsv(): void {
+    const header = ['Sale No', 'Customer', 'Status', 'Subtotal', 'Net Payable', 'Date'];
+    const rows = this.displayedSales.map((sale) => [
+      sale.sale_number,
+      sale.customer_name || '',
+      sale.status,
+      sale.subtotal,
+      sale.net_payable,
+      sale.sale_date || '',
+    ]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'medicine-sales.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   openSale(sale: PharmacySale): void {
     this.selectedSale = sale;
     this.returnForm.patchValue({ sale_item_id: sale.items[0]?.id || '', quantity: 1 });
@@ -130,11 +156,11 @@ export class PharmacySalesListComponent {
   }
 
   deleteSale(sale: PharmacySale): void {
-    if (!window.confirm(`Delete sale ${sale.sale_number}?`)) {
+    if (!this.confirmationService.confirmDestructive(sale.sale_number, 'delete sale')) {
       return;
     }
     this.pharmacyService.deleteSale(sale.id).subscribe(() => {
-      this.notificationService.success('Sale deleted successfully.');
+      this.notificationService.success(`Sale ${sale.sale_number} deleted.`);
       this.selectedSale = this.selectedSale?.id === sale.id ? null : this.selectedSale;
       this.loadPage();
     });
@@ -147,7 +173,7 @@ export class PharmacySalesListComponent {
     }
     const payload = { ...this.returnForm.getRawValue(), sale_id: this.selectedSale.id };
     this.pharmacyService.createReturn(payload as never).subscribe((returnRecord: PharmacyReturn) => {
-      this.notificationService.success(`Return ${returnRecord.return_number} created successfully.`);
+      this.notificationService.success(`Return ${returnRecord.return_number} created. Sale balance and return history are refreshed.`);
       this.pharmacyService.getSale(this.selectedSale!.id).subscribe((sale) => (this.selectedSale = sale));
       this.loadPage();
     });

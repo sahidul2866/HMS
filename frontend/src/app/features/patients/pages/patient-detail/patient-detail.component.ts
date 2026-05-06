@@ -5,13 +5,14 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { PERMISSIONS } from '../../../../core/constants/permissions';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { PatientClinicalHistory, PatientHistoryOPDVisit } from '../../models/patient.models';
 import { PatientService } from '../../services/patient.service';
 
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, PatientContextPanelComponent],
   templateUrl: './patient-detail.component.html',
   styleUrls: ['./patient-detail.component.scss'],
 })

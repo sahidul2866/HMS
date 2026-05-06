@@ -35,6 +35,7 @@ export class DashboardComponent {
     payment_status: '',
     module_type: '',
   };
+  private filterChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.loadAnalytics();
@@ -52,6 +53,70 @@ export class DashboardComponent {
 
   openDemoStep(route: string): void {
     void this.router.navigateByUrl(route);
+  }
+
+  get priorityKpis(): DashboardKpi[] {
+    const preferred = [
+      'Today\'s Appointments',
+      "Today's Revenue",
+      'Pending Bills',
+      'Emergency Cases',
+      'Admitted Patients',
+      'Lab Tests Today',
+      'Low Stock Items',
+      'Staff Present',
+    ];
+    const rows = this.analytics?.kpis || [];
+    const picked = preferred
+      .map((title) => rows.find((kpi) => kpi.title.trim().toLowerCase() === title.toLowerCase()))
+      .filter((kpi): kpi is DashboardKpi => !!kpi);
+    const fallback = rows.filter((kpi) => !picked.includes(kpi)).slice(0, Math.max(8 - picked.length, 0));
+    return [...picked, ...fallback].slice(0, 8);
+  }
+
+  get pendingTaskItems(): Array<{ label: string; detail: string; value: string; route: string; tone: string }> {
+    if (!this.analytics) return [];
+    const stockLow = this.analytics.pharmacy_inventory_analytics.low_stock_medicines + this.analytics.pharmacy_inventory_analytics.low_stock_items;
+    return [
+      {
+        label: 'Due Collection',
+        detail: 'Outstanding billing amount',
+        value: this.formatMoney(this.analytics.revenue_analytics.outstanding_due),
+        route: '/billing/due-payments',
+        tone: 'warning',
+      },
+      {
+        label: 'Diagnostics Queue',
+        detail: 'Lab + radiology today',
+        value: String(this.analytics.lab_radiology_analytics.lab_today + this.analytics.lab_radiology_analytics.radiology_today),
+        route: '/laboratory',
+        tone: 'info',
+      },
+      {
+        label: 'Low Stock',
+        detail: 'Medicines and inventory items',
+        value: String(stockLow),
+        route: '/inventory',
+        tone: stockLow ? 'warning' : 'good',
+      },
+      {
+        label: 'Pending Leave',
+        detail: 'HR approval queue',
+        value: String(this.analytics.hr_analytics.pending_leave),
+        route: '/hr/leave',
+        tone: this.analytics.hr_analytics.pending_leave ? 'warning' : 'good',
+      },
+    ];
+  }
+
+  get dashboardQuickLinks(): Array<{ label: string; detail: string; route: string }> {
+    return [
+      { label: 'Register OPD', detail: 'New visit and token', route: '/opd/register' },
+      { label: 'Create Invoice', detail: 'Billing counter', route: '/billing/create' },
+      { label: 'Admit Patient', detail: 'IPD bed workflow', route: '/ipd/admit' },
+      { label: 'Dispense Queue', detail: 'Pending prescriptions', route: '/pharmacy/dispense' },
+      { label: 'Reports', detail: 'Management summary', route: '/reporting' },
+    ];
   }
 
   financeSeries(kind: 'revenue' | 'cost', which: 'current' | 'goal'): number[] {
@@ -153,6 +218,32 @@ export class DashboardComponent {
         this.loading = false;
       },
     });
+  }
+
+  onFilterChanged(debounce = false): void {
+    if (this.filterChangeTimer) {
+      clearTimeout(this.filterChangeTimer);
+    }
+
+    if (!this.hasValidDateRange()) {
+      return;
+    }
+
+    if (debounce) {
+      this.filterChangeTimer = setTimeout(() => this.loadAnalytics(), 350);
+      return;
+    }
+
+    this.loadAnalytics();
+  }
+
+  private hasValidDateRange(): boolean {
+    const from = this.filters.date_from;
+    const to = this.filters.date_to;
+    if (!from || !to) {
+      return true;
+    }
+    return from <= to;
   }
 
   formatKpi(kpi: DashboardKpi): string {

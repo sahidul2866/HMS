@@ -57,10 +57,14 @@
       </div>
 
       <div class="toolbar-row toolbar-row--search">
-        <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" [placeholder]="config.searchPlaceholder" />
-        <button class="secondary-btn" type="button" (click)="searchNow()">Search</button>
+        <input [(ngModel)]="search" (ngModelChange)="onSearchChanged()" [ngModelOptions]="{ standalone: true }" [placeholder]="config.searchPlaceholder" />
+        <span class="table-meta"><strong>{{ total }}</strong> records</span>
+        @if (search) {
+          <button class="secondary-btn" type="button" (click)="clearSearch()">Clear</button>
+        }
       </div>
 
+      @if (rows.length) {
       <table class="table">
         <thead>
           <tr>
@@ -77,13 +81,21 @@
                 <td>{{ displayCell(row, column.key) }}</td>
               }
               <td class="action-cell">
-                <button class="secondary-btn" type="button" (click)="startEdit(row)">Edit</button>
-                <button class="danger-btn" type="button" (click)="deleteRow(row)">Delete</button>
+                <details class="row-action-menu">
+                  <summary>Actions</summary>
+                  <div class="row-action-menu__panel">
+                    <button type="button" (click)="startEdit(row)">Edit</button>
+                    <button class="danger-action" type="button" (click)="deleteRow(row)">Delete</button>
+                  </div>
+                </details>
               </td>
             </tr>
           }
         </tbody>
       </table>
+      } @else {
+        <div class="table-empty">No records match the current search.</div>
+      }
 
       <div class="pager-row">
         <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>

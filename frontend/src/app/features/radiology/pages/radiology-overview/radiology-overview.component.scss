@@ -32,7 +32,7 @@
 .radiology-grid {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .soft-panel {
@@ -138,6 +138,18 @@
   gap: 0.5rem;
 }
 
+.pill--pacs {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #065f46;
+}
+
+.pill--muted {
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #475569;
+}
+
 .work-copy,
 .detail-copy {
   color: #475569;
@@ -160,6 +172,46 @@
   border-radius: 1rem;
   background: rgba(237, 233, 254, 0.5);
   color: #475569;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 200;
+}
+
+.modal-card {
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+.modal-card--viewer {
+  width: min(1280px, 98vw);
+}
+
+.viewer-frame {
+  width: 100%;
+  height: min(80vh, 860px);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 0.75rem;
+  background: #0f172a;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field span {
+  font-size: 0.82rem;
+  color: #475569;
+  font-weight: 700;
 }
 
 @media (max-width: 1120px) {

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 
 import { Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
@@ -21,23 +21,8 @@ export class OTManagementComponent {
   private readonly otService = inject(OTService);
   private readonly patientService = inject(PatientService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
 
   tab = signal<OTTab>('dashboard');
-  tabs: { key: OTTab; label: string; route: string }[] = [
-    { key: 'dashboard', label: 'Dashboard', route: '/ot' },
-    { key: 'bookings', label: 'Bookings', route: '/ot/bookings' },
-    { key: 'calendar', label: 'Calendar', route: '/ot/calendar' },
-    { key: 'rooms', label: 'Rooms', route: '/ot/rooms' },
-    { key: 'checklist', label: 'Pre-Op', route: '/ot/checklist' },
-    { key: 'anesthesia', label: 'Anesthesia', route: '/ot/anesthesia' },
-    { key: 'notes', label: 'Case Sheet', route: '/ot/case-sheet' },
-    { key: 'recovery', label: 'Recovery', route: '/ot/recovery' },
-    { key: 'consumables', label: 'Consumables', route: '/ot/consumables' },
-    { key: 'billing', label: 'Billing', route: '/ot/billing' },
-    { key: 'documents', label: 'Documents', route: '/ot/documents' },
-    { key: 'reports', label: 'Reports', route: '/ot/reports' },
-  ];
 
   loading = false;
   saving = false;
@@ -99,10 +84,6 @@ export class OTManagementComponent {
   selectSchedule(schedule: OTSchedule): void {
     this.selectedSchedule = schedule;
     this.otService.getCaseSheet(schedule.id).subscribe({ next: (sheet) => (this.caseSheet = sheet), error: () => (this.caseSheet = null) });
-  }
-
-  openTab(route: string): void {
-    void this.router.navigate([route]);
   }
 
   patientSearchChanged(value: string): void {

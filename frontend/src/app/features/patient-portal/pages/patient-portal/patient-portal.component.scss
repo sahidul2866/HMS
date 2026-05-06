@@ -1,7 +1,7 @@
 .patient-app-shell {
   display: grid;
   gap: 0.75rem;
-  color: #172033;
+  color: var(--text);
 }
 
 .patient-home-card,
@@ -77,7 +77,7 @@
   justify-content: flex-end;
 }
 
-button {
+button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button) {
   min-height: 34px;
   border: 0;
   border-radius: 12px;
@@ -92,7 +92,7 @@ button {
     background 140ms ease;
 }
 
-button:hover {
+button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button):hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
 }
@@ -176,41 +176,13 @@ button:hover {
 }
 
 .portal-tabs {
-  display: flex;
-  gap: 0.35rem;
-  overflow-x: auto;
-  padding: 0.2rem;
-  border-radius: 16px;
-  background: #eef2f7;
+  margin-top: -0.25rem;
 }
 
 .portal-tab-groups {
-  display: flex;
-  gap: 0.45rem;
-  overflow-x: auto;
-  padding: 0.2rem;
+  margin-top: 0.25rem;
 }
 
-.portal-tab-groups button {
-  min-height: 34px;
-  padding: 0.45rem 0.8rem;
-  background: #e2e8f0;
-  font-size: 0.82rem;
-}
-
-.portal-tab-groups button.active {
-  background: #0f766e;
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
-}
-
-.portal-tabs button {
-  white-space: nowrap;
-  background: transparent;
-  box-shadow: none;
-}
-
-.portal-tabs button.active,
 .segmented-control button.active {
   background: #fff;
   color: #0f766e;

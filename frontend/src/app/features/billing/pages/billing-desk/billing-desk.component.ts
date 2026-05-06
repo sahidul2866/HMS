@@ -5,6 +5,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { debounceTime } from 'rxjs';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
@@ -35,6 +36,7 @@ export class BillingDeskComponent {
   private readonly router = inject(Router);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
   private readonly uiStateService = inject(UiStateService);
   readonly sessionService = inject(SessionService);
 
@@ -137,6 +139,10 @@ export class BillingDeskComponent {
     }
     this.sortField = field;
     this.sortDirection = field === 'created_at' ? 'desc' : 'asc';
+  }
+
+  sortClass(field: BillingDeskComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
   }
 
   navigateToNewPatient(): void {
@@ -464,7 +470,7 @@ export class BillingDeskComponent {
           this.syncPaymentForm(invoice);
           this.syncRefundForm(invoice);
           this.loadInvoices();
-          this.notificationService.success(`Payment collected for ${invoice.invoice_number}.`);
+          this.notificationService.success(`Payment collected for ${invoice.invoice_number}. You can print the invoice or continue the due queue.`);
         },
         error: () => {
           this.collectingPayment = false;
@@ -477,11 +483,49 @@ export class BillingDeskComponent {
     this.loadInvoices();
   }
 
+  clearInvoiceFilters(): void {
+    this.invoiceFilterForm.reset({
+      q: '',
+      internal_referral_user_id: '',
+      status: '',
+      payment_status: '',
+      source_module: '',
+      date_from: '',
+      date_to: '',
+    });
+  }
+
+  exportInvoicesCsv(): void {
+    const header = ['Invoice No', 'Patient', 'Status', 'Payment', 'Doctor', 'Total', 'Refunded', 'Due', 'Date'];
+    const rows = this.displayedInvoices.map((invoice) => [
+      invoice.invoice_number,
+      `${invoice.patient.first_name} ${invoice.patient.last_name}`.trim(),
+      invoice.status,
+      invoice.payment_status,
+      invoice.referred_doctor_name || '',
+      invoice.total_amount,
+      invoice.refunded_amount,
+      invoice.due_amount,
+      invoice.created_at,
+    ]);
+    const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = this.isDueMode ? 'due-payments.csv' : 'billing-list.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   voidLatestInvoice(): void {
     if (!this.latestInvoice || this.latestInvoice.status === 'void') {
       return;
     }
 
+    if (!this.confirmationService.confirmImportant(`Void invoice ${this.latestInvoice.invoice_number}?\n\nUse this only for incorrect or cancelled invoices.`)) {
+      return;
+    }
     const reason = window.prompt('Enter void reason');
     if (!reason?.trim()) {
       return;
@@ -491,7 +535,7 @@ export class BillingDeskComponent {
       this.latestInvoice = invoice;
       this.loadInvoices();
       this.persistState();
-      this.notificationService.warning(`Invoice ${invoice.invoice_number} voided.`);
+      this.notificationService.warning(`Invoice ${invoice.invoice_number} voided. It remains visible for audit with the void reason.`);
     });
   }
 
@@ -515,7 +559,7 @@ export class BillingDeskComponent {
           this.syncPaymentForm(invoice);
           this.syncRefundForm(invoice);
           this.loadInvoices();
-          this.notificationService.warning(`Refund posted for ${invoice.invoice_number}.`);
+          this.notificationService.warning(`Refund posted for ${invoice.invoice_number}. Receipt history has been updated.`);
         },
         error: () => {
           this.refunding = false;

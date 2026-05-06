@@ -32,7 +32,7 @@ from app.schemas.billing import (
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
 
-@router.get("/settings", response_model=BillingSettingsRead, dependencies=[Depends(require_permissions("billing.invoice.create"))])
+@router.get("/settings", response_model=BillingSettingsRead, dependencies=[Depends(require_permissions("billing.view"))])
 def get_billing_settings(user=Depends(get_current_user), db: Session = Depends(get_db)) -> BillingSettingsRead:
     return BillingServiceManager(db).get_settings(user)
 
@@ -122,7 +122,7 @@ def get_billing_invoice_stickers(invoice_id: UUID, user=Depends(get_current_user
     return BillingServiceManager(db).get_invoice_stickers(invoice_id, user)
 
 
-@router.get("/reports/summary", response_model=BillingSummaryRead, dependencies=[Depends(require_permissions("reporting.view"))])
+@router.get("/reports/summary", response_model=BillingSummaryRead, dependencies=[Depends(require_permissions("reporting.financial.view"))])
 def get_billing_summary(
     internal_referral_user_id: UUID | None = None,
     date_from: date | None = None,
@@ -134,7 +134,7 @@ def get_billing_summary(
     return BillingServiceManager(db).get_summary(user, filters)
 
 
-@router.get("/reports/referrals", response_model=list[BillingReferralSummaryRead], dependencies=[Depends(require_permissions("reporting.view"))])
+@router.get("/reports/referrals", response_model=list[BillingReferralSummaryRead], dependencies=[Depends(require_permissions("reporting.financial.view"))])
 def get_billing_referral_summary(
     date_from: date | None = None,
     date_to: date | None = None,

@@ -2,16 +2,16 @@
   <section class="page-card module-hero config-hero">
     <div class="hero-row">
       <div>
-        <div class="hero-kicker">Configuration Center</div>
-        <h1 class="page-title">Hospital Setup Builders</h1>
-        <div class="page-subtitle">Configure OPD fee sharing, doctor prescription suggestions, prescription print layouts, and invoice templates without code changes.</div>
+        <div class="hero-kicker">{{ heroKicker }}</div>
+        <h1 class="page-title">{{ heroTitle }}</h1>
+        <div class="page-subtitle">{{ heroSubtitle }}</div>
       </div>
       <div class="hero-actions">
         <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
       </div>
     </div>
     <div class="config-kpis">
-      @for (type of profileTypes; track type.key) {
+      @for (type of visibleProfileTypes; track type.key) {
         <button type="button" [class.active]="activeType === type.key" (click)="openType(type.key)">
           <span>{{ type.label }}</span>
           <strong>{{ getTypeCount(type.key) }}</strong>

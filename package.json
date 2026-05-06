@@ -2,9 +2,20 @@
   "name": "hms-workspace",
   "private": true,
   "scripts": {
-    "dev": "npx concurrently -k -n backend,frontend -c blue,green \"cd backend && PYTHONPATH=. ./.venv/bin/python -m uvicorn app.main:app --reload\" \"cd frontend && npm start\"",
-    "dev:backend": "cd backend && PYTHONPATH=. ./.venv/bin/python -m uvicorn app.main:app --reload",
-    "dev:frontend": "cd frontend && npm start"
+    "dev": "npm run kill:ports && (npm run dev:pacs || echo '⚠️ PACS docker start skipped; continuing HMS dev server') && sleep 2 && npx concurrently -k -n viewer,backend,frontend -c magenta,blue,green \"python3 infra/pacs/viewer_server.py --port 8080 --orthanc http://localhost:8042\" \"cd backend && PYTHONPATH=. ./.venv/bin/python -m uvicorn app.main:app --reload\" \"cd frontend && npm start\"",
+    "dev:full": "bash infra/pacs/start_hms_dev.sh",
+    "dev:backend": "npm run kill:ports && cd backend && PYTHONPATH=. ./.venv/bin/python -m uvicorn app.main:app --reload",
+    "dev:frontend": "npm run kill:ports && cd frontend && npm start",
+    "dev:pacs": "echo '🏥 Starting PACS server...' && docker compose -f docker-compose.pacs.yml down --remove-orphans 2>/dev/null || true && docker compose -f docker-compose.pacs.yml up -d && sleep 5 && echo '✓ PACS services started (Orthanc: http://localhost:8042)'",
+    "dev:pacs:logs": "docker compose -f docker-compose.pacs.yml logs -f",
+    "dev:pacs:down": "docker compose -f docker-compose.pacs.yml down",
+    "dev:only": "npm run kill:ports && npx concurrently -k -n backend,frontend -c blue,green \"cd backend && PYTHONPATH=. ./.venv/bin/python -m uvicorn app.main:app --reload\" \"cd frontend && npm start\"",
+    "dev:viewer": "python3 infra/pacs/viewer_server.py --port 8080 --orthanc http://localhost:8042",
+    "dev:viewer:bg": "nohup python3 infra/pacs/viewer_server.py --port 8080 --orthanc http://localhost:8042 >/tmp/hms_viewer.log 2>&1 & sleep 1 && curl -fsS http://localhost:8080/ >/dev/null && echo '✓ Viewer started on http://localhost:8080'",
+    "dev:pacs:check": "curl -fsS http://localhost:8042/studies >/dev/null && curl -fsS http://localhost:8080/orthanc/studies >/dev/null && curl -fsS http://localhost:8080/ >/dev/null && echo '✓ PACS check passed (Orthanc + Viewer + Proxy)'",
+    "test:viewer": "bash infra/pacs/test_viewer.sh",
+    "deploy:backend:render": "test -n \"$RENDER_DEPLOY_HOOK_URL\" || (echo \"Set RENDER_DEPLOY_HOOK_URL to your Render deploy hook URL\" && exit 1); curl -fsS -X POST \"$RENDER_DEPLOY_HOOK_URL\" && echo \"Render backend deploy triggered\"",
+    "kill:ports": "echo '🔌 Cleaning up ports 4200, 8000 and 8080...' && lsof -ti:4200,8000,8080 | xargs kill -9 2>/dev/null || true"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

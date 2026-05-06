@@ -1,0 +1,48 @@
+{
+  "Name": "HMS Orthanc - PACS Server",
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "AuthenticationEnabled": false,
+  "RegisteredUsers": {
+    "orthanc": "orthanc"
+  },
+  "RemoteAccessAllowed": true,
+  "HttpDescribeErrors": true,
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin",
+    "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+  },
+  "DicomAet": "HMSORTHANC",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  "OrthancExplorer2": {
+    "Enable": true,
+    "PluginEnabled": true
+  },
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "EnableQidoRs": true,
+    "EnableWadoRs": true,
+    "Ssl": false
+  },
+  "HtmlPath": "/",
+  "Plugins": [],
+  "Cors": {
+    "Enabled": true,
+    "AllowedHosts": ["*"],
+    "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "AllowedHeaders": ["*"],
+    "ExposedHeaders": ["*"],
+    "Credentials": true,
+    "MaxAge": 86400
+  },
+  "ExternalApplications": {
+    "viewer": {
+      "ExecutablePath": "viewer",
+      "Arguments": []
+    }
+  }
+}

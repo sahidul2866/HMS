@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -22,6 +23,7 @@ export class AppointmentsOverviewComponent {
   private readonly appointmentsService = inject(AppointmentsService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   readonly sessionService = inject(SessionService);
@@ -33,6 +35,8 @@ export class AppointmentsOverviewComponent {
   selectedDate = '';
   searchText = '';
   selectedAppointment: Appointment | null = null;
+  page = 1;
+  pageSize = 12;
   sortField: 'number' | 'patient' | 'doctor' | 'time' | 'status' | 'reason' = 'time';
   sortDirection: 'asc' | 'desc' = 'desc';
 
@@ -68,8 +72,11 @@ export class AppointmentsOverviewComponent {
   }
 
   updateStatus(appointment: Appointment, status: string): void {
+    if (status === 'cancelled' && !this.confirmationService.confirmImportant(`Cancel appointment ${appointment.appointment_number}?\n\nThis will remove it from the active appointment queue.`)) {
+      return;
+    }
     this.appointmentsService.updateStatus(appointment.id, { status }).subscribe((updated) => {
-      this.notificationService.success(`Appointment ${updated.appointment_number} moved to ${status}.`);
+      this.notificationService.success(`Appointment ${updated.appointment_number} moved to ${status.replace('_', ' ')}.`);
       this.loadAppointments();
     });
   }
@@ -107,7 +114,7 @@ export class AppointmentsOverviewComponent {
 
   get filteredAppointments(): Appointment[] {
     const search = this.searchText.trim().toLowerCase();
-    const filtered = this.appointments.filter((appointment) => {
+    return this.appointments.filter((appointment) => {
       const doctorMatch = !this.selectedDoctorUserId || appointment.doctor_user_id === this.selectedDoctorUserId;
       const statusMatch = !this.selectedStatus || appointment.status === this.selectedStatus;
       const dateMatch = !this.selectedDate || appointment.appointment_at.slice(0, 10) === this.selectedDate;
@@ -119,8 +126,11 @@ export class AppointmentsOverviewComponent {
         (appointment.reason || '').toLowerCase().includes(search);
       return doctorMatch && statusMatch && dateMatch && searchMatch;
     });
+  }
+
+  get sortedAppointments(): Appointment[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
-    return [...filtered].sort((a, b) => {
+    return [...this.filteredAppointments].sort((a, b) => {
       switch (this.sortField) {
         case 'number':
           return dir * a.appointment_number.localeCompare(b.appointment_number);
@@ -139,12 +149,47 @@ export class AppointmentsOverviewComponent {
     });
   }
 
+  get displayedAppointments(): Appointment[] {
+    const start = (this.page - 1) * this.pageSize;
+    return this.sortedAppointments.slice(start, start + this.pageSize);
+  }
+
+  get totalPages(): number {
+    return Math.max(Math.ceil(this.filteredAppointments.length / this.pageSize), 1);
+  }
+
+  get rangeStart(): number {
+    return this.filteredAppointments.length ? (this.page - 1) * this.pageSize + 1 : 0;
+  }
+
+  get rangeEnd(): number {
+    return Math.min(this.page * this.pageSize, this.filteredAppointments.length);
+  }
+
+  onFiltersChanged(): void {
+    this.page = 1;
+  }
+
   toggleSort(field: AppointmentsOverviewComponent['sortField']): void {
     if (this.sortField === field) {
       this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.page = 1;
       return;
     }
     this.sortField = field;
     this.sortDirection = field === 'time' ? 'desc' : 'asc';
+    this.page = 1;
+  }
+
+  sortClass(field: AppointmentsOverviewComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
+  }
+
+  previousPage(): void {
+    this.page = Math.max(this.page - 1, 1);
+  }
+
+  nextPage(): void {
+    this.page = Math.min(this.page + 1, this.totalPages);
   }
 }

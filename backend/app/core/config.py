@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
     patient_bot_max_gemini_calls_per_day: int = Field(default=5, alias="PATIENT_BOT_MAX_GEMINI_CALLS_PER_DAY")
+    orthanc_base_url: str = Field(default="http://localhost:8042", alias="ORTHANC_BASE_URL")
+    orthanc_username: str = Field(default="orthanc", alias="ORTHANC_USERNAME")
+    orthanc_password: str = Field(default="orthanc", alias="ORTHANC_PASSWORD")
+    orthanc_dicomweb_root: str = Field(default="/dicom-web", alias="ORTHANC_DICOMWEB_ROOT")
+    dicom_viewer_base_url: str = Field(default="http://localhost:8080", alias="DICOM_VIEWER_BASE_URL")
+    dicom_viewer_url_template: str | None = Field(default=None, alias="DICOM_VIEWER_URL_TEMPLATE")
+    machine_integration_key: str = Field(default="hms-machine-key", alias="MACHINE_INTEGRATION_KEY")
 
     def model_post_init(self, __context: object) -> None:
         self.debug = self._normalize_bool(self.debug, default=False)
@@ -45,6 +52,14 @@ class Settings(BaseSettings):
         self.gemini_model = self.gemini_model.strip().strip("\"'")
         if self.gemini_api_key:
             self.gemini_api_key = self.gemini_api_key.strip().strip("\"'")
+        self.orthanc_base_url = self.orthanc_base_url.strip().strip("\"'").rstrip("/")
+        self.orthanc_username = self.orthanc_username.strip().strip("\"'")
+        self.orthanc_password = self.orthanc_password.strip().strip("\"'")
+        self.orthanc_dicomweb_root = "/" + self.orthanc_dicomweb_root.strip().strip("\"'").strip("/")
+        self.dicom_viewer_base_url = self.dicom_viewer_base_url.strip().strip("\"'").rstrip("/")
+        if self.dicom_viewer_url_template:
+            self.dicom_viewer_url_template = self.dicom_viewer_url_template.strip().strip("\"'")
+        self.machine_integration_key = self.machine_integration_key.strip().strip("\"'")
         if isinstance(self.frontend_origins, str):
             normalized = self.frontend_origins.strip().strip("\"'")
             self.frontend_origins = [item.strip().strip("\"'") for item in normalized.split(",") if item.strip()]

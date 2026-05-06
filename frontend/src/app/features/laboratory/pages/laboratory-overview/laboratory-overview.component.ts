@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { SessionService } from '../../../../core/services/session.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import { InvestigationWorkItem, LaboratorySummary } from '../../models/laboratory.models';
 import { LaboratoryServiceApi } from '../../services/laboratory.service';
@@ -13,13 +14,14 @@ type WorklistSortField = 'visit_date' | 'patient_name' | 'item_name' | 'status' 
 @Component({
   selector: 'app-laboratory-overview',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PatientContextPanelComponent],
   templateUrl: './laboratory-overview.component.html',
   styleUrls: ['./laboratory-overview.component.scss'],
 })
 export class LaboratoryOverviewComponent {
   private readonly laboratoryService = inject(LaboratoryServiceApi);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   readonly sessionService = inject(SessionService);
 
   summary: LaboratorySummary | null = null;
@@ -27,8 +29,12 @@ export class LaboratoryOverviewComponent {
   queueSearch = '';
   sortField: WorklistSortField = 'visit_date';
   sortDirection: 'asc' | 'desc' = 'desc';
+  contextPatientId = '';
 
   constructor() {
+    this.route.queryParamMap.subscribe((params) => {
+      this.contextPatientId = params.get('patientId') || '';
+    });
     this.loadAll();
   }
 
@@ -69,10 +75,9 @@ export class LaboratoryOverviewComponent {
 
   get filteredWorklist(): InvestigationWorkItem[] {
     const query = this.queueSearch.trim().toLowerCase();
-    if (!query) {
-      return this.worklist;
-    }
     return this.worklist.filter((item) =>
+      (!this.contextPatientId || item.patient_id === this.contextPatientId) &&
+      (!query ||
       [
         item.visit_number,
         item.patient_number,
@@ -84,7 +89,7 @@ export class LaboratoryOverviewComponent {
         item.diagnosis,
       ]
         .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(query))
+        .some((value) => value!.toLowerCase().includes(query)))
     );
   }
 
@@ -116,6 +121,16 @@ export class LaboratoryOverviewComponent {
       { label: 'Completed', value: this.summary.completed_orders },
       { label: 'Verified', value: this.summary.verified_orders },
     ];
+  }
+
+  get queueHealthItems(): Array<{ label: string; value: number; width: string; tone: string }> {
+    const cards = this.summaryCards;
+    const max = Math.max(...cards.map((item) => item.value), 1);
+    return cards.map((item) => ({
+      ...item,
+      width: `${Math.max((item.value / max) * 100, item.value ? 10 : 0)}%`,
+      tone: item.label === 'Pending' ? 'var(--accent)' : item.label === 'Verified' ? 'var(--success)' : 'var(--primary)',
+    }));
   }
 
   private extractInvoiceNumber(instructions?: string | null): string | null {

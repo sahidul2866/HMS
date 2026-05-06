@@ -13,6 +13,7 @@ from app.modules.diagnostics.router import router as diagnostics_router
 from app.modules.hr.router import router as hr_router
 from app.modules.ipd.router import router as ipd_router
 from app.modules.laboratory.router import router as laboratory_router
+from app.modules.lis.router import router as lis_router
 from app.modules.opd.router import router as opd_router
 from app.modules.ot.router import router as ot_router
 from app.modules.er.router import router as er_router
@@ -51,6 +52,7 @@ api_router.include_router(hr_router)
 api_router.include_router(ipd_router)
 api_router.include_router(diagnostics_router)
 api_router.include_router(laboratory_router)
+api_router.include_router(lis_router)
 api_router.include_router(radiology_router)
 api_router.include_router(reporting_router)
 api_router.include_router(patients_router)

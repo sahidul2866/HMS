@@ -1,59 +1,81 @@
-<section class="page-card module-hero">
-  <div class="hero-row">
-    <div>
-      <div class="hero-kicker">Patient Registry</div>
-      <h1 class="page-title">Patients</h1>
-      <div class="page-subtitle">Keep the registry view clean here, then open a dedicated EMR screen for the full patient timeline.</div>
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Patient Registry</div>
+        <h1 class="page-title">Patients</h1>
+        <div class="page-subtitle">Keep the registry view clean here, then open a dedicated EMR screen for the full patient timeline.</div>
+      </div>
+      <a *appHasPermission="'patient.create'" class="primary-btn" routerLink="/patients/new">Create Patient</a>
     </div>
-    <a *appHasPermission="'patient.create'" class="primary-btn" routerLink="/patients/new">Create Patient</a>
-  </div>
 
-  <div class="hero-summary">
-    <div class="hero-stat">
-      <div class="label">Registered Patients</div>
-      <div class="value">{{ patients.length }}</div>
+    <div class="hero-summary">
+      <div class="hero-stat">
+        <div class="label">Registered Patients</div>
+        <div class="value">{{ patients.length }}</div>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="page-card">
-  @if (loading) {
-    <div class="muted">Loading patients...</div>
-  } @else {
-    <div class="toolbar-row" style="margin-bottom:.75rem;">
-      <label class="field" style="min-width:260px;">
-        <span>Search</span>
-        <input type="text" [(ngModel)]="searchText" placeholder="Patient no, name, phone, email" />
-      </label>
-    </div>
-    <table class="table">
-      <thead>
-        <tr>
-          <th class="sortable-th" (click)="toggleSort('patient_number')">Patient No</th>
-          <th class="sortable-th" (click)="toggleSort('name')">Name</th>
-          <th class="sortable-th" (click)="toggleSort('phone')">Phone</th>
-          <th class="sortable-th" (click)="toggleSort('email')">Email</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (patient of displayedPatients; track patient.id) {
-          <tr>
-            <td>{{ patient.patient_number }}</td>
-            <td>{{ patient.first_name }} {{ patient.last_name }}</td>
-            <td>{{ patient.phone || '-' }}</td>
-            <td>{{ patient.email || '-' }}</td>
-            <td>
-              <div class="toolbar-row">
-                <button class="secondary-btn" type="button" (click)="openHistory(patient)">EMR</button>
-                <button *appHasPermission="'billing.invoice.create'" class="secondary-btn" type="button" (click)="openBilling(patient)">Bill</button>
-                <button *appHasPermission="'opd.view'" class="secondary-btn" type="button" (click)="openOpdRegistration(patient)">OPD</button>
-                <button *appHasPermission="'ipd.admission.manage'" class="secondary-btn" type="button" (click)="openIpdAdmission(patient)">IPD</button>
-              </div>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  }
+  <section class="page-card">
+    @if (loading) {
+      <div class="table-loading">Loading patients...</div>
+    } @else {
+      <div class="table-toolbar">
+        <div class="table-toolbar__main">
+          <div class="table-toolbar__filters">
+            <label class="field">
+              <span>Search</span>
+              <input type="search" [(ngModel)]="searchText" (ngModelChange)="onSearchChanged()" placeholder="Patient no, name, phone, email" />
+            </label>
+          </div>
+          <div class="toolbar-row">
+            <span class="table-meta"><strong>{{ filteredPatients.length }}</strong> records · {{ rangeStart }}-{{ rangeEnd }}</span>
+            <button class="secondary-btn" type="button" (click)="exportCsv()">Export CSV</button>
+          </div>
+        </div>
+      </div>
+      @if (displayedPatients.length) {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="sortable-th" [ngClass]="sortClass('patient_number')" (click)="toggleSort('patient_number')">Patient No</th>
+              <th class="sortable-th" [ngClass]="sortClass('name')" (click)="toggleSort('name')">Name</th>
+              <th class="sortable-th" [ngClass]="sortClass('phone')" (click)="toggleSort('phone')">Phone</th>
+              <th class="sortable-th" [ngClass]="sortClass('email')" (click)="toggleSort('email')">Email</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (patient of displayedPatients; track patient.id) {
+              <tr>
+                <td><strong>{{ patient.patient_number }}</strong></td>
+                <td>{{ patient.first_name }} {{ patient.last_name }}</td>
+                <td>{{ patient.phone || '-' }}</td>
+                <td>{{ patient.email || '-' }}</td>
+                <td class="action-cell">
+                  <details class="row-action-menu">
+                    <summary>Actions</summary>
+                    <div class="row-action-menu__panel">
+                      <button type="button" (click)="openHistory(patient)">Open EMR</button>
+                      <button *appHasPermission="'billing.invoice.create'" type="button" (click)="openBilling(patient)">Create Bill</button>
+                      <button *appHasPermission="'opd.visit.create'" type="button" (click)="openOpdRegistration(patient)">Register OPD</button>
+                      <button *appHasPermission="'ipd.admit'" type="button" (click)="openIpdAdmission(patient)">Admit IPD</button>
+                    </div>
+                  </details>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <div class="pager-row">
+          <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
+          <span>Page {{ page }} of {{ totalPages }}</span>
+          <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
+        </div>
+      } @else {
+        <div class="table-empty">No patients match the current search.</div>
+      }
+    }
+  </section>
 </section>

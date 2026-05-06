@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppException
 from app.models.configuration import ConfigurationProfile
 from app.models.user import User
+from app.modules.auth.service import AuthService
 from app.schemas.configuration import ConfigurationProfileCreate, ConfigurationProfileRead, ConfigurationProfileUpdate, ConfigurationWorkspaceRead
+
+OPD_PROFILE_TYPES = {"doctor_share", "prescription_suggestion", "prescription_layout"}
 
 
 class ConfigurationService:
@@ -22,18 +25,23 @@ class ConfigurationService:
             profiles=profiles,
             counts=dict(counts),
             demo_points=[
-                "OPD consultation share can be configured by doctor, department, visit type, corporate, and follow-up rules.",
+                "OPD consultation share can be configured from the OPD module by doctor, department, visit type, corporate, and follow-up rules.",
                 "Prescription templates help doctors add favorites, advice, investigations, dosage, and follow-up instructions faster.",
-                "Prescription and invoice builders keep print branding configurable without code changes.",
+                "Print builders keep prescription and invoice branding configurable without code changes.",
             ],
         )
 
     def list_profiles(self, actor: User, profile_type: str | None = None) -> list[ConfigurationProfileRead]:
+        allowed_types = self._allowed_profile_types(actor)
+        if profile_type and allowed_types is not None and profile_type not in allowed_types:
+            raise AppException(403, "forbidden", "This configuration area is not available for your role")
         stmt = select(ConfigurationProfile).where(ConfigurationProfile.is_active.is_(True)).order_by(
             ConfigurationProfile.profile_type.asc(),
             ConfigurationProfile.is_default.desc(),
             ConfigurationProfile.name.asc(),
         )
+        if allowed_types is not None:
+            stmt = stmt.where(ConfigurationProfile.profile_type.in_(allowed_types))
         if actor.branch_id:
             stmt = stmt.where((ConfigurationProfile.branch_id == actor.branch_id) | (ConfigurationProfile.branch_id.is_(None)))
         if profile_type:
@@ -41,6 +49,7 @@ class ConfigurationService:
         return [ConfigurationProfileRead.model_validate(item) for item in self.db.scalars(stmt)]
 
     def create_profile(self, payload: ConfigurationProfileCreate, actor: User) -> ConfigurationProfileRead:
+        self._assert_profile_type_allowed(actor, payload.profile_type)
         existing = self.db.scalar(
             select(ConfigurationProfile).where(
                 ConfigurationProfile.branch_id == actor.branch_id,
@@ -62,6 +71,7 @@ class ConfigurationService:
         item = self.db.get(ConfigurationProfile, profile_id)
         if not item or not item.is_active:
             raise AppException(404, "configuration_not_found", "Configuration profile not found")
+        self._assert_profile_type_allowed(actor, item.profile_type)
         if actor.branch_id and item.branch_id and actor.branch_id != item.branch_id:
             raise AppException(403, "forbidden", "Configuration profile belongs to a different branch")
         if payload.is_default:
@@ -77,6 +87,7 @@ class ConfigurationService:
         item = self.db.get(ConfigurationProfile, profile_id)
         if not item or not item.is_active:
             raise AppException(404, "configuration_not_found", "Configuration profile not found")
+        self._assert_profile_type_allowed(actor, item.profile_type)
         if actor.branch_id and item.branch_id and actor.branch_id != item.branch_id:
             raise AppException(403, "forbidden", "Configuration profile belongs to a different branch")
         item.is_active = False
@@ -92,3 +103,16 @@ class ConfigurationService:
                 continue
             item.is_default = False
             item.updated_by = actor.id
+
+    def _allowed_profile_types(self, actor: User) -> set[str] | None:
+        permissions = set(AuthService(self.db).get_effective_permissions(actor))
+        if "settings.configuration.manage" in permissions:
+            return None
+        if "opd.settings.manage" in permissions:
+            return OPD_PROFILE_TYPES
+        return set()
+
+    def _assert_profile_type_allowed(self, actor: User, profile_type: str) -> None:
+        allowed_types = self._allowed_profile_types(actor)
+        if allowed_types is not None and profile_type not in allowed_types:
+            raise AppException(403, "forbidden", "This configuration area is not available for your role")

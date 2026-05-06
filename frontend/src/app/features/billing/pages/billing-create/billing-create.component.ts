@@ -10,6 +10,7 @@ import { DoctorDirectoryService } from '../../../../core/services/doctor-directo
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { UiStateService } from '../../../../core/services/ui-state.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import { IPDAdmission } from '../../../ipd/models/ipd.models';
@@ -53,7 +54,7 @@ interface BillingCatalogOption {
 @Component({
   selector: 'app-billing-create',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './billing-create.component.html',
   styleUrls: ['./billing-create.component.scss'],
 })
@@ -91,6 +92,7 @@ export class BillingCreateComponent {
   activeItemSearchIndex: number | null = null;
   saving = false;
   submitted = false;
+  private completed = false;
 
   readonly patientLookupControl = this.fb.nonNullable.control('');
 
@@ -708,6 +710,10 @@ export class BillingCreateComponent {
     void this.router.navigate(['/billing/list']);
   }
 
+  hasUnsavedChanges(): boolean {
+    return !this.completed && !this.saving && (this.form.dirty || this.patientLookupControl.dirty || this.items.length > 1 || this.selectedItemCount > 0);
+  }
+
   resetInvoiceDraft(): void {
     this.sourceVisit = null;
     this.sourceAdmission = null;
@@ -786,6 +792,9 @@ export class BillingCreateComponent {
           const finalizeNavigation = (postedInvoice: BillingInvoice) => {
             this.saving = false;
             this.submitted = false;
+            this.completed = true;
+            this.form.markAsPristine();
+            this.patientLookupControl.markAsPristine();
             this.clearDraftKeepContext();
             this.printInvestigationStickers(postedInvoice);
             this.notificationService.success(`Invoice ${postedInvoice.invoice_number} created successfully.`);

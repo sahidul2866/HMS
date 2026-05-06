@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_permissions
+from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.admin.service import AdminService
 from app.schemas.role import RoleCreate, RoleRead, RoleUpdatePermissions
 from app.schemas.user import UserCreate, UserOPDSettingsUpdate, UserRead
@@ -29,7 +29,7 @@ def create_user(
     return UserRead.model_validate(created, from_attributes=True)
 
 
-@router.put("/users/{user_id}/opd-settings", response_model=UserRead, dependencies=[Depends(require_permissions("settings.user.manage"))])
+@router.put("/users/{user_id}/opd-settings", response_model=UserRead, dependencies=[Depends(require_any_permissions("settings.user.manage", "opd.settings.manage"))])
 def update_user_opd_settings(
     user_id: UUID,
     payload: UserOPDSettingsUpdate,
@@ -47,8 +47,13 @@ def list_roles(db: Session = Depends(get_db)) -> list[RoleRead]:
 
 
 @router.post("/roles", response_model=RoleRead, dependencies=[Depends(require_permissions("settings.role.manage"))])
-def create_role(payload: RoleCreate, db: Session = Depends(get_db)) -> RoleRead:
-    role = AdminService(db).create_role(payload)
+def create_role(
+    payload: RoleCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RoleRead:
+    role = AdminService(db).create_role(payload, user.id, context)
     return RoleRead.model_validate(role, from_attributes=True)
 
 

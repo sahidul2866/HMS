@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_any_permissions, require_permissions
+from app.dependencies.permissions import require_permissions
 from app.modules.opd.service import OPDService
 from app.schemas.encounter import (
     IPDAdmissionRead,
@@ -40,7 +40,7 @@ def get_opd_summary(doctor_user_id: UUID | None = None, user=Depends(get_current
     return OPDService(db).get_summary(user, doctor_user_id)
 
 
-@router.post("/visits", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.post("/visits", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.create"))])
 def create_opd_visit(
     payload: OPDVisitCreate,
     context=Depends(get_request_context),
@@ -51,7 +51,7 @@ def create_opd_visit(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.put("/visits/{visit_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.put("/visits/{visit_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.edit"))])
 def update_opd_visit(
     visit_id: UUID,
     payload: OPDVisitUpdate,
@@ -66,7 +66,7 @@ def update_opd_visit(
 @router.put(
     "/visits/{visit_id}/status",
     response_model=OPDVisitRead,
-    dependencies=[Depends(require_any_permissions("opd.visit.manage", "opd.view"))],
+    dependencies=[Depends(require_permissions("opd.visit.manage"))],
 )
 def update_opd_status(
     visit_id: UUID,
@@ -79,7 +79,7 @@ def update_opd_status(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.put("/visits/{visit_id}/payment", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.put("/visits/{visit_id}/payment", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("billing.payment.collect"))])
 def update_opd_payment(
     visit_id: UUID,
     payload: OPDVisitPaymentUpdate,
@@ -91,7 +91,7 @@ def update_opd_payment(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.post("/visits/{visit_id}/orders", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.post("/visits/{visit_id}/orders", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
 def create_opd_order(
     visit_id: UUID,
     payload: OPDVisitOrderCreate,
@@ -103,7 +103,7 @@ def create_opd_order(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.put("/visits/{visit_id}/orders/{order_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.put("/visits/{visit_id}/orders/{order_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
 def update_opd_order(
     visit_id: UUID,
     order_id: UUID,
@@ -116,7 +116,7 @@ def update_opd_order(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
-@router.put("/visits/{visit_id}/consultation", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.manage"))])
+@router.put("/visits/{visit_id}/consultation", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
 def update_opd_consultation(
     visit_id: UUID,
     payload: OPDVisitConsultationUpdate,

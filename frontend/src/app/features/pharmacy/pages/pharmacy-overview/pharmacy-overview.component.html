@@ -24,12 +24,38 @@
     }
   </section>
 
-  <section class="quick-grid">
-    <button class="quick-card" type="button" (click)="open('/pharmacy/medicines')"><strong>Catalog</strong><span>Medicines, stock, reorder level</span></button>
-    <button class="quick-card" type="button" (click)="open('/pharmacy/purchases')"><strong>Purchase</strong><span>Receive stock and update price</span></button>
-    <button class="quick-card" type="button" (click)="open('/pharmacy/sales')"><strong>Sale</strong><span>Counter bill with stock validation</span></button>
-    <button class="quick-card" type="button" (click)="open('/pharmacy/sales/list')"><strong>Returns</strong><span>Review sales and post returns</span></button>
-    <button class="quick-card" type="button" (click)="open('/pharmacy/settings')"><strong>Settings</strong><span>Medicine types, generics, companies, customers</span></button>
+  <section class="dashboard-summary-grid">
+    @for (kpi of pharmacyKpis; track kpi.label) {
+      <article class="dashboard-kpi">
+        <span>{{ kpi.label }}</span>
+        <strong>{{ kpi.value }}</strong>
+        <small>{{ kpi.detail }}</small>
+      </article>
+    }
+  </section>
+
+  <section class="decision-grid">
+    <article class="page-card dashboard-panel">
+      <div class="chart-panel__head"><div><h2>Attention Needed</h2><span>Stock and dispensing queues</span></div></div>
+      <div class="task-list">
+        @for (alert of pharmacyAlerts; track alert.label) {
+          <button class="task-item" [class]="alert.tone" type="button" (click)="open(alert.route)">
+            <span><strong>{{ alert.label }}</strong><span>{{ alert.detail }}</span></span>
+            <b>{{ alert.value }}</b>
+          </button>
+        }
+      </div>
+    </article>
+
+    <article class="page-card dashboard-panel">
+      <div class="chart-panel__head"><div><h2>Quick Links</h2><span>Counter workflows</span></div></div>
+      <div class="quick-link-grid">
+        <button class="quick-link-card" type="button" (click)="open('/pharmacy/medicines')"><strong>Catalog</strong><small>Stock and reorder</small></button>
+        <button class="quick-link-card" type="button" (click)="open('/pharmacy/purchases')"><strong>Purchase</strong><small>Receive stock</small></button>
+        <button class="quick-link-card" type="button" (click)="open('/pharmacy/sales')"><strong>Sale</strong><small>Counter bill</small></button>
+        <button class="quick-link-card" type="button" (click)="open('/pharmacy/sales/list')"><strong>Returns</strong><small>Post returns</small></button>
+      </div>
+    </article>
   </section>
 
   <section class="dashboard-grid">

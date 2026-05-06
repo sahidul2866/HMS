@@ -244,7 +244,7 @@ def list_purchases(page: int = 1, page_size: int = 10, q: str | None = None, med
     return PharmacyService(db).list_purchases(user, page=page, page_size=page_size, q=q, medicine_id=medicine_id)
 
 
-@router.post("/purchases", response_model=PharmacyPurchaseRead, dependencies=[Depends(require_permissions("pharmacy.stock.adjust"))])
+@router.post("/purchases", response_model=PharmacyPurchaseRead, dependencies=[Depends(require_permissions("pharmacy.purchase.manage"))])
 def create_purchase(payload: PharmacyPurchaseCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).create_purchase(payload, user, context)
 
@@ -254,12 +254,12 @@ def get_purchase(entity_id: UUID, user=Depends(get_current_user), db: Session = 
     return PharmacyService(db).get_purchase(entity_id, user)
 
 
-@router.put("/purchases/{entity_id}", response_model=PharmacyPurchaseRead, dependencies=[Depends(require_permissions("pharmacy.stock.adjust"))])
+@router.put("/purchases/{entity_id}", response_model=PharmacyPurchaseRead, dependencies=[Depends(require_permissions("pharmacy.purchase.manage"))])
 def update_purchase(entity_id: UUID, payload: PharmacyPurchaseUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).update_purchase(entity_id, payload, user, context)
 
 
-@router.delete("/purchases/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.stock.adjust"))])
+@router.delete("/purchases/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.purchase.manage"))])
 def delete_purchase(entity_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     PharmacyService(db).delete_purchase(entity_id, user, context)
     return {"success": True}
@@ -278,7 +278,7 @@ def list_sales(
     return PharmacyService(db).list_sales(user, page=page, page_size=page_size, q=q, customer_id=customer_id, status=status)
 
 
-@router.post("/sales", response_model=PharmacySaleRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.post("/sales", response_model=PharmacySaleRead, dependencies=[Depends(require_permissions("pharmacy.sale.create"))])
 def create_sale(payload: PharmacySaleCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).create_sale(payload, user, context)
 
@@ -293,12 +293,12 @@ def get_sale_draft_for_visit(visit_id: UUID, user=Depends(get_current_user), db:
     return PharmacyService(db).build_sales_draft_from_visit(visit_id, user)
 
 
-@router.put("/sales/{entity_id}", response_model=PharmacySaleRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.put("/sales/{entity_id}", response_model=PharmacySaleRead, dependencies=[Depends(require_permissions("pharmacy.sale.create"))])
 def update_sale(entity_id: UUID, payload: PharmacySaleUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).update_sale(entity_id, payload, user, context)
 
 
-@router.delete("/sales/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.delete("/sales/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.sale.create"))])
 def delete_sale(entity_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     PharmacyService(db).delete_sale(entity_id, user, context)
     return {"success": True}
@@ -309,7 +309,7 @@ def list_returns(page: int = 1, page_size: int = 10, q: str | None = None, sale_
     return PharmacyService(db).list_returns(user, page=page, page_size=page_size, q=q, sale_id=sale_id)
 
 
-@router.post("/returns", response_model=PharmacySaleReturnRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.post("/returns", response_model=PharmacySaleReturnRead, dependencies=[Depends(require_permissions("pharmacy.return"))])
 def create_return(payload: PharmacySaleReturnCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).create_return(payload, user, context)
 
@@ -319,12 +319,12 @@ def get_return(entity_id: UUID, user=Depends(get_current_user), db: Session = De
     return PharmacyService(db).get_return(entity_id, user)
 
 
-@router.put("/returns/{entity_id}", response_model=PharmacySaleReturnRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.put("/returns/{entity_id}", response_model=PharmacySaleReturnRead, dependencies=[Depends(require_permissions("pharmacy.return"))])
 def update_return(entity_id: UUID, payload: PharmacySaleReturnUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).update_return(entity_id, payload, user, context)
 
 
-@router.delete("/returns/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.delete("/returns/{entity_id}", dependencies=[Depends(require_permissions("pharmacy.return"))])
 def delete_return(entity_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     PharmacyService(db).delete_return(entity_id, user, context)
     return {"success": True}
@@ -350,33 +350,33 @@ def list_stock_movements(
     )
 
 
-@router.get("/investigation-settings", response_model=PaginatedResponse[PharmacyInvestigationSettingRead], dependencies=[Depends(require_permissions("laboratory.view"))])
+@router.get("/investigation-settings", response_model=PaginatedResponse[PharmacyInvestigationSettingRead], dependencies=[Depends(require_permissions("diagnostics.view"))])
 def list_investigation_settings(page: int = 1, page_size: int = 10, q: str | None = None, service_area: str | None = None, is_active: bool | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).list_investigation_settings(user, page=page, page_size=page_size, q=q, service_area=service_area, is_active=is_active)
 
 
-@router.post("/investigation-settings", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.post("/investigation-settings", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("diagnostics.settings.manage"))])
 def create_investigation_setting(payload: PharmacyInvestigationSettingCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).create_investigation_setting(payload, user, context)
 
 
-@router.get("/investigation-settings/{entity_id}", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("laboratory.view"))])
+@router.get("/investigation-settings/{entity_id}", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("diagnostics.view"))])
 def get_investigation_setting(entity_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).get_investigation_setting(entity_id, user)
 
 
-@router.put("/investigation-settings/{entity_id}", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.put("/investigation-settings/{entity_id}", response_model=PharmacyInvestigationSettingRead, dependencies=[Depends(require_permissions("diagnostics.settings.manage"))])
 def update_investigation_setting(entity_id: UUID, payload: PharmacyInvestigationSettingUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).update_investigation_setting(entity_id, payload, user, context)
 
 
-@router.delete("/investigation-settings/{entity_id}", dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.delete("/investigation-settings/{entity_id}", dependencies=[Depends(require_permissions("diagnostics.settings.manage"))])
 def delete_investigation_setting(entity_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     PharmacyService(db).delete_investigation_setting(entity_id, user, context)
     return {"success": True}
 
 
-@router.get("/investigations", response_model=PaginatedResponse[PharmacyInvestigationRead], dependencies=[Depends(require_permissions("laboratory.view"))])
+@router.get("/investigations", response_model=PaginatedResponse[PharmacyInvestigationRead], dependencies=[Depends(require_permissions("diagnostics.view"))])
 def list_investigations(
     page: int = 1,
     page_size: int = 10,
@@ -402,27 +402,27 @@ def list_investigations(
     )
 
 
-@router.post("/investigations", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.post("/investigations", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("diagnostics.order.manage"))])
 def create_investigation(payload: PharmacyInvestigationCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).create_investigation(payload, user, context)
 
 
-@router.get("/investigations/{entity_id}", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("laboratory.view"))])
+@router.get("/investigations/{entity_id}", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("diagnostics.view"))])
 def get_investigation(entity_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).get_investigation(entity_id, user)
 
 
-@router.get("/investigation-drafts/opd-visit/{visit_id}", response_model=PharmacyInvestigationDraftRead, dependencies=[Depends(require_permissions("laboratory.view"))])
+@router.get("/investigation-drafts/opd-visit/{visit_id}", response_model=PharmacyInvestigationDraftRead, dependencies=[Depends(require_permissions("diagnostics.view"))])
 def get_investigation_draft_for_visit(visit_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).build_investigation_draft_from_visit(visit_id, user)
 
 
-@router.put("/investigations/{entity_id}", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.put("/investigations/{entity_id}", response_model=PharmacyInvestigationRead, dependencies=[Depends(require_permissions("diagnostics.order.manage"))])
 def update_investigation(entity_id: UUID, payload: PharmacyInvestigationUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return PharmacyService(db).update_investigation(entity_id, payload, user, context)
 
 
-@router.delete("/investigations/{entity_id}", dependencies=[Depends(require_permissions("laboratory.manage"))])
+@router.delete("/investigations/{entity_id}", dependencies=[Depends(require_permissions("diagnostics.order.manage"))])
 def delete_investigation(entity_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     PharmacyService(db).delete_investigation(entity_id, user, context)
     return {"success": True}

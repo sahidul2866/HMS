@@ -5,13 +5,15 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
+import { printLaboratoryReport } from '../../../../shared/utils/laboratory-report-printer';
 import { InvestigationWorkItem } from '../../models/laboratory.models';
 import { LaboratoryServiceApi } from '../../services/laboratory.service';
 
 @Component({
   selector: 'app-laboratory-workbench',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './laboratory-workbench.component.html',
   styleUrls: ['./laboratory-workbench.component.scss'],
 })
@@ -64,6 +66,34 @@ export class LaboratoryWorkbenchComponent {
 
   openQueue(): void {
     void this.router.navigate(['/laboratory']);
+  }
+
+  printReport(): void {
+    if (!this.selectedItem) {
+      return;
+    }
+    const printed = printLaboratoryReport({
+      orderId: this.selectedItem.order_id,
+      visitNumber: this.selectedItem.visit_number,
+      patientNumber: this.selectedItem.patient_number,
+      patientName: this.selectedItem.patient_name,
+      doctorName: this.selectedItem.consulting_doctor_name,
+      testName: this.selectedItem.item_name,
+      roomNumber: this.selectedItem.room_number,
+      sampleNote: this.selectedItem.sample_note,
+      resultText: this.selectedItem.result_text,
+      verifiedAt: this.selectedItem.verified_at,
+    });
+    if (!printed) {
+      this.notificationService.warning('Unable to open print preview. Allow popups and try again.');
+    }
+  }
+
+  get canPrintReport(): boolean {
+    if (!this.selectedItem) {
+      return false;
+    }
+    return ['verified', 'completed'].includes(this.selectedItem.status) && Boolean(this.selectedItem.result_text?.trim());
   }
 
   formatStatus(status: string): string {

@@ -7,6 +7,7 @@ import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
@@ -16,7 +17,7 @@ import { IPDService } from '../../services/ipd.service';
 @Component({
   selector: 'app-ipd-admit',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './ipd-admit.component.html',
   styleUrls: ['./ipd-admit.component.scss'],
 })
@@ -39,6 +40,7 @@ export class IPDAdmitComponent {
   patientLookupModalOpen = false;
   submitted = false;
   saving = false;
+  private completed = false;
 
   readonly form = this.fb.group({
     patient_id: ['', Validators.required],
@@ -322,6 +324,10 @@ export class IPDAdmitComponent {
     void this.router.navigate(['/ipd']);
   }
 
+  hasUnsavedChanges(): boolean {
+    return !this.completed && !this.saving && (this.form.dirty || this.patientLookupControl.dirty);
+  }
+
   submit(): void {
     this.submitted = true;
     if (this.form.invalid || this.saving) {
@@ -333,6 +339,9 @@ export class IPDAdmitComponent {
     this.ipdService.createAdmission({ ...value, expected_discharge_date: value.expected_discharge_date || null } as never).subscribe((admission) => {
       this.saving = false;
       this.submitted = false;
+      this.completed = true;
+      this.form.markAsPristine();
+      this.patientLookupControl.markAsPristine();
       this.notificationService.success(`Admission ${admission.admission_number} created.`);
       this.form.reset({
         patient_id: '',

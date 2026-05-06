@@ -5,13 +5,14 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { InvestigationWorkItem } from '../../models/radiology.models';
 import { RadiologyServiceApi } from '../../services/radiology.service';
 
 @Component({
   selector: 'app-radiology-workbench',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './radiology-workbench.component.html',
   styleUrls: ['./radiology-workbench.component.scss'],
 })

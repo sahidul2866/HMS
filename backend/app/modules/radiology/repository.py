@@ -60,13 +60,18 @@ class RadiologyRepository:
         self.db.flush()
         return section
 
+    def create_pacs_link(self, link: PACSLink) -> PACSLink:
+        self.db.add(link)
+        self.db.flush()
+        return link
+
     def get_summary_counts(self, branch_id=None) -> dict[str, int]:
         stmt = select(
             func.count(RadiologyOrder.id),
-            func.count().filter(RadiologyOrder.status == "pending"),
-            func.count().filter(RadiologyOrder.status == "collected"),
-            func.count().filter(RadiologyOrder.status == "in_progress"),
-            func.count().filter(RadiologyOrder.status == "completed"),
+            func.count().filter(RadiologyOrder.status.in_(["pending", "pending_study"])),
+            func.count().filter(RadiologyOrder.status.in_(["collected", "study_uploaded"])),
+            func.count().filter(RadiologyOrder.status.in_(["in_progress", "ready_for_review"])),
+            func.count().filter(RadiologyOrder.status.in_(["completed", "report_completed"])),
             func.count().filter(RadiologyOrder.status == "verified"),
         )
         if branch_id:

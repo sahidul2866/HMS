@@ -1,10 +1,12 @@
 <section class="workspace-shell opd-entry-page">
   <div class="page-card module-hero opd-hero">
-    <div class="hero-main">
+    <div class="hero-row">
       <div>
+        <div class="hero-kicker">OPD Registration</div>
         <h1 class="page-title">Register Outpatient Visit</h1>
+        <div class="page-subtitle">Create or select a patient, assign doctor and department, then save the visit.</div>
       </div>
-      <div class="hero-actions">
+      <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="backToQueue()">Back To Queue</button>
       </div>
@@ -34,6 +36,15 @@
             </article>
           }
         </div>
+
+        @if (selectedPatient) {
+          <app-patient-context-panel
+            [patient]="selectedPatient"
+            [patientId]="selectedPatient.id"
+            contextLabel="OPD Patient"
+            [compact]="true"
+          ></app-patient-context-panel>
+        }
 
         <div class="lookup-banner">
           @if (selectedPatient && !showPatientLookup) {
@@ -394,6 +405,7 @@
         </div>
 
         <div class="form-actions sticky-actions">
+          <span class="form-helper">{{ hasUnsavedChanges() ? 'Unsaved OPD visit draft' : 'Visit draft clean' }}</span>
           <button class="ghost-btn" type="button" (click)="resetPage()">Reset</button>
           <button class="ghost-btn" type="button" (click)="backToQueue()">Cancel</button>
           <button class="primary-btn" type="submit" [disabled]="saving">Save Visit</button>

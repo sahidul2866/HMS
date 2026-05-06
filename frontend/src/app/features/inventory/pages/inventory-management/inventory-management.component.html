@@ -1,40 +1,36 @@
-<section class="inventory-shell">
-  <header class="inventory-hero">
-    <div>
-      <div class="eyebrow">Inventory</div>
-      <h1>Stock Control</h1>
-      <p>Items, reagents, requests and alerts.</p>
+<section class="workspace-shell inventory-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Inventory</div>
+        <h1 class="page-title">Stock Control</h1>
+        <div class="page-subtitle">Items, reagents, requests and alerts.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="lowStockOnly = !lowStockOnly; load()">{{ lowStockOnly ? 'All Stock' : 'Low Stock' }}</button>
+        <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
+      </div>
     </div>
-    <div class="hero-actions">
-      <button type="button" (click)="lowStockOnly = !lowStockOnly; load()">{{ lowStockOnly ? 'All Stock' : 'Low Stock' }}</button>
-      <button type="button" (click)="load()">Refresh</button>
-    </div>
-  </header>
-
-  <nav class="tab-strip">
-    @for (item of tabs; track item.key) {
-      <button type="button" [class.active]="tab() === item.key" (click)="openTab(item.route)">{{ item.label }}</button>
-    }
-  </nav>
+  </section>
 
   @if (error) { <div class="alert error">{{ error }}</div> }
 
   @if (dashboard) {
     <section class="metric-grid">
-      <div class="metric"><span>Stock Value</span><strong>{{ formatMoney(dashboard.total_stock_value) }}</strong></div>
-      <div class="metric info"><span>Items</span><strong>{{ dashboard.total_items }}</strong></div>
-      <div class="metric warn"><span>Low Stock</span><strong>{{ dashboard.low_stock_items }}</strong></div>
-      <div class="metric danger"><span>Out</span><strong>{{ dashboard.out_of_stock_items }}</strong></div>
-      <div class="metric warn"><span>Expiry</span><strong>{{ dashboard.near_expiry_items }}</strong></div>
-      <div class="metric good"><span>Received</span><strong>{{ dashboard.recent_receivings }}</strong></div>
-      <div class="metric"><span>Issued</span><strong>{{ dashboard.recent_issues }}</strong></div>
-      <div class="metric"><span>Suppliers</span><strong>{{ suppliers.length }}</strong></div>
+      <div class="metric-card"><div class="label">Stock Value</div><div class="value">{{ formatMoney(dashboard.total_stock_value) }}</div></div>
+      <div class="metric-card"><div class="label">Items</div><div class="value">{{ dashboard.total_items }}</div></div>
+      <div class="metric-card"><div class="label">Low Stock</div><div class="value">{{ dashboard.low_stock_items }}</div></div>
+      <div class="metric-card"><div class="label">Out</div><div class="value">{{ dashboard.out_of_stock_items }}</div></div>
+      <div class="metric-card"><div class="label">Expiry</div><div class="value">{{ dashboard.near_expiry_items }}</div></div>
+      <div class="metric-card"><div class="label">Received</div><div class="value">{{ dashboard.recent_receivings }}</div></div>
+      <div class="metric-card"><div class="label">Issued</div><div class="value">{{ dashboard.recent_issues }}</div></div>
+      <div class="metric-card"><div class="label">Suppliers</div><div class="value">{{ suppliers.length }}</div></div>
     </section>
   }
 
   @if (tab() === 'dashboard') {
     <section class="dashboard-grid">
-      <article class="panel span-2">
+      <article class="page-card span-2">
         <div class="panel-head"><h2>Stock Mix</h2><span>By item type</span></div>
         <div class="bar-list">
           @for (item of categoryEntries(); track item.label) {
@@ -43,7 +39,7 @@
           @if (!categoryEntries().length) { <div class="empty">No inventory categories yet.</div> }
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Alerts</h2><span>Needs action</span></div>
         <div class="alert-list">
           <div [class]="dashboard?.low_stock_items ? 'smart-alert warn' : 'smart-alert good'"><strong>Low stock</strong><span>{{ dashboard?.low_stock_items || 0 }} item(s)</span></div>
@@ -51,7 +47,7 @@
           <div [class]="dashboard?.near_expiry_items ? 'smart-alert warn' : 'smart-alert good'"><strong>Near expiry</strong><span>{{ dashboard?.near_expiry_items || 0 }} batch(es)</span></div>
         </div>
       </article>
-      <article class="panel">
+      <article class="page-card">
         <div class="panel-head"><h2>Open Requests</h2><span>Purchase queue</span></div>
         <div class="compact-list">
           @for (request of requests.slice(0, 6); track request.id) {
@@ -64,7 +60,7 @@
   }
 
   @if (tab() === 'items' || tab() === 'dashboard') {
-    <section class="panel">
+    <section class="page-card">
       <div class="list-toolbar">
         <input [(ngModel)]="query" (input)="load()" placeholder="Search item, code, supplier" />
         <label><input type="checkbox" [(ngModel)]="lowStockOnly" (change)="load()" /> Low stock</label>
@@ -91,7 +87,7 @@
   }
 
   @if (tab() === 'reagents') {
-    <section class="panel">
+    <section class="page-card">
       <div class="list-toolbar"><input [(ngModel)]="query" (input)="load()" placeholder="Search reagent or analyzer" /></div>
       <div class="table-wrap">
         <table>
@@ -114,7 +110,7 @@
   }
 
   @if (tab() === 'requests') {
-    <section class="panel">
+    <section class="page-card">
       <div class="table-wrap">
         <table>
           <thead><tr><th>Item</th><th>Department</th><th>Qty</th><th>Priority</th><th>Expected</th><th>Status</th></tr></thead>
@@ -137,11 +133,11 @@
 
   @if (tab() === 'reports' && report) {
     <section class="report-grid">
-      <div class="metric warn"><span>Low Stock</span><strong>{{ report.low_stock_items }}</strong></div>
-      <div class="metric warn"><span>Near Expiry</span><strong>{{ report.near_expiry_batches }}</strong></div>
-      <div class="metric danger"><span>Expired</span><strong>{{ report.expired_batches }}</strong></div>
-      <div class="metric info"><span>Reagent Usage</span><strong>{{ report.reagent_usage_last_7_days }}</strong></div>
-      <div class="metric"><span>Open PR</span><strong>{{ report.purchase_requests_open }}</strong></div>
+      <div class="metric-card"><div class="label">Low Stock</div><div class="value">{{ report.low_stock_items }}</div></div>
+      <div class="metric-card"><div class="label">Near Expiry</div><div class="value">{{ report.near_expiry_batches }}</div></div>
+      <div class="metric-card"><div class="label">Expired</div><div class="value">{{ report.expired_batches }}</div></div>
+      <div class="metric-card"><div class="label">Reagent Usage</div><div class="value">{{ report.reagent_usage_last_7_days }}</div></div>
+      <div class="metric-card"><div class="label">Open PR</div><div class="value">{{ report.purchase_requests_open }}</div></div>
     </section>
   }
 </section>

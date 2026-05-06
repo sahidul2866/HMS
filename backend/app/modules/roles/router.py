@@ -16,8 +16,13 @@ def list_roles(db: Session = Depends(get_db)) -> list[RoleRead]:
 
 
 @router.post("", response_model=RoleRead, dependencies=[Depends(require_permissions("settings.role.manage"))])
-def create_role(payload: RoleCreate, db: Session = Depends(get_db)) -> RoleRead:
-    return RoleRead.model_validate(RolesService(db).create_role(payload), from_attributes=True)
+def create_role(
+    payload: RoleCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RoleRead:
+    return RoleRead.model_validate(RolesService(db).create_role(payload, user.id, context), from_attributes=True)
 
 
 @router.put("/{code}/permissions", response_model=RoleRead, dependencies=[Depends(require_permissions("settings.role.manage"))])
@@ -30,4 +35,3 @@ def update_role_permissions(
 ) -> RoleRead:
     role = RolesService(db).update_role_permissions(code, payload, user.id, context)
     return RoleRead.model_validate(role, from_attributes=True)
-

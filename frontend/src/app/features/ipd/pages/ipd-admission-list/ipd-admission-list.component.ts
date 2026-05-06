@@ -24,6 +24,8 @@ export class IPDAdmissionListComponent {
   admissions: IPDAdmission[] = [];
   selectedAdmission: IPDAdmission | null = null;
   searchText = '';
+  page = 1;
+  pageSize = 12;
   sortField: 'admission_number' | 'patient' | 'ward_bed' | 'doctor' | 'status' | 'admitted_at' = 'admitted_at';
   sortDirection: 'asc' | 'desc' = 'desc';
 
@@ -63,7 +65,7 @@ export class IPDAdmissionListComponent {
 
   get filteredAdmissions(): IPDAdmission[] {
     const q = this.searchText.trim().toLowerCase();
-    const filtered = this.admissions.filter((admission) => {
+    return this.admissions.filter((admission) => {
       if (!q) return true;
       return (
         (admission.admission_number || '').toLowerCase().includes(q) ||
@@ -73,8 +75,11 @@ export class IPDAdmissionListComponent {
         `${admission.ward_name || ''} ${admission.bed_number || ''}`.toLowerCase().includes(q)
       );
     });
+  }
+
+  get sortedAdmissions(): IPDAdmission[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
-    return [...filtered].sort((a, b) => {
+    return [...this.filteredAdmissions].sort((a, b) => {
       switch (this.sortField) {
         case 'admission_number':
           return dir * (a.admission_number || '').localeCompare(b.admission_number || '');
@@ -93,12 +98,47 @@ export class IPDAdmissionListComponent {
     });
   }
 
+  get displayedAdmissions(): IPDAdmission[] {
+    const start = (this.page - 1) * this.pageSize;
+    return this.sortedAdmissions.slice(start, start + this.pageSize);
+  }
+
+  get totalPages(): number {
+    return Math.max(Math.ceil(this.filteredAdmissions.length / this.pageSize), 1);
+  }
+
+  get rangeStart(): number {
+    return this.filteredAdmissions.length ? (this.page - 1) * this.pageSize + 1 : 0;
+  }
+
+  get rangeEnd(): number {
+    return Math.min(this.page * this.pageSize, this.filteredAdmissions.length);
+  }
+
+  onSearchChanged(): void {
+    this.page = 1;
+  }
+
   toggleSort(field: IPDAdmissionListComponent['sortField']): void {
     if (this.sortField === field) {
       this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.page = 1;
       return;
     }
     this.sortField = field;
     this.sortDirection = field === 'admitted_at' ? 'desc' : 'asc';
+    this.page = 1;
+  }
+
+  sortClass(field: IPDAdmissionListComponent['sortField']): string {
+    return this.sortField === field ? `sorted-${this.sortDirection}` : '';
+  }
+
+  previousPage(): void {
+    this.page = Math.max(this.page - 1, 1);
+  }
+
+  nextPage(): void {
+    this.page = Math.min(this.page + 1, this.totalPages);
   }
 }

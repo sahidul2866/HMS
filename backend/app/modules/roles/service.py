@@ -16,7 +16,7 @@ class RolesService:
     def list_roles(self) -> list[Role]:
         return self.repository.list_roles()
 
-    def create_role(self, payload: RoleCreate) -> Role:
+    def create_role(self, payload: RoleCreate, actor_id=None, context: dict[str, str | None] | None = None) -> Role:
         role = Role(
             code=payload.code,
             name=payload.name,
@@ -26,6 +26,16 @@ class RolesService:
         )
         role.permissions = self.repository.get_permissions(payload.permission_codes)
         self.repository.create_role(role)
+        if actor_id and context is not None:
+            AuditService(self.db).log(
+                user_id=actor_id,
+                action=AuditAction.ROLE_CREATE,
+                module="admin",
+                entity_type="role",
+                entity_id=str(role.id),
+                detail={"role_code": role.code, "permissions": payload.permission_codes},
+                context=context,
+            )
         self.db.commit()
         self.db.refresh(role)
         return role

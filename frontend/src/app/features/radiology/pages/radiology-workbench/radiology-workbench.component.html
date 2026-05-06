@@ -17,6 +17,12 @@
       <div class="empty-state">Loading radiology work item...</div>
     </section>
   } @else if (selectedItem) {
+    <app-patient-context-panel
+      [patientId]="selectedItem.patient_id"
+      contextLabel="Radiology Patient"
+      [compact]="true"
+    ></app-patient-context-panel>
+
     <section class="workbench-grid">
       <section class="page-card soft-panel">
         <div class="panel-head">
@@ -90,7 +96,7 @@
             <span>Radiology Report</span>
             <textarea rows="8" formControlName="result_text" placeholder="Findings and impression"></textarea>
           </label>
-          @if (sessionService.hasPermission('radiology.manage')) {
+          @if (sessionService.hasAnyPermission(['radiology.upload_report', 'radiology.verify_result'])) {
             <div style="grid-column:1/-1;">
               <button class="primary-btn" type="submit">Save Radiology Update</button>
             </div>

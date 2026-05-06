@@ -20,6 +20,38 @@
     }
   </section>
 
+  @if (contextPatientId) {
+    <app-patient-context-panel
+      [patientId]="contextPatientId"
+      contextLabel="Laboratory Patient"
+      [compact]="true"
+    ></app-patient-context-panel>
+  }
+
+  @if (summary) {
+    <section class="decision-grid">
+      <article class="page-card chart-panel">
+        <div class="chart-panel__head"><div><h2>Queue Health</h2><span>Specimen-to-verification movement</span></div></div>
+        <div class="mini-bar-list">
+          @for (item of queueHealthItems; track item.label) {
+            <div class="mini-bar-row">
+              <span>{{ item.label }}</span>
+              <span class="mini-bar-row__track"><span class="mini-bar-row__fill" [style.width]="item.width" [style.background]="item.tone"></span></span>
+              <b>{{ item.value }}</b>
+            </div>
+          }
+        </div>
+      </article>
+      <article class="page-card dashboard-panel">
+        <div class="chart-panel__head"><div><h2>Quick Decisions</h2><span>Worklist actions are available on each order</span></div></div>
+        <div class="task-list">
+          <div class="task-item warning"><span><strong>Pending Orders</strong><span>Collect samples and start processing</span></span><b>{{ summary.pending_orders }}</b></div>
+          <div class="task-item good"><span><strong>Verified Reports</strong><span>Ready for clinical release</span></span><b>{{ summary.verified_orders }}</b></div>
+        </div>
+      </article>
+    </section>
+  }
+
   <section class="lab-grid">
     <section class="page-card soft-panel">
       <div class="panel-head">

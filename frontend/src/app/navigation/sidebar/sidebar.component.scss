@@ -1,7 +1,10 @@
 .sidebar {
-  background: linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.1), transparent 15rem),
+    linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
   color: var(--sidebar-ink);
   height: 100vh;
+  height: 100dvh;
   padding: 1rem 0.8rem;
   display: flex;
   flex-direction: column;
@@ -55,7 +58,8 @@
 
 .brand h2 {
   margin: 0;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  font-weight: 850;
   transition: letter-spacing 0.28s ease, transform 0.28s ease;
 }
 
@@ -69,19 +73,35 @@
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.5rem;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 0.25rem;
   margin-top: 0.5rem;
+}
+
+.nav-section {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.nav-section-title {
+  padding: 0.2rem 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .nav a,
 .group-toggle {
   color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
-  padding: 0.62rem 0.72rem;
+  padding: 0.5rem 0.68rem;
   border-radius: 10px;
   border: 0;
   background: transparent;
@@ -91,6 +111,8 @@
   align-items: center;
   justify-content: space-between;
   transition: background 0.22s ease, color 0.22s ease, padding 0.28s ease;
+  position: relative;
+  min-height: 2.45rem;
 }
 
 .nav-label {
@@ -101,7 +123,7 @@
 }
 
 .nav-text {
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -130,8 +152,27 @@
 .nav a:hover,
 .group-toggle:hover,
 .nav-group.active-group > .group-toggle {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.13);
   color: var(--sidebar-ink);
+}
+
+.nav a.active,
+.nav-group.active-group > .group-toggle {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.nav a.active::before,
+.nav-group.active-group > .group-toggle::before {
+  content: "";
+  position: absolute;
+  left: 0.25rem;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 .group-indicator {
@@ -155,9 +196,9 @@
 .group-links {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding-left: 0.55rem;
-  margin-top: 0.25rem;
+  gap: 0.18rem;
+  padding-left: 0.48rem;
+  margin-top: 0.18rem;
   animation: reveal-group 0.22s ease;
 }
 
@@ -168,6 +209,11 @@
 
 .sidebar.collapsed:not(.mobile-mode) .nav {
   align-items: center;
+  gap: 0.3rem;
+}
+
+.sidebar.collapsed:not(.mobile-mode) .nav-section {
+  width: 100%;
 }
 
 .sidebar.collapsed:not(.mobile-mode) .nav a,
@@ -199,7 +245,7 @@
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .sidebar {
     position: fixed;
     top: 0;
@@ -207,6 +253,7 @@
     width: min(320px, 86vw);
     max-width: 86vw;
     height: 100vh;
+    height: 100dvh;
     max-height: 100vh;
     padding: 1rem 0.85rem;
     border-radius: 0 22px 22px 0;
@@ -220,7 +267,8 @@
 
   .nav a,
   .group-toggle {
-    padding: 0.7rem 0.8rem;
+    min-height: 2.75rem;
+    padding: 0.72rem 0.8rem;
   }
 
   .sidebar.collapsed {

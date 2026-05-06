@@ -1,0 +1,106 @@
+Sample Request :
+Pull Request : T: 1-11
+--> Sample Request T: 1-12
+1. Sample Type
+2. Sample Test
+3. Sample Priority
+
+---  LIS Document  ---
+Poll Message
+
+<STX> = "\x02" ###start
+<ETX> = "\x03" ###End
+<FS>  = "\x1c" ###Feild Seperator
+
+
+
+First Poll - <STX>P<FS>9300<FS>1<FS>1<FS>0<FS>6C<ETX>
+b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03'
+Conversational Poll - <STX>P<FS>92300<FS>0<FS>1<FS>0<FS>6B<ETX>
+b'\x02P\x1c92300\x1c0\x1c1\x1c0\x1c6B\x03'
+b'\x02P\x1c92300\x1c1\x1c1\x1c0\x1c48\x03'
+
+Sample Request
+
+<STX>D<FS>0<FS>0<FS>A<FS>Doe,John<FS>012345<FS>2<FS><FS>0<FS>1<FS>**<FS>1<FS>2<FS>BUN<FS>CREA<FS>F5<ETX>
+
+b'\x02D\x1c0\x1c0\x1cA\x1cDoe,John\x1c012345\x1c2\x1c\x1c0\x1c1\x1c**\x1c1\x1c2\x1cBUN\x1cCREA\x1cF5\x03'
+
+No Request Message
+
+<STX>N<FS>6A<ETX>
+b'\x02N\x1c6A\x03'
+
+Accept Message from computer.
+<STX>M<FS>A<FS><FS>E2<ETX>
+b'\x02M\x1cA\x1c\x1cE2\x03'
+
+ACK
+b'\x06'
+
+<STX> = "\x02" ###start
+<ETX> = "\x03" ###End
+<FS>  = "\x1c" ###Feild Seperator
+
+Query for sample ID 043092011
+<STX>I<FS>043092011<FS>45<ETX>
+b'\x02I\x1c043092011\x1c45\x03'
+
+Sample Request
+<STX>Type=D<FS>Sample Carrier ID=0 <FS>Loadlist ID=0<FS>Transaction [Add Sample =A , Delete Sample =d]A<FS>
+Patient ID <FS>sampleID=012345<FS> Sample Type= 2[ 1 to 9 or W] <FS>Location<FS> Priority [0-4] 2 <FS> # Of Cups For Sample 1<FS>
+Cup Position= **<FS>Dilution [1-100] <FS># Of Tests [2 | 1 to 36]<FS>BUN [test 1] <FS>CREA [test 2]<FS>F5<ETX>
+<STX>D<FS>0<FS>0<FS>A<FS>Doe,John<FS>012345<FS>2<FS><FS>0<FS>1<FS>**<FS>1<FS>2<FS>BUN<FS>CREA<FS>F5<ETX>
+
+b'\x02D\x1c0\x1c0\x1cA\x1cL_N,F_N<FS>SampleId<FS>W<FS><FS>2<FS>1<FS>**<FS>1<FS>2<FS>BUN<FS>CREA<FS>F5\x03'
+
+Accept Barcoded sample tube.
+<STX>M<FS><FS>A<FS>A<FS>1<FS>42<FS>0E<ETX>
+
+
+
+
+C:\Users\AMIN\AppData\Local\Programs\Python\Python39\python.exe E:/Python/CPH_LIS/cph-lis/DIMENTION_EXL/serverDimentionEXL.py
+Connecting...
+Start
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+type:  <class 'str'>   messsage:  b'\x02P\x1cDIM\x1c1\x1c1\x1c0\x1c48\x03\x05'
+initialized
+type:  <class 'str'>   messsage:  b'\x15\x02M\x1cR\x1c9\x1c0\x1c1\x1c0\x1c11\x03'
+type:  <class 'str'>   messsage:  b'\x02R\x1c*\x1cSozib\x1c1\x1c1\x1c\x1c0\x1c402810220723\x1c1\x1c1\x1c9\x1cAHDL\x1c42\x1cmg/dL\x1c\x1cTBI\x1c\x1c\x1c9\x1cALPI\x1c97\x1cU/L\x1c\x1cTGL\x1c132\x1cmg/dL\x1c\x1cALDL\x1c147\x1cmg/dL\x1c\x1cCHOL\x1c\x1c\x1c9\x1cAST\x1c\x1c\x1c9\x1cALTI\x1c25\x1cU/L\x1c\x1cCRE2\x1c0.88\x1cmg/dL\x1c\x1cED\x03\x05\x05\x05'
+
+
+
+
+
+
+
+
+

@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Observable } from 'rxjs';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { CompanyPayload, CustomerPayload, MasterPayload, PaginatedResponse } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -31,6 +32,7 @@ export class PharmacySettingsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   readonly configs: PharmacySettingConfig[] = [
     {
@@ -112,6 +114,7 @@ export class PharmacySettingsComponent {
   editingId: string | null = null;
   saving = false;
   form = this.fb.group({});
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   get totalPages(): number {
     return Math.max(Math.ceil(this.total / this.pageSize), 1);
@@ -157,6 +160,21 @@ export class PharmacySettingsComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onSearchChanged(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+    this.searchTimer = setTimeout(() => this.searchNow(), 300);
+  }
+
+  clearSearch(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+    this.search = '';
+    this.searchNow();
   }
 
   previousPage(): void {
@@ -219,7 +237,7 @@ export class PharmacySettingsComponent {
   }
 
   deleteRow(row: MasterRow): void {
-    if (!this.activeConfig || !window.confirm(`Delete ${row.name || this.activeConfig.label}?`)) {
+    if (!this.activeConfig || !this.confirmationService.confirmDestructive(String(row.name || this.activeConfig.label))) {
       return;
     }
     const id = row.id;
@@ -258,7 +276,7 @@ export class PharmacySettingsComponent {
   }
 
   private handleDelete(): void {
-    this.notificationService.success('Pharmacy setting deleted successfully.');
+    this.notificationService.success('Pharmacy setting deleted. Related selectors are refreshed.');
     this.resetForm();
     this.loadPage();
   }

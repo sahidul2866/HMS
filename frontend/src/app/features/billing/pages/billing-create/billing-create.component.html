@@ -74,6 +74,13 @@
         }
         <button class="danger-btn compact-btn" type="button" (click)="clearPatientSelection()">Clear</button>
       </section>
+
+      <app-patient-context-panel
+        [patient]="selectedPatient"
+        [patientId]="selectedPatient.id"
+        contextLabel="Billing Patient"
+        [compact]="true"
+      ></app-patient-context-panel>
     }
 
     <div class="billing-main">
@@ -532,7 +539,8 @@
         </label>
       </div>
 
-      <div class="submit-row">
+      <div class="submit-row sticky-actions">
+        <span class="form-helper">{{ hasUnsavedChanges() ? postReadinessMessage : 'Invoice draft clean' }}</span>
         <button class="ghost-btn compact-btn" type="button" (click)="resetInvoiceDraft()" [disabled]="saving">Reset</button>
         <button class="primary-btn" type="submit" [disabled]="saving || !readyToPost">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
       </div>

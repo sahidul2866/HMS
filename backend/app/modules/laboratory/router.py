@@ -34,7 +34,7 @@ def list_laboratory_worklist(user=Depends(get_current_user), db: Session = Depen
 @router.put(
     "/worklist/{order_id}",
     response_model=ClinicalInvestigationWorkItemRead,
-    dependencies=[Depends(require_any_permissions("laboratory.manage", "settings.role.manage"))],
+    dependencies=[Depends(require_any_permissions("laboratory.result.enter", "laboratory.verify_result"))],
 )
 def update_laboratory_result(
     order_id: UUID,

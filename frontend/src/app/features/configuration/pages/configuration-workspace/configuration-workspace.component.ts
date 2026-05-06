@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { ConfigurationProfile, ConfigurationService, ConfigurationWorkspace } from '../../services/configuration.service';
 
 type ConfigType = 'doctor_share' | 'prescription_suggestion' | 'prescription_layout' | 'invoice_layout' | 'patient_portal_settings' | 'patient_bot_settings';
+type ConfigContext = 'admin' | 'opd';
 
 @Component({
   selector: 'app-configuration-workspace',
@@ -18,10 +21,13 @@ export class ConfigurationWorkspaceComponent {
   private readonly fb = inject(FormBuilder);
   private readonly configurationService = inject(ConfigurationService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
+  private readonly route = inject(ActivatedRoute);
 
   workspace: ConfigurationWorkspace | null = null;
   profiles: ConfigurationProfile[] = [];
-  activeType: ConfigType = 'doctor_share';
+  readonly context = (this.route.snapshot.data['configurationContext'] as ConfigContext) || 'admin';
+  activeType: ConfigType = this.context === 'opd' ? 'doctor_share' : 'invoice_layout';
   editing: ConfigurationProfile | null = null;
   saving = false;
   search = '';
@@ -34,6 +40,26 @@ export class ConfigurationWorkspaceComponent {
     { key: 'patient_portal_settings', label: 'Patient Portal', description: 'Patient portal access, document download, family access, billing visibility and portal branding.' },
     { key: 'patient_bot_settings', label: 'Patient Bot', description: 'Gemini usage, safety message, quick replies, intake flow, diet/report guidance and appointment actions.' },
   ];
+
+  readonly opdProfileTypes: ConfigType[] = ['doctor_share', 'prescription_suggestion', 'prescription_layout'];
+
+  get visibleProfileTypes(): Array<{ key: ConfigType; label: string; description: string }> {
+    return this.profileTypes.filter((type) => this.context === 'opd' ? this.opdProfileTypes.includes(type.key) : !this.opdProfileTypes.includes(type.key));
+  }
+
+  get heroKicker(): string {
+    return this.context === 'opd' ? 'OPD Configuration' : 'Configuration Center';
+  }
+
+  get heroTitle(): string {
+    return this.context === 'opd' ? 'OPD Setup Builders' : 'Hospital Setup Builders';
+  }
+
+  get heroSubtitle(): string {
+    return this.context === 'opd'
+      ? 'Configure OPD fee sharing, doctor prescription suggestions, and prescription print layouts from the OPD module.'
+      : 'Configure invoice templates, patient portal settings, and patient bot settings without code changes.';
+  }
 
   readonly form = this.fb.group({
     code: ['', Validators.required],
@@ -58,7 +84,10 @@ export class ConfigurationWorkspaceComponent {
     this.configurationService.workspace().subscribe((workspace) => {
       this.workspace = workspace;
       this.profiles = workspace.profiles;
-      if (!this.activeProfile) {
+      if (!this.visibleProfileTypes.some((type) => type.key === this.activeType)) {
+        this.activeType = this.visibleProfileTypes[0]?.key || 'invoice_layout';
+      }
+      if (!this.activeProfile && this.visibleProfileTypes.length) {
         this.openType(this.activeType);
       }
     });
@@ -76,7 +105,7 @@ export class ConfigurationWorkspaceComponent {
   }
 
   get activeTypeMeta() {
-    return this.profileTypes.find((item) => item.key === this.activeType) ?? this.profileTypes[0];
+    return this.visibleProfileTypes.find((item) => item.key === this.activeType) ?? this.visibleProfileTypes[0] ?? this.profileTypes[0];
   }
 
   get sharePreview(): { gross: number; net: number; doctor: number; hospital: number } {
@@ -167,7 +196,7 @@ export class ConfigurationWorkspaceComponent {
     request.subscribe({
       next: () => {
         this.saving = false;
-        this.notificationService.success('Configuration profile saved.');
+        this.notificationService.success('Configuration profile saved. Affected workflows will use the updated profile.');
         this.resetForm();
         this.load();
       },
@@ -178,11 +207,11 @@ export class ConfigurationWorkspaceComponent {
   }
 
   delete(profile: ConfigurationProfile): void {
-    if (!window.confirm(`Delete ${profile.name}?`)) {
+    if (!this.confirmationService.confirmDestructive(profile.name)) {
       return;
     }
     this.configurationService.delete(profile.id).subscribe(() => {
-      this.notificationService.success('Configuration profile removed.');
+      this.notificationService.success(`${profile.name} configuration profile removed.`);
       this.load();
     });
   }

@@ -363,3 +363,81 @@ Change this immediately outside local development.
 ## Additional Documentation
 
 - [`docs/architecture.md`](/Users/sahidulislam/ATM/HMS/docs/architecture.md)
+
+## Radiology PACS Demo (Orthanc Viewer)
+
+Use a single supported flow: HMS Radiology `Open Viewer` opens your configured DICOM viewer (default `http://localhost:8080`) with Orthanc connection parameters.
+
+### Option A: Docker (recommended)
+
+1. Start/restart PACS stack:
+
+```bash
+docker compose -f docker-compose.pacs.yml down
+docker compose -f docker-compose.pacs.yml up -d
+```
+
+2. Set PACS env in `backend/.env`:
+
+```env
+ORTHANC_BASE_URL=http://localhost:8042
+ORTHANC_USERNAME=orthanc
+ORTHANC_PASSWORD=orthanc
+ORTHANC_DICOMWEB_ROOT=/dicom-web
+DICOM_VIEWER_BASE_URL=http://localhost:8080
+```
+
+3. Seed demo data (real DICOM linkage):
+
+```bash
+cd backend
+.venv/bin/python -m app.scripts.seed_lab_radiology_demo
+.venv/bin/python -m app.scripts.seed_radiology_pacs_images
+.venv/bin/python -m app.scripts.refresh_radiology_viewer_links
+```
+
+4. Use HMS:
+   - Open `Radiology` queue
+   - Open an order with `PACS Linked`
+   - Click `Open Viewer`
+
+For the best result, open studies from the HMS `Open Viewer` button so each order uses its linked Orthanc study ID.
+
+Optional viewer URL template:
+
+```env
+DICOM_VIEWER_URL_TEMPLATE=http://localhost:8080/?StudyInstanceUID={study_uid}&orthanc={orthanc_base_url}
+```
+
+### Option B: Run without Docker
+
+If Orthanc is managed externally, point HMS to that host.
+
+1. Run backend/frontend normally:
+
+```bash
+cd backend
+.venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+```bash
+cd frontend
+npm run dev
+```
+
+2. Configure PACS endpoints in `backend/.env`:
+
+```env
+ORTHANC_BASE_URL=http://<your-orthanc-host>:8042
+ORTHANC_USERNAME=<your-orthanc-user>
+ORTHANC_PASSWORD=<your-orthanc-password>
+ORTHANC_DICOMWEB_ROOT=/dicom-web
+DICOM_VIEWER_BASE_URL=http://<your-dicom-viewer-host>:8080
+```
+
+3. Restart backend after env changes.
+
+Notes:
+- `npm run dev` starts Orthanc (Docker) and the DCIM viewer (`:8080`) before backend/frontend.
+- PACS features require backend and browser reachability to Orthanc.
+- Health check: `npm run dev:pacs:check`

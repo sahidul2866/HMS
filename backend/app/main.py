@@ -37,6 +37,20 @@ install_exception_handlers(app)
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": settings.app_name,
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "health": "/health/live",
+            "ready": "/health/ready",
+            "api": settings.api_v1_prefix
+        }
+    }
+
+
 @app.get("/health/live")
 def live() -> dict[str, str]:
     return {"status": "ok"}

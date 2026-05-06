@@ -15,13 +15,44 @@
   </section>
 
   @if (summary) {
-    <section class="kpi-grid">
-      <article class="kpi-card"><span>Posted Invoices</span><strong>{{ summary.posted_invoice_count }}</strong></article>
-      <article class="kpi-card"><span>Void Invoices</span><strong>{{ summary.void_invoice_count }}</strong></article>
-      <article class="kpi-card"><span>Gross Amount</span><strong>{{ formatCurrency(summary.gross_amount) }}</strong></article>
-      <article class="kpi-card"><span>Discount Amount</span><strong>{{ formatCurrency(summary.discount_amount) }}</strong></article>
-      <article class="kpi-card"><span>Net Amount</span><strong>{{ formatCurrency(summary.net_amount) }}</strong></article>
-      <article class="kpi-card"><span>Referral Amount</span><strong>{{ formatCurrency(summary.referred_doctor_amount) }}</strong></article>
+    <section class="dashboard-summary-grid">
+      @for (card of revenueCards; track card.label) {
+        <article class="dashboard-kpi">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <small>{{ card.detail }}</small>
+        </article>
+      }
+    </section>
+
+    <section class="decision-grid">
+      <article class="page-card chart-panel">
+        <div class="chart-panel__head">
+          <div><h2>Collection Health</h2><span>Net collection vs due queue</span></div>
+          <strong>{{ collectionRate }}%</strong>
+        </div>
+        <div class="mini-bar-list">
+          <div class="mini-bar-row">
+            <span>Collected</span>
+            <span class="mini-bar-row__track"><span class="mini-bar-row__fill" [style.width.%]="collectionRate"></span></span>
+            <b>{{ formatCurrency(summary.net_amount) }}</b>
+          </div>
+          <div class="mini-bar-row">
+            <span>Due</span>
+            <span class="mini-bar-row__track"><span class="mini-bar-row__fill" [style.width.%]="100 - collectionRate"></span></span>
+            <b>{{ formatCurrency(dueQueueTotal) }}</b>
+          </div>
+        </div>
+      </article>
+
+      <article class="page-card dashboard-panel">
+        <div class="chart-panel__head"><div><h2>Quick Actions</h2><span>Most used billing workflows</span></div></div>
+        <div class="quick-link-grid">
+          <button class="quick-link-card" type="button" (click)="goToCreateInvoice()"><strong>Create Invoice</strong><small>New bill</small></button>
+          <button class="quick-link-card" type="button" (click)="goToDueList()"><strong>Due Payments</strong><small>{{ dueInvoices.length }} pending</small></button>
+          <button class="quick-link-card" type="button" (click)="goToInvoiceList()"><strong>Invoice List</strong><small>Search and review</small></button>
+        </div>
+      </article>
     </section>
   }
 

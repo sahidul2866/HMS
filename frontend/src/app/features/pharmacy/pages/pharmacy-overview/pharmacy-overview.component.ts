@@ -47,6 +47,35 @@ export class PharmacyOverviewComponent {
     void this.router.navigate([path], { queryParams });
   }
 
+  get pharmacyKpis(): Array<{ label: string; value: string | number; detail: string }> {
+    if (!this.summary) return [];
+    return [
+      { label: 'Sales', value: this.summary.total_sales, detail: `${this.recentSales.length} recent transactions` },
+      { label: 'Low Stock', value: this.summary.low_stock_medicines, detail: 'Items below reorder level' },
+      { label: 'Pending Rx', value: this.pendingPrescriptions.length, detail: 'Ready for dispense review' },
+      { label: 'Catalog', value: this.summary.total_medicines, detail: `${this.summary.total_customers} customers recorded` },
+    ];
+  }
+
+  get pharmacyAlerts(): Array<{ label: string; detail: string; value: number; route: string; tone: string }> {
+    return [
+      {
+        label: 'Low-stock medicines',
+        detail: 'Create purchase orders before stockout',
+        value: this.lowStockMedicines.length,
+        route: '/pharmacy/medicines',
+        tone: this.lowStockMedicines.length ? 'warning' : 'good',
+      },
+      {
+        label: 'Prescription queue',
+        detail: 'Dispense pending clinical orders',
+        value: this.pendingPrescriptions.length,
+        route: '/pharmacy/dispense',
+        tone: this.pendingPrescriptions.length ? 'warning' : 'good',
+      },
+    ];
+  }
+
   formatCurrency(value: string | number | null | undefined): string {
     return new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', minimumFractionDigits: 2 }).format(Number(value ?? 0));
   }

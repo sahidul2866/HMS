@@ -1,4 +1,4 @@
-<div class="patient-app-shell">
+<div class="workspace-shell patient-app-shell">
   @if (loading) {
     <section class="page-card patient-skeleton">
       <div></div>
@@ -6,7 +6,7 @@
       <div></div>
     </section>
   } @else if (history) {
-    <section class="patient-home-card">
+    <section class="page-card module-hero patient-home-card">
       <div class="profile-chip">
         <div class="avatar">{{ profileInitials || 'P' }}</div>
         <div>
@@ -15,10 +15,10 @@
         </div>
       </div>
       <div class="home-actions">
-        <button type="button" (click)="setTab('book')">Find Doctor</button>
-        <button type="button" (click)="setTab('book')">Book Appointment</button>
-        <button type="button" (click)="setTab('assistant')">Health Assistant</button>
-        <button type="button" (click)="toggleQuickActionsModal()">More Actions</button>
+        <button class="primary-btn" type="button" (click)="setTab('book')">Find Doctor</button>
+        <button class="secondary-btn" type="button" (click)="setTab('book')">Book Appointment</button>
+        <button class="secondary-btn" type="button" (click)="setTab('assistant')">Health Assistant</button>
+        <button class="secondary-btn" type="button" (click)="toggleQuickActionsModal()">More Actions</button>
       </div>
     </section>
 
@@ -54,15 +54,15 @@
       <div class="inline-message">{{ portalMessage }}</div>
     }
 
-    <nav class="portal-tab-groups" aria-label="Patient portal tab groups">
+    <nav class="tab-strip portal-tab-groups" aria-label="Patient portal tab groups">
       @for (group of tabGroups; track group.key) {
-        <button type="button" [class.active]="activeTabGroup === group.key" (click)="setTabGroup(group.key)">{{ group.label }}</button>
+        <button type="button" class="tab-button" [class.active]="activeTabGroup === group.key" (click)="setTabGroup(group.key)">{{ group.label }}</button>
       }
     </nav>
 
-    <nav class="portal-tabs" aria-label="Patient portal sections">
+    <nav class="tab-strip portal-tabs" aria-label="Patient portal sections">
       @for (tab of visiblePortalTabs; track tab.key) {
-        <button type="button" [class.active]="activeTab === tab.key" (click)="setTab(tab.key)">{{ tab.label }}</button>
+        <button type="button" class="tab-button" [class.active]="activeTab === tab.key" (click)="setTab(tab.key)">{{ tab.label }}</button>
       }
     </nav>
 

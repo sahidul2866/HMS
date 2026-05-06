@@ -15,6 +15,8 @@ export interface StaffBotResponse {
   quick_replies?: string[];
   follow_up?: boolean;
   required_fields?: string[];
+  permission_denied?: boolean;
+  context_suggestions?: string[];
 }
 
 export interface StaffBotSettings {
@@ -23,13 +25,29 @@ export interface StaffBotSettings {
   gemini_enabled: boolean;
 }
 
+export interface StaffBotContext {
+  module?: string | null;
+  page?: string | null;
+  path?: string | null;
+  record_type?: string | null;
+  record_id?: string | null;
+  selected_label?: string | null;
+  patient_id?: string | null;
+  employee_id?: string | null;
+  invoice_id?: string | null;
+  visit_id?: string | null;
+  appointment_id?: string | null;
+  order_id?: string | null;
+  filters?: Record<string, unknown>;
+}
+
 @Injectable({ providedIn: 'root' })
 export class StaffBotService extends ApiBaseService {
   settings(): Observable<StaffBotSettings> {
     return this.http.get<StaffBotSettings>(this.url('/staff-bot/settings'));
   }
 
-  sendMessage(payload: { message: string; conversation_id?: string | null; context?: string | null }): Observable<StaffBotResponse> {
+  sendMessage(payload: { message: string; conversation_id?: string | null; context?: StaffBotContext | string | null }): Observable<StaffBotResponse> {
     return this.http.post<StaffBotResponse>(this.url('/staff-bot/message'), {
       message: payload.message,
       conversation_id: payload.conversation_id || null,
@@ -37,7 +55,7 @@ export class StaffBotService extends ApiBaseService {
     });
   }
 
-  reset(payload?: { context?: string | null }): Observable<StaffBotResponse> {
+  reset(payload?: { context?: StaffBotContext | string | null }): Observable<StaffBotResponse> {
     return this.http.post<StaffBotResponse>(this.url('/staff-bot/reset'), { context: payload?.context || null });
   }
 }

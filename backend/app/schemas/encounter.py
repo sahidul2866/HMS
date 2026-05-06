@@ -370,6 +370,8 @@ class ClinicalInvestigationWorkItemRead(BaseModel):
     result_text: str | None = None
     completed_at: datetime | None = None
     verified_at: datetime | None = None
+    has_pacs_link: bool = False
+    pacs_study_uid: str | None = None
     lab_order_id: UUID | None = None
     radiology_order_id: UUID | None = None
 

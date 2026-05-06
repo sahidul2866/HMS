@@ -1,0 +1,91 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">LIS Bridge</div>
+        <h1 class="page-title">Machine Simulation Console</h1>
+        <p class="page-subtitle">Client demo screen for direct analyzer-to-HMS result flow.</p>
+      </div>
+      <button class="secondary-btn" type="button" (click)="refresh()">Refresh</button>
+    </div>
+  </section>
+
+  <section class="page-card soft-panel">
+    <h2 class="section-title">Analyzer Machines</h2>
+    <div class="machine-grid">
+      @for (machine of machines; track machine.code) {
+        <button type="button" class="machine-card" [class.active]="machine.code === selectedMachineCode" (click)="pickMachine(machine.code)">
+          <strong>{{ machine.name }}</strong>
+          <span>{{ machine.analyzer_type }} · {{ machine.protocol }}</span>
+          <small>{{ machine.host }}:{{ machine.port }} · {{ machine.status }}</small>
+        </button>
+      }
+    </div>
+  </section>
+
+  <section class="page-card soft-panel">
+    <h2 class="section-title">Pending Lab Queue</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Visit</th>
+          <th>Patient</th>
+          <th>Test</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of queue; track item.order_id) {
+          <tr>
+            <td>{{ item.visit_number }}</td>
+            <td>{{ item.patient_number }} · {{ item.patient_name }}</td>
+            <td>{{ item.item_name }}</td>
+            <td>{{ item.status }}</td>
+            <td>
+              <button class="primary-btn" type="button" [disabled]="!selectedMachineCode || runningOrderId === item.order_id" (click)="simulate(item)">
+                {{ runningOrderId === item.order_id ? 'Analyzing...' : 'Run Analysis' }}
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5">No pending lab orders in queue.</td></tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="page-card soft-panel">
+    <h2 class="section-title">Latest Machine Logs</h2>
+    <div class="log-stack">
+      @for (log of logs; track log.completed_at + log.order_id) {
+        <article>
+          <strong>{{ log.machine_name }} · {{ log.sample_barcode }}</strong>
+          <small>Order: {{ log.order_id }} · {{ log.completed_at | date:'medium' }}</small>
+          <table class="table analyte-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Test</th>
+                <th>Value</th>
+                <th>Ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of log.analytes; track a.code) {
+                <tr>
+                  <td>{{ a.code }}</td>
+                  <td>{{ a.name }}</td>
+                  <td>{{ a.value }}{{ a.unit ? (' ' + a.unit) : '' }}</td>
+                  <td>{{ a.reference_range || '-' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </article>
+      } @empty {
+        <div class="empty-state">No simulation run yet.</div>
+      }
+    </div>
+  </section>
+</section>

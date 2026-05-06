@@ -26,7 +26,7 @@ def get_clinical_summary(user=Depends(get_current_user), db: Session = Depends(g
     return ReportingService(db).get_clinical_summary(user)
 
 
-@router.get("/financial-summary", response_model=FinancialSummaryRead, dependencies=[Depends(require_permissions("reporting.view"))])
+@router.get("/financial-summary", response_model=FinancialSummaryRead, dependencies=[Depends(require_permissions("reporting.financial.view"))])
 def get_financial_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> FinancialSummaryRead:
     return ReportingService(db).get_financial_summary(user)
 
@@ -46,7 +46,7 @@ def get_pharmacy_summary(user=Depends(get_current_user), db: Session = Depends(g
     return ReportingService(db).get_pharmacy_summary(user)
 
 
-@router.get("/revenue-summary", response_model=RevenueSummaryRead, dependencies=[Depends(require_permissions("reporting.view"))])
+@router.get("/revenue-summary", response_model=RevenueSummaryRead, dependencies=[Depends(require_permissions("reporting.financial.view"))])
 def get_revenue_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> RevenueSummaryRead:
     return ReportingService(db).get_revenue_summary(user)
 

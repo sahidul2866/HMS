@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
+import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { BillingInvoice, BillingInvoiceItem, BillingInvoiceListItem } from '../../../billing/models/billing.models';
 import { BillingServiceApi } from '../../../billing/services/billing.service';
 import { PharmacyDispense, PharmacyPendingPrescription } from '../../models/pharmacy.models';
@@ -12,7 +13,7 @@ import { PharmacyService } from '../../services/pharmacy.service';
 @Component({
   selector: 'app-pharmacy-workbench',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
   templateUrl: './pharmacy-workbench.component.html',
   styleUrls: ['./pharmacy-workbench.component.scss'],
 })

@@ -1,12 +1,12 @@
 <section class="workspace-shell ipd-entry-page">
   <section class="page-card module-hero ipd-hero">
-    <div class="hero-main">
+    <div class="hero-row">
       <div>
         <div class="hero-kicker">IPD Admission</div>
         <h1 class="page-title">Admit Inpatient Patient</h1>
-        <p class="page-subtitle">Compact admission intake for patient, bed, doctor, and finance setup.</p>
+        <div class="page-subtitle">Compact admission intake for patient, bed, doctor, and finance setup.</div>
       </div>
-      <div class="hero-actions">
+      <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="ghost-btn" type="button" (click)="backToOverview()">Back To IPD Overview</button>
       </div>
@@ -60,6 +60,15 @@
             </div>
           }
         </div>
+
+        @if (selectedPatient) {
+          <app-patient-context-panel
+            [patient]="selectedPatient"
+            [patientId]="selectedPatient.id"
+            contextLabel="IPD Patient"
+            [compact]="true"
+          ></app-patient-context-panel>
+        }
 
         <div class="section-block">
           <div class="section-headline">
@@ -288,6 +297,7 @@
         </div>
 
         <div class="form-actions sticky-actions">
+          <span class="form-helper">{{ hasUnsavedChanges() ? 'Unsaved admission draft' : 'Admission draft clean' }}</span>
           <button class="ghost-btn" type="button" (click)="backToOverview()">Cancel</button>
           <button class="secondary-btn" type="button" (click)="clearPatientSelection()">Reset Patient</button>
           <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Create Admission' }}</button>

@@ -1,47 +1,44 @@
 .hr-shell {
   display: grid;
-  gap: 14px;
+  gap: 0.75rem;
 }
 
-.hr-topbar,
 .panel,
 .metric,
 .quick-grid > button {
-  background: #ffffff;
-  border: 1px solid #dfe7ef;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
 }
 
-.hr-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
+.panel {
+  padding: 0.85rem;
+  min-width: 0;
 }
 
-.eyebrow {
-  color: #0f766e;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
+.metric {
+  border-left: 4px solid var(--text-muted);
+  padding: 0.75rem 0.85rem;
 }
 
-h1,
-h2,
-h3 {
-  margin: 0;
-  color: #102033;
+.metric.good { border-left-color: color-mix(in srgb, var(--success) 80%, black 20%); }
+.metric.warn { border-left-color: color-mix(in srgb, var(--accent) 80%, black 20%); }
+.metric.danger { border-left-color: color-mix(in srgb, var(--danger) 80%, black 20%); }
+.metric.money { border-left-color: color-mix(in srgb, var(--primary) 85%, white 15%); }
+
+.metric span {
+  color: var(--text-muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-h1 {
-  font-size: 24px;
-}
-
-h2 {
-  font-size: 16px;
+.metric strong {
+  display: block;
+  font-size: clamp(1.12rem, 1.7vw, 1.45rem);
+  margin-top: 4px;
+  color: var(--text);
 }
 
 button,
@@ -51,24 +48,19 @@ select {
   font: inherit;
 }
 
-button {
-  border: 1px solid #cbd7e2;
-  background: #f8fafc;
-  color: #172033;
+button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button):not(.primary):not(.secondary):not(.danger) {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   font-weight: 700;
-  padding: 9px 12px;
+  min-height: 2.25rem;
+  padding: 0.48rem 0.72rem;
 }
 
-button:hover {
-  border-color: #0f766e;
-}
-
-.primary,
-.top-actions button:first-child {
-  background: #0f766e;
-  border-color: #0f766e;
-  color: #fff;
+button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button):not(.primary):not(.secondary):not(.danger):hover {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  color: var(--primary);
 }
 
 .top-actions,
@@ -87,62 +79,17 @@ button:hover {
   justify-content: space-between;
 }
 
-.tab-strip {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.tab-strip button {
-  background: #eaf1f7;
-  border-color: transparent;
-  white-space: nowrap;
-}
-
-.tab-strip button.active {
-  background: #102033;
-  color: #fff;
-}
-
 .metric-grid {
   display: grid;
-  gap: 10px;
+  gap: 0.6rem;
   grid-template-columns: repeat(6, minmax(130px, 1fr));
 }
-
-.metric {
-  border-left: 4px solid #64748b;
-  padding: 14px;
-}
-
-.metric span {
-  color: #64748b;
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.metric strong {
-  display: block;
-  font-size: 25px;
-  margin-top: 4px;
-}
-
-.metric.good { border-left-color: #16a34a; }
-.metric.warn { border-left-color: #f59e0b; }
-.metric.danger { border-left-color: #dc2626; }
-.metric.money { border-left-color: #2563eb; }
 
 .content-grid,
 .payroll-layout {
   display: grid;
-  gap: 14px;
+  gap: 0.75rem;
   grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
-}
-
-.panel {
-  padding: 14px;
 }
 
 .wide {
@@ -165,14 +112,14 @@ button:hover {
 }
 
 .bar-row div {
-  background: #edf2f7;
+  background: var(--surface-alt);
   border-radius: 999px;
   height: 8px;
   overflow: hidden;
 }
 
 .bar-row i {
-  background: #0f766e;
+  background: var(--primary);
   display: block;
   height: 100%;
 }
@@ -180,28 +127,28 @@ button:hover {
 .alert,
 .alert-row,
 .empty {
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  padding: 0.62rem 0.72rem;
 }
 
 .alert.error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  color: var(--danger);
 }
 
 .alert.success {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
 }
 
 .alert-row {
-  background: #fff7ed;
-  color: #9a3412;
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
 }
 
 .empty {
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--surface-soft);
+  color: var(--text-muted);
 }
 
 .list-toolbar {
@@ -212,9 +159,9 @@ button:hover {
 .list-toolbar select,
 .form-grid input,
 .form-grid select {
-  border: 1px solid #cbd7e2;
-  min-height: 38px;
-  padding: 8px 10px;
+  border: 1px solid var(--border);
+  min-height: 2.35rem;
+  padding: 0.48rem 0.62rem;
 }
 
 .list-toolbar input {
@@ -233,67 +180,28 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid #e5edf5;
-  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  padding: 0.54rem 0.62rem;
   text-align: left;
   vertical-align: middle;
 }
 
 th {
-  color: #64748b;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
   text-transform: uppercase;
 }
 
 td small,
 .payroll-row small,
 .roster-card small {
-  color: #64748b;
+  color: var(--text-muted);
   display: block;
   margin-top: 3px;
 }
 
 .row-alert {
-  background: #ffffbf;
-}
-
-.status {
-  border-radius: 999px;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 5px 8px;
-  text-transform: capitalize;
-}
-
-.status-active,
-.status-present,
-.status-approved,
-.status-paid {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-late,
-.status-pending,
-.status-half-day {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-absent,
-.status-rejected,
-.status-unpaid,
-.status-terminated {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-on-leave,
-.status-resigned,
-.status-draft {
-  background: #dbeafe;
-  color: #1e40af;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 
 .calendar-grid,
@@ -307,8 +215,8 @@ td small,
 .calendar-cell,
 .roster-card,
 .quick-grid > button {
-  min-height: 88px;
-  padding: 12px;
+  min-height: 5rem;
+  padding: 0.72rem;
   text-align: left;
 }
 
@@ -317,15 +225,15 @@ td small,
   gap: 4px;
 }
 
-.calendar-cell.present { background: #f0fdf4; }
-.calendar-cell.late { background: #fffbeb; }
-.calendar-cell.absent { background: #fef2f2; }
-.calendar-cell.on_leave { background: #eff6ff; }
+.calendar-cell.present { background: var(--badge-success-bg); }
+.calendar-cell.late { background: var(--badge-warn-bg); }
+.calendar-cell.absent { background: color-mix(in srgb, var(--danger) 9%, var(--surface)); }
+.calendar-cell.on_leave { background: var(--badge-info-bg); }
 
 .roster-card,
 .payroll-row,
 .setting-row {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   display: grid;
   gap: 5px;
@@ -340,7 +248,7 @@ td small,
 }
 
 .payslip {
-  border: 1px dashed #94a3b8;
+  border: 1px dashed color-mix(in srgb, var(--text-muted) 50%, var(--border));
   border-radius: 8px;
   margin-top: 10px;
   padding: 12px;
@@ -354,24 +262,24 @@ td small,
 
 .payslip dt,
 .payslip dd {
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--border);
   margin: 0;
   padding: 6px 0;
 }
 
 .setting-row {
-  background: #fff;
+  background: var(--surface);
   text-align: left;
 }
 
 .setting-row span {
-  color: #0f766e;
+  color: var(--primary);
   font-weight: 800;
 }
 
 .modal-backdrop {
   align-items: center;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.54);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -381,8 +289,9 @@ td small,
 }
 
 .modal-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
   max-height: 90vh;
   max-width: 760px;
@@ -405,7 +314,7 @@ td small,
 }
 
 label {
-  color: #475569;
+  color: var(--text-muted);
   display: grid;
   font-size: 12px;
   font-weight: 800;

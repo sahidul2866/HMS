@@ -1,0 +1,47 @@
+messageRawdata:  \x05
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230729210347\r\x0337\r\n
+messageRawdata:  \x022P|1|\r\x03BB\r\n
+messageRawdata:  \x023O|1|23072510675|^10^1|^^^Testo^1|||||||||||Serum||||||||||F\r\x036D\r\n
+messageRawdata:  \x024R|1|^^^Testo^1|0.36|ng/mL||N||F||||20230726200948|901894\r\x03EF\r\n
+messageRawdata:  \x025C|1|I|CEX|I\r\x031B\r\n
+messageRawdata:  \x026L|1|F\r\x0301\r\n
+messageRawdata:  \x04
+Final_Result=> {'sampleId': '23072510675', 'result': {'1': ['1', 'Testo', '0.36', 'ng/mL']}}
+Data Sending To Server
+Data Send To server
+{"status":1,"message":"Data Inserted Successfully"}
++++++++++++++++++++++successfull++++++++++++++++++++++
+
+
+
+messageRawdata:  \x05
+messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230729210549\r\x033B\r\n
+messageRawdata:  \x022Q|1|^23072510324||ALL||||||||O\r\x0347\r\n
+messageRawdata:  \x023L|1|F\r\x03FE\r\n
+messageRawdata:  \x04
+Final_Result=> {'sampleId': '', 'result': {}}
+SampleID Missing!
+
+
+['\\x05', '\\x021H|\\\\^&|||ACCESS^901894|||||LIS||P|1|20230729212937\\r\\x033E\\r\\n', '\\x022Q|1|^23072510324||ALL||||||||O\\r\\x0347\\r\\n', '\\x023L|1|F\\r\\x03FE\\r\\n']
+
+
+1H|\^&|||LIS HOST|||||ACCESS^901894||P|1|
+
+
+
+b'\x05'
+2023-08-05 20:05:31.932506: messageRawdata:  \x05
+message First Sig  \x05
+b'\x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230805194532\r\x0339\r\n'
+2023-08-05 20:05:32.296975: messageRawdata:  \x021H|\\^&|||ACCESS^901894|||||LIS||P|1|20230805194532\r\x0339\r\n
+message First Sig  \x021H
+b'\x022Q|1|^I1014486||ALL||||||||O\r\x03CB\r\n'
+2023-08-05 20:05:32.536613: messageRawdata:  \x022Q|1|^I1014486||ALL||||||||O\r\x03CB\r\n
+message First Sig  \x022Q
+sample ID:  I1014486
+b'\x023L|1|F\r\x03FE\r\n'
+2023-08-05 20:05:32.733258: messageRawdata:  \x023L|1|F\r\x03FE\r\n
+message First Sig  \x023L
+last message
+b'\x04'

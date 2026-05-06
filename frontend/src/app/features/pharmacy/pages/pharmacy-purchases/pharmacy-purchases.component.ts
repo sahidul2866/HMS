@@ -3,6 +3,7 @@ import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { PharmacyMedicine, PharmacyPurchase } from '../../models/pharmacy.models';
 import { PharmacyService } from '../../services/pharmacy.service';
@@ -19,6 +20,7 @@ export class PharmacyPurchasesComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   purchases: PharmacyPurchase[] = [];
   medicines: PharmacyMedicine[] = [];
@@ -167,7 +169,7 @@ export class PharmacyPurchasesComponent {
       ? this.pharmacyService.updatePurchase(this.editingId, payload as never)
       : this.pharmacyService.createPurchase(payload as never);
     request.subscribe(() => {
-      this.notificationService.success(`Purchase ${this.editingId ? 'updated' : 'recorded'} successfully.`);
+      this.notificationService.success(`Purchase ${this.editingId ? 'updated' : 'recorded'}. Stock quantities are refreshed.`);
       this.resetForm();
       this.loadPage();
       this.loadMedicines();
@@ -175,11 +177,11 @@ export class PharmacyPurchasesComponent {
   }
 
   remove(item: PharmacyPurchase): void {
-    if (!window.confirm(`Delete purchase ${item.purchase_number}?`)) {
+    if (!this.confirmationService.confirmDestructive(item.purchase_number, 'delete purchase')) {
       return;
     }
     this.pharmacyService.deletePurchase(item.id).subscribe(() => {
-      this.notificationService.success('Purchase deleted successfully.');
+      this.notificationService.success(`Purchase ${item.purchase_number} deleted. Stock totals are refreshed.`);
       this.loadPage();
       this.loadMedicines();
     });

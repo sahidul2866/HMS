@@ -4,6 +4,7 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { Observable } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 
+import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import {
   CompanyPayload,
@@ -50,6 +51,7 @@ export class PharmacyMasterPageComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly notificationService = inject(NotificationService);
+  private readonly confirmationService = inject(ActionConfirmationService);
 
   readonly config = this.route.snapshot.data['config'] as MasterPageConfig;
   readonly form = this.buildForm();
@@ -61,6 +63,7 @@ export class PharmacyMasterPageComponent {
   total = 0;
   editingId: string | null = null;
   saving = false;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.loadPage();
@@ -91,6 +94,21 @@ export class PharmacyMasterPageComponent {
   searchNow(): void {
     this.page = 1;
     this.loadPage();
+  }
+
+  onSearchChanged(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+    this.searchTimer = setTimeout(() => this.searchNow(), 300);
+  }
+
+  clearSearch(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+    this.search = '';
+    this.searchNow();
   }
 
   previousPage(): void {
@@ -168,8 +186,7 @@ export class PharmacyMasterPageComponent {
   deleteRow(row: MasterRow): void {
     const id = String(row['id']);
     const name = row['name'] || this.config.title;
-    const confirmed = window.confirm(`Delete ${name}?`);
-    if (!confirmed) {
+    if (!this.confirmationService.confirmDestructive(String(name))) {
       return;
     }
     switch (this.config.entityKey) {

@@ -40,6 +40,15 @@
           </div>
         </div>
 
+        @if (selectedPatient) {
+          <app-patient-context-panel
+            [patient]="selectedPatient"
+            [patientId]="selectedPatient.id"
+            contextLabel="Appointment Patient"
+            [compact]="true"
+          ></app-patient-context-panel>
+        }
+
         <div class="section-block">
           <div class="section-headline">
             <h3>Booking Details</h3>
@@ -116,19 +125,19 @@
             <div class="form-grid appointment-grid">
               <label class="field">
                 <div class="field-label-row"><span>First Name</span><span class="field-label-meta"><span class="field-badge field-badge--required">Required</span></span></div>
-                <input type="text" formControlName="first_name" />
+                <input type="text" formControlName="first_name" placeholder="Given name" />
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Last Name</span><span class="field-label-meta"><span class="field-badge field-badge--required">Required</span></span></div>
-                <input type="text" formControlName="last_name" />
+                <input type="text" formControlName="last_name" placeholder="Family name" />
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
-                <input type="text" formControlName="phone" />
+                <input type="text" formControlName="phone" placeholder="Mobile number" />
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Email</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
-                <input type="email" formControlName="email" />
+                <input type="email" formControlName="email" placeholder="name@example.com" />
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Gender</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
@@ -145,15 +154,15 @@
               </label>
               <label class="field field-wide">
                 <div class="field-label-row"><span>Address</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
-                <textarea rows="2" formControlName="address"></textarea>
+                <textarea rows="2" formControlName="address" placeholder="Area, road, city"></textarea>
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Emergency Contact Name</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
-                <input type="text" formControlName="emergency_contact_name" />
+                <input type="text" formControlName="emergency_contact_name" placeholder="Guardian or emergency contact" />
               </label>
               <label class="field">
                 <div class="field-label-row"><span>Emergency Contact Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
-                <input type="text" formControlName="emergency_contact_phone" />
+                <input type="text" formControlName="emergency_contact_phone" placeholder="Emergency mobile number" />
               </label>
             </div>
           }
@@ -183,7 +192,8 @@
           </div>
         </div>
 
-        <div class="form-actions">
+        <div class="form-actions sticky-actions">
+          <span class="form-helper">{{ hasUnsavedChanges() ? 'Unsaved appointment draft' : 'Ready for new entry' }}</span>
           <button class="ghost-btn" type="button" (click)="openAppointmentDesk()">Cancel</button>
           <button class="primary-btn" type="submit">{{ saving ? 'Saving...' : 'Create Appointment' }}</button>
         </div>

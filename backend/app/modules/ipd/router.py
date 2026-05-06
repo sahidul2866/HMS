@@ -44,7 +44,7 @@ def create_ipd_bed(
     return IPDBedRead.model_validate(bed, from_attributes=True)
 
 
-@router.post("/admissions", response_model=IPDAdmissionRead, dependencies=[Depends(require_permissions("ipd.admission.manage"))])
+@router.post("/admissions", response_model=IPDAdmissionRead, dependencies=[Depends(require_permissions("ipd.admit"))])
 def create_ipd_admission(
     payload: IPDAdmissionCreate,
     context=Depends(get_request_context),
@@ -58,7 +58,7 @@ def create_ipd_admission(
 @router.put(
     "/admissions/{admission_id}/discharge",
     response_model=IPDAdmissionRead,
-    dependencies=[Depends(require_permissions("ipd.admission.manage"))],
+    dependencies=[Depends(require_permissions("ipd.discharge"))],
 )
 def discharge_ipd_admission(
     admission_id: UUID,
@@ -74,7 +74,7 @@ def discharge_ipd_admission(
 @router.put(
     "/admissions/{admission_id}/transfer",
     response_model=IPDAdmissionRead,
-    dependencies=[Depends(require_permissions("ipd.admission.manage"))],
+    dependencies=[Depends(require_permissions("ipd.transfer"))],
 )
 def transfer_ipd_admission(
     admission_id: UUID,
