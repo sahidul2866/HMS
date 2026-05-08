@@ -87,8 +87,14 @@ export interface CreateOPDVisitOrderPayload {
 }
 
 export interface UpdateOPDVisitOrderPayload {
-  status: string;
+  service_area?: string | null;
+  item_name?: string | null;
+  room_number?: string | null;
+  instructions?: string | null;
+  quantity?: number | null;
+  status?: string | null;
   result_text?: string | null;
+  sample_note?: string | null;
 }
 
 export interface UpdateOPDVisitPayload {

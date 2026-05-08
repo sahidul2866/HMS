@@ -310,15 +310,32 @@ class OPDService:
         order = self.repository.get_order(order_id)
         if not order or order.visit_id != visit.id:
             raise AppException(404, "opd_order_not_found", "OPD order not found")
-        if order.order_type != "procedure":
-            raise AppException(400, "invalid_opd_order_type", "Only procedure orders can be updated from the OPD desk")
 
-        order.status = payload.status
-        order.result_text = payload.result_text
-        if payload.status == "completed":
+        if payload.item_name is not None:
+            order.item_name = payload.item_name
+        if payload.instructions is not None:
+            order.instructions = payload.instructions
+        if payload.quantity is not None:
+            order.quantity = payload.quantity
+        if payload.room_number is not None:
+            order.room_number = payload.room_number
+        if payload.sample_note is not None:
+            order.sample_note = payload.sample_note
+        if payload.result_text is not None:
+            order.result_text = payload.result_text
+        if payload.service_area is not None:
+            if order.order_type == "investigation" and payload.service_area == "pharmacy":
+                raise AppException(400, "invalid_service_area", "Investigation orders require laboratory or radiology service area")
+            order.service_area = "pharmacy" if order.order_type == "prescription" else payload.service_area
+        elif order.order_type == "prescription":
+            order.service_area = "pharmacy"
+
+        if payload.status is not None:
+            order.status = payload.status
+        if order.status == "completed":
             order.completed_at = datetime.now(UTC)
             order.completed_by_user_id = actor.id
-        else:
+        elif payload.status is not None:
             order.completed_at = None
             order.completed_by_user_id = None
         order.updated_by = actor.id
@@ -329,6 +346,28 @@ class OPDService:
             entity_type="opd_visit_order",
             entity_id=str(order.id),
             detail={"visit_number": visit.visit_number, "order_type": order.order_type, "status": payload.status},
+            context=context,
+        )
+        self.db.commit()
+        return self.repository.get_visit(visit.id) or visit
+
+    def delete_order(self, visit_id, order_id, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.get_visit(visit_id, actor)
+        order = self.repository.get_order(order_id)
+        if not order or order.visit_id != visit.id:
+            raise AppException(404, "opd_order_not_found", "OPD order not found")
+        if order.status in {"completed", "verified"}:
+            raise AppException(400, "opd_order_locked", "Completed or verified orders cannot be removed from the prescription")
+
+        order.status = "cancelled"
+        order.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.OPD_VISIT_ORDER_UPDATE,
+            module="opd",
+            entity_type="opd_visit_order",
+            entity_id=str(order.id),
+            detail={"visit_number": visit.visit_number, "order_type": order.order_type, "status": "cancelled", "removed_from_prescription": True},
             context=context,
         )
         self.db.commit()

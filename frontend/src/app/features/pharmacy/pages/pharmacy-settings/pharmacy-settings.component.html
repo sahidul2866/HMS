@@ -80,7 +80,7 @@
               @if (editingId) {
                 <button class="secondary-btn" type="button" (click)="resetForm()">Cancel Edit</button>
               }
-              <button class="primary-btn" type="submit" [disabled]="saving || form.invalid">{{ saving ? 'Saving...' : (editingId ? 'Update' : 'Save') }}</button>
+              <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : (editingId ? 'Update' : 'Save') }}</button>
             </div>
           </section>
         </form>

@@ -98,6 +98,7 @@
                 <summary>Actions</summary>
                 <div class="row-action-menu__panel">
                   <button type="button" (click)="openVisit(visit.id)">Open</button>
+                  <button type="button" (click)="printPrescription(visit)">Print Prescription</button>
                   @if (canStartVisit && isPaymentDone(visit)) {
                     <button type="button" (click)="startVisit(visit)">Start Visit</button>
                   }
@@ -130,6 +131,7 @@
             <div class="section-copy">{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }} · {{ selectedVisit.consulting_doctor_name }}</div>
           </div>
           <div class="toolbar-row">
+            <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Print Prescription</button>
             <button class="secondary-btn" type="button" (click)="closeVisit()">Close</button>
             @if (canStartVisit && isPaymentDone(selectedVisit)) {
               <button class="primary-btn" type="button" (click)="startVisit(selectedVisit)">Start Visit</button>
@@ -147,6 +149,275 @@
           <div><strong>Visit Fee:</strong> {{ formatCurrency(selectedVisit.consultation_total || selectedVisit.consultation_fee) }}</div>
           <div><strong>Chief Complaint:</strong> {{ selectedVisit.chief_complaint || 'Not recorded' }}</div>
         </div>
+
+        <section class="prescription-workbench">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Doctor Prescription</h3>
+              <div class="section-copy">
+                Layout: {{ activeLayoutProfile?.name || 'Default layout' }} · Suggestions: {{ activeSuggestionProfile?.name || 'Default suggestions' }}
+              </div>
+            </div>
+            <div class="toolbar-row">
+              <button class="secondary-btn" type="button" (click)="saveConsultation()" [disabled]="savingConsultation">Save Draft</button>
+              <button class="primary-btn" type="button" (click)="finalizePrescription()" [disabled]="savingConsultation">Finalize Prescription</button>
+            </div>
+          </div>
+
+          <div class="quick-action-strip">
+            <div class="quick-action-group">
+              <span>Templates</span>
+              @for (template of quickTemplates; track template.name) {
+                <button type="button" (click)="applyTemplate(template)">{{ template.name }}</button>
+              }
+            </div>
+            @if (previousVisits.length) {
+              <details class="previous-prescription-panel">
+                <summary>Copy Previous</summary>
+                <div class="previous-prescription-list">
+                  @for (visit of previousVisits; track visit.id) {
+                    <div>
+                      <strong>{{ visit.visit_date }} · {{ visit.consulting_doctor_name }}</strong>
+                      @for (order of visit.orders; track order.id) {
+                        @if (order.status !== 'cancelled' && (order.order_type === 'prescription' || order.order_type === 'investigation')) {
+                          <button type="button" (click)="copyPreviousOrder(order)">{{ order.order_type === 'prescription' ? 'Rx' : 'Test' }}: {{ order.item_name }}</button>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+              </details>
+            }
+          </div>
+
+          <div class="prescription-sheet-editor">
+            <header class="prescription-sheet-head">
+              <div>
+                <strong>{{ selectedVisit.consulting_doctor_name }}</strong>
+                <span>{{ selectedVisit.department_name }}</span>
+              </div>
+              <div>
+                <strong>{{ selectedVisit.patient.first_name }} {{ selectedVisit.patient.last_name }}</strong>
+                <span>{{ selectedVisit.patient.patient_number }} · {{ selectedVisit.visit_number }}</span>
+              </div>
+            </header>
+
+            @for (section of fullPrescriptionSections; track section.key) {
+              <div class="prescription-full-row">
+                @switch (section.key) {
+                  @case ('follow_up') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <input type="date" [(ngModel)]="prescriptionDraft.follow_up_date" [ngModelOptions]="{ standalone: true }" />
+                    </article>
+                  }
+                  @default {
+                    <article class="prescription-section prescription-section--compact" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <p>Configured full-width block</p>
+                    </article>
+                  }
+                }
+              </div>
+            }
+
+            <div class="prescription-two-column" [style.gridTemplateColumns]="prescriptionGridColumns">
+              <main class="prescription-column prescription-column--clinical">
+                @for (section of leftPrescriptionSections; track section.key) {
+                  @switch (section.key) {
+                  @case ('complaint') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <div class="suggestion-chip-row">
+                        @for (item of complaintSuggestions; track item) {
+                          <button type="button" (click)="applySuggestion('chief_complaint', item)">{{ item }}</button>
+                        }
+                      </div>
+                      <textarea rows="3" [(ngModel)]="prescriptionDraft.chief_complaint" [ngModelOptions]="{ standalone: true }"></textarea>
+                    </article>
+                  }
+                  @case ('history') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <textarea rows="3" [(ngModel)]="prescriptionDraft.history_of_present_illness" [ngModelOptions]="{ standalone: true }"></textarea>
+                    </article>
+                  }
+                  @case ('vitals') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <textarea rows="2" [(ngModel)]="prescriptionDraft.vital_signs" [ngModelOptions]="{ standalone: true }"></textarea>
+                    </article>
+                  }
+                  @case ('examination') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <textarea rows="3" [(ngModel)]="prescriptionDraft.examination_note" [ngModelOptions]="{ standalone: true }"></textarea>
+                    </article>
+                  }
+	                  @case ('diagnosis') {
+	                    <article class="prescription-section" [style.minHeight.px]="section.height">
+	                      <h4>{{ section.label }}</h4>
+                          <input [(ngModel)]="diagnosisSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search diagnosis template" />
+	                      <div class="suggestion-chip-row">
+	                        @for (item of diagnosisQuickSuggestions; track item) {
+	                          <button type="button" (click)="applyDiagnosis(item)">{{ item }}</button>
+	                        }
+	                      </div>
+	                      <input [(ngModel)]="prescriptionDraft.provisional_diagnosis" [ngModelOptions]="{ standalone: true }" placeholder="Provisional diagnosis" />
+                      <input [(ngModel)]="prescriptionDraft.final_diagnosis" [ngModelOptions]="{ standalone: true }" placeholder="Final diagnosis" />
+                    </article>
+                  }
+                  @default {
+                    <article class="prescription-section prescription-section--compact" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <p>Clinical section</p>
+                    </article>
+                  }
+                }
+              }
+            </main>
+
+              <aside class="prescription-column prescription-column--rx">
+                @for (section of rightPrescriptionSections; track section.key) {
+                  @switch (section.key) {
+	                  @case ('rx') {
+	                    <article class="prescription-section rx-section" [style.minHeight.px]="section.height">
+	                      <div class="rx-header-row">
+	                        <div class="rx-symbol">Rx</div>
+	                        <button class="primary-btn" type="button" (click)="addPrescriptionMedicine()" [disabled]="savingOrder">Add Medicine</button>
+	                      </div>
+	                      <div class="medicine-entry-grid">
+	                        <input [(ngModel)]="medicineDraft.item_name" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onMedicineQueryChanged($event)" (keydown.enter)="addBestMedicineFromKeyboard()" placeholder="Medicine name" />
+	                        <input [(ngModel)]="medicineDraft.strength" [ngModelOptions]="{ standalone: true }" placeholder="Strength" />
+	                        <select [(ngModel)]="medicineDraft.dosage" [ngModelOptions]="{ standalone: true }">
+	                          @for (item of dosageOptions; track item) { <option [value]="item">{{ item }}</option> }
+	                        </select>
+	                        <select [(ngModel)]="medicineDraft.frequency" [ngModelOptions]="{ standalone: true }">
+	                          @for (item of frequencyOptions; track item) { <option [value]="item">{{ item }}</option> }
+	                        </select>
+	                        <input [(ngModel)]="medicineDraft.duration" [ngModelOptions]="{ standalone: true }" placeholder="Duration" />
+	                        <select [(ngModel)]="medicineDraft.timing" [ngModelOptions]="{ standalone: true }">
+	                          @for (item of timingOptions; track item) { <option [value]="item">{{ item }}</option> }
+	                        </select>
+	                        <select [(ngModel)]="medicineDraft.route" [ngModelOptions]="{ standalone: true }">
+	                          @for (item of routeOptions; track item) { <option [value]="item">{{ item }}</option> }
+	                        </select>
+	                        <input type="number" min="1" [(ngModel)]="medicineDraft.quantity" [ngModelOptions]="{ standalone: true }" placeholder="Qty" />
+	                      </div>
+	                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="addPrescriptionMedicine()" placeholder="Extra instructions" />
+	                      <div class="suggestion-list">
+	                        @if (medicineSuggestionsLoading) {
+	                          <div class="suggestion-loading">Searching medicines...</div>
+	                        }
+	                        @for (medicine of filteredMedicineSuggestions; track medicine.id) {
+	                          <button type="button" (click)="selectMedicineSuggestion(medicine, true)">
+	                            <strong>{{ medicine.name }}</strong>
+	                            <span>{{ medicine.strength || medicine.dosage_form || '-' }} · {{ medicine.generic_name || 'Generic N/A' }} · Stock {{ medicine.stock_quantity }}</span>
+	                          </button>
+	                        }
+	                      </div>
+	                      @if (activePrescriptionOrders.length) {
+	                        <div class="prescribed-list prescribed-list--table">
+	                          @for (order of activePrescriptionOrders; track order.id) {
+	                            <div>
+	                              @if (editingOrderId === order.id) {
+	                                <input [(ngModel)]="order.item_name" [ngModelOptions]="{ standalone: true }" />
+	                                <input [(ngModel)]="order.instructions" [ngModelOptions]="{ standalone: true }" />
+	                                <input type="number" min="1" [(ngModel)]="order.quantity" [ngModelOptions]="{ standalone: true }" />
+	                                <button type="button" (click)="saveOrder(order)">Save</button>
+	                              } @else {
+	                                <strong>{{ order.item_name }}</strong>
+	                                <span>{{ order.instructions || 'No instruction' }} · Qty {{ order.quantity }}</span>
+	                                <div class="row-tools">
+	                                  <button type="button" (click)="editOrder(order)">Edit</button>
+	                                  <button type="button" (click)="removeOrder(order)">Remove</button>
+	                                </div>
+	                              }
+	                            </div>
+	                          }
+	                        </div>
+	                      }
+	                    </article>
+	                  }
+	                  @case ('investigation') {
+	                    <article class="prescription-section" [style.minHeight.px]="section.height">
+	                      <div class="rx-header-row">
+	                        <h4>{{ section.label }}</h4>
+	                        <button class="secondary-btn" type="button" (click)="addInvestigation()" [disabled]="savingOrder">Add Investigation</button>
+	                      </div>
+	                      <div class="investigation-entry-row">
+		                        <input [(ngModel)]="investigationDraft.item_name" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onInvestigationQueryChanged($event)" (keydown.enter)="addBestInvestigationFromKeyboard()" placeholder="Search lab or radiology test" />
+	                        <select [(ngModel)]="investigationDraft.service_area" [ngModelOptions]="{ standalone: true }">
+	                          <option value="laboratory">Lab</option>
+	                          <option value="radiology">Radiology</option>
+	                        </select>
+	                      </div>
+	                      <div class="suggestion-list suggestion-list--compact">
+	                        @if (investigationSuggestionsLoading) {
+	                          <div class="suggestion-loading">Searching tests...</div>
+	                        }
+	                        @for (item of filteredInvestigationSuggestions; track item.id) {
+	                          <button type="button" (click)="selectInvestigationSuggestion(item, true)">
+	                            <strong>{{ item.test_name }}</strong>
+	                            <span>{{ item.category_name }} · {{ item.service_area }} · {{ item.code }}</span>
+	                          </button>
+	                        }
+	                      </div>
+	                      @if (activeInvestigationOrders.length) {
+	                        <div class="prescribed-list prescribed-list--table">
+	                          @for (order of activeInvestigationOrders; track order.id) {
+	                            <div>
+	                              @if (editingOrderId === order.id) {
+	                                <input [(ngModel)]="order.item_name" [ngModelOptions]="{ standalone: true }" />
+	                                <select [(ngModel)]="order.service_area" [ngModelOptions]="{ standalone: true }">
+	                                  <option value="laboratory">Lab</option>
+	                                  <option value="radiology">Radiology</option>
+	                                </select>
+	                                <button type="button" (click)="saveOrder(order)">Save</button>
+	                              } @else {
+	                                <strong>{{ order.item_name }}</strong>
+	                                <span>{{ order.service_area || 'laboratory' }}</span>
+	                                <div class="row-tools">
+	                                  <button type="button" (click)="editOrder(order)">Edit</button>
+	                                  <button type="button" (click)="removeOrder(order)">Remove</button>
+	                                </div>
+	                              }
+	                            </div>
+	                          }
+	                        </div>
+	                      }
+	                    </article>
+	                  }
+	                  @case ('advice') {
+	                    <article class="prescription-section" [style.minHeight.px]="section.height">
+	                      <h4>{{ section.label }}</h4>
+                          <input [(ngModel)]="adviceSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search advice template" />
+	                      <div class="suggestion-chip-row">
+	                        @for (item of adviceQuickSuggestions; track item) {
+	                          <button type="button" (click)="applyAdvice(item)">{{ item }}</button>
+	                        }
+	                      </div>
+                      <textarea rows="2" [(ngModel)]="prescriptionDraft.follow_up_note" [ngModelOptions]="{ standalone: true }"></textarea>
+                    </article>
+                  }
+                  @case ('follow_up') {
+                    <article class="prescription-section" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <input type="date" [(ngModel)]="prescriptionDraft.follow_up_date" [ngModelOptions]="{ standalone: true }" />
+                    </article>
+                  }
+                  @default {
+                    <article class="prescription-section prescription-section--compact" [style.minHeight.px]="section.height">
+                      <h4>{{ section.label }}</h4>
+                      <p>Prescription section</p>
+                    </article>
+                  }
+                }
+              }
+            </aside>
+          </div>
+          </div>
+        </section>
       </section>
     </div>
   }

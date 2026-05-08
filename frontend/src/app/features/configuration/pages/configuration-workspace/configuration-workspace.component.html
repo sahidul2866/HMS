@@ -10,7 +10,7 @@
         <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
       </div>
     </div>
-    <div class="config-kpis">
+    <div class="config-tabs">
       @for (type of visibleProfileTypes; track type.key) {
         <button type="button" [class.active]="activeType === type.key" (click)="openType(type.key)">
           <span>{{ type.label }}</span>
@@ -24,20 +24,21 @@
     <aside class="page-card config-sidebar">
       <div class="section-header">
         <div>
-          <div class="hero-kicker">Setup Area</div>
+          <div class="hero-kicker">Saved Profiles</div>
           <h2 class="section-title">{{ activeTypeMeta.label }}</h2>
           <div class="section-copy">{{ activeTypeMeta.description }}</div>
         </div>
       </div>
-      <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search templates and rules" />
+      <input [(ngModel)]="search" [ngModelOptions]="{ standalone: true }" placeholder="Search doctor or profile" />
+      <button class="primary-btn" type="button" (click)="editing = null; resetDraft()">Create New</button>
       <div class="profile-list">
         @for (profile of filteredProfiles; track profile.id) {
           <button type="button" class="profile-card" [class.default]="profile.is_default" (click)="edit(profile)">
             <strong>{{ profile.name }}</strong>
-            <span>{{ profile.scope }} · {{ profile.code }}</span>
+            <span>{{ profile.is_default ? 'Default profile' : doctorName(profile.target_id) }}</span>
           </button>
         } @empty {
-          <div class="empty-state">No profile configured for this area.</div>
+          <div class="empty-state">No profile configured yet.</div>
         }
       </div>
     </aside>
@@ -46,112 +47,299 @@
       <section class="page-card editor-card">
         <div class="section-header">
           <div>
-            <div class="hero-kicker">Profile Editor</div>
-            <h2 class="section-title">{{ editing ? 'Edit Profile' : 'Create Profile' }}</h2>
+            <div class="hero-kicker">{{ editing ? 'Edit Profile' : 'Create Profile' }}</div>
+            <h2 class="section-title">{{ activeTypeMeta.label }}</h2>
           </div>
-          <button class="ghost-btn" type="button" (click)="editing = null; resetForm()">New</button>
+          @if (editing) {
+            <button class="danger-btn" type="button" (click)="delete(editing)">Delete</button>
+          }
         </div>
 
-        <form class="editor-grid" [formGroup]="form" (ngSubmit)="save()">
+        <div class="editor-grid">
+          <label class="field">
+            <span>Profile Name</span>
+            <input [(ngModel)]="currentDraft.name" [ngModelOptions]="{ standalone: true }" />
+          </label>
           <label class="field">
             <span>Code</span>
-            <input formControlName="code" />
+            <input [(ngModel)]="currentDraft.code" [ngModelOptions]="{ standalone: true }" />
           </label>
-          <label class="field">
-            <span>Name</span>
-            <input formControlName="name" />
-          </label>
-          <label class="field">
-            <span>Scope</span>
-            <select formControlName="scope">
-              <option value="hospital">Hospital-wide</option>
-              <option value="department">Department-wise</option>
-              <option value="doctor">Doctor-wise</option>
-              <option value="specialty">Specialty-wise</option>
-              <option value="visit_type">Visit-type-wise</option>
-            </select>
-          </label>
+          @if (context === 'opd') {
+            <label class="field">
+              <span>Doctor</span>
+              <select [(ngModel)]="currentDraft.target_id" [ngModelOptions]="{ standalone: true }">
+                <option value="">Use as default</option>
+                @for (doctor of doctors; track doctor.id) {
+                  <option [value]="doctor.id">{{ doctor.full_name }}</option>
+                }
+              </select>
+            </label>
+          }
           <label class="toggle-field">
-            <input type="checkbox" formControlName="is_default" />
-            <span>Default profile</span>
+            <input type="checkbox" [(ngModel)]="currentDraft.is_default" [ngModelOptions]="{ standalone: true }" />
+            <span>Default when doctor has no own setup</span>
           </label>
           <label class="field field-wide">
             <span>Description</span>
-            <textarea rows="2" formControlName="description"></textarea>
+            <textarea rows="2" [(ngModel)]="currentDraft.description" [ngModelOptions]="{ standalone: true }"></textarea>
           </label>
-          <label class="field field-wide">
-            <span>Structured Payload</span>
-            <textarea rows="13" formControlName="payload" spellcheck="false"></textarea>
-          </label>
-          <div class="form-actions sticky-actions">
-            @if (editing) {
-              <button class="danger-btn" type="button" (click)="delete(editing)">Delete</button>
-              <button class="secondary-btn" type="button" (click)="duplicate(editing)">Duplicate</button>
-            }
-            <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Save Configuration' }}</button>
+        </div>
+
+        @if (activeType === 'doctor_share') {
+          <div class="builder-panel">
+            <div class="segmented-control">
+              <button type="button" [class.active]="shareDraft.method === 'percentage'" (click)="shareDraft.method = 'percentage'">Percentage</button>
+              <button type="button" [class.active]="shareDraft.method === 'fixed'" (click)="shareDraft.method = 'fixed'">Fixed Amount</button>
+            </div>
+            <div class="editor-grid">
+              <label class="field">
+                <span>Consultation Fee</span>
+                <input type="number" min="0" [(ngModel)]="shareDraft.consultation_fee" [ngModelOptions]="{ standalone: true }" />
+              </label>
+              @if (shareDraft.method === 'percentage') {
+                <label class="field">
+                  <span>Doctor Share %</span>
+                  <input type="number" min="0" max="100" [(ngModel)]="shareDraft.doctor_share_percentage" [ngModelOptions]="{ standalone: true }" />
+                </label>
+                <label class="field">
+                  <span>Follow-Up Share %</span>
+                  <input type="number" min="0" max="100" [(ngModel)]="shareDraft.follow_up_share_percentage" [ngModelOptions]="{ standalone: true }" />
+                </label>
+              } @else {
+                <label class="field">
+                  <span>Doctor Fixed Amount</span>
+                  <input type="number" min="0" [(ngModel)]="shareDraft.doctor_share_amount" [ngModelOptions]="{ standalone: true }" />
+                </label>
+              }
+              <label class="toggle-field">
+                <input type="checkbox" [(ngModel)]="shareDraft.applies_to_follow_up" [ngModelOptions]="{ standalone: true }" />
+                <span>Apply separate follow-up share</span>
+              </label>
+              <label class="field field-wide">
+                <span>Internal Note</span>
+                <textarea rows="2" [(ngModel)]="shareDraft.notes" [ngModelOptions]="{ standalone: true }"></textarea>
+              </label>
+            </div>
           </div>
-        </form>
+        }
+
+        @if (activeType === 'prescription_suggestion') {
+          <div class="builder-panel suggestion-builder">
+            @for (group of [
+              { key: 'complaints', label: 'Complaints' },
+              { key: 'diagnoses', label: 'Diagnoses' },
+              { key: 'medicines', label: 'Medicines' },
+              { key: 'investigations', label: 'Investigations' },
+              { key: 'advice', label: 'Advice' }
+            ]; track group.key) {
+              <section class="list-editor">
+                <div class="list-editor__head">
+                  <strong>{{ group.label }}</strong>
+                  <button class="secondary-btn" type="button" (click)="addListItem($any(group.key))">Add</button>
+                </div>
+                @for (item of $any(suggestionDraft)[group.key]; track $index) {
+                  <div class="list-row-editor">
+                    <input [(ngModel)]="$any(suggestionDraft)[group.key][$index]" [ngModelOptions]="{ standalone: true }" />
+                    <button class="ghost-btn" type="button" (click)="removeListItem($any(group.key), $index)">Remove</button>
+                  </div>
+                }
+              </section>
+            }
+            <label class="field">
+              <span>Default Follow-Up Days</span>
+              <input type="number" min="0" [(ngModel)]="suggestionDraft.follow_up_days" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          </div>
+        }
+
+        @if (activeType === 'prescription_layout') {
+          <div class="builder-panel layout-builder">
+            <div class="editor-grid">
+              <label class="field">
+                <span>Paper Size</span>
+                <select [(ngModel)]="layoutDraft.paper_size" [ngModelOptions]="{ standalone: true }">
+                  <option value="A4">A4</option>
+                  <option value="A5">A5</option>
+                  <option value="Letter">Letter</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Layout</span>
+                <select [(ngModel)]="layoutDraft.layout" [ngModelOptions]="{ standalone: true }">
+                  <option value="single_column">Single column</option>
+                  <option value="two_column">Two column</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Font Size</span>
+                <input type="number" min="9" max="16" [(ngModel)]="layoutDraft.font_size" [ngModelOptions]="{ standalone: true }" />
+              </label>
+              <label class="field">
+                <span>Left Column Width %</span>
+                <input type="number" min="25" max="65" [(ngModel)]="layoutDraft.left_column_width" [ngModelOptions]="{ standalone: true }" />
+              </label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_logo" [ngModelOptions]="{ standalone: true }" /><span>Logo</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_qr" [ngModelOptions]="{ standalone: true }" /><span>QR Code</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_barcode" [ngModelOptions]="{ standalone: true }" /><span>Barcode</span></label>
+              <label class="field field-wide">
+                <span>Footer Note</span>
+                <input [(ngModel)]="layoutDraft.footer_note" [ngModelOptions]="{ standalone: true }" />
+              </label>
+            </div>
+            <div class="section-list">
+              @for (section of layoutDraft.sections; track section.key; let index = $index) {
+                <article
+                  class="section-item"
+                  draggable="true"
+                  (dragstart)="dragSection(index)"
+                  (dragover)="$event.preventDefault()"
+                  (drop)="dropSection(index)"
+                  [class.disabled]="!section.enabled"
+                >
+                  <span class="drag-handle">::</span>
+                  <label><input type="checkbox" [(ngModel)]="section.enabled" [ngModelOptions]="{ standalone: true }" /> {{ section.label }}</label>
+                  <select [(ngModel)]="section.placement" [ngModelOptions]="{ standalone: true }" [disabled]="layoutDraft.layout === 'single_column'">
+                    <option value="full">Full width</option>
+                    <option value="left">Left column</option>
+                    <option value="right">Right column</option>
+                  </select>
+                  <input type="number" min="34" max="320" [(ngModel)]="section.height" [ngModelOptions]="{ standalone: true }" title="Section height" />
+                  <div class="section-actions">
+                    <button type="button" class="ghost-btn" (click)="moveSection(index, index - 1)">Up</button>
+                    <button type="button" class="ghost-btn" (click)="moveSection(index, index + 1)">Down</button>
+                  </div>
+                </article>
+              }
+            </div>
+          </div>
+        }
+
+        @if (context !== 'opd') {
+          <div class="builder-panel">
+            <div class="editor-grid">
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.enabled" [ngModelOptions]="{ standalone: true }" /><span>Enabled</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.allow_appointment_booking" [ngModelOptions]="{ standalone: true }" /><span>Appointment Booking</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.allow_online_payment" [ngModelOptions]="{ standalone: true }" /><span>Online Payment</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.allow_family_access" [ngModelOptions]="{ standalone: true }" /><span>Family Access</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.allow_document_download" [ngModelOptions]="{ standalone: true }" /><span>Document Download</span></label>
+              <label class="toggle-field"><input type="checkbox" [(ngModel)]="genericDraft.show_billing_details" [ngModelOptions]="{ standalone: true }" /><span>Billing Details</span></label>
+              <label class="field field-wide"><span>Footer Note</span><input [(ngModel)]="genericDraft.footer_note" [ngModelOptions]="{ standalone: true }" /></label>
+            </div>
+          </div>
+        }
+
+        <div class="form-actions sticky-actions">
+          @if (editing) {
+            <button class="secondary-btn" type="button" (click)="duplicate(editing)">Duplicate</button>
+          }
+          <button class="primary-btn" type="button" [disabled]="saving" (click)="save()">{{ saving ? 'Saving...' : 'Save Configuration' }}</button>
+        </div>
       </section>
 
       <section class="page-card preview-card">
         <div class="section-header">
           <div>
-            <div class="hero-kicker">Live Preview</div>
-            <h2 class="section-title">{{ activeProfile?.name || activeTypeMeta.label }}</h2>
+            <div class="hero-kicker">Preview</div>
+            <h2 class="section-title">{{ currentDraft.name || activeTypeMeta.label }}</h2>
+            <div class="section-copy">{{ currentDraft.is_default ? 'Default profile' : doctorName(currentDraft.target_id) }}</div>
           </div>
         </div>
 
         @if (activeType === 'doctor_share') {
           <div class="share-preview">
-            <label class="field">
-              <span>Consultation Fee</span>
-              <input type="number" [formControl]="sharePreviewForm.controls.consultationFee" />
-            </label>
-            <label class="field">
-              <span>Discount</span>
-              <input type="number" [formControl]="sharePreviewForm.controls.discount" />
-            </label>
+            <label class="field"><span>Sample Fee</span><input type="number" [(ngModel)]="sharePreviewFee" [ngModelOptions]="{ standalone: true }" /></label>
+            <label class="field"><span>Discount</span><input type="number" [(ngModel)]="sharePreviewDiscount" [ngModelOptions]="{ standalone: true }" /></label>
             <div class="preview-metrics">
               <article><span>Net Fee</span><strong>{{ formatCurrency(sharePreview.net) }}</strong></article>
-              <article><span>Doctor Payable</span><strong>{{ formatCurrency(sharePreview.doctor) }}</strong></article>
-              <article><span>Hospital Share</span><strong>{{ formatCurrency(sharePreview.hospital) }}</strong></article>
+              <article><span>Doctor</span><strong>{{ formatCurrency(sharePreview.doctor) }}</strong></article>
+              <article><span>Hospital</span><strong>{{ formatCurrency(sharePreview.hospital) }}</strong></article>
             </div>
           </div>
         } @else if (activeType === 'prescription_suggestion') {
-          <div class="template-preview">
-            @for (key of ['complaints', 'diagnoses', 'medicines', 'investigations', 'advice']; track key) {
-              <article>
-                <span>{{ key }}</span>
-                <strong>{{ payloadListLabel(key) }}</strong>
-              </article>
+          <div class="suggestion-preview">
+            @for (medicine of suggestionDraft.medicines; track $index) {
+              @if (medicine) { <button type="button">{{ medicine }}</button> }
             }
           </div>
-        } @else if (activeType === 'patient_portal_settings' || activeType === 'patient_bot_settings') {
-          <div class="template-preview">
-            @for (key of ['enabled', 'allow_appointment_booking', 'allow_family_access', 'allow_document_download', 'show_billing_details']; track key) {
-              <article>
-                <span>{{ key }}</span>
-                <strong>{{ payloadListLabel(key) }}</strong>
-              </article>
-            }
-          </div>
-        } @else {
+        } @else if (activeType === 'prescription_layout') {
           <div class="print-preview">
-            <div class="print-paper">
-              <div class="print-header">Hospital Logo · Hospital Name · Contact</div>
-              @for (section of getSections(activeProfile); track section) {
-                <div class="print-section">{{ section }}</div>
-              }
-              <div class="print-footer">{{ payloadObject(activeProfile)['footer_note'] || 'Footer note' }}</div>
+            <div class="placement-legend">
+              <span>Full width</span>
+              <span>Left {{ leftColumnPercent }}%</span>
+              <span>Right {{ rightColumnPercent }}%</span>
+            </div>
+            <div class="print-paper prescription-paper-preview" [class.print-paper--single]="layoutDraft.layout === 'single_column'" [style.fontSize.px]="layoutDraft.font_size">
+              <div class="preview-doctor-head">
+                <div><strong>Doctor Name</strong><span>MBBS, FCPS · Consultant</span></div>
+                <div><span>Chamber / Room</span><span>Phone / Address</span></div>
+              </div>
+              <div class="preview-patient-band">
+                <span>Patient</span><span>ID</span><span>Age/Sex</span><span>Date</span>
+              </div>
+              <div class="preview-drop-zone preview-full-row" (dragover)="$event.preventDefault()" (drop)="dropCanvasSection('full')">
+                @for (section of canvasSections('full'); track section.key) {
+                  <div
+                    class="canvas-section"
+                    draggable="true"
+                    (dragstart)="dragCanvasSection(section)"
+                    [style.minHeight.px]="section.height"
+                  >
+                    <b>{{ section.label }}</b>
+                    <span>Full width · {{ section.height }}px</span>
+                    <button class="resize-handle" type="button" (pointerdown)="startResizeSection($event, section)" aria-label="Resize section"></button>
+                  </div>
+                } @empty {
+                  <span>Drop full-width sections here</span>
+                }
+              </div>
+              <div class="preview-body-grid" [style.gridTemplateColumns]="previewGridColumns" [style.--divider-left.%]="leftColumnPercent">
+                <div class="preview-drop-zone preview-left-column" (dragover)="$event.preventDefault()" (drop)="dropCanvasSection('left')">
+                  @for (section of canvasSections('left'); track section.key) {
+                    <div
+                      class="canvas-section"
+                      draggable="true"
+                      (dragstart)="dragCanvasSection(section)"
+                      [style.minHeight.px]="section.height"
+                    >
+                      <b>{{ section.label }}</b>
+                      <span>Clinical · {{ section.height }}px</span>
+                      <button class="resize-handle" type="button" (pointerdown)="startResizeSection($event, section)" aria-label="Resize section"></button>
+                    </div>
+                  } @empty {
+                    <span>Drop left-column sections here</span>
+                  }
+                </div>
+                @if (layoutDraft.layout !== 'single_column') {
+                  <button class="column-resize-handle" type="button" (pointerdown)="startResizeColumns($event)" aria-label="Resize columns"></button>
+                }
+                <div class="preview-drop-zone preview-right-column" (dragover)="$event.preventDefault()" (drop)="dropCanvasSection('right')">
+                  <strong class="preview-rx">Rx</strong>
+                  @for (section of canvasSections('right'); track section.key) {
+                    <div
+                      class="canvas-section"
+                      draggable="true"
+                      (dragstart)="dragCanvasSection(section)"
+                      [style.minHeight.px]="section.height"
+                    >
+                      <b>{{ section.label }}</b>
+                      <span>Rx side · {{ section.height }}px</span>
+                      <button class="resize-handle" type="button" (pointerdown)="startResizeSection($event, section)" aria-label="Resize section"></button>
+                    </div>
+                  } @empty {
+                    <span>Drop right-column sections here</span>
+                  }
+                </div>
+              </div>
+              <div class="print-footer">{{ layoutDraft.footer_note }}</div>
             </div>
           </div>
+        } @else {
+          <div class="template-preview">
+            <article><span>Enabled</span><strong>{{ genericDraft.enabled ? 'Yes' : 'No' }}</strong></article>
+            <article><span>Downloads</span><strong>{{ genericDraft.allow_document_download ? 'Allowed' : 'Blocked' }}</strong></article>
+            <article><span>Billing</span><strong>{{ genericDraft.show_billing_details ? 'Visible' : 'Hidden' }}</strong></article>
+          </div>
         }
-
-        <div class="demo-points">
-          @for (point of workspace?.demo_points || []; track point) {
-            <div>{{ point }}</div>
-          }
-        </div>
       </section>
     </main>
   </section>

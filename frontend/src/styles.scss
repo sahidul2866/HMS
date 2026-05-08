@@ -1926,10 +1926,11 @@ body .modal-card.modal-card {
   position: fixed;
   top: 1rem;
   right: 1rem;
-  z-index: 1200;
+  z-index: 3050;
   display: grid;
   gap: 0.75rem;
   width: min(380px, calc(100vw - 2rem));
+  pointer-events: none;
 }
 
 .notification-item {
@@ -1945,6 +1946,7 @@ body .modal-card.modal-card {
     var(--surface);
   overflow: hidden;
   position: relative;
+  pointer-events: auto;
   animation: notification-slide-in 220ms ease-out;
 }
 
@@ -2221,4 +2223,64 @@ body .action-grid button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):
 body .list-toolbar button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button):not(.primary):not(.secondary):not(.danger):hover {
   border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
   color: var(--primary);
+}
+
+.app-validation-summary {
+  display: grid;
+  gap: 0.2rem;
+  grid-column: 1 / -1;
+  margin-bottom: 0.35rem;
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  background: rgba(254, 242, 242, 0.94);
+  color: #991b1b;
+}
+
+.app-validation-summary strong {
+  font-weight: 900;
+}
+
+form.app-form-submitted input.ng-invalid,
+form.app-form-submitted select.ng-invalid,
+form.app-form-submitted textarea.ng-invalid,
+input.ng-invalid.ng-touched,
+select.ng-invalid.ng-touched,
+textarea.ng-invalid.ng-touched {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+.app-select-search {
+  width: 100%;
+  min-height: 2.15rem;
+  margin-bottom: 0.28rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.42rem 0.62rem;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.smart-suggestion-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: -0.18rem;
+}
+
+.smart-suggestion-strip button {
+  min-height: 1.85rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 999px;
+  padding: 0.28rem 0.52rem;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.smart-suggestion-strip button:hover {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
 }

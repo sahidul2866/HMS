@@ -3,11 +3,13 @@ import { Observable, map, tap } from 'rxjs';
 
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
+import { DataSyncService } from '../../../core/services/data-sync.service';
 import { CreatePatientPayload, Patient, PatientClinicalHistory, PatientLookupResult, PatientMobileLookup } from '../models/patient.models';
 
 @Injectable({ providedIn: 'root' })
 export class PatientService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
+  private readonly dataSync = inject(DataSyncService);
 
   list(): Observable<Patient[]> {
     return this.cache.getPersistent('patients:list', () => this.http.get<Patient[]>(this.url('/patients')));
@@ -58,7 +60,20 @@ export class PatientService extends ApiBaseService {
   }
 
   create(payload: CreatePatientPayload): Observable<Patient> {
-    return this.http.post<Patient>(this.url('/patients'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<Patient>(this.url('/patients'), payload).pipe(
+      tap((patient) => {
+        this.clearCache();
+        this.dataSync.publish({
+          name: 'patient.updated',
+          entityType: 'patient',
+          entityId: patient.id,
+          patientId: patient.id,
+          modules: ['patients', 'appointments', 'opd', 'ipd', 'er', 'billing', 'pharmacy', 'laboratory', 'radiology', 'dashboard'],
+          cachePrefixes: ['patients:', 'appointments:', 'opd:', 'ipd:', 'er:', 'billing:', 'pharmacy:', 'laboratory:', 'radiology:', 'dashboard:'],
+          message: 'Patient information updated.',
+        });
+      })
+    );
   }
 
   clearCache(): void {

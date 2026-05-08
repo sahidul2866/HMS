@@ -3,6 +3,7 @@ import { Observable, tap } from 'rxjs';
 
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
+import { DataSyncService } from '../../../core/services/data-sync.service';
 import {
   BillingInvoice,
   BillingInvoiceFilters,
@@ -26,6 +27,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class BillingServiceApi extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
+  private readonly dataSync = inject(DataSyncService);
 
   listServices(): Observable<BillingService[]> {
     return this.cache.getPersistent('billing:services:v2', () => this.http.get<BillingService[]>(this.url('/billing/services')));
@@ -42,15 +44,30 @@ export class BillingServiceApi extends ApiBaseService {
     max_invoice_discount_amount?: number | null;
     default_referral_percentage: number;
   }): Observable<BillingSettings> {
-    return this.http.patch<BillingSettings>(this.url('/billing/settings'), payload).pipe(tap(() => this.clearSettingsCache()));
+    return this.http.patch<BillingSettings>(this.url('/billing/settings'), payload).pipe(
+      tap(() => {
+        this.clearSettingsCache();
+        this.publishBillingEvent('data.updated', 'billing_settings', null, 'Billing settings updated.');
+      })
+    );
   }
 
   createService(payload: CreateBillingServicePayload): Observable<BillingService> {
-    return this.http.post<BillingService>(this.url('/billing/services'), payload).pipe(tap(() => this.clearServicesCache()));
+    return this.http.post<BillingService>(this.url('/billing/services'), payload).pipe(
+      tap((service) => {
+        this.clearServicesCache();
+        this.publishBillingEvent('data.updated', 'billing_service', service.id, 'Billing service list updated.');
+      })
+    );
   }
 
   updateServiceControls(id: string, payload: UpdateBillingServiceControlsPayload): Observable<BillingService> {
-    return this.http.patch<BillingService>(this.url(`/billing/services/${id}/controls`), payload).pipe(tap(() => this.clearServicesCache()));
+    return this.http.patch<BillingService>(this.url(`/billing/services/${id}/controls`), payload).pipe(
+      tap((service) => {
+        this.clearServicesCache();
+        this.publishBillingEvent('data.updated', 'billing_service', service.id, 'Billing service list updated.');
+      })
+    );
   }
 
   listInvoices(filters: BillingInvoiceFilters = {}): Observable<BillingInvoiceListItem[]> {
@@ -87,19 +104,39 @@ export class BillingServiceApi extends ApiBaseService {
   }
 
   createInvoice(payload: CreateBillingInvoicePayload): Observable<BillingInvoice> {
-    return this.http.post<BillingInvoice>(this.url('/billing/invoices'), payload).pipe(tap(() => this.clearInvoiceCache()));
+    return this.http.post<BillingInvoice>(this.url('/billing/invoices'), payload).pipe(
+      tap((invoice) => {
+        this.clearInvoiceCache(invoice.id);
+        this.publishInvoiceEvent('billing.invoice.updated', invoice, 'Invoice list updated.');
+      })
+    );
   }
 
   voidInvoice(invoiceId: string, payload: BillingInvoiceVoidPayload): Observable<BillingInvoice> {
-    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/void`), payload).pipe(tap(() => this.clearInvoiceCache(invoiceId)));
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/void`), payload).pipe(
+      tap((invoice) => {
+        this.clearInvoiceCache(invoiceId);
+        this.publishInvoiceEvent('billing.invoice.updated', invoice, 'Invoice status updated.');
+      })
+    );
   }
 
   collectPayment(invoiceId: string, payload: BillingPaymentPayload): Observable<BillingInvoice> {
-    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/payments`), payload).pipe(tap(() => this.clearInvoiceCache(invoiceId)));
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/payments`), payload).pipe(
+      tap((invoice) => {
+        this.clearInvoiceCache(invoiceId);
+        this.publishInvoiceEvent('billing.payment.received', invoice, 'Payment status updated.');
+      })
+    );
   }
 
   createRefund(invoiceId: string, payload: BillingRefundPayload): Observable<BillingInvoice> {
-    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/refunds`), payload).pipe(tap(() => this.clearInvoiceCache(invoiceId)));
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/refunds`), payload).pipe(
+      tap((invoice) => {
+        this.clearInvoiceCache(invoiceId);
+        this.publishInvoiceEvent('billing.payment.received', invoice, 'Payment status updated.');
+      })
+    );
   }
 
   getSummary(filters: BillingInvoiceFilters = {}): Observable<BillingSummary> {
@@ -142,5 +179,29 @@ export class BillingServiceApi extends ApiBaseService {
     } else {
       this.cache.clearPrefix('billing:invoice:');
     }
+  }
+
+  private publishInvoiceEvent(name: 'billing.invoice.updated' | 'billing.payment.received', invoice: BillingInvoice, message: string): void {
+    this.dataSync.publish({
+      name,
+      entityType: 'billing_invoice',
+      entityId: invoice.id,
+      patientId: invoice.patient_id,
+      visitId: invoice.source_opd_visit_id,
+      modules: ['billing', 'patients', 'opd', 'ipd', 'pharmacy', 'laboratory', 'radiology', 'dashboard'],
+      cachePrefixes: ['billing:', 'patients:', 'opd:', 'ipd:', 'pharmacy:', 'laboratory:', 'radiology:', 'dashboard:'],
+      message,
+    });
+  }
+
+  private publishBillingEvent(name: 'data.updated', entityType: string, entityId: string | null, message: string): void {
+    this.dataSync.publish({
+      name,
+      entityType,
+      entityId,
+      modules: ['billing', 'opd', 'ipd', 'dashboard'],
+      cachePrefixes: ['billing:', 'opd:', 'ipd:', 'dashboard:'],
+      message,
+    });
   }
 }

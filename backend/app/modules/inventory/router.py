@@ -13,6 +13,11 @@ from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemRead,
     InventoryReportRead,
+    InventoryRequisitionCreate,
+    InventoryRequisitionRead,
+    InventoryStoreBalanceRead,
+    InventoryStoreCreate,
+    InventoryStoreRead,
     PaginatedResponse,
     PurchaseRequestCreate,
     PurchaseRequestRead,
@@ -64,7 +69,45 @@ def list_items(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/items", response_model=InventoryItemRead, dependencies=[Depends(require_permissions("inventory.manage"))])
+@router.get("/stores", response_model=PaginatedResponse[InventoryStoreRead], dependencies=[Depends(require_permissions("inventory.view"))])
+def list_stores(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    q: str | None = None,
+    include_inactive: bool = False,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items, total = InventoryService(db).list_stores(page=page, page_size=page_size, q=q, include_inactive=include_inactive, user=user)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/stores", response_model=InventoryStoreRead, dependencies=[Depends(require_permissions("inventory.store.manage"))])
+def create_store(payload: InventoryStoreCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return InventoryService(db).create_store(payload, user, context)
+
+
+@router.put("/stores/{entity_id}", response_model=InventoryStoreRead, dependencies=[Depends(require_permissions("inventory.store.manage"))])
+def update_store(entity_id: UUID, payload: InventoryStoreCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return InventoryService(db).update_store(str(entity_id), payload, user, context)
+
+
+@router.get("/stock", response_model=PaginatedResponse[InventoryStoreBalanceRead], dependencies=[Depends(require_permissions("inventory.view"))])
+def list_store_stock(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=200),
+    q: str | None = None,
+    store_id: UUID | None = None,
+    item_id: UUID | None = None,
+    stock_status: str | None = None,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items, total = InventoryService(db).list_store_balances(page=page, page_size=page_size, q=q, store_id=str(store_id) if store_id else None, item_id=str(item_id) if item_id else None, stock_status=stock_status, user=user)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/items", response_model=InventoryItemRead, dependencies=[Depends(require_permissions("inventory.item.create"))])
 def create_item(payload: InventoryItemCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_item(payload, user, context)
 
@@ -74,7 +117,7 @@ def get_item(entity_id: UUID, user=Depends(get_current_user), db: Session = Depe
     return InventoryService(db).get_item(str(entity_id), user)
 
 
-@router.put("/items/{entity_id}", response_model=InventoryItemRead, dependencies=[Depends(require_permissions("inventory.manage"))])
+@router.put("/items/{entity_id}", response_model=InventoryItemRead, dependencies=[Depends(require_permissions("inventory.item.edit"))])
 def update_item(entity_id: UUID, payload: InventoryItemCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).update_item(str(entity_id), payload, user, context)
 
@@ -91,7 +134,7 @@ def list_suppliers(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/suppliers", response_model=SupplierRead, dependencies=[Depends(require_permissions("inventory.manage"))])
+@router.post("/suppliers", response_model=SupplierRead, dependencies=[Depends(require_permissions("inventory.item.create"))])
 def create_supplier(payload: SupplierCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_supplier(payload, user, context)
 
@@ -101,7 +144,7 @@ def get_supplier(entity_id: UUID, user=Depends(get_current_user), db: Session = 
     return InventoryService(db).get_supplier(str(entity_id))
 
 
-@router.put("/suppliers/{entity_id}", response_model=SupplierRead, dependencies=[Depends(require_permissions("inventory.manage"))])
+@router.put("/suppliers/{entity_id}", response_model=SupplierRead, dependencies=[Depends(require_permissions("inventory.item.edit"))])
 def update_supplier(entity_id: UUID, payload: SupplierCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).update_supplier(str(entity_id), payload, user, context)
 
@@ -118,7 +161,7 @@ def list_receivings(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/receivings", response_model=StockReceivingRead, dependencies=[Depends(require_permissions("inventory.receive"))])
+@router.post("/receivings", response_model=StockReceivingRead, dependencies=[Depends(require_permissions("inventory.stock.receive"))])
 def create_receiving(payload: StockReceivingCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_receiving(payload, user, context)
 
@@ -135,7 +178,7 @@ def list_issues(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/issues", response_model=StockIssueRead, dependencies=[Depends(require_permissions("inventory.issue"))])
+@router.post("/issues", response_model=StockIssueRead, dependencies=[Depends(require_permissions("inventory.stock.issue"))])
 def create_issue(payload: StockIssueCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_issue(payload, user, context)
 
@@ -152,7 +195,7 @@ def list_transfers(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/transfers", response_model=StockTransferRead, dependencies=[Depends(require_permissions("inventory.transfer"))])
+@router.post("/transfers", response_model=StockTransferRead, dependencies=[Depends(require_permissions("inventory.stock.transfer"))])
 def create_transfer(payload: StockTransferCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_transfer(payload, user, context)
 
@@ -169,7 +212,7 @@ def list_adjustments(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
-@router.post("/adjustments", response_model=StockAdjustmentRead, dependencies=[Depends(require_permissions("inventory.adjust"))])
+@router.post("/adjustments", response_model=StockAdjustmentRead, dependencies=[Depends(require_permissions("inventory.stock.adjust"))])
 def create_adjustment(payload: StockAdjustmentCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_adjustment(payload, user, context)
 
@@ -194,6 +237,30 @@ def create_purchase_request(payload: PurchaseRequestCreate, context=Depends(get_
 @router.put("/purchase-requests/{entity_id}", response_model=PurchaseRequestRead, dependencies=[Depends(require_permissions("inventory.purchase"))])
 def update_purchase_request(entity_id: UUID, payload: PurchaseRequestCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).update_purchase_request(str(entity_id), payload, user, context)
+
+
+@router.get("/requisitions", response_model=PaginatedResponse[InventoryRequisitionRead], dependencies=[Depends(require_permissions("inventory.view"))])
+def list_requisitions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    q: str | None = None,
+    store_id: UUID | None = None,
+    status: str | None = None,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items, total = InventoryService(db).list_requisitions(page=page, page_size=page_size, q=q, store_id=str(store_id) if store_id else None, status=status, user=user)
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/requisitions", response_model=InventoryRequisitionRead, dependencies=[Depends(require_permissions("inventory.requisition.create"))])
+def create_requisition(payload: InventoryRequisitionCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return InventoryService(db).create_requisition(payload, user, context)
+
+
+@router.put("/requisitions/{entity_id}", response_model=InventoryRequisitionRead, dependencies=[Depends(require_permissions("inventory.requisition.approve"))])
+def update_requisition(entity_id: UUID, payload: InventoryRequisitionCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return InventoryService(db).update_requisition(str(entity_id), payload, user, context)
 
 
 @router.get("/reagents", response_model=PaginatedResponse[ReagentRead], dependencies=[Depends(require_permissions("inventory.view"))])

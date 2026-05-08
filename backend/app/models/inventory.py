@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -80,12 +80,14 @@ class InventoryItem(Base, BaseModelMixin):
     adjustments = relationship("StockAdjustment", back_populates="item")
     purchase_requests = relationship("PurchaseRequest", back_populates="item")
     transactions = relationship("InventoryStockTransaction", back_populates="item")
+    store_balances = relationship("InventoryStoreItem", back_populates="item")
 
 
 class StockBatch(Base, BaseModelMixin):
     __tablename__ = "stock_batches"
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     batch_no: Mapped[str | None] = mapped_column(String(120))
     expiry_date: Mapped[Date | None] = mapped_column(Date())
     manufacturing_date: Mapped[Date | None] = mapped_column(Date())
@@ -97,6 +99,7 @@ class StockBatch(Base, BaseModelMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     item = relationship("InventoryItem", back_populates="batches")
+    store = relationship("InventoryStore", back_populates="batches")
     issues = relationship("StockIssue", back_populates="batch")
     transfers = relationship("StockTransfer", back_populates="batch")
     adjustments = relationship("StockAdjustment", back_populates="batch")
@@ -107,6 +110,7 @@ class StockReceiving(Base, BaseModelMixin):
     __tablename__ = "stock_receivings"
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     supplier_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("suppliers.id"))
     invoice_number: Mapped[str | None] = mapped_column(String(120))
     received_date: Mapped[Date] = mapped_column(Date(), nullable=False)
@@ -121,26 +125,33 @@ class StockReceiving(Base, BaseModelMixin):
     created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     item = relationship("InventoryItem", back_populates="receivings")
+    store = relationship("InventoryStore", back_populates="receivings")
     supplier = relationship("Supplier")
-    created_by_user = relationship("User")
+    created_by_user = relationship("User", foreign_keys=[created_by])
 
 
 class StockIssue(Base, BaseModelMixin):
     __tablename__ = "stock_issues"
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     batch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("stock_batches.id"))
     department: Mapped[str | None] = mapped_column(String(120))
     requestor: Mapped[str | None] = mapped_column(String(120))
     purpose: Mapped[str | None] = mapped_column(Text)
+    patient_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"))
+    visit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visits.id"))
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     issue_date: Mapped[Date] = mapped_column(Date(), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     item = relationship("InventoryItem", back_populates="issues")
+    store = relationship("InventoryStore", back_populates="issues")
     batch = relationship("StockBatch", back_populates="issues")
-    created_by_user = relationship("User")
+    patient = relationship("Patient")
+    visit = relationship("OPDVisit")
+    created_by_user = relationship("User", foreign_keys=[created_by])
 
 
 class StockTransfer(Base, BaseModelMixin):
@@ -148,17 +159,36 @@ class StockTransfer(Base, BaseModelMixin):
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
     batch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("stock_batches.id"))
+    source_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
+    destination_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     source_location: Mapped[str | None] = mapped_column(String(120))
     destination_location: Mapped[str | None] = mapped_column(String(120))
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    requested_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    approved_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    issued_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    received_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     transfer_date: Mapped[Date] = mapped_column(Date(), nullable=False)
     status: Mapped[str] = mapped_column(String(60), nullable=False, default="requested")
     note: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    approved_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    issued_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    received_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    approved_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    issued_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     item = relationship("InventoryItem", back_populates="transfers")
     batch = relationship("StockBatch", back_populates="transfers")
-    created_by_user = relationship("User")
+    source_store = relationship("InventoryStore", foreign_keys=[source_store_id], back_populates="outgoing_transfers")
+    destination_store = relationship("InventoryStore", foreign_keys=[destination_store_id], back_populates="incoming_transfers")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    requested_by_user = relationship("User", foreign_keys=[requested_by])
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
+    issued_by_user = relationship("User", foreign_keys=[issued_by])
+    received_by_user = relationship("User", foreign_keys=[received_by])
 
 
 class StockAdjustment(Base, BaseModelMixin):
@@ -166,16 +196,21 @@ class StockAdjustment(Base, BaseModelMixin):
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
     batch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("stock_batches.id"))
+    store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     adjustment_type: Mapped[str] = mapped_column(String(60), nullable=False)
     quantity_change: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     reason: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(60), nullable=False, default="posted")
+    approved_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     created_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[date] = mapped_column(Date(), nullable=False)
 
     item = relationship("InventoryItem", back_populates="adjustments")
     batch = relationship("StockBatch", back_populates="adjustments")
-    created_by_user = relationship("User")
+    store = relationship("InventoryStore", back_populates="adjustments")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
 
 
 class PurchaseRequest(Base, BaseModelMixin):
@@ -203,6 +238,7 @@ class InventoryStockTransaction(Base, BaseModelMixin):
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
     batch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("stock_batches.id"))
+    store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     transaction_type: Mapped[str] = mapped_column(String(60), nullable=False)
     reference_type: Mapped[str | None] = mapped_column(String(60))
     reference_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
@@ -214,7 +250,80 @@ class InventoryStockTransaction(Base, BaseModelMixin):
 
     item = relationship("InventoryItem", back_populates="transactions")
     batch = relationship("StockBatch", back_populates="transactions")
-    created_by_user = relationship("User")
+    store = relationship("InventoryStore", back_populates="transactions")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+
+
+class InventoryStore(Base, BaseModelMixin):
+    __tablename__ = "inventory_stores"
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    department_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("departments.id"))
+    parent_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    store_type: Mapped[str] = mapped_column(String(60), nullable=False, default="sub_store")
+    department_name: Mapped[str | None] = mapped_column(String(120))
+    location: Mapped[str | None] = mapped_column(String(160))
+    allow_sub_store_transfers: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    branch = relationship("Branch")
+    department = relationship("Department")
+    parent_store = relationship("InventoryStore", remote_side=lambda: [InventoryStore.id])
+    balances = relationship("InventoryStoreItem", back_populates="store")
+    batches = relationship("StockBatch", back_populates="store")
+    receivings = relationship("StockReceiving", back_populates="store")
+    issues = relationship("StockIssue", back_populates="store")
+    adjustments = relationship("StockAdjustment", back_populates="store")
+    transactions = relationship("InventoryStockTransaction", back_populates="store")
+    outgoing_transfers = relationship("StockTransfer", foreign_keys=[StockTransfer.source_store_id], back_populates="source_store")
+    incoming_transfers = relationship("StockTransfer", foreign_keys=[StockTransfer.destination_store_id], back_populates="destination_store")
+
+
+class InventoryStoreItem(Base, BaseModelMixin):
+    __tablename__ = "inventory_store_items"
+
+    store_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"), nullable=False)
+    item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    quantity_on_hand: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    reserved_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    reorder_level: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    minimum_stock_level: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    maximum_stock_level: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    location: Mapped[str | None] = mapped_column(String(160))
+
+    store = relationship("InventoryStore", back_populates="balances")
+    item = relationship("InventoryItem", back_populates="store_balances")
+
+
+class InventoryRequisition(Base, BaseModelMixin):
+    __tablename__ = "inventory_requisitions"
+
+    item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
+    source_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
+    destination_store_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"), nullable=False)
+    department: Mapped[str | None] = mapped_column(String(120))
+    requested_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    approved_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    issued_quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    priority: Mapped[str] = mapped_column(String(40), nullable=False, default="normal")
+    required_date: Mapped[Date | None] = mapped_column(Date())
+    reason: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(60), nullable=False, default="draft")
+    remarks: Mapped[str | None] = mapped_column(Text)
+    requested_by: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    approved_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    rejected_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    issued_by: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+    item = relationship("InventoryItem")
+    source_store = relationship("InventoryStore", foreign_keys=[source_store_id])
+    destination_store = relationship("InventoryStore", foreign_keys=[destination_store_id])
+    requested_by_user = relationship("User", foreign_keys=[requested_by])
+    approved_by_user = relationship("User", foreign_keys=[approved_by])
+    rejected_by_user = relationship("User", foreign_keys=[rejected_by])
+    issued_by_user = relationship("User", foreign_keys=[issued_by])
 
 
 class Reagent(Base, BaseModelMixin):

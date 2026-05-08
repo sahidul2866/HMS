@@ -79,7 +79,7 @@
             </div>
             <div class="editor-actions">
               <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
-              <button class="primary-btn" type="submit" [disabled]="saving || form.invalid">{{ saving ? 'Saving...' : 'Save Settings' }}</button>
+              <button class="primary-btn" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Save Settings' }}</button>
             </div>
           </form>
         } @else {

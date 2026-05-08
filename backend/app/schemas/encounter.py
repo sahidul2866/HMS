@@ -67,7 +67,7 @@ class OPDVisitStatusUpdate(BaseModel):
 
 class OPDVisitOrderCreate(BaseModel):
     order_type: str = Field(pattern="^(prescription|investigation|procedure)$")
-    service_area: str | None = Field(default=None, pattern="^(laboratory|radiology)$")
+    service_area: str | None = Field(default=None, pattern="^(pharmacy|laboratory|radiology)$")
     item_name: str = Field(min_length=2, max_length=180)
     room_number: str | None = Field(default=None, max_length=60)
     instructions: str | None = None
@@ -77,13 +77,22 @@ class OPDVisitOrderCreate(BaseModel):
     def validate_service_area(self) -> "OPDVisitOrderCreate":
         if self.order_type == "investigation" and not self.service_area:
             raise ValueError("Investigation orders require a service area")
-        if self.order_type in {"prescription", "procedure"}:
+        if self.order_type == "investigation" and self.service_area == "pharmacy":
+            raise ValueError("Investigation orders require laboratory or radiology service area")
+        if self.order_type == "prescription":
+            self.service_area = "pharmacy"
+        if self.order_type == "procedure":
             self.service_area = None
         return self
 
 
 class OPDVisitOrderUpdate(BaseModel):
-    status: str = Field(pattern="^(pending|scheduled|collected|in_progress|completed|verified|cancelled)$")
+    service_area: str | None = Field(default=None, pattern="^(pharmacy|laboratory|radiology)$")
+    item_name: str | None = Field(default=None, min_length=2, max_length=180)
+    room_number: str | None = Field(default=None, max_length=60)
+    instructions: str | None = None
+    quantity: Decimal | None = Field(default=None, ge=0.01)
+    status: str | None = Field(default=None, pattern="^(pending|scheduled|collected|in_progress|completed|verified|cancelled)$")
     result_text: str | None = None
     sample_note: str | None = None
 
@@ -165,7 +174,7 @@ class ERVisitAssignmentUpdate(BaseModel):
 
 
 class ERVisitTreatmentUpdate(BaseModel):
-    treatment_status: str = Field(pattern="^(pending|in_progress|completed|review_needed)$")
+    treatment_status: str = Field(pattern="^(pending|under_assessment|orders_pending|in_progress|observation|ready_for_disposition|completed|review_needed)$")
     treatment_notes: str | None = None
     disposition: str | None = Field(default=None, max_length=255)
     referral_hospital: str | None = Field(default=None, max_length=150)
@@ -174,7 +183,7 @@ class ERVisitTreatmentUpdate(BaseModel):
 
 
 class ERVisitStatusUpdate(BaseModel):
-    status: str = Field(pattern="^(waiting|triaged|assigned|in_treatment|admitted|discharged|referred|cancelled)$")
+    status: str = Field(pattern="^(registered|waiting|waiting_for_triage|triaged|waiting_for_doctor|under_assessment|orders_pending|assigned|in_treatment|observation|ready_for_disposition|admitted|transferred|discharged|left_without_being_seen|left_against_medical_advice|death_recorded|referred|cancelled)$")
     note: str | None = None
 
 

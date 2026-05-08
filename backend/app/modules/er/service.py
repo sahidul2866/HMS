@@ -93,6 +93,7 @@ class ERService:
         visit.triage_level = payload.triage_level
         visit.vitals = payload.vitals
         visit.status = "triaged"
+        visit.note = self._append_note(visit.note, "Triage", payload.note)
         visit.updated_by = actor.id
         self._audit_visit(actor, visit, AuditAction.ER_VISIT_TRIAGE_UPDATE, {"triage_category": payload.triage_category, "triage_level": payload.triage_level}, context)
         self.db.commit()
@@ -108,7 +109,8 @@ class ERService:
             nurse = self._get_user(payload.assigned_nurse_user_id, actor)
             visit.assigned_nurse_user_id = nurse.id
         visit.assigned_location = payload.assigned_location
-        visit.status = "assigned"
+        visit.status = "assigned" if payload.assigned_doctor_user_id or payload.assigned_nurse_user_id or payload.assigned_location else visit.status
+        visit.note = self._append_note(visit.note, "Assignment", payload.note)
         visit.updated_by = actor.id
         self._audit_visit(actor, visit, AuditAction.ER_VISIT_ASSIGNMENT_UPDATE, {"assigned_location": payload.assigned_location}, context)
         self.db.commit()
@@ -123,7 +125,15 @@ class ERService:
         visit.referral_hospital = payload.referral_hospital
         visit.referral_doctor_name = payload.referral_doctor_name
         visit.disposition_note = payload.disposition_note
-        if payload.treatment_status == "completed" and visit.status not in {"admitted", "discharged", "referred"}:
+        if payload.treatment_status == "under_assessment":
+            visit.status = "under_assessment"
+        elif payload.treatment_status == "orders_pending":
+            visit.status = "orders_pending"
+        elif payload.treatment_status == "observation":
+            visit.status = "observation"
+        elif payload.treatment_status == "ready_for_disposition":
+            visit.status = "ready_for_disposition"
+        elif payload.treatment_status in {"in_progress", "completed"} and visit.status not in {"admitted", "discharged", "referred", "transferred"}:
             visit.status = "in_treatment"
         visit.updated_by = actor.id
         self._audit_visit(actor, visit, AuditAction.ER_VISIT_TREATMENT_UPDATE, {"treatment_status": payload.treatment_status}, context)
@@ -136,6 +146,7 @@ class ERService:
         visit.status = payload.status
         if payload.status == "discharged":
             visit.discharged_at = datetime.now(UTC)
+        visit.note = self._append_note(visit.note, "Status", payload.note)
         visit.updated_by = actor.id
         self._audit_visit(actor, visit, AuditAction.ER_VISIT_STATUS_UPDATE, {"status": payload.status, "note": payload.note}, context)
         self.db.commit()
@@ -199,3 +210,10 @@ class ERService:
             detail=detail,
             context=context,
         )
+
+    @staticmethod
+    def _append_note(existing: str | None, label: str, note: str | None) -> str | None:
+        if not note:
+            return existing
+        line = f"[{datetime.now(UTC).isoformat()}] {label}: {note}"
+        return f"{existing}\n{line}" if existing else line

@@ -42,7 +42,7 @@
           </div>
         }
         <div class="form-actions" style="grid-column:1/-1;">
-          <button class="primary-btn" type="submit" [disabled]="form.invalid">{{ editingId ? 'Update Medicine' : 'Save Medicine' }}</button>
+          <button class="primary-btn" type="submit">{{ editingId ? 'Update Medicine' : 'Save Medicine' }}</button>
           @if (editingId) {
             <button class="secondary-btn" type="button" (click)="resetForm()">Cancel Edit</button>
           }

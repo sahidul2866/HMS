@@ -10,6 +10,37 @@
   align-items: center;
 }
 
+.nav-card {
+  padding: 0.65rem;
+}
+
+.tab-strip button.active {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  background: color-mix(in srgb, var(--primary) 11%, var(--surface));
+  color: var(--primary);
+}
+
+.split-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 0.85fr 1.4fr;
+}
+
+.form-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+
+.movement-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.span-input {
+  grid-column: span 2;
+}
+
 .report-grid {
   display: grid;
   gap: 10px;
@@ -129,13 +160,15 @@ button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):no
   margin-bottom: 10px;
 }
 
-input {
+input,
+select {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   min-height: 2.25rem;
   padding: 0.48rem 0.62rem;
   background: var(--surface);
   color: var(--text);
+  min-width: 0;
 }
 
 .list-toolbar input {
@@ -226,5 +259,15 @@ td small {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .split-grid,
+  .form-grid,
+  .movement-form {
+    grid-template-columns: 1fr;
+  }
+
+  .span-input {
+    grid-column: span 1;
   }
 }

@@ -93,7 +93,7 @@
                 <textarea rows="2" formControlName="note" placeholder="Receipt note or reference"></textarea>
               </label>
               <div style="grid-column:1/-1;">
-                <button class="primary-btn" type="submit" [disabled]="collectingPayment || paymentForm.invalid" [attr.aria-busy]="collectingPayment">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
+                <button class="primary-btn" type="submit" [disabled]="collectingPayment" [attr.aria-busy]="collectingPayment">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
               </div>
             </form>
           } @else {
@@ -129,7 +129,7 @@
                 <textarea rows="2" formControlName="reason" placeholder="Why this refund is being issued"></textarea>
               </label>
               <div style="grid-column:1/-1;">
-                <button class="danger-btn is-destructive" type="submit" [disabled]="refunding || refundForm.invalid" [attr.aria-busy]="refunding">{{ refunding ? 'Refunding...' : 'Post Refund' }}</button>
+                <button class="danger-btn is-destructive" type="submit" [disabled]="refunding" [attr.aria-busy]="refunding">{{ refunding ? 'Refunding...' : 'Post Refund' }}</button>
               </div>
             </form>
           } @else {

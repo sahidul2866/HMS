@@ -116,6 +116,18 @@ def update_opd_order(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
+@router.delete("/visits/{visit_id}/orders/{order_id}", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
+def delete_opd_order(
+    visit_id: UUID,
+    order_id: UUID,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OPDVisitRead:
+    visit = OPDService(db).delete_order(visit_id, order_id, user, context)
+    return OPDVisitRead.model_validate(visit, from_attributes=True)
+
+
 @router.put("/visits/{visit_id}/consultation", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
 def update_opd_consultation(
     visit_id: UUID,

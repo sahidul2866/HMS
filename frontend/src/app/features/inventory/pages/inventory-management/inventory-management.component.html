@@ -7,6 +7,11 @@
         <div class="page-subtitle">Items, reagents, requests and alerts.</div>
       </div>
       <div class="toolbar-row">
+        <button class="primary-btn" type="button" (click)="setQuickAction('receive')">Receive Stock</button>
+        <button class="secondary-btn" type="button" (click)="setQuickAction('issue')">Issue Stock</button>
+        <button class="secondary-btn" type="button" (click)="setQuickAction('transfer')">Transfer</button>
+        <button class="secondary-btn" type="button" (click)="setQuickAction('requisition')">Requisition</button>
+        <button class="secondary-btn" type="button" (click)="setQuickAction('adjustment')">Adjust</button>
         <button class="secondary-btn" type="button" (click)="lowStockOnly = !lowStockOnly; load()">{{ lowStockOnly ? 'All Stock' : 'Low Stock' }}</button>
         <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
       </div>
@@ -24,9 +29,27 @@
       <div class="metric-card"><div class="label">Expiry</div><div class="value">{{ dashboard.near_expiry_items }}</div></div>
       <div class="metric-card"><div class="label">Received</div><div class="value">{{ dashboard.recent_receivings }}</div></div>
       <div class="metric-card"><div class="label">Issued</div><div class="value">{{ dashboard.recent_issues }}</div></div>
-      <div class="metric-card"><div class="label">Suppliers</div><div class="value">{{ suppliers.length }}</div></div>
+      <div class="metric-card"><div class="label">Stores</div><div class="value">{{ dashboard.total_stores }}</div></div>
+      <div class="metric-card"><div class="label">Requisitions</div><div class="value">{{ dashboard.open_requisitions }}</div></div>
+      <div class="metric-card"><div class="label">Transfers</div><div class="value">{{ dashboard.open_transfers }}</div></div>
     </section>
   }
+
+  <section class="page-card nav-card">
+    <div class="tab-strip">
+      <button type="button" [class.active]="tab() === 'dashboard'" (click)="tab.set('dashboard')">Dashboard</button>
+      <button type="button" [class.active]="tab() === 'items'" (click)="tab.set('items')">Items</button>
+      <button type="button" [class.active]="tab() === 'stock'" (click)="tab.set('stock')">Stock</button>
+      <button type="button" [class.active]="tab() === 'stores'" (click)="tab.set('stores')">Stores</button>
+      <button type="button" [class.active]="tab() === 'requisitions'" (click)="tab.set('requisitions')">Requisitions</button>
+      <button type="button" [class.active]="tab() === 'transfers'" (click)="tab.set('transfers')">Transfers</button>
+      <button type="button" [class.active]="tab() === 'receive'" (click)="tab.set('receive')">Receive</button>
+      <button type="button" [class.active]="tab() === 'issue'" (click)="tab.set('issue')">Issue</button>
+      <button type="button" [class.active]="tab() === 'adjustments'" (click)="tab.set('adjustments')">Adjustments</button>
+      <button type="button" [class.active]="tab() === 'suppliers'" (click)="tab.set('suppliers')">Suppliers</button>
+      <button type="button" [class.active]="tab() === 'reports'" (click)="tab.set('reports')">Reports</button>
+    </div>
+  </section>
 
   @if (tab() === 'dashboard') {
     <section class="dashboard-grid">
@@ -54,6 +77,15 @@
             <div><span>{{ request.item_name || 'Item' }}</span><b>{{ request.status }}</b></div>
           }
           @if (!requests.length) { <div class="empty">No open requests.</div> }
+        </div>
+      </article>
+      <article class="page-card span-2">
+        <div class="panel-head"><h2>Store Stock Value</h2><span>Main and sub-stores</span></div>
+        <div class="bar-list">
+          @for (item of storeValueEntries(); track item.label) {
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="item.value ? (item.value / storeValueEntries()[0].value) * 100 : 0"></i><b>{{ formatMoney(item.value) }}</b></div>
+          }
+          @if (!storeValueEntries().length) { <div class="empty">No store balances yet.</div> }
         </div>
       </article>
     </section>
@@ -86,6 +118,111 @@
     </section>
   }
 
+  @if (tab() === 'stock') {
+    <section class="page-card">
+      <div class="list-toolbar">
+        <input [(ngModel)]="query" (input)="load()" placeholder="Search stock by item or store" />
+        <select [(ngModel)]="storeFilter" (change)="load()">
+          <option value="">All stores</option>
+          @for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }
+        </select>
+        <select [(ngModel)]="statusFilter" (change)="load()">
+          <option value="">All status</option>
+          <option value="low">Low stock</option>
+          <option value="out">Out of stock</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Store</th><th>Item</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Reorder</th><th>Status</th><th>Location</th></tr></thead>
+          <tbody>
+            @for (row of stock; track row.id) {
+              <tr [class]="row.stock_status === 'out_of_stock' ? 'danger-row' : row.stock_status === 'low_stock' ? 'warn-row' : ''">
+                <td><strong>{{ row.store_name }}</strong><small>{{ row.department_name || row.store_type }}</small></td>
+                <td><strong>{{ row.item_name }}</strong><small>{{ row.item_code || row.category_name || '-' }}</small></td>
+                <td>{{ num(row.quantity_on_hand) }}</td>
+                <td>{{ num(row.reserved_quantity) }}</td>
+                <td>{{ num(row.available_quantity) }}</td>
+                <td>{{ num(row.reorder_level) }}</td>
+                <td><span [class]="statusClass(row.stock_status)">{{ row.stock_status }}</span></td>
+                <td>{{ row.location || '-' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'stores') {
+    <section class="split-grid">
+      <article class="page-card">
+        <div class="panel-head"><h2>Create Store</h2><span>Main or department sub-store</span></div>
+        <div class="form-grid">
+          <input [(ngModel)]="storeForm.code" placeholder="Code" />
+          <input [(ngModel)]="storeForm.name" placeholder="Store name" />
+          <select [(ngModel)]="storeForm.store_type"><option value="main">Main Inventory</option><option value="sub_store">Sub-store</option></select>
+          <input [(ngModel)]="storeForm.department_name" placeholder="Department" />
+          <input [(ngModel)]="storeForm.location" placeholder="Location" />
+          <label><input type="checkbox" [(ngModel)]="storeForm.is_active" /> Active</label>
+        </div>
+        <button class="primary-btn" type="button" (click)="saveStore()">Save Store</button>
+      </article>
+      <article class="page-card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Store</th><th>Type</th><th>Department</th><th>Items</th><th>Low</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (store of stores; track store.id) {
+                <tr><td><strong>{{ store.name }}</strong><small>{{ store.code }} · {{ store.location || '-' }}</small></td><td>{{ store.store_type }}</td><td>{{ store.department_name || '-' }}</td><td>{{ store.total_items }}</td><td>{{ store.low_stock_items }}</td><td><span [class]="statusClass(store.is_active ? 'active' : 'closed')">{{ store.is_active ? 'active' : 'inactive' }}</span></td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (tab() === 'receive' || tab() === 'issue' || tab() === 'transfers' || tab() === 'requisitions' || tab() === 'adjustments') {
+    <section class="page-card">
+      <div class="panel-head"><h2>{{ tab() | titlecase }}</h2><span>Store-aware inventory action</span></div>
+      <div class="form-grid movement-form">
+        <select [(ngModel)]="movementForm.item_id"><option value="">Select item</option>@for (item of items; track item.id) { <option [value]="item.id">{{ item.name }}</option> }</select>
+        @if (tab() === 'transfers' || tab() === 'requisitions') {
+          <select [(ngModel)]="movementForm.source_store_id"><option value="">Source store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
+          <select [(ngModel)]="movementForm.destination_store_id"><option value="">Destination store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
+        } @else {
+          <select [(ngModel)]="movementForm.store_id"><option value="">Select store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
+        }
+        <input type="number" [(ngModel)]="movementForm.quantity" placeholder="Quantity" />
+        @if (tab() === 'receive') {
+          <select [(ngModel)]="movementForm.supplier_id"><option value="">Supplier</option>@for (supplier of suppliers; track supplier.id) { <option [value]="supplier.id">{{ supplier.name }}</option> }</select>
+          <input type="number" [(ngModel)]="movementForm.unit_cost" placeholder="Unit cost" />
+          <input [(ngModel)]="movementForm.batch_no" placeholder="Batch number" />
+          <input type="date" [(ngModel)]="movementForm.expiry_date" />
+        }
+        @if (tab() === 'issue') {
+          <input [(ngModel)]="movementForm.department" placeholder="Department" />
+          <input [(ngModel)]="movementForm.purpose" placeholder="Purpose" />
+        }
+        @if (tab() === 'requisitions') {
+          <select [(ngModel)]="movementForm.priority"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="critical">Critical</option></select>
+          <input type="date" [(ngModel)]="movementForm.required_date" />
+          <input [(ngModel)]="movementForm.reason" placeholder="Reason" />
+        }
+        @if (tab() === 'adjustments') {
+          <select [(ngModel)]="movementForm.reason"><option value="deduction">Deduction</option><option value="addition">Addition</option><option value="damage">Damage</option><option value="expiry">Expiry</option><option value="physical_count">Physical count</option></select>
+        }
+        <input class="span-input" [(ngModel)]="movementForm.note" placeholder="Remarks" />
+      </div>
+      @if (tab() === 'receive') { <button class="primary-btn" type="button" (click)="createReceiving()">Receive Stock</button> }
+      @if (tab() === 'issue') { <button class="primary-btn" type="button" (click)="createIssue()">Issue Stock</button> }
+      @if (tab() === 'transfers') { <button class="primary-btn" type="button" (click)="createTransfer()">Transfer Stock</button> }
+      @if (tab() === 'requisitions') { <button class="primary-btn" type="button" (click)="createRequisition()">Create Requisition</button> }
+      @if (tab() === 'adjustments') { <button class="primary-btn" type="button" (click)="createAdjustment()">Post Adjustment</button> }
+    </section>
+  }
+
   @if (tab() === 'reagents') {
     <section class="page-card">
       <div class="list-toolbar"><input [(ngModel)]="query" (input)="load()" placeholder="Search reagent or analyzer" /></div>
@@ -107,6 +244,52 @@
         </table>
       </div>
     </section>
+  }
+
+  @if (tab() === 'requisitions') {
+    <section class="page-card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>From</th><th>To</th><th>Qty</th><th>Approved</th><th>Priority</th><th>Required</th><th>Status</th></tr></thead>
+          <tbody>
+            @for (request of requisitions; track request.id) {
+              <tr><td><strong>{{ request.item_name || 'Item' }}</strong><small>{{ request.requested_by_name || '-' }}</small></td><td>{{ request.source_store_name || '-' }}</td><td>{{ request.destination_store_name || '-' }}</td><td>{{ request.requested_quantity }}</td><td>{{ request.approved_quantity || 0 }}</td><td><span [class]="statusClass(request.priority)">{{ request.priority }}</span></td><td>{{ request.required_date || '-' }}</td><td><span [class]="statusClass(request.status)">{{ request.status }}</span></td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'transfers') {
+    <section class="page-card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>From</th><th>To</th><th>Requested</th><th>Issued</th><th>Received</th><th>Date</th><th>Status</th></tr></thead>
+          <tbody>
+            @for (transfer of transfers; track transfer.id) {
+              <tr><td><strong>{{ transfer.item_name || 'Item' }}</strong></td><td>{{ transfer.source_store_name || transfer.source_location || '-' }}</td><td>{{ transfer.destination_store_name || transfer.destination_location || '-' }}</td><td>{{ transfer.requested_quantity || transfer.quantity }}</td><td>{{ transfer.issued_quantity || 0 }}</td><td>{{ transfer.received_quantity || 0 }}</td><td>{{ transfer.transfer_date }}</td><td><span [class]="statusClass(transfer.status)">{{ transfer.status }}</span></td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (tab() === 'receive') {
+    <section class="page-card"><div class="table-wrap"><table><thead><tr><th>Item</th><th>Store</th><th>Supplier</th><th>Batch</th><th>Qty</th><th>Cost</th><th>Date</th></tr></thead><tbody>@for (row of receivings; track row.id) { <tr><td>{{ row.item_name }}</td><td>{{ row.store_name || '-' }}</td><td>{{ row.supplier_name || '-' }}</td><td>{{ row.batch_no || '-' }}</td><td>{{ row.quantity }}</td><td>{{ formatMoney(row.total_cost) }}</td><td>{{ row.received_date }}</td></tr> }</tbody></table></div></section>
+  }
+
+  @if (tab() === 'issue') {
+    <section class="page-card"><div class="table-wrap"><table><thead><tr><th>Item</th><th>Store</th><th>Department</th><th>Purpose</th><th>Qty</th><th>Date</th></tr></thead><tbody>@for (row of issues; track row.id) { <tr><td>{{ row.item_name }}</td><td>{{ row.store_name || '-' }}</td><td>{{ row.department || '-' }}</td><td>{{ row.purpose || '-' }}</td><td>{{ row.quantity }}</td><td>{{ row.issue_date }}</td></tr> }</tbody></table></div></section>
+  }
+
+  @if (tab() === 'adjustments') {
+    <section class="page-card"><div class="table-wrap"><table><thead><tr><th>Item</th><th>Store</th><th>Type</th><th>Qty</th><th>Reason</th><th>Status</th></tr></thead><tbody>@for (row of adjustments; track row.id) { <tr><td>{{ row.item_name }}</td><td>{{ row.store_name || '-' }}</td><td>{{ row.adjustment_type }}</td><td>{{ row.quantity_change }}</td><td>{{ row.reason || '-' }}</td><td><span [class]="statusClass(row.status)">{{ row.status }}</span></td></tr> }</tbody></table></div></section>
+  }
+
+  @if (tab() === 'suppliers') {
+    <section class="page-card"><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th></tr></thead><tbody>@for (supplier of suppliers; track supplier.id) { <tr><td><strong>{{ supplier.name }}</strong></td><td>{{ supplier.contact_person || '-' }}</td><td>{{ supplier.phone || '-' }}</td><td>{{ supplier.email || '-' }}</td><td><span [class]="statusClass(supplier.is_active ? 'active' : 'closed')">{{ supplier.is_active ? 'active' : 'inactive' }}</span></td></tr> }</tbody></table></div></section>
   }
 
   @if (tab() === 'requests') {

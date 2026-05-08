@@ -9,7 +9,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.inventory import (
     InventoryCategory,
+    InventoryRequisition,
     InventoryItem,
+    InventoryStore,
+    InventoryStoreItem,
     InventoryStockTransaction,
     PurchaseRequest,
     Reagent,
@@ -68,6 +71,68 @@ class InventoryRepository:
     def get_supplier(self, entity_id):
         return self.db.get(Supplier, entity_id)
 
+    def list_stores(self, branch_id=None, q=None, include_inactive=False):
+        stmt = select(InventoryStore)
+        if not include_inactive:
+            stmt = stmt.where(InventoryStore.is_active.is_(True))
+        if branch_id:
+            stmt = stmt.where(InventoryStore.branch_id == branch_id)
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            stmt = stmt.where(
+                func.lower(InventoryStore.name).like(pattern)
+                | func.lower(InventoryStore.code).like(pattern)
+                | func.lower(func.coalesce(InventoryStore.department_name, "")).like(pattern)
+                | func.lower(func.coalesce(InventoryStore.location, "")).like(pattern)
+            )
+        return stmt.order_by(InventoryStore.store_type.asc(), InventoryStore.name.asc())
+
+    def get_store(self, entity_id, *, for_update: bool = False):
+        stmt = select(InventoryStore).where(InventoryStore.id == entity_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        return self.db.scalar(stmt)
+
+    def get_main_store(self, branch_id=None):
+        stmt = select(InventoryStore).where(InventoryStore.store_type == "main", InventoryStore.is_active.is_(True))
+        if branch_id:
+            stmt = stmt.where(InventoryStore.branch_id == branch_id)
+        return self.db.scalar(stmt.order_by(InventoryStore.created_at.asc()))
+
+    def get_store_balance(self, store_id, item_id, *, for_update: bool = False):
+        stmt = select(InventoryStoreItem).options(joinedload(InventoryStoreItem.store), joinedload(InventoryStoreItem.item)).where(
+            InventoryStoreItem.store_id == store_id,
+            InventoryStoreItem.item_id == item_id,
+            InventoryStoreItem.is_active.is_(True),
+        )
+        if for_update:
+            stmt = stmt.with_for_update()
+        return self.db.scalar(stmt)
+
+    def list_store_balances(self, branch_id=None, store_id=None, item_id=None, q=None, stock_status=None):
+        stmt = select(InventoryStoreItem).options(
+            joinedload(InventoryStoreItem.store),
+            joinedload(InventoryStoreItem.item).joinedload(InventoryItem.category),
+            joinedload(InventoryStoreItem.item).joinedload(InventoryItem.preferred_supplier),
+        ).where(InventoryStoreItem.is_active.is_(True))
+        if branch_id:
+            stmt = stmt.where(InventoryStoreItem.store.has(InventoryStore.branch_id == branch_id))
+        if store_id:
+            stmt = stmt.where(InventoryStoreItem.store_id == store_id)
+        if item_id:
+            stmt = stmt.where(InventoryStoreItem.item_id == item_id)
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            stmt = stmt.where(
+                InventoryStoreItem.item.has(func.lower(InventoryItem.name).like(pattern))
+                | InventoryStoreItem.store.has(func.lower(InventoryStore.name).like(pattern))
+            )
+        if stock_status == "out":
+            stmt = stmt.where(InventoryStoreItem.quantity_on_hand <= 0)
+        elif stock_status == "low":
+            stmt = stmt.where(InventoryStoreItem.quantity_on_hand > 0, InventoryStoreItem.quantity_on_hand <= InventoryStoreItem.reorder_level)
+        return stmt.order_by(InventoryStoreItem.updated_at.desc())
+
     def list_suppliers(self, branch_id=None, q=None):
         stmt = select(Supplier).where(Supplier.is_active.is_(True))
         if branch_id:
@@ -82,7 +147,7 @@ class InventoryRepository:
         return stmt.order_by(Supplier.name.asc())
 
     def list_receivings(self, branch_id=None, q=None):
-        stmt = select(StockReceiving).options(joinedload(StockReceiving.item), joinedload(StockReceiving.supplier)).where(StockReceiving.is_active.is_(True))
+        stmt = select(StockReceiving).options(joinedload(StockReceiving.item), joinedload(StockReceiving.supplier), joinedload(StockReceiving.store)).where(StockReceiving.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(StockReceiving.item.has(InventoryItem.branch_id == branch_id))
         if q:
@@ -95,7 +160,7 @@ class InventoryRepository:
         return stmt.order_by(StockReceiving.received_date.desc())
 
     def list_issues(self, branch_id=None, q=None):
-        stmt = select(StockIssue).options(joinedload(StockIssue.item), joinedload(StockIssue.batch)).where(StockIssue.is_active.is_(True))
+        stmt = select(StockIssue).options(joinedload(StockIssue.item), joinedload(StockIssue.batch), joinedload(StockIssue.store)).where(StockIssue.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(StockIssue.item.has(InventoryItem.branch_id == branch_id))
         if q:
@@ -108,7 +173,16 @@ class InventoryRepository:
         return stmt.order_by(StockIssue.issue_date.desc())
 
     def list_transfers(self, branch_id=None, q=None):
-        stmt = select(StockTransfer).options(joinedload(StockTransfer.item), joinedload(StockTransfer.batch)).where(StockTransfer.is_active.is_(True))
+        stmt = select(StockTransfer).options(
+            joinedload(StockTransfer.item),
+            joinedload(StockTransfer.batch),
+            joinedload(StockTransfer.source_store),
+            joinedload(StockTransfer.destination_store),
+            joinedload(StockTransfer.requested_by_user),
+            joinedload(StockTransfer.approved_by_user),
+            joinedload(StockTransfer.issued_by_user),
+            joinedload(StockTransfer.received_by_user),
+        ).where(StockTransfer.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(StockTransfer.item.has(InventoryItem.branch_id == branch_id))
         if q:
@@ -129,6 +203,45 @@ class InventoryRepository:
                 | func.lower(func.coalesce(PurchaseRequest.priority, "")).like(pattern)
             )
         return stmt.order_by(PurchaseRequest.created_at.desc())
+
+    def get_requisition(self, entity_id, *, for_update: bool = False):
+        stmt = select(InventoryRequisition).options(
+            joinedload(InventoryRequisition.item),
+            joinedload(InventoryRequisition.source_store),
+            joinedload(InventoryRequisition.destination_store),
+            joinedload(InventoryRequisition.requested_by_user),
+            joinedload(InventoryRequisition.approved_by_user),
+            joinedload(InventoryRequisition.rejected_by_user),
+            joinedload(InventoryRequisition.issued_by_user),
+        ).where(InventoryRequisition.id == entity_id)
+        if for_update:
+            stmt = stmt.with_for_update()
+        return self.db.scalar(stmt)
+
+    def list_requisitions(self, branch_id=None, q=None, store_id=None, status=None):
+        stmt = select(InventoryRequisition).options(
+            joinedload(InventoryRequisition.item),
+            joinedload(InventoryRequisition.source_store),
+            joinedload(InventoryRequisition.destination_store),
+            joinedload(InventoryRequisition.requested_by_user),
+            joinedload(InventoryRequisition.approved_by_user),
+            joinedload(InventoryRequisition.rejected_by_user),
+            joinedload(InventoryRequisition.issued_by_user),
+        ).where(InventoryRequisition.is_active.is_(True))
+        if branch_id:
+            stmt = stmt.where(InventoryRequisition.destination_store.has(InventoryStore.branch_id == branch_id))
+        if store_id:
+            stmt = stmt.where((InventoryRequisition.source_store_id == store_id) | (InventoryRequisition.destination_store_id == store_id))
+        if status:
+            stmt = stmt.where(InventoryRequisition.status == status)
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            stmt = stmt.where(
+                func.lower(func.coalesce(InventoryRequisition.department, "")).like(pattern)
+                | func.lower(func.coalesce(InventoryRequisition.priority, "")).like(pattern)
+                | InventoryRequisition.item.has(func.lower(InventoryItem.name).like(pattern))
+            )
+        return stmt.order_by(InventoryRequisition.created_at.desc())
 
     def list_reagents(self, branch_id=None, q=None):
         stmt = select(Reagent).options(joinedload(Reagent.supplier)).where(Reagent.is_active.is_(True))

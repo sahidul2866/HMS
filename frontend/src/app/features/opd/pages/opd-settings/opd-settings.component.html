@@ -209,7 +209,7 @@
                 </label>
                 <div class="field slot-actions">
                   <span>&nbsp;</span>
-                  <button class="primary-btn" type="button" [disabled]="scheduleSaving || slotForm.invalid" (click)="saveSlotSettings()">
+                  <button class="primary-btn" type="button" [disabled]="scheduleSaving" (click)="saveSlotSettings()">
                     {{ scheduleSaving ? 'Saving...' : 'Save Slot' }}
                   </button>
                 </div>
@@ -249,7 +249,7 @@
           <div class="editor-actions">
             <button class="secondary-btn" type="button" (click)="closeEditor()">Cancel</button>
             @if (!isSlotEditor) {
-              <button class="primary-btn" type="submit" [disabled]="saving || settingsForm.invalid || !selectedDoctor">
+              <button class="primary-btn" type="submit" [disabled]="saving || !selectedDoctor">
                 {{ saving ? 'Saving...' : 'Save OPD Settings' }}
               </button>
             }

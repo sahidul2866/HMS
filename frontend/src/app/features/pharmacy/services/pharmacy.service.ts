@@ -3,6 +3,7 @@ import { Observable, tap } from 'rxjs';
 
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
+import { DataSyncService } from '../../../core/services/data-sync.service';
 import {
   CompanyPayload,
   CustomerPayload,
@@ -38,6 +39,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class PharmacyService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
+  private readonly dataSync = inject(DataSyncService);
 
   getSummary(): Observable<PharmacySummary> {
     return this.cache.get('pharmacy:summary', () => this.http.get<PharmacySummary>(this.url('/pharmacy/summary')));
@@ -56,11 +58,21 @@ export class PharmacyService extends ApiBaseService {
   }
 
   dispense(payload: DispensePayload): Observable<PharmacyDispense> {
-    return this.http.post<PharmacyDispense>(this.url('/pharmacy/dispense'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyDispense>(this.url('/pharmacy/dispense'), payload).pipe(
+      tap((dispense) => {
+        this.clearCache();
+        this.publishPharmacyEvent('pharmacy.dispense.completed', 'pharmacy_dispense', dispense.id, 'Pharmacy dispense status updated.', dispense.patient_id, dispense.source_visit_id);
+      })
+    );
   }
 
   returnDispense(dispenseId: string, payload: PharmacyReturnPayload): Observable<PharmacyDispense> {
-    return this.http.post<PharmacyDispense>(this.url(`/pharmacy/dispenses/${dispenseId}/return`), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyDispense>(this.url(`/pharmacy/dispenses/${dispenseId}/return`), payload).pipe(
+      tap((dispense) => {
+        this.clearCache();
+        this.publishPharmacyEvent('pharmacy.dispense.completed', 'pharmacy_dispense', dispense.id, 'Pharmacy dispense status updated.', dispense.patient_id, dispense.source_visit_id);
+      })
+    );
   }
 
   listMedicineTypes(params: { page?: number; page_size?: number; q?: string } = {}): Observable<PaginatedResponse<PharmacyMedicineType>> {
@@ -141,15 +153,30 @@ export class PharmacyService extends ApiBaseService {
   }
 
   createMedicine(payload: MedicinePayload): Observable<PharmacyMedicine> {
-    return this.http.post<PharmacyMedicine>(this.url('/pharmacy/medicines'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyMedicine>(this.url('/pharmacy/medicines'), payload).pipe(
+      tap((medicine) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'medicine', medicine.id, 'Medicine catalog or stock updated.');
+      })
+    );
   }
 
   updateMedicine(id: string, payload: MedicinePayload): Observable<PharmacyMedicine> {
-    return this.http.put<PharmacyMedicine>(this.url(`/pharmacy/medicines/${id}`), payload).pipe(tap(() => this.clearCache()));
+    return this.http.put<PharmacyMedicine>(this.url(`/pharmacy/medicines/${id}`), payload).pipe(
+      tap((medicine) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'medicine', medicine.id, 'Medicine catalog or stock updated.');
+      })
+    );
   }
 
   deleteMedicine(id: string): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/medicines/${id}`)).pipe(tap(() => this.clearCache()));
+    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/medicines/${id}`)).pipe(
+      tap(() => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'medicine', id, 'Medicine catalog or stock updated.');
+      })
+    );
   }
 
   listPurchases(params: Record<string, string | number | undefined> = {}): Observable<PaginatedResponse<PharmacyPurchase>> {
@@ -162,15 +189,30 @@ export class PharmacyService extends ApiBaseService {
   }
 
   createPurchase(payload: PurchasePayload): Observable<PharmacyPurchase> {
-    return this.http.post<PharmacyPurchase>(this.url('/pharmacy/purchases'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyPurchase>(this.url('/pharmacy/purchases'), payload).pipe(
+      tap((purchase) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_purchase', purchase.id, 'Stock quantity changed.');
+      })
+    );
   }
 
   updatePurchase(id: string, payload: PurchasePayload): Observable<PharmacyPurchase> {
-    return this.http.put<PharmacyPurchase>(this.url(`/pharmacy/purchases/${id}`), payload).pipe(tap(() => this.clearCache()));
+    return this.http.put<PharmacyPurchase>(this.url(`/pharmacy/purchases/${id}`), payload).pipe(
+      tap((purchase) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_purchase', purchase.id, 'Stock quantity changed.');
+      })
+    );
   }
 
   deletePurchase(id: string): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/purchases/${id}`)).pipe(tap(() => this.clearCache()));
+    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/purchases/${id}`)).pipe(
+      tap(() => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_purchase', id, 'Stock quantity changed.');
+      })
+    );
   }
 
   listSales(params: Record<string, string | number | undefined> = {}): Observable<PaginatedResponse<PharmacySale>> {
@@ -187,15 +229,30 @@ export class PharmacyService extends ApiBaseService {
   }
 
   createSale(payload: SalePayload): Observable<PharmacySale> {
-    return this.http.post<PharmacySale>(this.url('/pharmacy/sales'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacySale>(this.url('/pharmacy/sales'), payload).pipe(
+      tap((sale) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_sale', sale.id, 'Stock quantity changed.', sale.patient_id, sale.source_visit_id);
+      })
+    );
   }
 
   updateSale(id: string, payload: SalePayload): Observable<PharmacySale> {
-    return this.http.put<PharmacySale>(this.url(`/pharmacy/sales/${id}`), payload).pipe(tap(() => this.clearCache()));
+    return this.http.put<PharmacySale>(this.url(`/pharmacy/sales/${id}`), payload).pipe(
+      tap((sale) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_sale', sale.id, 'Stock quantity changed.', sale.patient_id, sale.source_visit_id);
+      })
+    );
   }
 
   deleteSale(id: string): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/sales/${id}`)).pipe(tap(() => this.clearCache()));
+    return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/sales/${id}`)).pipe(
+      tap(() => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_sale', id, 'Stock quantity changed.');
+      })
+    );
   }
 
   listReturns(params: Record<string, string | number | undefined> = {}): Observable<PaginatedResponse<PharmacyReturn>> {
@@ -208,7 +265,12 @@ export class PharmacyService extends ApiBaseService {
   }
 
   createReturn(payload: ReturnPayload): Observable<PharmacyReturn> {
-    return this.http.post<PharmacyReturn>(this.url('/pharmacy/returns'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyReturn>(this.url('/pharmacy/returns'), payload).pipe(
+      tap((itemReturn) => {
+        this.clearCache();
+        this.publishPharmacyEvent('inventory.stock.updated', 'pharmacy_return', itemReturn.id, 'Stock quantity changed.');
+      })
+    );
   }
 
   updateReturn(id: string, payload: ReturnPayload): Observable<PharmacyReturn> {
@@ -255,11 +317,21 @@ export class PharmacyService extends ApiBaseService {
   }
 
   createInvestigation(payload: InvestigationPayload): Observable<PharmacyInvestigation> {
-    return this.http.post<PharmacyInvestigation>(this.url('/diagnostics/orders'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PharmacyInvestigation>(this.url('/diagnostics/orders'), payload).pipe(
+      tap((investigation) => {
+        this.clearCache();
+        this.publishPharmacyEvent('lab.order.created', 'diagnostics_order', investigation.id, 'Investigation order updated.', investigation.patient_id, investigation.source_visit_id);
+      })
+    );
   }
 
   updateInvestigation(id: string, payload: InvestigationPayload): Observable<PharmacyInvestigation> {
-    return this.http.put<PharmacyInvestigation>(this.url(`/diagnostics/orders/${id}`), payload).pipe(tap(() => this.clearCache()));
+    return this.http.put<PharmacyInvestigation>(this.url(`/diagnostics/orders/${id}`), payload).pipe(
+      tap((investigation) => {
+        this.clearCache();
+        this.publishPharmacyEvent('lab.order.created', 'diagnostics_order', investigation.id, 'Investigation order updated.', investigation.patient_id, investigation.source_visit_id);
+      })
+    );
   }
 
   deleteInvestigation(id: string): Observable<{ success: boolean }> {
@@ -283,5 +355,25 @@ export class PharmacyService extends ApiBaseService {
     this.cache.clearPrefix('billing:');
     this.cache.clearPrefix('laboratory:');
     this.cache.clearPrefix('radiology:');
+  }
+
+  private publishPharmacyEvent(
+    name: 'inventory.stock.updated' | 'pharmacy.dispense.completed' | 'lab.order.created',
+    entityType: string,
+    entityId: string | null,
+    message: string,
+    patientId?: string | null,
+    visitId?: string | null
+  ): void {
+    this.dataSync.publish({
+      name,
+      entityType,
+      entityId,
+      patientId,
+      visitId,
+      modules: ['pharmacy', 'inventory', 'billing', 'opd', 'patients', 'laboratory', 'radiology', 'dashboard'],
+      cachePrefixes: ['pharmacy:', 'inventory:', 'billing:', 'opd:', 'patients:', 'laboratory:', 'radiology:', 'diagnostics:', 'dashboard:'],
+      message,
+    });
   }
 }
