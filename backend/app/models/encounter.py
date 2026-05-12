@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,6 +48,9 @@ class OPDVisit(Base, BaseModelMixin):
     follow_up_date: Mapped[date | None] = mapped_column(Date)
     follow_up_note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="waiting")
+    queue_number: Mapped[str | None] = mapped_column(String(40), index=True)
+    queue_status: Mapped[str | None] = mapped_column(String(40), index=True)
+    queue_called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     consultation_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     consultation_discount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     consultation_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -102,9 +105,15 @@ class IPDAdmission(Base, BaseModelMixin):
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
     bed_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_beds.id"))
     attending_doctor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_nurse_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     admission_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     admitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     admission_type: Mapped[str] = mapped_column(String(30), nullable=False, default="general")
+    admission_source: Mapped[str | None] = mapped_column(String(40))
+    department_name: Mapped[str | None] = mapped_column(String(120))
+    payment_type: Mapped[str | None] = mapped_column(String(60))
+    insurance_info: Mapped[str | None] = mapped_column(Text)
+    patient_condition: Mapped[str | None] = mapped_column(Text)
     ward_name: Mapped[str] = mapped_column(String(120), nullable=False)
     bed_number: Mapped[str] = mapped_column(String(60), nullable=False)
     attending_doctor_name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -112,6 +121,11 @@ class IPDAdmission(Base, BaseModelMixin):
     daily_charge: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     advance_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="admitted")
+    billing_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unbilled")
+    discharge_status: Mapped[str] = mapped_column(String(40), nullable=False, default="not_planned")
+    pharmacy_clearance_status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
+    lab_clearance_status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
+    radiology_clearance_status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
     expected_discharge_date: Mapped[date | None] = mapped_column(Date)
     discharged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     discharge_condition: Mapped[str | None] = mapped_column(String(120))
@@ -125,9 +139,18 @@ class IPDAdmission(Base, BaseModelMixin):
     patient = relationship("Patient")
     bed = relationship("IPDBed", back_populates="admissions")
     attending_doctor = relationship("User", foreign_keys=[attending_doctor_user_id])
+    assigned_nurse = relationship("User", foreign_keys=[assigned_nurse_user_id])
     admitted_by = relationship("User", foreign_keys=[admitted_by_user_id])
     discharged_by = relationship("User", foreign_keys=[discharged_by_user_id])
     movements = relationship("IPDAdmissionMovement", back_populates="admission", cascade="all, delete-orphan")
+    staff_assignments = relationship("IPDStaffAssignment", back_populates="admission", cascade="all, delete-orphan")
+    clinical_notes = relationship("IPDClinicalNote", back_populates="admission", cascade="all, delete-orphan")
+    nursing_notes = relationship("IPDNursingNote", back_populates="admission", cascade="all, delete-orphan")
+    orders = relationship("IPDOrder", back_populates="admission", cascade="all, delete-orphan")
+    medication_administrations = relationship("IPDMedicationAdministration", back_populates="admission", cascade="all, delete-orphan")
+    handovers = relationship("IPDHandover", back_populates="admission", cascade="all, delete-orphan")
+    nursing_tasks = relationship("IPDNursingTask", back_populates="admission", cascade="all, delete-orphan")
+    timeline_events = relationship("IPDTimelineEvent", back_populates="admission", cascade="all, delete-orphan")
 
 
 class IPDAdmissionMovement(Base, BaseModelMixin):
@@ -140,11 +163,214 @@ class IPDAdmissionMovement(Base, BaseModelMixin):
     from_bed_number: Mapped[str | None] = mapped_column(String(60))
     to_ward_name: Mapped[str | None] = mapped_column(String(120))
     to_bed_number: Mapped[str | None] = mapped_column(String(60))
+    transfer_reason: Mapped[str | None] = mapped_column(Text)
+    remarks: Mapped[str | None] = mapped_column(Text)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    requested_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     note: Mapped[str | None] = mapped_column(Text)
     moved_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     admission = relationship("IPDAdmission", back_populates="movements")
     moved_by = relationship("User", foreign_keys=[moved_by_user_id])
+    requested_by = relationship("User", foreign_keys=[requested_by_user_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+
+
+class IPDStaffAssignment(Base, BaseModelMixin):
+    __tablename__ = "ipd_staff_assignments"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    staff_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    staff_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    role_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    assignment_type: Mapped[str] = mapped_column(String(60), nullable=False, default="primary")
+    shift_name: Mapped[str | None] = mapped_column(String(80))
+    ward_name: Mapped[str | None] = mapped_column(String(120))
+    bed_number: Mapped[str | None] = mapped_column(String(60))
+    department_name: Mapped[str | None] = mapped_column(String(120))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str | None] = mapped_column(Text)
+    override_reason: Mapped[str | None] = mapped_column(Text)
+    schedule_status: Mapped[str | None] = mapped_column(String(60))
+    assigned_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    changed_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+    admission = relationship("IPDAdmission", back_populates="staff_assignments")
+    staff_user = relationship("User", foreign_keys=[staff_user_id])
+    assigned_by = relationship("User", foreign_keys=[assigned_by_user_id])
+    changed_by = relationship("User", foreign_keys=[changed_by_user_id])
+
+
+class IPDClinicalNote(Base, BaseModelMixin):
+    __tablename__ = "ipd_clinical_notes"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    note_type: Mapped[str] = mapped_column(String(60), nullable=False, default="progress_note")
+    title: Mapped[str | None] = mapped_column(String(160))
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    diagnosis: Mapped[str | None] = mapped_column(Text)
+    treatment_plan: Mapped[str | None] = mapped_column(Text)
+    template_key: Mapped[str | None] = mapped_column(String(120))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    authored_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    authored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    admission = relationship("IPDAdmission", back_populates="clinical_notes")
+    authored_by = relationship("User", foreign_keys=[authored_by_user_id])
+
+
+class IPDNursingNote(Base, BaseModelMixin):
+    __tablename__ = "ipd_nursing_notes"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    note_type: Mapped[str] = mapped_column(String(60), nullable=False, default="nursing_note")
+    note: Mapped[str | None] = mapped_column(Text)
+    temperature: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    pulse: Mapped[int | None] = mapped_column(Integer)
+    respiratory_rate: Mapped[int | None] = mapped_column(Integer)
+    systolic_bp: Mapped[int | None] = mapped_column(Integer)
+    diastolic_bp: Mapped[int | None] = mapped_column(Integer)
+    spo2: Mapped[int | None] = mapped_column(Integer)
+    pain_score: Mapped[int | None] = mapped_column(Integer)
+    intake_ml: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    output_ml: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    glucose: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    fall_risk: Mapped[str | None] = mapped_column(String(40))
+    abnormal_alert: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recorded_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    admission = relationship("IPDAdmission", back_populates="nursing_notes")
+    recorded_by = relationship("User", foreign_keys=[recorded_by_user_id])
+
+
+class IPDOrder(Base, BaseModelMixin):
+    __tablename__ = "ipd_orders"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    order_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    service_area: Mapped[str | None] = mapped_column(String(40))
+    item_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    instructions: Mapped[str | None] = mapped_column(Text)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
+    priority: Mapped[str] = mapped_column(String(40), nullable=False, default="routine")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="ordered")
+    billing_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unbilled")
+    order_set_code: Mapped[str | None] = mapped_column(String(120))
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    frequency: Mapped[str | None] = mapped_column(String(80))
+    duration: Mapped[str | None] = mapped_column(String(80))
+    dose: Mapped[str | None] = mapped_column(String(80))
+    route: Mapped[str | None] = mapped_column(String(80))
+    lab_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("lab_orders.id"))
+    radiology_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("radiology_orders.id"))
+    discontinued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    discontinued_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    ordered_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    ordered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    admission = relationship("IPDAdmission", back_populates="orders")
+    ordered_by = relationship("User", foreign_keys=[ordered_by_user_id])
+    lab_order = relationship("LabOrder", foreign_keys=[lab_order_id])
+    radiology_order = relationship("RadiologyOrder", foreign_keys=[radiology_order_id])
+    discontinued_by = relationship("User", foreign_keys=[discontinued_by_user_id])
+    cancelled_by = relationship("User", foreign_keys=[cancelled_by_user_id])
+    nursing_tasks = relationship("IPDNursingTask", back_populates="order", cascade="all, delete-orphan")
+
+
+class IPDMedicationAdministration(Base, BaseModelMixin):
+    __tablename__ = "ipd_medication_administrations"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_orders.id"))
+    medicine_name: Mapped[str] = mapped_column(String(180), nullable=False)
+    dose: Mapped[str | None] = mapped_column(String(80))
+    route: Mapped[str | None] = mapped_column(String(80))
+    frequency: Mapped[str | None] = mapped_column(String(80))
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    administered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="due")
+    reason: Mapped[str | None] = mapped_column(Text)
+    remarks: Mapped[str | None] = mapped_column(Text)
+    administered_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+    admission = relationship("IPDAdmission", back_populates="medication_administrations")
+    order = relationship("IPDOrder")
+    administered_by = relationship("User", foreign_keys=[administered_by_user_id])
+
+
+class IPDNursingTask(Base, BaseModelMixin):
+    __tablename__ = "ipd_nursing_tasks"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_orders.id"))
+    assigned_nurse_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    task_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    instructions: Mapped[str | None] = mapped_column(Text)
+    ward_name: Mapped[str | None] = mapped_column(String(120))
+    bed_number: Mapped[str | None] = mapped_column(String(60))
+    shift_name: Mapped[str | None] = mapped_column(String(80))
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    completion_note: Mapped[str | None] = mapped_column(Text)
+
+    admission = relationship("IPDAdmission", back_populates="nursing_tasks")
+    order = relationship("IPDOrder", back_populates="nursing_tasks")
+    assigned_nurse = relationship("User", foreign_keys=[assigned_nurse_user_id])
+    completed_by = relationship("User", foreign_keys=[completed_by_user_id])
+
+
+class IPDHandover(Base, BaseModelMixin):
+    __tablename__ = "ipd_handovers"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    handover_type: Mapped[str] = mapped_column(String(40), nullable=False, default="nursing")
+    shift_name: Mapped[str | None] = mapped_column(String(80))
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    pending_items: Mapped[str | None] = mapped_column(Text)
+    precautions: Mapped[str | None] = mapped_column(Text)
+    sender_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    receiver_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    handed_over_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending_ack")
+    patient_condition: Mapped[str | None] = mapped_column(Text)
+    active_diagnosis: Mapped[str | None] = mapped_column(Text)
+    treatment_plan: Mapped[str | None] = mapped_column(Text)
+    pending_orders: Mapped[str | None] = mapped_column(Text)
+    medication_due: Mapped[str | None] = mapped_column(Text)
+    abnormal_vitals: Mapped[str | None] = mapped_column(Text)
+    critical_alerts: Mapped[str | None] = mapped_column(Text)
+    discharge_tasks: Mapped[str | None] = mapped_column(Text)
+    special_instructions: Mapped[str | None] = mapped_column(Text)
+
+    admission = relationship("IPDAdmission", back_populates="handovers")
+    sender = relationship("User", foreign_keys=[sender_user_id])
+    receiver = relationship("User", foreign_keys=[receiver_user_id])
+
+
+class IPDTimelineEvent(Base, BaseModelMixin):
+    __tablename__ = "ipd_timeline_events"
+
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text)
+    source_type: Mapped[str | None] = mapped_column(String(80))
+    source_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    actor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+    admission = relationship("IPDAdmission", back_populates="timeline_events")
+    actor = relationship("User", foreign_keys=[actor_user_id])
 
 
 class ERVisit(Base, BaseModelMixin):

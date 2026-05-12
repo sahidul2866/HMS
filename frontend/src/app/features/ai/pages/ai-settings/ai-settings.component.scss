@@ -1,0 +1,137 @@
+.ai-settings {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+header p {
+  margin: 0 0 0.25rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  color: #0f172a;
+}
+
+header span {
+  display: block;
+  margin-top: 0.35rem;
+  color: #475569;
+}
+
+.message {
+  margin: 0;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1e40af;
+  font-weight: 750;
+}
+
+.settings-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  max-width: 980px;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.wide,
+.module-grid,
+button[type='submit'] {
+  grid-column: 1 / -1;
+}
+
+input,
+select {
+  min-height: 2.45rem;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 8px;
+  padding: 0 0.7rem;
+  font: inherit;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.3rem;
+}
+
+.check input {
+  min-height: auto;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #f8fafc;
+}
+
+button[type='submit'] {
+  width: fit-content;
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-list {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 980px;
+}
+
+.settings-list article {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 0.8rem;
+  background: #fff;
+}
+
+.settings-list strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  text-transform: capitalize;
+}
+
+.settings-list code {
+  display: block;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #475569;
+}
+
+@media (max-width: 800px) {
+  .settings-form,
+  .module-grid {
+    grid-template-columns: 1fr;
+  }
+}

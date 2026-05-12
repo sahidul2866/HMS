@@ -60,6 +60,31 @@ class AccountingDashboardRead(BaseModel):
     alerts: list[AccountingAlert]
 
 
+class AccountingReportSummary(BaseModel):
+    trial_balance: list[AccountingChartPoint]
+    profit_and_loss: list[AccountingChartPoint]
+    balance_sheet: list[AccountingChartPoint]
+    receivable_aging: list[AccountingChartPoint]
+    payable_aging: list[AccountingChartPoint]
+    cash_bank: list[AccountingChartPoint]
+
+
+class GeneralLedgerLineRead(BaseModel):
+    id: UUID
+    journal_entry_id: UUID
+    journal_number: str
+    journal_date: date
+    account_code: str
+    account_name: str
+    description: str | None = None
+    debit_amount: Decimal
+    credit_amount: Decimal
+    balance: Decimal
+    source_module: str | None = None
+    source_reference: str | None = None
+    created_by: UUID | None = None
+
+
 class AccountCreate(BaseModel):
     group_id: UUID | None = None
     account_code: str = Field(max_length=50)
@@ -127,8 +152,23 @@ class JournalEntryRead(BaseModel):
     total_credit: Decimal
     lines: list[JournalEntryLineRead] = []
     created_at: datetime
+    posted_at: datetime | None = None
+    reversed_entry_id: UUID | None = None
 
     model_config = {"from_attributes": True}
+
+
+class JournalEntryActionRead(BaseModel):
+    id: UUID
+    journal_number: str
+    status: str
+    message: str
+
+
+class AccountingSyncRead(BaseModel):
+    created_entries: int
+    skipped_entries: int
+    message: str
 
 
 class SimpleFinanceCreate(BaseModel):

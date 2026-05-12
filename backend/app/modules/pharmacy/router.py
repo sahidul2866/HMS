@@ -31,6 +31,7 @@ from app.schemas.pharmacy import (
     PharmacyInvestigationSettingUpdate,
     PharmacyInvestigationUpdate,
     PharmacyMedicineCreate,
+    PharmacyMedicineAvailabilityRead,
     PharmacyMedicineRead,
     PharmacyMedicineTypeCreate,
     PharmacyMedicineTypeRead,
@@ -58,6 +59,10 @@ def serialize_dispense(item) -> PharmacyDispenseRead:
     return PharmacyDispenseRead(
         id=item.id,
         patient_id=item.patient_id,
+        billing_invoice_id=item.billing_invoice_id,
+        billing_invoice_item_id=item.billing_invoice_item_id,
+        billing_invoice_number=item.billing_invoice.invoice_number if item.billing_invoice else None,
+        billing_payment_status=item.billing_invoice.payment_status if item.billing_invoice else None,
         source_visit_id=item.source_visit_id,
         source_visit_order_id=item.source_visit_order_id,
         patient_name=f"{item.patient.first_name} {item.patient.last_name}" if item.patient else None,
@@ -440,8 +445,44 @@ def get_pharmacy_summary(user=Depends(get_current_user), db: Session = Depends(g
 
 
 @router.get("/opd-prescriptions", response_model=list[PharmacyPendingPrescriptionRead], dependencies=[Depends(require_permissions("pharmacy.view"))])
-def list_pending_opd_prescriptions(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[PharmacyPendingPrescriptionRead]:
-    return PharmacyService(db).list_pending_prescriptions(user)
+def list_pending_opd_prescriptions(
+    patient: str | None = None,
+    doctor: str | None = None,
+    department: str | None = None,
+    prescription_status: str | None = None,
+    payment_status: str | None = None,
+    availability_status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PharmacyPendingPrescriptionRead]:
+    items = PharmacyService(db).list_pending_prescriptions(user)
+    if patient:
+        needle = patient.strip().lower()
+        items = [item for item in items if needle in item.patient_name.lower() or needle in item.patient_number.lower()]
+    if doctor:
+        needle = doctor.strip().lower()
+        items = [item for item in items if needle in (item.doctor_name or "").lower()]
+    if department:
+        needle = department.strip().lower()
+        items = [item for item in items if needle in (item.visit_status or "").lower()]
+    if prescription_status:
+        items = [item for item in items if item.prescription_status == prescription_status]
+    if payment_status:
+        items = [item for item in items if item.payment_status == payment_status]
+    if availability_status:
+        items = [item for item in items if item.availability_status == availability_status]
+    if date_from:
+        items = [item for item in items if item.visit_date >= date_from]
+    if date_to:
+        items = [item for item in items if item.visit_date <= date_to]
+    return items
+
+
+@router.get("/medicine-availability", response_model=PharmacyMedicineAvailabilityRead, dependencies=[Depends(require_permissions("pharmacy.view"))])
+def get_medicine_availability(medicine_name: str = Query(min_length=2), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PharmacyMedicineAvailabilityRead:
+    return PharmacyService(db).get_medicine_availability(medicine_name, user)
 
 
 @router.post("/dispense", response_model=PharmacyDispenseRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])

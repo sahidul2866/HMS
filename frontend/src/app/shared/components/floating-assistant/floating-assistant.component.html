@@ -199,17 +199,19 @@
           <span class="assistant-chip">{{ msg.response.source_module || 'HMS' }}</span>
           <span class="assistant-chip warn" *ngIf="msg.response.used_gemini">Gemini</span>
           <span class="assistant-chip good" *ngIf="msg.response.used_database">DB</span>
+          <span class="assistant-chip" *ngIf="msg.response.context_summary">{{ msg.response.context_summary }}</span>
         </div>
         <div class="assistant-bubble-text">{{ msg.text }}</div>
-        <button
-          *ngIf="msg.sender === 'bot'"
-          type="button"
-          class="assistant-copy"
-          (click)="copyResponse(msg.text)"
-          aria-label="Copy assistant response"
-        >
-          Copy
-        </button>
+        <div class="assistant-response-actions" *ngIf="msg.sender === 'bot'">
+          <button type="button" class="assistant-copy" (click)="copyResponse(msg.response?.draft_content || msg.text)" aria-label="Copy assistant response">Copy</button>
+          <button type="button" class="assistant-copy" *ngIf="msg.response?.draft_content" (click)="insertResponse(msg.response?.draft_content || '')">Insert</button>
+        </div>
+        <div class="assistant-draft" *ngIf="msg.sender === 'bot' && msg.response?.draft_content">
+          {{ msg.response?.draft_content }}
+        </div>
+        <div class="assistant-disclaimer" *ngIf="msg.sender === 'bot' && msg.response?.disclaimer">
+          {{ msg.response?.disclaimer }}
+        </div>
         <div class="assistant-detail" *ngIf="msg.sender === 'bot' && msg.response?.details?.length">
           <div class="assistant-row" *ngFor="let row of msg.response?.details || []">
             <span>{{ row.label }}</span>
@@ -222,6 +224,15 @@
         </div>
         <div class="assistant-denied" *ngIf="msg.sender === 'bot' && msg.response?.permission_denied">
           Permission denied. Restricted data and actions are blocked by backend RBAC.
+        </div>
+        <div class="assistant-confirm" *ngIf="msg.sender === 'bot' && msg.response?.requires_confirmation">
+          <span>Sensitive action requires confirmation in the owning module.</span>
+          <button type="button" (click)="confirmAssistantAction(msg.response!)">Review rule</button>
+        </div>
+        <div class="assistant-actions" *ngIf="msg.sender === 'bot' && msg.response?.actions?.length">
+          <button type="button" *ngFor="let action of msg.response?.actions || []" [disabled]="action.sensitive" (click)="action.action === 'ui.insert_draft' ? insertResponse(msg.response?.draft_content || msg.text) : confirmAssistantAction(msg.response!)">
+            {{ action.label }}
+          </button>
         </div>
         <div class="assistant-replies" *ngIf="msg.sender === 'bot' && msg.response?.quick_replies?.length">
           <button type="button" *ngFor="let item of msg.response?.quick_replies || []" (click)="useQuick(item)">{{ item }}</button>
@@ -239,6 +250,7 @@
       (keydown.enter)="send()"
       [disabled]="loading"
     />
+    <button type="button" class="assistant-voice" (click)="startVoiceInput()" [disabled]="loading || !speechSupported || listening">{{ listening ? '...' : 'Voice' }}</button>
     <button type="button" class="assistant-send" (click)="send()" [disabled]="loading || !input.trim()">Send</button>
   </footer>
 </div>

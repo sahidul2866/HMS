@@ -3,11 +3,114 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">IPD Settings</div>
-        <h1 class="page-title">Bed And Type Configuration</h1>
-        <div class="page-subtitle">Manage bed inventory, categories, and daily rates from a dedicated settings workspace.</div>
+        <h1 class="page-title">IPD Policy Configuration</h1>
+        <div class="page-subtitle">Configure inpatient beds, admission policy, care-team assignment, handover, documentation, discharge, and permission guidance.</div>
       </div>
     </div>
   </div>
+
+  <section class="page-card">
+    <div class="settings-tabs">
+      <button type="button" [class.active]="activeTab === 'beds'" (click)="activeTab = 'beds'">Beds</button>
+      <button type="button" [class.active]="activeTab === 'admission'" (click)="activeTab = 'admission'">Admission</button>
+      <button type="button" [class.active]="activeTab === 'assignment'" (click)="activeTab = 'assignment'">Staff Rules</button>
+      <button type="button" [class.active]="activeTab === 'handover'" (click)="activeTab = 'handover'">Handover</button>
+      <button type="button" [class.active]="activeTab === 'clinical'" (click)="activeTab = 'clinical'">Clinical Docs</button>
+      <button type="button" [class.active]="activeTab === 'discharge'" (click)="activeTab = 'discharge'">Discharge</button>
+      <button type="button" [class.active]="activeTab === 'permissions'" (click)="activeTab = 'permissions'">Permissions</button>
+    </div>
+  </section>
+
+  <form class="page-card policy-card" [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Workflow Policy</h2>
+        <div class="section-copy">Comma fields store option lists. JSON fields store advanced department, payment, template, and clearance rules.</div>
+      </div>
+      <button class="primary-btn" type="submit" [disabled]="savingSettings">{{ savingSettings ? 'Saving...' : 'Save IPD Settings' }}</button>
+    </div>
+    @if (settingsError) {
+      <div class="settings-error">{{ settingsError }}</div>
+    }
+
+    @if (activeTab === 'beds') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Ward Types</span><textarea rows="2" formControlName="ward_types"></textarea></label>
+        <label class="field field-wide"><span>Room Types</span><textarea rows="2" formControlName="room_types"></textarea></label>
+        <label class="field field-wide"><span>Bed Types</span><textarea rows="2" formControlName="bed_types"></textarea></label>
+        <label class="field field-wide"><span>Bed Statuses</span><textarea rows="2" formControlName="bed_statuses"></textarea></label>
+        <label class="field field-wide"><span>Cleaning / Maintenance Statuses</span><textarea rows="2" formControlName="cleaning_statuses"></textarea></label>
+        <label class="field field-wide"><span>ICU / CCU / NICU / Isolation Categories</span><textarea rows="2" formControlName="critical_care_categories"></textarea></label>
+        <label class="field field-wide"><span>Default Bed Charges JSON</span><textarea rows="7" formControlName="default_bed_charges"></textarea></label>
+      </div>
+    }
+
+    @if (activeTab === 'admission') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Admission Sources</span><textarea rows="2" formControlName="admission_sources"></textarea></label>
+        <label class="field field-wide"><span>Admission Types</span><textarea rows="2" formControlName="admission_types"></textarea></label>
+        <label class="field field-wide"><span>Required Admission Fields</span><textarea rows="2" formControlName="required_admission_fields"></textarea></label>
+        <label class="field"><span>Admission Number Format</span><input type="text" formControlName="admission_number_format" /></label>
+        <label class="field field-wide"><span>Department-wise Admission Rules JSON</span><textarea rows="7" formControlName="department_admission_rules"></textarea></label>
+        <label class="field field-wide"><span>Payment Type Rules JSON</span><textarea rows="7" formControlName="payment_type_rules"></textarea></label>
+        <label class="field field-wide"><span>Insurance / Corporate Rules JSON</span><textarea rows="7" formControlName="insurance_corporate_rules"></textarea></label>
+      </div>
+    }
+
+    @if (activeTab === 'assignment') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Doctor Assignment Types</span><textarea rows="2" formControlName="doctor_assignment_types"></textarea></label>
+        <label class="field field-wide"><span>Nurse Assignment Types</span><textarea rows="2" formControlName="nurse_assignment_types"></textarea></label>
+        <label class="field"><span>Max Load Per Doctor</span><input type="number" formControlName="max_patient_load_doctor" /></label>
+        <label class="field"><span>Max Load Per Nurse</span><input type="number" formControlName="max_patient_load_nurse" /></label>
+        <label class="field field-wide"><span>Department-wise Staff Rules JSON</span><textarea rows="7" formControlName="department_staff_rules"></textarea></label>
+        <label class="field field-wide"><span>Shift-wise Assignment Rules JSON</span><textarea rows="7" formControlName="shift_assignment_rules"></textarea></label>
+        <label class="field field-wide"><span>On-call Assignment Rules JSON</span><textarea rows="7" formControlName="on_call_assignment_rules"></textarea></label>
+      </div>
+    }
+
+    @if (activeTab === 'handover') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Handover Templates JSON</span><textarea rows="8" formControlName="handover_templates"></textarea></label>
+        <label class="field field-wide"><span>Required Handover Fields</span><textarea rows="2" formControlName="required_handover_fields"></textarea></label>
+        <label class="field field-wide"><span>Shift Handover Timing JSON</span><textarea rows="6" formControlName="shift_handover_timings"></textarea></label>
+        <label class="field"><span>Escalation Minutes</span><input type="number" formControlName="handover_escalation_minutes" /></label>
+        <label class="inline-check"><input type="checkbox" formControlName="require_handover_acknowledgment" /><span>Require receiver acknowledgment</span></label>
+      </div>
+    }
+
+    @if (activeTab === 'clinical') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Doctor Note Templates JSON</span><textarea rows="8" formControlName="doctor_note_templates"></textarea></label>
+        <label class="field field-wide"><span>Nursing Note Templates JSON</span><textarea rows="8" formControlName="nursing_note_templates"></textarea></label>
+        <label class="field field-wide"><span>Vitals Configuration JSON</span><textarea rows="8" formControlName="vitals_config"></textarea></label>
+        <label class="field field-wide"><span>Intake / Output Settings JSON</span><textarea rows="6" formControlName="intake_output_settings"></textarea></label>
+        <label class="field field-wide"><span>Care Plan Templates JSON</span><textarea rows="6" formControlName="care_plan_templates"></textarea></label>
+        <label class="field field-wide"><span>Procedure Note Templates JSON</span><textarea rows="6" formControlName="procedure_note_templates"></textarea></label>
+      </div>
+    }
+
+    @if (activeTab === 'discharge') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Discharge Approval Levels</span><textarea rows="2" formControlName="discharge_approval_levels"></textarea></label>
+        <label class="field field-wide"><span>Required Summary Fields</span><textarea rows="2" formControlName="required_discharge_summary_fields"></textarea></label>
+        <label class="field field-wide"><span>Clearance Requirements JSON</span><textarea rows="7" formControlName="clearance_requirements"></textarea></label>
+        <label class="field field-wide"><span>Billing Clearance Rules JSON</span><textarea rows="7" formControlName="billing_clearance_rules"></textarea></label>
+        <label class="field field-wide"><span>Pharmacy Clearance Rules JSON</span><textarea rows="7" formControlName="pharmacy_clearance_rules"></textarea></label>
+        <label class="field field-wide"><span>Lab / Radiology Pending Order Rules JSON</span><textarea rows="7" formControlName="lab_radiology_pending_order_rules"></textarea></label>
+        <label class="field field-wide"><span>Follow-up Requirements JSON</span><textarea rows="7" formControlName="follow_up_requirements"></textarea></label>
+      </div>
+    }
+
+    @if (activeTab === 'permissions') {
+      <div class="form-grid">
+        <label class="field field-wide"><span>Role Permission Policy Notes JSON</span><textarea rows="10" formControlName="role_permission_notes"></textarea></label>
+        <div class="permission-hint field-wide">
+          Real permission assignment is managed in Admin Roles. These notes keep IPD policy visible beside the workflow controls.
+        </div>
+      </div>
+    }
+  </form>
 
   <div class="settings-layout">
     <section class="page-card">

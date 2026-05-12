@@ -1,0 +1,73 @@
+<section class="notification-page">
+  <header>
+    <div>
+      <p>Workspace</p>
+      <h1>Notification Center</h1>
+      <span>{{ response.action_required_count }} action required · {{ response.unread_count }} unread · {{ response.critical_count }} critical</span>
+    </div>
+    <button type="button" (click)="load()">Refresh</button>
+  </header>
+
+  <form class="filters" (ngSubmit)="load()">
+    <input type="search" [(ngModel)]="filters.search" name="search" placeholder="Search notifications" />
+    <select [(ngModel)]="filters.status" name="status">
+      <option value="">All statuses</option>
+      <option value="unread">Unread</option>
+      <option value="action_required">Action required</option>
+      <option value="in_progress">In progress</option>
+      <option value="completed">Completed</option>
+      <option value="dismissed">Dismissed</option>
+      <option value="escalated">Escalated</option>
+    </select>
+    <select [(ngModel)]="filters.priority" name="priority">
+      <option value="">All priorities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+      <option value="informational">Informational</option>
+    </select>
+    <select [(ngModel)]="filters.module" name="module">
+      <option value="">All modules</option>
+      <option value="ipd">IPD</option>
+      <option value="opd">OPD</option>
+      <option value="er">Emergency</option>
+      <option value="laboratory">Lab</option>
+      <option value="radiology">Radiology</option>
+      <option value="pharmacy">Pharmacy</option>
+      <option value="billing">Billing</option>
+      <option value="inventory">Inventory</option>
+      <option value="blood_bank">Blood Bank</option>
+      <option value="hr">HR</option>
+      <option value="payroll">Payroll</option>
+      <option value="accounting">Accounting</option>
+      <option value="admin">Admin</option>
+    </select>
+    <label><input type="checkbox" [(ngModel)]="filters.due_today" name="dueToday" /> Due today</label>
+    <label><input type="checkbox" [(ngModel)]="filters.overdue" name="overdue" /> Overdue</label>
+    <button type="submit">Apply</button>
+  </form>
+
+  <div class="notification-table">
+    <article *ngFor="let item of response.items; trackBy: trackById" [ngClass]="priorityClass(item)" [class.unread]="item.status === 'unread'" [class.overdue]="item.overdue">
+      <div class="priority-dot"></div>
+      <div class="content">
+        <div class="line">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.status.replaceAll('_', ' ') }}</span>
+        </div>
+        <p>{{ item.message }}</p>
+        <small>{{ item.module }} · {{ item.category }} · {{ item.notification_type.replaceAll('_', ' ') }} · {{ item.created_at | date: 'short' }}</small>
+        <small *ngIf="item.due_at">Due {{ item.due_at | date: 'short' }}</small>
+      </div>
+      <div class="actions">
+        <button type="button" *ngIf="item.route" (click)="open(item)">{{ item.action_label || 'Open' }}</button>
+        <button type="button" *ngIf="item.status === 'unread'" (click)="update(item, 'read')">Read</button>
+        <button type="button" *ngIf="item.status !== 'completed'" (click)="update(item, 'completed')">Complete</button>
+        <button type="button" (click)="update(item, 'dismissed')">Dismiss</button>
+      </div>
+    </article>
+    <p class="empty" *ngIf="!loading && !response.items.length">No notifications match these filters.</p>
+    <p class="empty" *ngIf="loading">Loading notifications...</p>
+  </div>
+</section>

@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -114,6 +115,9 @@ class OPDVisitRead(OPDVisitCreate):
     id: UUID
     visit_number: str
     status: str
+    queue_number: str | None = None
+    queue_status: str | None = None
+    queue_called_at: datetime | None = None
     consulting_doctor_user_id: UUID | None = None
     converted_ipd_admission_id: UUID | None = None
     history_of_present_illness: str | None = None
@@ -266,6 +270,11 @@ class IPDAdmissionCreate(BaseModel):
     bed_id: UUID | None = None
     admitted_at: datetime
     admission_type: str = Field(min_length=2, max_length=30)
+    admission_source: str | None = Field(default=None, max_length=40)
+    department_name: str | None = Field(default=None, max_length=120)
+    payment_type: str | None = Field(default=None, max_length=60)
+    insurance_info: str | None = None
+    patient_condition: str | None = None
     ward_name: str = Field(min_length=2, max_length=120)
     bed_number: str = Field(min_length=1, max_length=60)
     doctor_user_id: UUID | None = None
@@ -281,12 +290,18 @@ class IPDDischarge(BaseModel):
     discharge_diagnosis: str | None = None
     discharge_summary: str | None = None
     discharge_note: str | None = None
+    allow_override: bool = False
+    override_reason: str | None = None
 
 
 class IPDTransfer(BaseModel):
     bed_id: UUID | None = None
     ward_name: str = Field(min_length=2, max_length=120)
     bed_number: str = Field(min_length=1, max_length=60)
+    transfer_reason: str | None = None
+    transfer_time: datetime | None = None
+    approved_by_user_id: UUID | None = None
+    remarks: str | None = None
     note: str | None = None
 
 
@@ -298,6 +313,11 @@ class IPDAdmissionMovementRead(BaseModel):
     from_bed_number: str | None = None
     to_ward_name: str | None = None
     to_bed_number: str | None = None
+    transfer_reason: str | None = None
+    remarks: str | None = None
+    requested_by_user_id: UUID | None = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
     note: str | None = None
     moved_by_user_id: UUID
 
@@ -308,7 +328,20 @@ class IPDAdmissionRead(IPDAdmissionCreate):
     id: UUID
     admission_number: str
     attending_doctor_user_id: UUID | None = None
+    assigned_nurse_user_id: UUID | None = None
     status: str
+    billing_status: str = "unbilled"
+    discharge_status: str = "not_planned"
+    pharmacy_clearance_status: str = "pending"
+    lab_clearance_status: str = "pending"
+    radiology_clearance_status: str = "pending"
+    pending_orders: int = 0
+    pending_handovers: int = 0
+    due_medications: int = 0
+    current_shift: str | None = None
+    handover_status: str = "clear"
+    active_doctors: list["IPDStaffAssignmentRead"] = []
+    active_nurses: list["IPDStaffAssignmentRead"] = []
     discharged_at: datetime | None = None
     discharge_condition: str | None = None
     discharge_diagnosis: str | None = None
@@ -326,6 +359,366 @@ class IPDSummary(BaseModel):
     active_admissions: int
     discharged_admissions: int
     occupied_beds: int
+    pending_orders: int = 0
+    pending_handovers: int = 0
+    discharge_planned: int = 0
+
+
+class IPDBedBoardRow(BaseModel):
+    bed_id: UUID
+    ward_name: str
+    room_type: str | None = None
+    bed_number: str
+    bed_type: str
+    daily_rate: Decimal
+    bed_status: str
+    board_status: str
+    patient_id: UUID | None = None
+    patient_name: str | None = None
+    patient_number: str | None = None
+    admission_id: UUID | None = None
+    admission_number: str | None = None
+    department_name: str | None = None
+    doctor_name: str | None = None
+    nurse_name: str | None = None
+    admitted_at: datetime | None = None
+    discharge_status: str | None = None
+    billing_status: str | None = None
+    occupancy_hours: Decimal = Decimal("0")
+
+
+class IPDDischargeReadiness(BaseModel):
+    admission_id: UUID
+    admission_number: str
+    status: str
+    ready: bool
+    checks: list[dict[str, Any]]
+    blockers: list[str]
+    discharge_summary_ready: bool
+    final_bill_url: str | None = None
+
+
+class IPDReportSummary(BaseModel):
+    bed_occupancy: dict[str, Any]
+    ward_census: list[dict[str, Any]]
+    transfer_history: list[IPDAdmissionMovementRead]
+    average_length_of_stay_days: Decimal
+    discharge_status: dict[str, int]
+    pending_discharge: list[IPDAdmissionRead]
+    department_flow: list[dict[str, Any]]
+
+
+class IPDSettings(BaseModel):
+    ward_types: list[str] = Field(default_factory=list)
+    room_types: list[str] = Field(default_factory=list)
+    bed_types: list[str] = Field(default_factory=list)
+    bed_statuses: list[str] = Field(default_factory=list)
+    cleaning_statuses: list[str] = Field(default_factory=list)
+    critical_care_categories: list[str] = Field(default_factory=list)
+    default_bed_charges: dict[str, Decimal] = Field(default_factory=dict)
+    admission_sources: list[str] = Field(default_factory=list)
+    admission_types: list[str] = Field(default_factory=list)
+    required_admission_fields: list[str] = Field(default_factory=list)
+    admission_number_format: str = "IPD-{YYYY}{MM}{DD}-{SEQ4}"
+    department_admission_rules: dict[str, Any] = Field(default_factory=dict)
+    payment_type_rules: dict[str, Any] = Field(default_factory=dict)
+    insurance_corporate_rules: dict[str, Any] = Field(default_factory=dict)
+    doctor_assignment_types: list[str] = Field(default_factory=list)
+    nurse_assignment_types: list[str] = Field(default_factory=list)
+    max_patient_load_doctor: int = Field(default=20, ge=1)
+    max_patient_load_nurse: int = Field(default=8, ge=1)
+    department_staff_rules: dict[str, Any] = Field(default_factory=dict)
+    shift_assignment_rules: dict[str, Any] = Field(default_factory=dict)
+    on_call_assignment_rules: dict[str, Any] = Field(default_factory=dict)
+    handover_templates: list[dict[str, Any]] = Field(default_factory=list)
+    required_handover_fields: list[str] = Field(default_factory=list)
+    shift_handover_timings: dict[str, str] = Field(default_factory=dict)
+    require_handover_acknowledgment: bool = True
+    handover_escalation_minutes: int = Field(default=30, ge=0)
+    doctor_note_templates: list[dict[str, Any]] = Field(default_factory=list)
+    nursing_note_templates: list[dict[str, Any]] = Field(default_factory=list)
+    vitals_config: dict[str, Any] = Field(default_factory=dict)
+    intake_output_settings: dict[str, Any] = Field(default_factory=dict)
+    care_plan_templates: list[dict[str, Any]] = Field(default_factory=list)
+    procedure_note_templates: list[dict[str, Any]] = Field(default_factory=list)
+    discharge_approval_levels: list[str] = Field(default_factory=list)
+    required_discharge_summary_fields: list[str] = Field(default_factory=list)
+    clearance_requirements: dict[str, bool] = Field(default_factory=dict)
+    billing_clearance_rules: dict[str, Any] = Field(default_factory=dict)
+    pharmacy_clearance_rules: dict[str, Any] = Field(default_factory=dict)
+    lab_radiology_pending_order_rules: dict[str, Any] = Field(default_factory=dict)
+    follow_up_requirements: dict[str, Any] = Field(default_factory=dict)
+    role_permission_notes: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class IPDSettingsRead(IPDSettings):
+    id: UUID | None = None
+    updated_at: datetime | None = None
+
+
+class IPDSettingsUpdate(IPDSettings):
+    pass
+
+
+class IPDStaffAssignmentCreate(BaseModel):
+    staff_user_id: UUID
+    role_type: str = Field(pattern="^(doctor|nurse)$")
+    assignment_type: str = Field(default="primary", max_length=60)
+    shift_name: str | None = Field(default=None, max_length=80)
+    reason: str | None = None
+    allow_override: bool = False
+    override_reason: str | None = None
+
+
+class IPDStaffAssignmentRead(IPDStaffAssignmentCreate):
+    id: UUID
+    staff_name: str
+    ward_name: str | None = None
+    bed_number: str | None = None
+    department_name: str | None = None
+    assigned_at: datetime
+    ended_at: datetime | None = None
+    changed_at: datetime | None = None
+    assigned_by_user_id: UUID
+    changed_by_user_id: UUID | None = None
+    schedule_status: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class IPDStaffAvailabilityRead(BaseModel):
+    staff_user_id: UUID
+    staff_name: str
+    role_type: str
+    employee_id: UUID | None = None
+    employee_status: str | None = None
+    department_name: str | None = None
+    current_shift: str | None = None
+    duty_area: str | None = None
+    roster_status: str | None = None
+    is_on_duty: bool
+    is_on_leave: bool
+    active_ipd_assignments: int
+    max_patient_load: int
+    is_overloaded: bool
+    can_assign: bool
+    warnings: list[str] = []
+
+
+class IPDShiftCoverageRead(BaseModel):
+    shift_name: str
+    ward_name: str | None = None
+    doctors_on_duty: int = 0
+    nurses_on_duty: int = 0
+    doctor_gap: bool = False
+    nurse_gap: bool = False
+    warnings: list[str] = []
+
+
+class IPDClinicalNoteCreate(BaseModel):
+    note_type: str = Field(default="progress_note", max_length=60)
+    title: str | None = Field(default=None, max_length=160)
+    note: str = Field(min_length=1)
+    diagnosis: str | None = None
+    treatment_plan: str | None = None
+    template_key: str | None = Field(default=None, max_length=120)
+
+
+class IPDClinicalNoteRead(IPDClinicalNoteCreate):
+    id: UUID
+    version: int
+    authored_by_user_id: UUID
+    authored_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IPDNursingNoteCreate(BaseModel):
+    note_type: str = Field(default="nursing_note", max_length=60)
+    note: str | None = None
+    temperature: Decimal | None = None
+    pulse: int | None = None
+    respiratory_rate: int | None = None
+    systolic_bp: int | None = None
+    diastolic_bp: int | None = None
+    spo2: int | None = None
+    pain_score: int | None = None
+    intake_ml: Decimal | None = None
+    output_ml: Decimal | None = None
+    glucose: Decimal | None = None
+    fall_risk: str | None = Field(default=None, max_length=40)
+
+
+class IPDNursingNoteRead(IPDNursingNoteCreate):
+    id: UUID
+    abnormal_alert: bool
+    recorded_by_user_id: UUID
+    recorded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IPDOrderCreate(BaseModel):
+    order_type: str = Field(pattern="^(medicine|lab|radiology|procedure|nursing|diet|monitoring)$")
+    service_area: str | None = Field(default=None, max_length=40)
+    item_name: str = Field(min_length=1, max_length=180)
+    instructions: str | None = None
+    quantity: Decimal = Field(default=1, gt=0)
+    priority: str = Field(default="routine", max_length=40)
+    order_set_code: str | None = Field(default=None, max_length=120)
+    scheduled_at: datetime | None = None
+    frequency: str | None = Field(default=None, max_length=80)
+    duration: str | None = Field(default=None, max_length=80)
+    dose: str | None = Field(default=None, max_length=80)
+    route: str | None = Field(default=None, max_length=80)
+
+
+class IPDOrderRead(IPDOrderCreate):
+    id: UUID
+    status: str
+    billing_status: str
+    lab_order_id: UUID | None = None
+    radiology_order_id: UUID | None = None
+    discontinued_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    ordered_by_user_id: UUID
+    ordered_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class IPDOrderStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(pending|active|completed|cancelled|discontinued)$")
+    reason: str | None = None
+
+
+class IPDOrderGroupRead(BaseModel):
+    order_type: str
+    status: str
+    orders: list[IPDOrderRead]
+
+
+class IPDMedicationAdministrationCreate(BaseModel):
+    order_id: UUID | None = None
+    medicine_name: str = Field(min_length=1, max_length=180)
+    dose: str | None = Field(default=None, max_length=80)
+    route: str | None = Field(default=None, max_length=80)
+    frequency: str | None = Field(default=None, max_length=80)
+    scheduled_at: datetime | None = None
+    administered_at: datetime | None = None
+    status: str = Field(default="administered", pattern="^(due|administered|skipped|held|delayed|refused)$")
+    reason: str | None = None
+    remarks: str | None = None
+    allow_duplicate: bool = False
+
+
+class IPDMedicationAdministrationRead(IPDMedicationAdministrationCreate):
+    id: UUID
+    administered_by_user_id: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class IPDNursingTaskCreate(BaseModel):
+    order_id: UUID | None = None
+    assigned_nurse_user_id: UUID | None = None
+    task_type: str = Field(max_length=60)
+    title: str = Field(min_length=1, max_length=180)
+    instructions: str | None = None
+    shift_name: str | None = Field(default=None, max_length=80)
+    due_at: datetime | None = None
+
+
+class IPDNursingTaskUpdate(BaseModel):
+    status: str = Field(pattern="^(pending|in_progress|completed|cancelled)$")
+    completion_note: str | None = None
+
+
+class IPDNursingTaskRead(IPDNursingTaskCreate):
+    id: UUID
+    admission_id: UUID
+    ward_name: str | None = None
+    bed_number: str | None = None
+    status: str
+    completed_at: datetime | None = None
+    completed_by_user_id: UUID | None = None
+    completion_note: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class IPDVitalsTrendRead(BaseModel):
+    recorded_at: datetime
+    temperature: Decimal | None = None
+    pulse: int | None = None
+    respiratory_rate: int | None = None
+    systolic_bp: int | None = None
+    diastolic_bp: int | None = None
+    spo2: int | None = None
+    pain_score: int | None = None
+    glucose: Decimal | None = None
+    abnormal_alert: bool
+
+
+class IPDHandoverCreate(BaseModel):
+    handover_type: str = Field(default="nursing", max_length=40)
+    shift_name: str | None = Field(default=None, max_length=80)
+    receiver_user_id: UUID | None = None
+    summary: str = Field(min_length=1)
+    pending_items: str | None = None
+    precautions: str | None = None
+    patient_condition: str | None = None
+    active_diagnosis: str | None = None
+    treatment_plan: str | None = None
+    pending_orders: str | None = None
+    medication_due: str | None = None
+    abnormal_vitals: str | None = None
+    critical_alerts: str | None = None
+    discharge_tasks: str | None = None
+    special_instructions: str | None = None
+
+
+class IPDHandoverRead(IPDHandoverCreate):
+    id: UUID
+    sender_user_id: UUID
+    handed_over_at: datetime
+    acknowledged_at: datetime | None = None
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
+class IPDHandoverBoardRead(IPDHandoverRead):
+    admission_id: UUID
+    admission_number: str | None = None
+    patient_name: str | None = None
+    ward_name: str | None = None
+    bed_number: str | None = None
+
+
+class IPDTimelineEventRead(BaseModel):
+    id: UUID
+    event_type: str
+    title: str
+    detail: str | None = None
+    source_type: str | None = None
+    source_id: UUID | None = None
+    occurred_at: datetime
+    actor_user_id: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class IPDPatientWorkspace(BaseModel):
+    admission: IPDAdmissionRead
+    assignments: list[IPDStaffAssignmentRead]
+    clinical_notes: list[IPDClinicalNoteRead]
+    nursing_notes: list[IPDNursingNoteRead]
+    orders: list[IPDOrderRead]
+    medications: list[IPDMedicationAdministrationRead]
+    nursing_tasks: list[IPDNursingTaskRead]
+    handovers: list[IPDHandoverRead]
+    timeline: list[IPDTimelineEventRead]
 
 
 class IPDBedCreate(BaseModel):

@@ -24,6 +24,11 @@ class HRDashboardSummary(BaseModel):
     pending_leave_requests: int
     pending_payroll_approvals: int
     monthly_salary_payable: Decimal
+    employees_on_leave: int = 0
+    expiring_documents: int = 0
+    current_month_payroll_status: str | None = None
+    total_overtime_cost: Decimal = Decimal("0")
+    total_deductions: Decimal = Decimal("0")
     alerts: list[str] = []
 
 
@@ -80,6 +85,28 @@ class HREmployeeRead(HREmployeeCreate):
     department_name: str | None = None
     designation_name: str | None = None
     salary_gross: Decimal | None = None
+    reporting_manager_name: str | None = None
+    document_count: int = 0
+    expiring_document_count: int = 0
+    model_config = {"from_attributes": True}
+
+
+class HREmployeeDocumentCreate(BaseModel):
+    employee_id: UUID
+    document_type: str = Field(min_length=2, max_length=80)
+    file_name: str | None = Field(default=None, max_length=220)
+    file_url: str | None = Field(default=None, max_length=500)
+    expiry_date: date | None = None
+    note: str | None = None
+
+
+class HREmployeeDocumentRead(HREmployeeDocumentCreate):
+    id: UUID
+    employee_name: str | None = None
+    staff_code: str | None = None
+    status: str = "valid"
+    days_to_expiry: int | None = None
+    created_at: datetime
     model_config = {"from_attributes": True}
 
 
@@ -99,6 +126,9 @@ class HRAttendanceRead(HRAttendanceCreate):
     id: UUID
     employee_name: str | None = None
     staff_code: str | None = None
+    department_name: str | None = None
+    correction_status: str | None = None
+    correction_note: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -165,6 +195,7 @@ class HRLeaveRequestRead(HRLeaveRequestCreate):
     status: str
     employee_name: str | None = None
     leave_type_name: str | None = None
+    leave_type_paid: bool | None = None
     approval_remarks: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
@@ -248,6 +279,11 @@ class HRPayrollItemRead(BaseModel):
     unpaid_leave_days: Decimal
     overtime_hours: Decimal
     gross_salary: Decimal
+    basic_salary: Decimal | None = None
+    total_allowances: Decimal | None = None
+    overtime_amount: Decimal | None = None
+    loan_deduction: Decimal | None = None
+    attendance_deduction: Decimal | None = None
     total_deductions: Decimal
     net_salary: Decimal
     payment_status: str
@@ -267,6 +303,29 @@ class HRPayrollRunRead(BaseModel):
     created_at: datetime
     items: list[HRPayrollItemRead] = []
     model_config = {"from_attributes": True}
+
+
+class HRPayrollDashboard(BaseModel):
+    payroll_month: str
+    status: str | None = None
+    total_salary_payable: Decimal = Decimal("0")
+    pending_approvals: int = 0
+    paid_items: int = 0
+    unpaid_items: int = 0
+    overtime_cost: Decimal = Decimal("0")
+    deduction_total: Decimal = Decimal("0")
+    department_costs: dict[str, Decimal] = {}
+
+
+class HRReportSummary(BaseModel):
+    employee_count: int
+    attendance_summary: dict[str, int]
+    leave_summary: dict[str, int]
+    overtime_hours: Decimal
+    payroll_net_total: Decimal
+    loan_outstanding: Decimal
+    expiring_documents: int
+    resigned_employees: int
 
 
 class HRRecruitmentJobCreate(BaseModel):

@@ -424,6 +424,12 @@
   line-height: 1.45;
 }
 
+.assistant-response-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .assistant-copy {
   margin-top: 0.45rem;
   min-height: 1.8rem;
@@ -440,6 +446,59 @@
 .assistant-copy:hover {
   border-color: rgba(37, 99, 235, 0.42);
   color: rgba(37, 99, 235, 0.95);
+}
+
+.assistant-draft,
+.assistant-disclaimer,
+.assistant-confirm {
+  margin-top: 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(248, 250, 252, 0.98);
+  color: rgba(15, 23, 42, 0.82);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.assistant-disclaimer {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  color: rgba(120, 53, 15, 0.95);
+  font-weight: 750;
+}
+
+.assistant-confirm {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.assistant-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.assistant-actions button,
+.assistant-confirm button {
+  min-height: 1.8rem;
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  color: rgba(30, 64, 175, 0.95);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.assistant-actions button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .assistant-denied {
@@ -554,7 +613,7 @@
 .assistant-footer {
   padding: 10px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   border-top: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(255, 255, 255, 0.98);
@@ -574,7 +633,8 @@
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
-.assistant-send {
+.assistant-send,
+.assistant-voice {
   height: 40px;
   padding: 0 14px;
   border-radius: 12px;
@@ -585,7 +645,13 @@
   cursor: pointer;
 }
 
-.assistant-send[disabled] {
+.assistant-voice {
+  border-color: rgba(15, 23, 42, 0.35);
+  background: rgba(15, 23, 42, 0.86);
+}
+
+.assistant-send[disabled],
+.assistant-voice[disabled] {
   opacity: 0.55;
   cursor: not-allowed;
 }

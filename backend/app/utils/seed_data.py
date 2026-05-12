@@ -6,6 +6,11 @@ PERMISSION_CATALOG = [
     ("patient.edit", "patient", "edit", "Edit patients"),
     ("patient.delete", "patient", "delete", "Delete patients"),
     ("patient.medical_record.update", "patient", "medical_record.update", "Update patient medical records"),
+    ("patient.id_card.view", "patient", "id_card.view", "View patient ID card preview"),
+    ("patient.id_card.generate", "patient", "id_card.generate", "Generate patient ID card barcode"),
+    ("patient.id_card.print", "patient", "id_card.print", "Print patient ID card"),
+    ("patient.id_card.reprint", "patient", "id_card.reprint", "Reprint patient ID card"),
+    ("patient.id_card.configure", "patient", "id_card.configure", "Configure patient ID card template"),
     ("appointment.view", "appointment", "view", "View appointments"),
     ("appointment.book", "appointment", "book", "Book appointments"),
     ("appointment.manage", "appointment", "manage", "Manage and check in appointments"),
@@ -35,6 +40,21 @@ PERMISSION_CATALOG = [
     ("ipd.discharge", "ipd", "discharge", "Discharge IPD patients"),
     ("ipd.transfer", "ipd", "transfer", "Transfer IPD patients and beds"),
     ("ipd.bed.manage", "ipd", "bed.manage", "Manage IPD beds"),
+    ("ipd.settings.manage", "ipd", "settings.manage", "Manage IPD workflow and policy settings"),
+    ("ipd.edit_admission", "ipd", "edit_admission", "Edit IPD admission details"),
+    ("ipd.assign_doctor", "ipd", "assign_doctor", "Assign or change IPD doctors"),
+    ("ipd.assign_nurse", "ipd", "assign_nurse", "Assign or change IPD nurses"),
+    ("ipd.bed_transfer", "ipd", "bed_transfer", "Transfer IPD beds"),
+    ("ipd.doctor_note.create", "ipd", "doctor_note.create", "Create IPD doctor notes"),
+    ("ipd.nursing_note.create", "ipd", "nursing_note.create", "Create IPD nursing notes and vitals"),
+    ("ipd.order.create", "ipd", "order.create", "Create IPD orders"),
+    ("ipd.medication.administer", "ipd", "medication.administer", "Administer IPD medicines"),
+    ("ipd.handover.create", "ipd", "handover.create", "Create duty handovers"),
+    ("ipd.handover.acknowledge", "ipd", "handover.acknowledge", "Acknowledge duty handovers"),
+    ("ipd.discharge.request", "ipd", "discharge.request", "Request or plan IPD discharge"),
+    ("ipd.discharge.approve", "ipd", "discharge.approve", "Approve IPD discharge"),
+    ("ipd.discharge.finalize", "ipd", "discharge.finalize", "Finalize IPD discharge"),
+    ("ipd.report.print", "ipd", "report.print", "Print IPD reports and summaries"),
     ("er.view", "er", "view", "View emergency room module"),
     ("emergency.view", "emergency", "view", "View emergency department command center"),
     ("emergency.register", "emergency", "register", "Register emergency patients"),
@@ -80,6 +100,52 @@ PERMISSION_CATALOG = [
     ("pharmacy.stock.adjust", "pharmacy", "stock.adjust", "Adjust pharmacy stock"),
     ("pharmacy.purchase.manage", "pharmacy", "purchase.manage", "Manage pharmacy purchases"),
     ("pharmacy.settings.manage", "pharmacy", "settings.manage", "Manage pharmacy master data and settings"),
+    ("blood_bank.view", "blood_bank", "view", "View blood bank module"),
+    ("blood_bank.dashboard.view", "blood_bank", "dashboard.view", "View blood bank dashboard"),
+    ("blood_bank.donor.create", "blood_bank", "donor.create", "Register blood donors"),
+    ("blood_bank.donor.edit", "blood_bank", "donor.edit", "Edit blood donor profiles"),
+    ("blood_bank.donor.screen", "blood_bank", "donor.screen", "Screen blood donors and record eligibility"),
+    ("blood_bank.collection.create", "blood_bank", "collection.create", "Collect donor blood and create units"),
+    ("blood_bank.testing.update", "blood_bank", "testing.update", "Update blood screening and test results"),
+    ("blood_bank.component.prepare", "blood_bank", "component.prepare", "Prepare blood components and manage storage"),
+    ("blood_bank.stock.view", "blood_bank", "stock.view", "View blood stock"),
+    ("blood_bank.request.create", "blood_bank", "request.create", "Create blood requests"),
+    ("blood_bank.request.approve", "blood_bank", "request.approve", "Approve blood requests"),
+    ("blood_bank.crossmatch.perform", "blood_bank", "crossmatch.perform", "Perform blood crossmatch"),
+    ("blood_bank.crossmatch.verify", "blood_bank", "crossmatch.verify", "Verify blood crossmatch"),
+    ("blood_bank.issue", "blood_bank", "issue", "Issue blood units"),
+    ("blood_bank.return", "blood_bank", "return", "Return blood units"),
+    ("blood_bank.discard", "blood_bank", "discard", "Discard unusable blood units"),
+    ("blood_bank.transfusion.update", "blood_bank", "transfusion.update", "Update transfusion events"),
+    ("blood_bank.report.view", "blood_bank", "report.view", "View blood bank reports"),
+    ("blood_bank.report.export", "blood_bank", "report.export", "Export blood bank reports"),
+    ("scanner.use", "scanner", "use", "Use global barcode and QR scanning"),
+    ("scanner.generate", "scanner", "generate", "Generate barcode and QR codes for permitted records"),
+    ("scanner.settings.manage", "scanner", "settings.manage", "Manage barcode, QR, label, wristband, and scanner settings"),
+    ("scanner.audit.view", "scanner", "audit.view", "View barcode and QR scan audit logs"),
+    ("ai.assistant.use", "ai", "assistant.use", "Use the permission-aware hospital AI assistant"),
+    ("ai.assistant.action", "ai", "assistant.action", "Allow AI-assisted safe workflow actions"),
+    ("ai.assistant.configure", "ai", "assistant.configure", "Configure hospital AI assistant settings"),
+    ("ai.assistant.audit.view", "ai", "assistant.audit.view", "View AI assistant audit logs"),
+    ("notification.view", "notification", "view", "View role-based notification center"),
+    ("notification.action", "notification", "action", "Take permitted actions from notifications"),
+    ("notification.configure", "notification", "configure", "Configure hospital notification rules and channels"),
+    ("notification.audit.view", "notification", "audit.view", "View notification audit logs"),
+    ("queue.view", "queue", "view", "View hospital queue dashboard and tokens"),
+    ("queue.call_next", "queue", "call_next", "Call next patient from a queue counter"),
+    ("queue.skip", "queue", "skip", "Skip queue token"),
+    ("queue.recall", "queue", "recall", "Recall queue token"),
+    ("queue.transfer", "queue", "transfer", "Transfer token between queues"),
+    ("queue.priority.update", "queue", "priority.update", "Update queue priority"),
+    ("queue.counter.manage", "queue", "counter.manage", "Manage queue counters and settings"),
+    ("queue.display.manage", "queue", "display.manage", "Manage queue public display screens"),
+    ("opd.queue.view", "queue", "opd.view", "View OPD queue"),
+    ("opd.queue.call", "queue", "opd.call", "Call OPD queue patients"),
+    ("billing.queue.manage", "queue", "billing.manage", "Manage billing queue"),
+    ("pharmacy.queue.manage", "queue", "pharmacy.manage", "Manage pharmacy queue"),
+    ("lab.queue.manage", "queue", "lab.manage", "Manage lab queue"),
+    ("radiology.queue.manage", "queue", "radiology.manage", "Manage radiology queue"),
+    ("blood_bank.queue.manage", "queue", "blood_bank.manage", "Manage blood bank queue"),
     ("inventory.view", "inventory", "view", "View inventory module"),
     ("inventory.manage", "inventory", "manage", "Manage inventory items and suppliers"),
     ("inventory.item.create", "inventory", "item.create", "Create inventory items and suppliers"),
@@ -136,6 +202,20 @@ PERMISSION_CATALOG = [
     ("accounting.reports.view", "accounting", "reports.view", "View accounting and finance reports"),
     ("accounting.journal.create", "accounting", "journal.create", "Create accounting journal"),
     ("accounting.journal.post", "accounting", "journal.post", "Post accounting journal"),
+    ("accounting.dashboard.view", "accounting", "dashboard.view", "View accounting dashboard"),
+    ("accounting.chart_of_accounts.manage", "accounting", "chart_of_accounts.manage", "Manage chart of accounts"),
+    ("accounting.ledger.view", "accounting", "ledger.view", "View general ledger"),
+    ("accounting.voucher.create", "accounting", "voucher.create", "Create accounting vouchers"),
+    ("accounting.voucher.edit", "accounting", "voucher.edit", "Edit draft accounting vouchers"),
+    ("accounting.voucher.approve", "accounting", "voucher.approve", "Approve accounting vouchers"),
+    ("accounting.voucher.post", "accounting", "voucher.post", "Post accounting vouchers"),
+    ("accounting.voucher.reverse", "accounting", "voucher.reverse", "Reverse posted accounting vouchers"),
+    ("accounting.expense.create", "accounting", "expense.create", "Create expenses"),
+    ("accounting.expense.approve", "accounting", "expense.approve", "Approve expenses"),
+    ("accounting.supplier_payment.create", "accounting", "supplier_payment.create", "Create supplier payments"),
+    ("accounting.cash_bank.manage", "accounting", "cash_bank.manage", "Manage cash and bank records"),
+    ("accounting.report.view", "accounting", "report.view", "View accounting reports"),
+    ("accounting.report.export", "accounting", "report.export", "Export accounting reports"),
     ("settings.user.manage", "settings", "user.manage", "Manage users"),
     ("settings.role.manage", "settings", "role.manage", "Manage roles"),
     ("settings.permission.manage", "settings", "permission.manage", "Manage permission catalog"),
@@ -166,8 +246,23 @@ ROLE_CATALOG = {
         "ipd.view",
         "ipd.admit",
         "ipd.bed.manage",
+        "ipd.settings.manage",
         "ipd.transfer",
         "ipd.discharge",
+        "ipd.edit_admission",
+        "ipd.assign_doctor",
+        "ipd.assign_nurse",
+        "ipd.bed_transfer",
+        "ipd.doctor_note.create",
+        "ipd.nursing_note.create",
+        "ipd.order.create",
+        "ipd.medication.administer",
+        "ipd.handover.create",
+        "ipd.handover.acknowledge",
+        "ipd.discharge.request",
+        "ipd.discharge.approve",
+        "ipd.discharge.finalize",
+        "ipd.report.print",
         "er.view",
         "er.visit.manage",
         "er.triage.manage",
@@ -402,6 +497,20 @@ ROLE_CATALOG = {
         "accounting.reports.view",
         "accounting.journal.create",
         "accounting.journal.post",
+        "accounting.dashboard.view",
+        "accounting.chart_of_accounts.manage",
+        "accounting.ledger.view",
+        "accounting.voucher.create",
+        "accounting.voucher.edit",
+        "accounting.voucher.approve",
+        "accounting.voucher.post",
+        "accounting.voucher.reverse",
+        "accounting.expense.create",
+        "accounting.expense.approve",
+        "accounting.supplier_payment.create",
+        "accounting.cash_bank.manage",
+        "accounting.report.view",
+        "accounting.report.export",
         "diagnostics.view",
         "hr.view",
         "hr.payroll.manage",
@@ -413,6 +522,40 @@ ROLE_CATALOG = {
         "ot.reports.view",
     ],
 }
+
+for role_code, permissions in ROLE_CATALOG.items():
+    if role_code != "PATIENT" and "scanner.use" not in permissions:
+        permissions.append("scanner.use")
+    if role_code != "PATIENT" and "ai.assistant.use" not in permissions:
+        permissions.append("ai.assistant.use")
+    if role_code != "PATIENT" and "notification.view" not in permissions:
+        permissions.append("notification.view")
+    if role_code != "PATIENT" and "notification.action" not in permissions:
+        permissions.append("notification.action")
+    if role_code != "PATIENT" and "queue.view" not in permissions:
+        permissions.append("queue.view")
+    if role_code != "PATIENT" and any(code in permissions for code in ("opd.view", "appointment.view")):
+        for permission_code in ("opd.queue.view", "opd.queue.call"):
+            if permission_code not in permissions:
+                permissions.append(permission_code)
+    if role_code != "PATIENT" and "billing.view" in permissions and "billing.queue.manage" not in permissions:
+        permissions.append("billing.queue.manage")
+    if role_code != "PATIENT" and "pharmacy.view" in permissions and "pharmacy.queue.manage" not in permissions:
+        permissions.append("pharmacy.queue.manage")
+    if role_code != "PATIENT" and "laboratory.view" in permissions and "lab.queue.manage" not in permissions:
+        permissions.append("lab.queue.manage")
+    if role_code != "PATIENT" and "radiology.view" in permissions and "radiology.queue.manage" not in permissions:
+        permissions.append("radiology.queue.manage")
+    if role_code != "PATIENT" and "blood_bank.view" in permissions and "blood_bank.queue.manage" not in permissions:
+        permissions.append("blood_bank.queue.manage")
+    if role_code != "PATIENT":
+        for permission_code in ("patient.id_card.view", "patient.id_card.generate", "patient.id_card.print", "patient.id_card.reprint"):
+            if "patient.view" in permissions and permission_code not in permissions:
+                permissions.append(permission_code)
+for admin_role in ("SUPER_ADMIN", "ADMIN"):
+    for permission_code in ("scanner.generate", "scanner.settings.manage", "scanner.audit.view", "patient.id_card.configure", "ai.assistant.action", "ai.assistant.configure", "ai.assistant.audit.view", "notification.configure", "notification.audit.view", "queue.call_next", "queue.skip", "queue.recall", "queue.transfer", "queue.priority.update", "queue.counter.manage", "queue.display.manage"):
+        if permission_code not in ROLE_CATALOG[admin_role]:
+            ROLE_CATALOG[admin_role].append(permission_code)
 
 ROLE_FLAGS = {
     "SUPER_ADMIN": {"is_doctor_role": False, "is_referral_role": False},

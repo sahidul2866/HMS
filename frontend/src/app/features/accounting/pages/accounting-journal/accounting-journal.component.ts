@@ -4,10 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { NotificationService } from '../../../../core/services/notification.service';
-import { AccountingDashboard, AccountingWorkspace, ChartPoint, FinanceRecord } from '../../models/accounting.models';
+import { AccountingDashboard, AccountingReportSummary, AccountingWorkspace, ChartPoint, FinanceRecord, GeneralLedgerLine, JournalEntry } from '../../models/accounting.models';
 import { AccountingService } from '../../services/accounting.service';
 
-type AccountingTab = 'dashboard' | 'accounts' | 'collections' | 'receivables' | 'payables' | 'expenses' | 'payroll' | 'doctor' | 'cash' | 'bank' | 'journals' | 'reports' | 'audit';
+type AccountingTab = 'dashboard' | 'accounts' | 'ledger' | 'vouchers' | 'collections' | 'receivables' | 'payables' | 'expenses' | 'payroll' | 'doctor' | 'cash' | 'bank' | 'reports' | 'audit';
 
 @Component({
   selector: 'app-accounting-journal',
@@ -27,6 +27,8 @@ export class AccountingJournalComponent {
   error = '';
   dashboard: AccountingDashboard | null = null;
   workspace: AccountingWorkspace | null = null;
+  ledger: GeneralLedgerLine[] = [];
+  reports: AccountingReportSummary | null = null;
   modal: '' | 'account' | 'journal' | 'advance' | 'refund' | 'discount' | 'insurance' | 'corporate' | 'supplier' | 'expense' = '';
   accountForm: Record<string, unknown> = { category: 'assets', normal_balance: 'debit', opening_balance: 0, current_balance: 0, is_active: true };
   workflowForm: Record<string, unknown> = { amount: 0, status: 'pending', payment_method: 'cash' };
@@ -34,6 +36,7 @@ export class AccountingJournalComponent {
     journal_date: this.today(),
     narration: '',
     source_module: 'manual',
+    status: 'draft',
     lines: [
       { account_code: '1001', account_name: 'Cash', debit_amount: 0, credit_amount: 0 },
       { account_code: '4000', account_name: 'Revenue', debit_amount: 0, credit_amount: 0 },
@@ -61,6 +64,8 @@ export class AccountingJournalComponent {
       },
     });
     this.accountingService.workspace().subscribe((workspace) => (this.workspace = workspace));
+    this.accountingService.ledger().subscribe((ledger) => (this.ledger = ledger));
+    this.accountingService.reports().subscribe((reports) => (this.reports = reports));
   }
 
   openModal(modal: typeof this.modal): void {
@@ -82,7 +87,7 @@ export class AccountingJournalComponent {
 
   saveJournal(): void {
     this.accountingService.createJournalEntry(this.journalForm).subscribe((entry) => {
-      this.notificationService.success(`Journal ${entry.journal_number} posted.`);
+      this.notificationService.success(`Voucher ${entry.journal_number} saved.`);
       this.closeModal();
       this.load();
     });
@@ -107,6 +112,38 @@ export class AccountingJournalComponent {
     if (this.tab() === 'cash') return this.workspace.cash_closings;
     if (this.tab() === 'bank') return this.workspace.bank_transactions;
     return [];
+  }
+
+  voucherAction(entry: JournalEntry, action: string): void {
+    this.accountingService.voucherAction(entry.id, action).subscribe((result) => {
+      this.notificationService.success(`${result.journal_number} is ${result.status}.`);
+      this.load();
+    });
+  }
+
+  approveRecord(record: FinanceRecord, kind: string): void {
+    this.accountingService.updateFinanceStatus(kind, record.id, 'approved').subscribe(() => {
+      this.notificationService.success('Record approved.');
+      this.load();
+    });
+  }
+
+  recordKind(): string {
+    if (this.tab() === 'payables') return 'supplier';
+    if (this.tab() === 'expenses') return 'expense';
+    if (this.tab() === 'receivables') return 'insurance';
+    return this.tab();
+  }
+
+  syncIntegrations(): void {
+    this.accountingService.syncIntegrations().subscribe((result) => {
+      this.notificationService.success(`${result.created_entries} entries synced, ${result.skipped_entries} skipped.`);
+      this.load();
+    });
+  }
+
+  reportGroup(key: keyof AccountingReportSummary): ChartPoint[] {
+    return this.reports?.[key] || [];
   }
 
   num(value: string | number | null | undefined): number {

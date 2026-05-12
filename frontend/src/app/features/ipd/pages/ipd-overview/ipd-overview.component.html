@@ -92,22 +92,53 @@
       <section class="page-card">
         <div class="section-header">
           <div>
-            <h2 class="section-title">Bed Inventory</h2>
-            <div class="section-copy">Bed creation and type configuration are managed from IPD Settings.</div>
+            <h2 class="section-title">IPD Bed Board</h2>
+            <div class="section-copy">Live ward, room, patient, doctor, nurse, status, occupancy, and discharge readiness view.</div>
           </div>
-          <button class="secondary-btn" type="button" (click)="navigateToSettings()">Open IPD Settings</button>
+          <div class="toolbar-row compact-toolbar">
+            <button class="secondary-btn" type="button" (click)="loadBedBoard()">Refresh</button>
+            <button class="secondary-btn" type="button" (click)="navigateToSettings()">IPD Settings</button>
+          </div>
         </div>
 
-        <div class="bed-grid">
-          @for (bed of beds; track bed.id) {
-            <article class="bed-card" [class.bed-card--occupied]="bed.status === 'occupied'">
+        <form class="bed-board-filters" [formGroup]="bedBoardFilters" (ngSubmit)="loadBedBoard()">
+          <label class="field"><span>Ward</span><input type="text" formControlName="ward_name" list="ipdWardOptions" /></label>
+          <label class="field"><span>Bed Type</span><select formControlName="bed_type"><option value="">All</option>@for (type of bedBoardTypes; track type) { <option [value]="type">{{ type }}</option> }</select></label>
+          <label class="field"><span>Status</span><select formControlName="status"><option value="">All</option><option value="available">Available</option><option value="occupied">Occupied</option><option value="reserved">Reserved</option><option value="cleaning">Cleaning</option><option value="maintenance">Maintenance</option><option value="blocked">Blocked</option><option value="discharge_pending">Discharge Pending</option></select></label>
+          <label class="field"><span>Department</span><input type="text" formControlName="department_name" /></label>
+          <div class="filter-actions">
+            <button class="primary-btn" type="submit">Apply</button>
+            <button class="secondary-btn" type="button" (click)="resetBedBoardFilters()">Reset</button>
+          </div>
+          <datalist id="ipdWardOptions">
+            @for (ward of bedBoardWards; track ward) { <option [value]="ward"></option> }
+          </datalist>
+        </form>
+
+        <div class="bed-board-grid">
+          @for (bed of bedBoard; track bed.bed_id) {
+            <article [class]="'bed-board-card bed-board-card--' + bed.board_status" (click)="openBedBoardRow(bed)">
               <div class="bed-card__head">
                 <strong>{{ bed.ward_name }} / {{ bed.bed_number }}</strong>
-                <span class="pill">{{ bed.status }}</span>
+                <span class="pill">{{ bed.board_status }}</span>
               </div>
               <div class="bed-card__meta">{{ bed.bed_type }} · Daily {{ bed.daily_rate }}</div>
-              <div class="bed-card__note">{{ bed.note || 'No note' }}</div>
+              @if (bed.patient_name) {
+                <div class="bed-board-patient">
+                  <strong>{{ bed.patient_name }}</strong>
+                  <span>{{ bed.admission_number }} · {{ bed.department_name || 'No department' }}</span>
+                </div>
+                <div class="bed-board-team">
+                  <span>Doctor: {{ bed.doctor_name || 'Unassigned' }}</span>
+                  <span>Nurse: {{ bed.nurse_name || 'Unassigned' }}</span>
+                  <span>{{ bed.occupancy_hours }}h occupied · {{ bed.billing_status || 'unbilled' }}</span>
+                </div>
+              } @else {
+                <div class="bed-card__note">No active patient. Bed status: {{ bed.bed_status }}</div>
+              }
             </article>
+          } @empty {
+            <div class="empty-state">No beds match the selected filters.</div>
           }
         </div>
       </section>
@@ -132,9 +163,12 @@
               </div>
               <div class="admission-card__grid">
                 <div><span>Ward / Bed</span><strong>{{ admission.ward_name }} / {{ admission.bed_number }}</strong></div>
-                <div><span>Doctor</span><strong>{{ admission.attending_doctor_name }}</strong></div>
+                <div><span>Doctor</span><strong>{{ admission.active_doctors?.[0]?.staff_name || admission.attending_doctor_name }}</strong></div>
+                <div><span>Nurse</span><strong>{{ admission.active_nurses?.[0]?.staff_name || 'Unassigned' }}</strong></div>
+                <div><span>Pending</span><strong>{{ admission.pending_orders || 0 }} orders · {{ admission.due_medications || 0 }} meds</strong></div>
                 <div><span>Admitted</span><strong>{{ admission.admitted_at | date:'mediumDate' }}</strong></div>
-                <div><span>Advance</span><strong>{{ admission.advance_amount }}</strong></div>
+                <div><span>Handover</span><strong>{{ admission.handover_status || 'clear' }}</strong></div>
+                <div><span>Clearance</span><strong>{{ admission.billing_status || 'unbilled' }}</strong></div>
               </div>
               <div class="admission-card__actions">
                 <button class="secondary-btn" type="button" (click)="selectAdmission(admission)">Open</button>
@@ -149,6 +183,42 @@
           }
         </div>
       </section>
+
+      <section class="page-card">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Shift Handover</h2>
+            <div class="section-copy">Pending acknowledgments by ward, bed, patient, shift, and handover type.</div>
+          </div>
+          <span class="pill">{{ handoverBoard.length }} pending</span>
+        </div>
+        @if (handoverBoard.length) {
+          <div class="handover-board">
+            @for (handover of handoverBoard; track handover.id) {
+              <article class="handover-card">
+                <div class="handover-card__head">
+                  <div>
+                    <strong>{{ handover.patient_name || handover.admission_number }}</strong>
+                    <span>{{ handover.ward_name || '-' }} / {{ handover.bed_number || '-' }} · {{ handover.shift_name || 'shift' }}</span>
+                  </div>
+                  <span class="pill">{{ handover.handover_type }}</span>
+                </div>
+                <div class="handover-card__summary">{{ handover.summary }}</div>
+                @if (handover.critical_alerts || handover.medication_due || handover.discharge_tasks) {
+                  <div class="mini-badges">
+                    @if (handover.critical_alerts) { <span class="mini-badge danger">Alerts</span> }
+                    @if (handover.medication_due) { <span class="mini-badge warn">Medication due</span> }
+                    @if (handover.discharge_tasks) { <span class="mini-badge info">Discharge tasks</span> }
+                  </div>
+                }
+                <button class="secondary-btn" type="button" (click)="acknowledgeHandover(handover.id)">Acknowledge</button>
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">No pending duty handovers need acknowledgment.</div>
+        }
+      </section>
     </div>
 
     <aside class="control-stack">
@@ -159,8 +229,12 @@
           <ul class="summary-list">
             <li><span>Patient</span><strong>{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }}</strong></li>
             <li><span>Doctor</span><strong>{{ selectedAdmission.attending_doctor_name }}</strong></li>
+            <li><span>Nurse</span><strong>{{ selectedAdmission.active_nurses?.[0]?.staff_name || 'Unassigned' }}</strong></li>
             <li><span>Ward / Bed</span><strong>{{ selectedAdmission.ward_name }} / {{ selectedAdmission.bed_number }}</strong></li>
             <li><span>Status</span><strong>{{ selectedAdmission.status }}</strong></li>
+            <li><span>Shift</span><strong>{{ selectedAdmission.current_shift || 'current' }}</strong></li>
+            <li><span>Discharge</span><strong>{{ selectedAdmission.discharge_status || 'not planned' }}</strong></li>
+            <li><span>Pending</span><strong>{{ selectedAdmission.pending_orders || 0 }} orders · {{ selectedAdmission.pending_handovers || 0 }} handovers</strong></li>
           </ul>
         } @else {
           <div class="empty-state">Choose an admission card to open transfer and discharge controls.</div>
@@ -186,6 +260,210 @@
               }
             </div>
             <div class="control-block">
+              <div class="control-block__title">Care Team</div>
+              <div class="care-team-grid">
+                <div class="care-team-column">
+                  <span>Doctors</span>
+                  @if (activeDoctors.length) {
+                    @for (assignment of activeDoctors; track assignment.id) {
+                      <div class="care-chip">
+                        <strong>{{ assignment.staff_name }}</strong>
+                        <small>{{ assignment.assignment_type }} · {{ assignment.shift_name || 'any shift' }}</small>
+                      </div>
+                    }
+                  } @else {
+                    <div class="empty-state compact-empty">No doctor assignment history for this case.</div>
+                  }
+                </div>
+                <div class="care-team-column">
+                  <span>Nurses</span>
+                  @if (activeNurses.length) {
+                    @for (assignment of activeNurses; track assignment.id) {
+                      <div class="care-chip">
+                        <strong>{{ assignment.staff_name }}</strong>
+                        <small>{{ assignment.assignment_type }} · {{ assignment.shift_name || 'any shift' }}</small>
+                      </div>
+                    }
+                  } @else {
+                    <div class="empty-state compact-empty">No nurse assigned for this shift.</div>
+                  }
+                </div>
+              </div>
+              @if (shiftCoverage) {
+                <div class="coverage-strip" [class.coverage-gap]="shiftCoverage.doctor_gap || shiftCoverage.nurse_gap">
+                  <strong>{{ shiftCoverage.shift_name }} coverage</strong>
+                  <span>{{ shiftCoverage.doctors_on_duty }} doctors · {{ shiftCoverage.nurses_on_duty }} nurses available</span>
+                </div>
+              }
+              <form class="form-grid" [formGroup]="assignmentForm" (ngSubmit)="submitAssignment()">
+                <label class="field"><span>Role</span><select formControlName="role_type"><option value="doctor">Doctor</option><option value="nurse">Nurse</option></select></label>
+                <label class="field"><span>Shift</span><select formControlName="shift_name"><option value="morning">Morning</option><option value="evening">Evening</option><option value="night">Night</option><option value="on_call">On-call</option></select></label>
+                <label class="field"><span>Assignment</span><select formControlName="assignment_type">@for (option of assignmentOptions; track option.value) { <option [value]="option.value">{{ option.label }}</option> }</select></label>
+                <label class="field"><span>Available Staff</span><select formControlName="staff_user_id"><option value="">Select staff</option>@for (staff of staffAvailability; track staff.staff_user_id) { <option [value]="staff.staff_user_id">{{ staff.staff_name }} · {{ staff.active_ipd_assignments }}/{{ staff.max_patient_load }} {{ staff.can_assign ? '' : ' - needs override' }}</option> }</select></label>
+                <label class="field" style="grid-column:1/-1;"><span>Reason</span><input type="text" formControlName="reason" /></label>
+                <label class="inline-check" style="grid-column:1/-1;"><input type="checkbox" formControlName="allow_override" /><span>Override roster/load warning</span></label>
+                @if (assignmentForm.getRawValue().allow_override) {
+                  <label class="field" style="grid-column:1/-1;"><span>Override Reason</span><input type="text" formControlName="override_reason" /></label>
+                }
+                @if (staffAvailability.length) {
+                  <div class="availability-list" style="grid-column:1/-1;">
+                    @for (staff of staffAvailability.slice(0, 5); track staff.staff_user_id) {
+                      <div [class]="staff.can_assign ? 'availability-row ok' : 'availability-row warn'">
+                        <strong>{{ staff.staff_name }}</strong>
+                        <span>{{ staff.is_on_duty ? 'On duty' : 'Not rostered' }} · load {{ staff.active_ipd_assignments }}/{{ staff.max_patient_load }}</span>
+                        @if (staff.warnings.length) { <small>{{ staff.warnings.join(' · ') }}</small> }
+                      </div>
+                    }
+                  </div>
+                }
+                <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Assign Staff</button></div>
+              </form>
+            </div>
+
+            <div class="control-block">
+              <div class="control-block__title">Inpatient Workflow</div>
+              <div class="toolbar-row compact-toolbar">
+                <button type="button" [class.primary-btn]="activeWorkflow === 'notes'" [class.secondary-btn]="activeWorkflow !== 'notes'" (click)="activeWorkflow = 'notes'">Notes</button>
+                <button type="button" [class.primary-btn]="activeWorkflow === 'orders'" [class.secondary-btn]="activeWorkflow !== 'orders'" (click)="activeWorkflow = 'orders'">Orders</button>
+                <button type="button" [class.primary-btn]="activeWorkflow === 'meds'" [class.secondary-btn]="activeWorkflow !== 'meds'" (click)="activeWorkflow = 'meds'">Medication</button>
+                <button type="button" [class.primary-btn]="activeWorkflow === 'handover'" [class.secondary-btn]="activeWorkflow !== 'handover'" (click)="activeWorkflow = 'handover'">Handover</button>
+              </div>
+
+              @if (activeWorkflow === 'notes') {
+                <form class="form-grid" [formGroup]="clinicalNoteForm" (ngSubmit)="submitClinicalNote()">
+                  <label class="field"><span>Type</span><select formControlName="note_type"><option value="admission_note">Admission</option><option value="progress_note">Progress</option><option value="consultation_note">Consultation</option><option value="procedure_note">Procedure</option><option value="discharge_plan">Discharge Plan</option></select></label>
+                  <label class="field"><span>Title</span><input type="text" formControlName="title" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Note</span><textarea rows="3" formControlName="note"></textarea></label>
+                  <label class="field"><span>Diagnosis</span><input type="text" formControlName="diagnosis" /></label>
+                  <label class="field"><span>Treatment Plan</span><input type="text" formControlName="treatment_plan" /></label>
+                  <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Save Doctor Note</button></div>
+                </form>
+                <form class="form-grid" [formGroup]="nursingNoteForm" (ngSubmit)="submitNursingNote()">
+                  <label class="field" style="grid-column:1/-1;"><span>Nursing Note</span><textarea rows="2" formControlName="note"></textarea></label>
+                  <label class="field"><span>Temp</span><input type="number" formControlName="temperature" /></label>
+                  <label class="field"><span>Pulse</span><input type="number" formControlName="pulse" /></label>
+                  <label class="field"><span>BP Sys</span><input type="number" formControlName="systolic_bp" /></label>
+                  <label class="field"><span>BP Dia</span><input type="number" formControlName="diastolic_bp" /></label>
+                  <label class="field"><span>SpO2</span><input type="number" formControlName="spo2" /></label>
+                  <label class="field"><span>Pain</span><input type="number" formControlName="pain_score" /></label>
+                  <label class="field"><span>RR</span><input type="number" formControlName="respiratory_rate" /></label>
+                  <label class="field"><span>Glucose</span><input type="number" formControlName="glucose" /></label>
+                  <div style="grid-column:1/-1;"><button class="secondary-btn" type="submit">Save Vitals / Nursing Note</button></div>
+                </form>
+                @if (workspace?.nursing_tasks?.length) {
+                  <div class="handover-history">
+                    @for (task of workspace?.nursing_tasks?.slice(0, 8); track task.id) {
+                      <article class="handover-card">
+                        <div class="handover-card__head">
+                          <strong>{{ task.title }}</strong>
+                          <span class="pill">{{ task.task_type }} · {{ task.status }}</span>
+                        </div>
+                        <div class="handover-card__summary">{{ task.instructions || 'No instructions' }} · {{ task.due_at ? (task.due_at | date:'short') : 'no due time' }}</div>
+                        @if (task.status !== 'completed') {
+                          <button class="secondary-btn" type="button" (click)="completeTask(task.id)">Complete Task</button>
+                        }
+                      </article>
+                    }
+                  </div>
+                }
+              }
+
+              @if (activeWorkflow === 'orders') {
+                <form class="form-grid" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
+                  <label class="field"><span>Order Type</span><select formControlName="order_type"><option value="medicine">Medicine</option><option value="lab">Lab</option><option value="radiology">Radiology</option><option value="procedure">Procedure</option><option value="diet">Diet</option><option value="nursing">Nursing</option><option value="monitoring">Monitoring</option></select></label>
+                  <label class="field"><span>Priority</span><select formControlName="priority"><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></select></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Item</span><input type="text" formControlName="item_name" /></label>
+                  <label class="field"><span>Qty</span><input type="number" formControlName="quantity" /></label>
+                  <label class="field"><span>Area</span><input type="text" formControlName="service_area" /></label>
+                  <label class="field"><span>Scheduled At</span><input type="datetime-local" formControlName="scheduled_at" /></label>
+                  <label class="field"><span>Frequency</span><input type="text" formControlName="frequency" /></label>
+                  <label class="field"><span>Dose</span><input type="text" formControlName="dose" /></label>
+                  <label class="field"><span>Route</span><input type="text" formControlName="route" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Instructions</span><textarea rows="2" formControlName="instructions"></textarea></label>
+                  <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Create Order</button></div>
+                </form>
+                @if (workspace?.orders?.length) {
+                  <div class="handover-history">
+                    @for (order of workspace?.orders?.slice(0, 8); track order.id) {
+                      <article class="handover-card">
+                        <div class="handover-card__head">
+                          <strong>{{ order.item_name }}</strong>
+                          <span class="pill">{{ order.order_type }} · {{ order.status }}</span>
+                        </div>
+                        <div class="handover-card__summary">{{ order.instructions || 'No instructions' }}</div>
+                        @if (order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'discontinued') {
+                          <button class="secondary-btn" type="button" (click)="discontinueOrder(order.id)">Discontinue</button>
+                        }
+                      </article>
+                    }
+                  </div>
+                }
+              }
+
+              @if (activeWorkflow === 'meds') {
+                @if (workspace?.medications?.length) {
+                  <div class="handover-history">
+                    @for (med of workspace?.medications?.slice(0, 8); track med.id) {
+                      <article class="handover-card">
+                        <div class="handover-card__head">
+                          <strong>{{ med.medicine_name }}</strong>
+                          <span class="pill">{{ med.status }}</span>
+                        </div>
+                        <div class="handover-card__summary">{{ med.dose || '-' }} · {{ med.route || '-' }} · {{ med.frequency || '-' }} · {{ med.scheduled_at ? (med.scheduled_at | date:'short') : 'unscheduled' }}</div>
+                        @if (med.status === 'due') {
+                          <button class="secondary-btn" type="button" (click)="recordScheduledMedication(med.medicine_name, med.order_id, med.scheduled_at)">Record</button>
+                        }
+                      </article>
+                    }
+                  </div>
+                }
+                <form class="form-grid" [formGroup]="medicationForm" (ngSubmit)="submitMedication()">
+                  <label class="field"><span>Medicine</span><input type="text" formControlName="medicine_name" /></label>
+                  <label class="field"><span>Dose</span><input type="text" formControlName="dose" /></label>
+                  <label class="field"><span>Route</span><input type="text" formControlName="route" /></label>
+                  <label class="field"><span>Frequency</span><input type="text" formControlName="frequency" /></label>
+                  <label class="field"><span>Status</span><select formControlName="status"><option value="administered">Administered</option><option value="skipped">Skipped</option><option value="held">Held</option><option value="delayed">Delayed</option><option value="refused">Refused</option></select></label>
+                  <label class="field"><span>Reason</span><input type="text" formControlName="reason" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Remarks</span><input type="text" formControlName="remarks" /></label>
+                  <label class="inline-check" style="grid-column:1/-1;"><input type="checkbox" formControlName="allow_duplicate" /><span>Allow duplicate administration</span></label>
+                  <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Record Medication</button></div>
+                </form>
+              }
+
+              @if (activeWorkflow === 'handover') {
+                <form class="form-grid" [formGroup]="handoverForm" (ngSubmit)="submitHandover()">
+                  <label class="field"><span>Type</span><select formControlName="handover_type"><option value="nursing">Nursing</option><option value="doctor">Doctor</option></select></label>
+                  <label class="field"><span>Shift</span><select formControlName="shift_name"><option value="morning">Morning</option><option value="evening">Evening</option><option value="night">Night</option><option value="on_call">On-call</option></select></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Patient Condition</span><input type="text" formControlName="patient_condition" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Active Diagnosis</span><input type="text" formControlName="active_diagnosis" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Treatment Plan</span><textarea rows="2" formControlName="treatment_plan"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Summary</span><textarea rows="3" formControlName="summary"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Pending Orders</span><textarea rows="2" formControlName="pending_orders"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Medication Due</span><textarea rows="2" formControlName="medication_due"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Abnormal Vitals / Alerts</span><textarea rows="2" formControlName="abnormal_vitals"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Pending Items</span><textarea rows="2" formControlName="pending_items"></textarea></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Precautions</span><input type="text" formControlName="precautions" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Discharge Tasks</span><input type="text" formControlName="discharge_tasks" /></label>
+                  <label class="field" style="grid-column:1/-1;"><span>Special Instructions</span><input type="text" formControlName="special_instructions" /></label>
+                  <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Create Handover</button></div>
+                </form>
+                @if (workspace?.handovers?.length) {
+                  <div class="handover-history">
+                    @for (handover of workspace?.handovers?.slice(0, 5); track handover.id) {
+                      <article class="handover-card">
+                        <div class="handover-card__head"><strong>{{ handover.shift_name || 'Shift' }} {{ handover.handover_type }}</strong><span class="pill">{{ handover.status }}</span></div>
+                        <div class="handover-card__summary">{{ handover.summary }}</div>
+                        @if (handover.status === 'pending_ack') {
+                          <button class="secondary-btn" type="button" (click)="acknowledgeHandover(handover.id)">Acknowledge</button>
+                        }
+                      </article>
+                    }
+                  </div>
+                }
+              }
+            </div>
+
+            <div class="control-block">
               <div class="control-block__title">Transfer Admission</div>
               <form class="form-grid" [formGroup]="transferForm" (ngSubmit)="transferAdmission()">
                 <label class="field">
@@ -199,6 +477,9 @@
                 </label>
                 <label class="field"><span>To Ward</span><input type="text" formControlName="ward_name" /></label>
                 <label class="field"><span>To Bed</span><input type="text" formControlName="bed_number" /></label>
+                <label class="field"><span>Transfer Time</span><input type="datetime-local" formControlName="transfer_time" /></label>
+                <label class="field" style="grid-column:1/-1;"><span>Transfer Reason</span><input type="text" formControlName="transfer_reason" /></label>
+                <label class="field" style="grid-column:1/-1;"><span>Approval / Remarks</span><input type="text" formControlName="remarks" /></label>
                 <label class="field" style="grid-column:1/-1;"><span>Transfer Note</span><textarea rows="2" formControlName="note"></textarea></label>
                 <div style="grid-column:1/-1;"><button class="primary-btn" type="submit">Transfer Admission</button></div>
               </form>
@@ -206,11 +487,22 @@
 
             <div class="control-block">
               <div class="control-block__title">Finalize Discharge</div>
+              <button class="secondary-btn" type="button" (click)="requestDischarge()">Request Discharge</button>
+              @if (dischargeReadiness) {
+                <div [class]="dischargeReadiness.ready ? 'readiness-banner ready' : 'readiness-banner blocked'">
+                  <strong>{{ dischargeReadiness.ready ? 'Ready for final discharge' : 'Discharge blocked' }}</strong>
+                  <span>{{ dischargeReadiness.ready ? 'All configured clearance checks are complete.' : dischargeReadiness.blockers.join(' · ') }}</span>
+                </div>
+              }
               <form class="form-grid" [formGroup]="dischargeForm" (ngSubmit)="discharge(selectedAdmission)">
                 <label class="field"><span>Discharge Condition</span><input type="text" formControlName="discharge_condition" /></label>
                 <label class="field"><span>Discharge Diagnosis</span><input type="text" formControlName="discharge_diagnosis" /></label>
                 <label class="field" style="grid-column:1/-1;"><span>Discharge Summary</span><textarea rows="3" formControlName="discharge_summary"></textarea></label>
                 <label class="field" style="grid-column:1/-1;"><span>Discharge Note</span><textarea rows="2" formControlName="discharge_note"></textarea></label>
+                <label class="inline-check" style="grid-column:1/-1;"><input type="checkbox" formControlName="allow_override" /><span>Authorized override for incomplete clearance</span></label>
+                @if (dischargeForm.getRawValue().allow_override) {
+                  <label class="field" style="grid-column:1/-1;"><span>Override Reason</span><input type="text" formControlName="override_reason" /></label>
+                }
                 <div class="control-actions" style="grid-column:1/-1;">
                   <button class="danger-btn is-destructive" type="submit">Finalize Discharge</button>
                   @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
@@ -242,6 +534,17 @@
             </div>
           </div>
           <div class="movement-list">
+            @if (workspace) {
+              @for (event of workspace.timeline; track event.id) {
+                <article class="movement-card">
+                  <div class="movement-card__head">
+                    <span class="pill">{{ event.event_type }}</span>
+                    <strong>{{ event.occurred_at | date:'medium' }}</strong>
+                  </div>
+                  <div class="movement-card__note">{{ event.title }} · {{ event.detail || 'No detail' }}</div>
+                </article>
+              }
+            }
             @for (movement of selectedAdmission.movements; track movement.id) {
               <article class="movement-card">
                 <div class="movement-card__head">
@@ -253,7 +556,10 @@
                   <strong>to</strong>
                   <span>{{ movement.to_ward_name || '-' }}{{ movement.to_bed_number ? ' / ' + movement.to_bed_number : '' }}</span>
                 </div>
-                <div class="movement-card__note">{{ movement.note || 'No note' }}</div>
+                <div class="movement-card__note">{{ movement.transfer_reason || movement.note || 'No note' }}</div>
+                @if (movement.remarks || movement.approved_at) {
+                  <div class="movement-card__note">{{ movement.remarks || 'Approved' }}{{ movement.approved_at ? ' · ' + (movement.approved_at | date:'short') : '' }}</div>
+                }
               </article>
             }
           </div>

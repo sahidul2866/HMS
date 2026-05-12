@@ -1,0 +1,41 @@
+<section class="workspace-shell">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Patient Identity</div>
+        <h1 class="page-title">Patient ID Card Template</h1>
+        <div class="page-subtitle">Configure the hospital-wise printable card, barcode type, logo, and visible fields.</div>
+      </div>
+      <button class="primary-btn" type="button" (click)="save()" [disabled]="saving">{{ saving ? 'Saving...' : 'Save Template' }}</button>
+    </div>
+  </section>
+
+  <section class="page-card settings-grid">
+    <label><span>Card size</span><input [(ngModel)]="template.card_size" name="cardSize" /></label>
+    <label><span>Logo URL</span><input [(ngModel)]="template.logo_url" name="logoUrl" placeholder="Optional logo URL" /></label>
+    <label><span>Header</span><input [(ngModel)]="template.header" name="header" /></label>
+    <label><span>Footer</span><input [(ngModel)]="template.footer" name="footer" /></label>
+    <label><span>Barcode type</span><select [(ngModel)]="template.code_type" name="codeType"><option value="code39">Code39</option><option value="qr">QR</option></select></label>
+    <label><span>Theme color</span><input type="color" [(ngModel)]="template.theme_color" name="themeColor" /></label>
+    <label><span>Print layout</span><select [(ngModel)]="template.print_layout" name="printLayout"><option value="standard-card">Standard card</option><option value="compact">Compact</option></select></label>
+    <label class="check"><input type="checkbox" [(ngModel)]="template.show_phone" name="showPhone" /> Show phone</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="template.show_emergency_contact" name="showEmergency" /> Show emergency contact</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="template.show_dob" name="showDob" /> Show DOB/age</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="template.show_issue_date" name="showIssueDate" /> Show issue date</label>
+  </section>
+
+  <section class="page-card preview">
+    <article class="sample-card" [style.borderTopColor]="template.theme_color">
+      <div class="sample-logo">H</div>
+      <div>
+        <strong>{{ template.header }}</strong>
+        <p>Sample Patient · PAT-000000</p>
+        <p *ngIf="template.show_dob">DOB/Age: 1990-01-01</p>
+        <p *ngIf="template.show_phone">Phone: 01XXXXXXXXX</p>
+        <p *ngIf="template.show_emergency_contact">Emergency: Attendant 01XXXXXXXXX</p>
+        <p *ngIf="template.show_issue_date">Issued: today</p>
+      </div>
+      <footer>{{ template.footer }}</footer>
+    </article>
+  </section>
+</section>

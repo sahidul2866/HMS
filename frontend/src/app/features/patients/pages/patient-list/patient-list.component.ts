@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { printScanLabel } from '../../../../shared/utils/scan-print.utils';
 import { PatientService } from '../../services/patient.service';
 import { Patient } from '../../models/patient.models';
 
@@ -52,6 +53,29 @@ export class PatientListComponent {
 
   openOpdRegistration(patient: Patient): void {
     void this.router.navigate(['/opd/register'], { queryParams: { patientId: patient.id } });
+  }
+
+  printIdCard(patient: Patient): void {
+    this.patientService.printIdCard(patient.id, true).subscribe((card) => {
+      printScanLabel({
+        kind: 'card',
+        title: card.hospital_name,
+        subtitle: card.template.header,
+        code: card.scan_code,
+        logoUrl: card.template.logo_url,
+        themeColor: card.template.theme_color,
+        lines: [
+          `Name: ${card.patient.first_name} ${card.patient.last_name}`,
+          `MRN: ${card.patient.patient_number}`,
+          card.template.show_dob ? `DOB/Age: ${card.patient.date_of_birth || '-'}` : '',
+          `Gender: ${card.patient.gender || '-'}`,
+          card.template.show_phone ? `Phone: ${card.patient.phone || '-'}` : '',
+          card.template.show_emergency_contact ? `Emergency: ${card.patient.emergency_contact_name || '-'} ${card.patient.emergency_contact_phone || ''}` : '',
+          `Issue date: ${card.issue_date} (Reprint)`,
+          card.template.footer,
+        ].filter(Boolean),
+      });
+    });
   }
 
   get filteredPatients(): Patient[] {

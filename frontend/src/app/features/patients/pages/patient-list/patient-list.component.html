@@ -61,6 +61,7 @@
                       <button *appHasPermission="'billing.invoice.create'" type="button" (click)="openBilling(patient)">Create Bill</button>
                       <button *appHasPermission="'opd.visit.create'" type="button" (click)="openOpdRegistration(patient)">Register OPD</button>
                       <button *appHasPermission="'ipd.admit'" type="button" (click)="openIpdAdmission(patient)">Admit IPD</button>
+                      <button *appHasPermission="'patient.id_card.reprint'" type="button" (click)="printIdCard(patient)">Reprint ID Card</button>
                     </div>
                   </details>
                 </td>

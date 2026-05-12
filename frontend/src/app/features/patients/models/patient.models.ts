@@ -12,6 +12,30 @@ export interface Patient {
   emergency_contact_phone?: string | null;
 }
 
+export interface PatientIdCardTemplate {
+  card_size: string;
+  logo_url?: string | null;
+  header: string;
+  footer: string;
+  code_type: string;
+  theme_color: string;
+  show_phone: boolean;
+  show_emergency_contact: boolean;
+  show_dob: boolean;
+  show_issue_date: boolean;
+  print_layout: string;
+}
+
+export interface PatientIdCard {
+  patient: Patient;
+  hospital_name: string;
+  scan_code: string;
+  code_type: string;
+  issue_date: string;
+  is_reprint: boolean;
+  template: PatientIdCardTemplate;
+}
+
 export interface PatientLookupResult extends Patient {
   full_name: string;
 }

@@ -1,10 +1,13 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from secrets import token_hex
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models.patient import Patient
+from app.models.scanner import ScanCode, ScanSetting
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.patients.repository import PatientsRepository
@@ -15,6 +18,9 @@ from app.schemas.patient import (
     PatientHistoryBillingInvoiceRead,
     PatientHistoryBillingPaymentRead,
     PatientHistoryIPDAdmissionRead,
+    PatientIdCardRead,
+    PatientIdCardTemplateRead,
+    PatientIdCardTemplateWrite,
     PatientMobileLookupRead,
     PatientHistoryAppointmentRead,
     PatientLookupResult,
@@ -215,6 +221,7 @@ class PatientsService:
             updated_by=actor.id,
         )
         self.repository.create_patient(patient)
+        self._ensure_patient_id_card_code(patient, actor)
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.PATIENT_CREATE,
@@ -227,3 +234,121 @@ class PatientsService:
         self.db.commit()
         self.db.refresh(patient)
         return patient
+
+    def get_id_card(self, patient_id, actor: User, context: dict[str, str | None], *, log_action: str | None = None, is_reprint: bool = False) -> PatientIdCardRead:
+        patient = self.get_patient(patient_id, actor)
+        code = self._ensure_patient_id_card_code(patient, actor)
+        if log_action:
+            AuditService(self.db).log(
+                user_id=actor.id,
+                action=log_action,
+                module="patients",
+                entity_type="patient_id_card",
+                entity_id=str(patient.id),
+                detail={"patient_number": patient.patient_number, "scan_code_id": str(code.id), "is_reprint": is_reprint},
+                context=context,
+            )
+            self.db.commit()
+        return self._card_read(patient, code, is_reprint=is_reprint)
+
+    def generate_id_card(self, patient_id, actor: User, context: dict[str, str | None]) -> PatientIdCardRead:
+        return self.get_id_card(patient_id, actor, context, log_action="patient.id_card.generate")
+
+    def print_id_card(self, patient_id, actor: User, context: dict[str, str | None], *, reprint: bool = False) -> PatientIdCardRead:
+        return self.get_id_card(patient_id, actor, context, log_action="patient.id_card.reprint" if reprint else "patient.id_card.print", is_reprint=reprint)
+
+    def get_id_card_template(self, actor: User) -> PatientIdCardTemplateRead:
+        setting = self.db.scalar(
+            select(ScanSetting).where(
+                ScanSetting.branch_id == actor.branch_id,
+                ScanSetting.department_id.is_(None),
+                ScanSetting.setting_key == "patient_id_card_template",
+            )
+        )
+        if not setting:
+            return PatientIdCardTemplateRead()
+        return PatientIdCardTemplateRead(**(setting.setting_value or {}))
+
+    def update_id_card_template(self, payload: PatientIdCardTemplateWrite, actor: User, context: dict[str, str | None]) -> PatientIdCardTemplateRead:
+        setting = self.db.scalar(
+            select(ScanSetting).where(
+                ScanSetting.branch_id == actor.branch_id,
+                ScanSetting.department_id.is_(None),
+                ScanSetting.setting_key == "patient_id_card_template",
+            )
+        )
+        if not setting:
+            setting = ScanSetting(
+                branch_id=actor.branch_id,
+                department_id=None,
+                setting_key="patient_id_card_template",
+                setting_value=payload.model_dump(),
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+            self.db.add(setting)
+        else:
+            setting.setting_value = payload.model_dump()
+            setting.updated_by = actor.id
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action="patient.id_card.template.update",
+            module="patients",
+            entity_type="patient_id_card_template",
+            entity_id=str(setting.id) if setting.id else None,
+            detail=payload.model_dump(),
+            context=context,
+        )
+        self.db.commit()
+        self.db.refresh(setting)
+        return PatientIdCardTemplateRead(**setting.setting_value)
+
+    def _ensure_patient_id_card_code(self, patient: Patient, actor: User) -> ScanCode:
+        existing = self.db.scalar(
+            select(ScanCode).where(
+                ScanCode.record_type == "patient",
+                ScanCode.record_id == patient.id,
+                ScanCode.purpose == "patient_id_card",
+                ScanCode.is_active.is_(True),
+            )
+        )
+        if existing:
+            return existing
+        code = ScanCode(
+            branch_id=patient.branch_id or actor.branch_id,
+            code_value=self._patient_card_code(),
+            code_type="code39",
+            purpose="patient_id_card",
+            record_type="patient",
+            record_id=patient.id,
+            display_value=patient.patient_number,
+            meta={"patient_number": patient.patient_number},
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.db.add(code)
+        self.db.flush()
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action="patient.id_card.generate",
+            module="patients",
+            entity_type="patient_id_card",
+            entity_id=str(patient.id),
+            detail={"patient_number": patient.patient_number, "scan_code_id": str(code.id), "auto_generated": True},
+            context={"ip_address": None, "user_agent": None},
+        )
+        return code
+
+    def _patient_card_code(self) -> str:
+        return f"HMS-PATIENT-CARD-{token_hex(12).upper()}"
+
+    def _card_read(self, patient: Patient, code: ScanCode, *, is_reprint: bool = False) -> PatientIdCardRead:
+        return PatientIdCardRead(
+            patient=PatientRead.model_validate(patient, from_attributes=True),
+            hospital_name=get_settings().app_name,
+            scan_code=code.code_value,
+            code_type=code.code_type,
+            issue_date=date.today(),
+            is_reprint=is_reprint,
+            template=self.get_id_card_template(type("Actor", (), {"branch_id": patient.branch_id})()),
+        )

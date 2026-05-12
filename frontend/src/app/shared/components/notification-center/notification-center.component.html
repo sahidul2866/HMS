@@ -1,16 +1,43 @@
-<div class="notification-stack">
-  @for (item of notificationService.items(); track item.id) {
-    <div class="notification-item" [class]="'notification-item ' + item.level">
-      <div class="notification-item__icon">{{ getIcon(item) }}</div>
-      <div class="notification-item__content">
-        <div class="notification-item__heading">
-          <strong>{{ getTitle(item.level) }}</strong>
-          <span>{{ getAgeLabel(item) }}</span>
-        </div>
-        <div>{{ item.message }}</div>
+<div class="notification-shell" *ngIf="session.hasPermission('notification.view')" [class.open]="open">
+  <button type="button" class="notification-trigger" (click)="toggle()" aria-label="Open notifications" title="Notifications">
+    <span class="bell" aria-hidden="true"><span></span></span>
+    <strong *ngIf="summary.unread_count || summary.critical_count" [class.critical]="summary.critical_count">
+      {{ summary.critical_count || summary.unread_count }}
+    </strong>
+  </button>
+
+  <section class="notification-panel" *ngIf="open" role="dialog" aria-label="Notification center">
+    <header>
+      <div>
+        <h3>Notifications</h3>
+        <p>{{ summary.action_required_count }} action required · {{ summary.unread_count }} unread</p>
       </div>
-      <button class="notification-close" type="button" aria-label="Dismiss notification" (click)="dismiss(item.id)">×</button>
-      <div class="notification-item__progress" [style.animation-duration.ms]="item.durationMs"></div>
+      <button type="button" (click)="markAllRead()" [disabled]="!summary.unread_count">Mark read</button>
+    </header>
+
+    <div class="notification-list">
+      <article class="notification-card" *ngFor="let item of summary.latest; trackBy: trackById" [class.unread]="item.status === 'unread'" [class.overdue]="item.overdue" [ngClass]="priorityClass(item)">
+        <span class="priority-dot"></span>
+        <button type="button" class="card-main" (click)="openNotification(item)">
+          <strong>{{ item.title }}</strong>
+          <small>{{ item.module }} · {{ item.category }} · {{ item.created_at | date: 'short' }}</small>
+          <span>{{ item.message }}</span>
+          <em *ngIf="item.due_at">Due {{ item.due_at | date: 'short' }}</em>
+        </button>
+        <span class="card-actions">
+          <button type="button" *ngIf="item.status === 'unread'" (click)="markRead(item, $event)">Read</button>
+          <button type="button" *ngIf="item.action_allowed && item.action_label" (click)="openNotification(item)">{{ item.action_label }}</button>
+          <button type="button" *ngIf="item.status !== 'completed'" (click)="complete(item, $event)">Done</button>
+          <button type="button" (click)="dismiss(item, $event)">Dismiss</button>
+        </span>
+      </article>
+
+      <p class="empty" *ngIf="!loading && !summary.latest.length">No active notifications.</p>
+      <p class="empty" *ngIf="loading">Loading notifications...</p>
     </div>
-  }
+
+    <footer>
+      <button type="button" (click)="openFullCenter()">Open Notification Center</button>
+    </footer>
+  </section>
 </div>

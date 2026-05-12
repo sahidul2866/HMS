@@ -17,6 +17,11 @@ export interface HRDashboardSummary {
   pending_leave_requests: number;
   pending_payroll_approvals: number;
   monthly_salary_payable: string | number;
+  employees_on_leave: number;
+  expiring_documents: number;
+  current_month_payroll_status?: string | null;
+  total_overtime_cost: string | number;
+  total_deductions: string | number;
   alerts: string[];
 }
 
@@ -40,9 +45,29 @@ export interface HREmployee {
   license_number?: string | null;
   license_expiry_date?: string | null;
   contract_end_date?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
   bank_name?: string | null;
   bank_account_number?: string | null;
   salary_gross?: string | number | null;
+  reporting_manager_name?: string | null;
+  document_count: number;
+  expiring_document_count: number;
+}
+
+export interface HREmployeeDocument {
+  id: string;
+  employee_id: string;
+  employee_name?: string | null;
+  staff_code?: string | null;
+  document_type: string;
+  file_name?: string | null;
+  file_url?: string | null;
+  expiry_date?: string | null;
+  note?: string | null;
+  status: string;
+  days_to_expiry?: number | null;
+  created_at: string;
 }
 
 export interface HRDesignation {
@@ -125,6 +150,11 @@ export interface HRPayrollItem {
   unpaid_leave_days: string | number;
   overtime_hours: string | number;
   gross_salary: string | number;
+  basic_salary?: string | number | null;
+  total_allowances?: string | number | null;
+  overtime_amount?: string | number | null;
+  loan_deduction?: string | number | null;
+  attendance_deduction?: string | number | null;
   total_deductions: string | number;
   net_salary: string | number;
   payment_status: string;
@@ -142,6 +172,63 @@ export interface HRPayrollRun {
   total_net_salary: string | number;
   created_at: string;
   items: HRPayrollItem[];
+}
+
+export interface HRPayrollDashboard {
+  payroll_month: string;
+  status?: string | null;
+  total_salary_payable: string | number;
+  pending_approvals: number;
+  paid_items: number;
+  unpaid_items: number;
+  overtime_cost: string | number;
+  deduction_total: string | number;
+  department_costs: Record<string, string | number>;
+}
+
+export interface HRReportSummary {
+  employee_count: number;
+  attendance_summary: Record<string, number>;
+  leave_summary: Record<string, number>;
+  overtime_hours: string | number;
+  payroll_net_total: string | number;
+  loan_outstanding: string | number;
+  expiring_documents: number;
+  resigned_employees: number;
+}
+
+export interface HRSalaryStructure {
+  id: string;
+  employee_id: string;
+  employee_name?: string | null;
+  effective_from: string;
+  basic_salary: string | number;
+  gross_salary: string | number;
+  total_deductions: string | number;
+  net_salary: string | number;
+}
+
+export interface HRLoan {
+  id: string;
+  employee_id: string;
+  employee_name?: string | null;
+  loan_type: string;
+  approved_amount: string | number;
+  monthly_installment: string | number;
+  deduction_start_month: string;
+  remaining_balance: string | number;
+  status: string;
+}
+
+export interface HROvertime {
+  id: string;
+  employee_id: string;
+  employee_name?: string | null;
+  overtime_date: string;
+  overtime_hours: string | number;
+  overtime_type: string;
+  status: string;
+  reason?: string | null;
 }
 
 export interface HRSetting {

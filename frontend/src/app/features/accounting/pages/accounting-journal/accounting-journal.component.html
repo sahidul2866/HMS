@@ -10,6 +10,7 @@
         <button class="secondary-btn" type="button" (click)="openModal('advance')">Advance</button>
         <button class="secondary-btn" type="button" (click)="openModal('expense')">Expense</button>
         <button class="primary-btn" type="button" (click)="openModal('journal')">Journal</button>
+        <button class="secondary-btn" type="button" (click)="syncIntegrations()">Sync Modules</button>
         <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
       </div>
     </div>
@@ -85,7 +86,19 @@
     </section>
   }
 
-  @if (tab() !== 'dashboard' && tab() !== 'accounts' && tab() !== 'journals' && tab() !== 'reports' && tab() !== 'audit') {
+  @if (tab() === 'ledger') {
+    <section class="page-card">
+      <div class="panel-head"><h2>General Ledger</h2><span>Posted debit and credit entries</span></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Voucher</th><th>Account</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th>Source</th></tr></thead><tbody>
+        @for (line of ledger; track line.id) {
+          <tr><td>{{ line.journal_date }}</td><td><strong>{{ line.journal_number }}</strong></td><td>{{ line.account_code }} {{ line.account_name }}</td><td>{{ line.description }}</td><td>{{ money(line.debit_amount) }}</td><td>{{ money(line.credit_amount) }}</td><td>{{ money(line.balance) }}</td><td>{{ line.source_module || '-' }}</td></tr>
+        }
+        @if (!ledger.length) { <tr><td colspan="8"><div class="empty">No posted ledger entries yet.</div></td></tr> }
+      </tbody></table></div>
+    </section>
+  }
+
+  @if (tab() !== 'dashboard' && tab() !== 'accounts' && tab() !== 'ledger' && tab() !== 'vouchers' && tab() !== 'reports' && tab() !== 'audit') {
     <section class="page-card">
       <div class="list-toolbar">
         <button class="primary-btn" type="button" (click)="openModal('advance')" *ngIf="tab() === 'collections'">Collect Advance</button>
@@ -95,30 +108,45 @@
         <button class="primary-btn" type="button" (click)="openModal('refund')" *ngIf="tab() === 'receivables'">Refund</button>
         <button class="primary-btn" type="button" (click)="openModal('discount')" *ngIf="tab() === 'receivables'">Discount</button>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Name</th><th>Category</th><th>Amount</th><th>Paid</th><th>Due/Diff</th><th>Status</th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Name</th><th>Category</th><th>Amount</th><th>Paid</th><th>Due/Diff</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @for (record of recordsForTab(); track record.id) {
-          <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td></tr>
+          <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td><td><button class="tiny-btn" type="button" (click)="approveRecord(record, recordKind())" *ngIf="record.status === 'pending'">Approve</button></td></tr>
         }
-        @if (!recordsForTab().length) { <tr><td colspan="7"><div class="empty">No records yet.</div></td></tr> }
+        @if (!recordsForTab().length) { <tr><td colspan="8"><div class="empty">No records yet.</div></td></tr> }
       </tbody></table></div>
     </section>
   }
 
-  @if (tab() === 'journals' && workspace) {
+  @if (tab() === 'vouchers' && workspace) {
     <section class="page-card">
-      <div class="list-toolbar"><button class="primary-btn" type="button" (click)="openModal('journal')">Post Journal</button></div>
-      <div class="table-wrap"><table><thead><tr><th>No</th><th>Date</th><th>Narration</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead><tbody>
+      <div class="list-toolbar"><button class="primary-btn" type="button" (click)="openModal('journal')">New Voucher</button></div>
+      <div class="table-wrap"><table><thead><tr><th>No</th><th>Date</th><th>Narration</th><th>Debit</th><th>Credit</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @for (entry of workspace.journal_entries; track entry.id) {
-          <tr><td><strong>{{ entry.journal_number }}</strong></td><td>{{ entry.journal_date }}</td><td>{{ entry.narration }}</td><td>{{ money(entry.total_debit) }}</td><td>{{ money(entry.total_credit) }}</td><td><span [class]="statusClass(entry.status)">{{ entry.status }}</span></td></tr>
+          <tr><td><strong>{{ entry.journal_number }}</strong></td><td>{{ entry.journal_date }}</td><td>{{ entry.narration }}</td><td>{{ money(entry.total_debit) }}</td><td>{{ money(entry.total_credit) }}</td><td>{{ entry.source_module || 'manual' }}</td><td><span [class]="statusClass(entry.status)">{{ entry.status }}</span></td><td><button class="tiny-btn" type="button" (click)="voucherAction(entry, 'approve')" *ngIf="entry.status === 'draft' || entry.status === 'submitted'">Approve</button><button class="tiny-btn" type="button" (click)="voucherAction(entry, 'post')" *ngIf="entry.status !== 'posted' && entry.status !== 'reversed' && entry.status !== 'cancelled'">Post</button><button class="tiny-btn danger" type="button" (click)="voucherAction(entry, 'reverse')" *ngIf="entry.status === 'posted'">Reverse</button></td></tr>
         }
+        @if (!workspace.journal_entries.length) { <tr><td colspan="8"><div class="empty">No vouchers yet.</div></td></tr> }
       </tbody></table></div>
     </section>
   }
 
-  @if (tab() === 'reports') {
-    <section class="report-grid">
-      @for (item of ['Daily Collection', 'Profit & Loss', 'Cash Flow', 'Balance Sheet', 'Patient Due Aging', 'Supplier Aging', 'Insurance Receivable', 'Payroll Cost', 'Doctor Commission', 'Tax/VAT']; track item) {
-        <a class="report-link" routerLink="/reporting">{{ item }}</a>
+  @if (tab() === 'reports' && reports) {
+    <section class="dashboard-grid">
+      @for (group of [
+        { title: 'Trial Balance', key: 'trial_balance' },
+        { title: 'Profit & Loss', key: 'profit_and_loss' },
+        { title: 'Balance Sheet', key: 'balance_sheet' },
+        { title: 'Receivable Aging', key: 'receivable_aging' },
+        { title: 'Payable Aging', key: 'payable_aging' },
+        { title: 'Cash / Bank', key: 'cash_bank' }
+      ]; track group.title) {
+        <article class="page-card">
+          <div class="panel-head"><h2>{{ group.title }}</h2><a routerLink="/reporting">Export</a></div>
+          <div class="compact-list">
+            @for (point of reportGroup($any(group.key)); track point.label) {
+              <div><span>{{ point.label }}</span><b>{{ money(point.value) }}</b></div>
+            }
+          </div>
+        </article>
       }
     </section>
   }
@@ -149,6 +177,7 @@
         <div class="form-grid">
           <label>Date<input type="date" [(ngModel)]="journalForm['journal_date']" name="jdate" /></label>
           <label>Source<input [(ngModel)]="journalForm['source_module']" name="source" /></label>
+          <label>Status<select [(ngModel)]="journalForm['status']" name="jstatus"><option>draft</option><option>submitted</option><option>approved</option><option>posted</option></select></label>
           <label class="wide">Narration<input [(ngModel)]="journalForm['narration']" name="narration" /></label>
         </div>
         @for (line of $any(journalForm['lines']); track $index) {
@@ -159,7 +188,7 @@
             <label>Credit<input type="number" [(ngModel)]="line.credit_amount" [name]="'credit' + $index" /></label>
           </div>
         }
-        <button class="primary" type="button" (click)="saveJournal()">Post Journal</button>
+        <button class="primary" type="button" (click)="saveJournal()">Save Voucher</button>
       }
 
       @if (modal !== 'account' && modal !== 'journal') {

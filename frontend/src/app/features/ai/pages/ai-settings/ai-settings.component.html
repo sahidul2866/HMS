@@ -1,0 +1,54 @@
+<section class="ai-settings">
+  <header>
+    <div>
+      <p>Administration</p>
+      <h1>AI Assistant Settings</h1>
+      <span>Configure availability, workflow safety, audit behavior, and module context for the hospital assistant.</span>
+    </div>
+  </header>
+
+  <p *ngIf="message" class="message">{{ message }}</p>
+
+  <form class="settings-form" (ngSubmit)="save()">
+    <label>Scope
+      <select [(ngModel)]="form.setting_key" name="settingKey">
+        <option value="global">Global defaults</option>
+        <option value="clinical_workflows">Clinical workflows</option>
+        <option value="finance_workflows">Finance workflows</option>
+        <option value="operations_workflows">Operations workflows</option>
+      </select>
+    </label>
+    <label class="wide">Greeting
+      <input [(ngModel)]="form.greeting_message" name="greeting" />
+    </label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.enabled" name="enabled" /> Enable assistant</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.audit_logging" name="audit" /> Audit AI prompts and sensitive actions</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.require_confirmation_for_sensitive_actions" name="confirm" /> Require confirmation for sensitive actions</label>
+
+    <div class="module-grid">
+      <label class="check"><input type="checkbox" [(ngModel)]="form.patients" name="patients" /> Patients</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.opd" name="opd" /> OPD</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.ipd" name="ipd" /> IPD</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.er" name="er" /> Emergency</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.billing" name="billing" /> Billing</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.pharmacy" name="pharmacy" /> Pharmacy</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.laboratory" name="laboratory" /> Lab</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.radiology" name="radiology" /> Radiology</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.inventory" name="inventory" /> Inventory</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.blood_bank" name="bloodBank" /> Blood Bank</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.hr" name="hr" /> HR</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.payroll" name="payroll" /> Payroll</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.accounting" name="accounting" /> Accounting</label>
+      <label class="check"><input type="checkbox" [(ngModel)]="form.reports" name="reports" /> Reports</label>
+    </div>
+
+    <button type="submit">Save Settings</button>
+  </form>
+
+  <div class="settings-list">
+    <article *ngFor="let setting of settings">
+      <strong>{{ setting.setting_key.replaceAll('_', ' ') }}</strong>
+      <code>{{ setting.setting_value | json }}</code>
+    </article>
+  </div>
+</section>

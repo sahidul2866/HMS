@@ -1,0 +1,37 @@
+@if (palette.open()) {
+  <section class="command-backdrop" role="dialog" aria-label="Command palette">
+    <div class="command-panel">
+      <header>
+        <input #searchBox [ngModel]="query()" (ngModelChange)="query.set($event); scanRecords = []" placeholder="Search pages, workflows, or paste a barcode" aria-label="Command search" />
+        <button type="button" class="ghost" (click)="searchRecord()" [disabled]="scanning">{{ scanning ? 'Finding' : 'Find Record' }}</button>
+        <button type="button" class="ghost" aria-label="Close" (click)="close()">Esc</button>
+      </header>
+
+      @if (scanRecords.length) {
+        <div class="results">
+          @for (record of scanRecords; track record.record_id; let i = $index) {
+            <button type="button" [class.active]="selectedIndex() === i" (click)="openRecord(record)">
+              <strong>{{ record.display }}</strong>
+              <span>{{ record.record_type.replaceAll('_', ' ') }} · {{ record.module }}</span>
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="results">
+          @for (item of filtered(); track item.label; let i = $index) {
+            <button type="button" [class.active]="selectedIndex() === i" (click)="run(item)">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.description }}</span>
+            </button>
+          }
+        </div>
+      }
+
+      <footer>
+        <span>Ctrl/Cmd+K open</span>
+        <span>Arrows move</span>
+        <span>Enter open</span>
+      </footer>
+    </div>
+  </section>
+}

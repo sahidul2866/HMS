@@ -11,7 +11,7 @@ import { PatientContextPanelComponent } from '../../../../shared/components/pati
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
-import { IPDBed } from '../../models/ipd.models';
+import { IPDBed, IPDSettings } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
 @Component({
@@ -34,6 +34,7 @@ export class IPDAdmitComponent {
   patients: Patient[] = [];
   patientSearchResults: PatientLookupResult[] = [];
   beds: IPDBed[] = [];
+  settings: IPDSettings | null = null;
   doctors: User[] = [];
   selectedPatient: Patient | null = null;
   showPatientLookup = true;
@@ -90,6 +91,12 @@ export class IPDAdmitComponent {
       this.syncSelectedPatient();
     });
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
+    this.ipdService.getSettings().subscribe((settings) => {
+      this.settings = settings;
+      this.form.patchValue({
+        admission_type: settings.admission_types[0] || this.form.getRawValue().admission_type,
+      });
+    });
   }
 
   get availableBeds(): IPDBed[] {
@@ -139,7 +146,7 @@ export class IPDAdmitComponent {
   }
 
   get admissionTypeOptions(): string[] {
-    return ['General', 'Emergency', 'Surgery', 'ICU', 'Maternity', 'Pediatric', 'Corporate', 'Insurance'];
+    return this.settings?.admission_types?.length ? this.settings.admission_types : ['General', 'Emergency', 'Surgery', 'ICU', 'Maternity', 'Pediatric', 'Corporate', 'Insurance'];
   }
 
   get patientDisplayName(): string {

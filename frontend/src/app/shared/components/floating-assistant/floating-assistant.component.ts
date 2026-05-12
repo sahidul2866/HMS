@@ -48,6 +48,8 @@ export class FloatingAssistantComponent {
   settings: StaffBotSettings | null = null;
   currentPath = this.router.url.split('?')[0].split('#')[0] || '/dashboard';
   mode: AssistantMode = 'chat';
+  listening = false;
+  speechSupported = typeof window !== 'undefined' && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   doctors: User[] = [];
   doctorsLoading = false;
@@ -321,15 +323,18 @@ export class FloatingAssistantComponent {
   }
 
   get resolvedContext(): StaffBotContext {
+    const routeContext = this.recordContextFromPath();
     if (this.context && typeof this.context !== 'string') {
       return {
         ...this.context,
+        ...routeContext,
         path: this.context.path || this.currentPath,
         module: this.context.module || this.moduleName,
         page: this.context.page || this.pageTitle,
       };
     }
     return {
+      ...routeContext,
       module: this.context || this.moduleName,
       page: this.pageTitle,
       path: this.currentPath,
@@ -358,6 +363,44 @@ export class FloatingAssistantComponent {
 
   copyResponse(text: string): void {
     void navigator.clipboard?.writeText(text);
+  }
+
+  insertResponse(text: string): void {
+    const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+    if (!active || !['INPUT', 'TEXTAREA'].includes(active.tagName)) {
+      this.notificationService.info('Focus a text field first, then insert.');
+      return;
+    }
+    const start = active.selectionStart ?? active.value.length;
+    const end = active.selectionEnd ?? active.value.length;
+    active.value = `${active.value.slice(0, start)}${text}${active.value.slice(end)}`;
+    active.dispatchEvent(new Event('input', { bubbles: true }));
+    active.focus();
+  }
+
+  startVoiceInput(): void {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition || this.listening) return;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    this.listening = true;
+    recognition.onresult = (event: any) => {
+      this.input = event.results?.[0]?.[0]?.transcript || this.input;
+      this.listening = false;
+    };
+    recognition.onerror = () => {
+      this.listening = false;
+      this.notificationService.error('Voice input was not available.');
+    };
+    recognition.onend = () => (this.listening = false);
+    recognition.start();
+  }
+
+  confirmAssistantAction(response: StaffBotResponse): void {
+    if (!response.requires_confirmation) return;
+    this.notificationService.info('Sensitive AI actions must be completed in the owning module. The assistant will not bypass workflow controls.');
   }
 
   private canAny(...permissions: string[]): boolean {
@@ -412,12 +455,25 @@ export class FloatingAssistantComponent {
                       ['Check leave balance', ['hr.leave.manage']],
                       ['Review payroll exceptions', ['payroll.view']],
                     ]
-                  : path.startsWith('/inventory')
+      : path.startsWith('/inventory')
                     ? [
                         ['Find low-stock items', ['inventory.view']],
                         ['Review purchase requests', ['inventory.purchase']],
                         ['Summarize stock movements', ['inventory.view']],
                       ]
+                    : path.startsWith('/blood-bank')
+                      ? [
+                          ['Show blood bank stock', ['blood_bank.view', 'blood_bank.stock.view']],
+                          ['Find near-expiry blood units', ['blood_bank.view']],
+                          ['Show pending crossmatch requests', ['blood_bank.view']],
+                          ['Review issue safety checklist', ['blood_bank.issue']],
+                        ]
+                      : path.startsWith('/er')
+                        ? [
+                            ['Summarize today’s emergency cases', ['er.view']],
+                            ['Show pending actions', ['er.view']],
+                            ['Review triage checklist', ['er.triage.manage']],
+                          ]
                     : [
                         ['Show today’s hospital summary', ['dashboard.view']],
                         ['Show operational alerts', ['dashboard.view']],
@@ -482,6 +538,18 @@ export class FloatingAssistantComponent {
       filters[key] = value;
     });
     return filters;
+  }
+
+  private recordContextFromPath(): Partial<StaffBotContext> {
+    const parts = this.currentPath.split('/').filter(Boolean);
+    const uuid = parts.find((part) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(part));
+    if (!uuid) return {};
+    if (parts[0] === 'patients') return { record_type: 'patient', record_id: uuid, patient_id: uuid };
+    if (parts[0] === 'laboratory') return { record_type: 'lab_order', record_id: uuid, order_id: uuid };
+    if (parts[0] === 'radiology') return { record_type: 'radiology_order', record_id: uuid, order_id: uuid };
+    if (parts[0] === 'ipd') return { record_type: 'admission', record_id: uuid };
+    if (parts[0] === 'billing') return { record_type: 'invoice', record_id: uuid, invoice_id: uuid };
+    return { record_id: uuid };
   }
 
   trackByIndex(index: number): number {

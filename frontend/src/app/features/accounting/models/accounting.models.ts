@@ -45,6 +45,37 @@ export interface AccountingDashboard {
   alerts: AccountingAlert[];
 }
 
+export interface GeneralLedgerLine {
+  id: string;
+  journal_entry_id: string;
+  journal_number: string;
+  journal_date: string;
+  account_code: string;
+  account_name: string;
+  description?: string | null;
+  debit_amount: string | number;
+  credit_amount: string | number;
+  balance: string | number;
+  source_module?: string | null;
+  source_reference?: string | null;
+  created_by?: string | null;
+}
+
+export interface AccountingReportSummary {
+  trial_balance: ChartPoint[];
+  profit_and_loss: ChartPoint[];
+  balance_sheet: ChartPoint[];
+  receivable_aging: ChartPoint[];
+  payable_aging: ChartPoint[];
+  cash_bank: ChartPoint[];
+}
+
+export interface AccountingSyncResult {
+  created_entries: number;
+  skipped_entries: number;
+  message: string;
+}
+
 export interface Account {
   id: string;
   account_code: string;
@@ -76,6 +107,8 @@ export interface JournalEntry {
   total_credit: string | number;
   lines: JournalEntryLine[];
   created_at: string;
+  posted_at?: string | null;
+  reversed_entry_id?: string | null;
 }
 
 export interface FinanceRecord {

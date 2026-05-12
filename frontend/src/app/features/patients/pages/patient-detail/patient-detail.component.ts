@@ -6,7 +6,8 @@ import { PERMISSIONS } from '../../../../core/constants/permissions';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
-import { PatientClinicalHistory, PatientHistoryOPDVisit } from '../../models/patient.models';
+import { code39Svg, printScanLabel } from '../../../../shared/utils/scan-print.utils';
+import { PatientClinicalHistory, PatientHistoryOPDVisit, PatientIdCard } from '../../models/patient.models';
 import { PatientService } from '../../services/patient.service';
 
 @Component({
@@ -26,6 +27,9 @@ export class PatientDetailComponent {
 
   historyLoading = true;
   history: PatientClinicalHistory | null = null;
+  idCard: PatientIdCard | null = null;
+  idCardPreviewOpen = false;
+  idCardLoading = false;
 
   constructor() {
     this.route.paramMap.subscribe((params) => {
@@ -58,6 +62,57 @@ export class PatientDetailComponent {
     if (this.history) {
       void this.router.navigate(['/opd/register'], { queryParams: { patientId: this.history.patient.id } });
     }
+  }
+
+  previewIdCard(): void {
+    if (!this.history || this.idCardLoading) return;
+    this.idCardLoading = true;
+    this.patientService.getIdCard(this.history.patient.id).subscribe({
+      next: (card) => {
+        this.idCard = card;
+        this.idCardPreviewOpen = true;
+        this.idCardLoading = false;
+      },
+      error: () => {
+        this.idCardLoading = false;
+        this.notificationService.error('Could not load patient ID card.');
+      },
+    });
+  }
+
+  generateIdCard(): void {
+    if (!this.history || this.idCardLoading) return;
+    this.idCardLoading = true;
+    this.patientService.generateIdCard(this.history.patient.id).subscribe({
+      next: (card) => {
+        this.idCard = card;
+        this.idCardPreviewOpen = true;
+        this.idCardLoading = false;
+        this.notificationService.success('Patient ID card generated.');
+      },
+      error: () => (this.idCardLoading = false),
+    });
+  }
+
+  printIdCard(reprint = false): void {
+    if (!this.history || this.idCardLoading) return;
+    this.idCardLoading = true;
+    this.patientService.printIdCard(this.history.patient.id, reprint).subscribe({
+      next: (card) => {
+        this.idCard = card;
+        this.idCardLoading = false;
+        this.renderPatientCardPrint(card);
+      },
+      error: () => (this.idCardLoading = false),
+    });
+  }
+
+  closeIdCardPreview(): void {
+    this.idCardPreviewOpen = false;
+  }
+
+  barcodeSvg(): string {
+    return this.idCard ? code39Svg(this.idCard.scan_code) : '';
   }
 
   openVisitBilling(visit: PatientHistoryOPDVisit): void {
@@ -98,6 +153,28 @@ export class PatientDetailComponent {
         this.notificationService.error('Could not load patient history.');
         void this.router.navigate(['/patients']);
       },
+    });
+  }
+
+  private renderPatientCardPrint(card: PatientIdCard): void {
+    const patient = card.patient;
+    printScanLabel({
+      kind: 'card',
+      title: card.hospital_name,
+      subtitle: card.template.header,
+      code: card.scan_code,
+      logoUrl: card.template.logo_url,
+      themeColor: card.template.theme_color,
+      lines: [
+        `Name: ${patient.first_name} ${patient.last_name}`,
+        `MRN: ${patient.patient_number}`,
+        card.template.show_dob ? `DOB/Age: ${patient.date_of_birth || '-'}` : '',
+        `Gender: ${patient.gender || '-'}`,
+        card.template.show_phone ? `Phone: ${patient.phone || '-'}` : '',
+        card.template.show_emergency_contact ? `Emergency: ${patient.emergency_contact_name || '-'} ${patient.emergency_contact_phone || ''}` : '',
+        card.template.show_issue_date ? `Issue date: ${card.issue_date}${card.is_reprint ? ' (Reprint)' : ''}` : '',
+        card.template.footer,
+      ].filter(Boolean),
     });
   }
 }

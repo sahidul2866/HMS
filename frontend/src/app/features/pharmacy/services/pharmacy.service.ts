@@ -21,6 +21,7 @@ import {
   PharmacyInvestigation,
   PharmacyInvestigationDraft,
   PharmacyInvestigationSetting,
+  PharmacyMedicineAvailability,
   PharmacyMedicine,
   PharmacyMedicineType,
   PharmacyPendingPrescription,
@@ -53,8 +54,14 @@ export class PharmacyService extends ApiBaseService {
     return this.cache.get('pharmacy:dispenses', () => this.http.get<PharmacyDispense[]>(this.url('/pharmacy/dispenses')));
   }
 
-  listPendingPrescriptions(): Observable<PharmacyPendingPrescription[]> {
-    return this.cache.get('pharmacy:pending-prescriptions', () => this.http.get<PharmacyPendingPrescription[]>(this.url('/pharmacy/opd-prescriptions')));
+  listPendingPrescriptions(params: Record<string, string | number | undefined> = {}): Observable<PharmacyPendingPrescription[]> {
+    const query = this.toQuery(params);
+    return this.cache.get(`pharmacy:pending-prescriptions:${query}`, () => this.http.get<PharmacyPendingPrescription[]>(this.url(`/pharmacy/opd-prescriptions${query}`)));
+  }
+
+  getMedicineAvailability(medicineName: string): Observable<PharmacyMedicineAvailability> {
+    const query = this.toQuery({ medicine_name: medicineName });
+    return this.cache.get(`pharmacy:medicine-availability:${medicineName}`, () => this.http.get<PharmacyMedicineAvailability>(this.url(`/pharmacy/medicine-availability${query}`)));
   }
 
   dispense(payload: DispensePayload): Observable<PharmacyDispense> {

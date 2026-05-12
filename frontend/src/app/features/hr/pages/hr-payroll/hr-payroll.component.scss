@@ -247,6 +247,51 @@ td small,
   margin-bottom: 8px;
 }
 
+.payroll-summary-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.payroll-summary-grid > div,
+.mini-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.payroll-summary-grid span {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.payroll-summary-grid strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.subsection {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.subsection h3 {
+  font-size: 0.9rem;
+  margin: 0 0 8px;
+}
+
+.mini-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
 .payslip {
   border: 1px dashed color-mix(in srgb, var(--text-muted) 50%, var(--border));
   border-radius: 8px;
@@ -334,6 +379,10 @@ label {
   }
 
   .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .payroll-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

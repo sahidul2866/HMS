@@ -25,11 +25,42 @@ from app.models.accounting import (
 from app.models.audit_log import AuditLog
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, BillingRefund, BillingService, ReferredDoctor
 from app.models.billing_links import BillingItemLink
+from app.models.blood_bank import (
+    BloodBankSetting,
+    BloodCollection,
+    BloodCrossmatch,
+    BloodDiscard,
+    BloodDonor,
+    BloodDonorScreening,
+    BloodIssue,
+    BloodRequest,
+    BloodReturn,
+    BloodStorageLocation,
+    BloodTestResult,
+    BloodTransfusion,
+    BloodUnit,
+)
 from app.models.laboratory import LabAttachment, LabOrder, LabOrderItem, LabResult, LabResultItem
 from app.models.branch import Branch
 from app.models.configuration import ConfigurationProfile
 from app.models.department import Department
-from app.models.encounter import ERVisit, ERAmbulanceRecord, IPDAdmission, IPDAdmissionMovement, IPDBed, OPDVisit, OPDVisitOrder
+from app.models.encounter import (
+    ERVisit,
+    ERAmbulanceRecord,
+    IPDAdmission,
+    IPDAdmissionMovement,
+    IPDBed,
+    IPDClinicalNote,
+    IPDHandover,
+    IPDMedicationAdministration,
+    IPDNursingNote,
+    IPDNursingTask,
+    IPDOrder,
+    IPDStaffAssignment,
+    IPDTimelineEvent,
+    OPDVisit,
+    OPDVisitOrder,
+)
 from app.models.hr import (
     HRAttendance,
     HRAuditLog,
@@ -67,6 +98,8 @@ from app.models.ot import (
     SurgerySchedule,
     SurgeryTeamAssignment,
 )
+from app.models.notification import Notification, NotificationAuditLog, NotificationSetting
+from app.models.queue import QueueAuditLog, QueueCounter, QueueSetting, QueueToken
 from app.models.permission import Permission
 from app.models.radiology import PACSLink, RadiologyAttachment, RadiologyOrder, RadiologyReport, RadiologyReportSection
 from app.models.patient import Patient
@@ -101,8 +134,9 @@ from app.models.pharmacy import (
 )
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
+from app.models.scanner import ScanCode, ScanEvent, ScanSetting
 from app.models.user import User, role_permissions, user_permissions, user_roles
-from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage
+from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage, StaffBotSetting
 
 __all__ = [
     "AccountingJournal",
@@ -135,6 +169,19 @@ __all__ = [
     "BillingService",
     "ReferredDoctor",
     "BillingItemLink",
+    "BloodBankSetting",
+    "BloodCollection",
+    "BloodCrossmatch",
+    "BloodDiscard",
+    "BloodDonor",
+    "BloodDonorScreening",
+    "BloodIssue",
+    "BloodRequest",
+    "BloodReturn",
+    "BloodStorageLocation",
+    "BloodTestResult",
+    "BloodTransfusion",
+    "BloodUnit",
     "LabAttachment",
     "LabOrder",
     "LabOrderItem",
@@ -153,6 +200,14 @@ __all__ = [
     "IPDAdmission",
     "IPDAdmissionMovement",
     "IPDBed",
+    "IPDClinicalNote",
+    "IPDHandover",
+    "IPDMedicationAdministration",
+    "IPDNursingNote",
+    "IPDNursingTask",
+    "IPDOrder",
+    "IPDStaffAssignment",
+    "IPDTimelineEvent",
     "OPDVisit",
     "OPDVisitOrder",
     "HRAttendance",
@@ -183,6 +238,13 @@ __all__ = [
     "OTDocument",
     "OTEquipmentUsage",
     "OTRoom",
+    "Notification",
+    "NotificationAuditLog",
+    "NotificationSetting",
+    "QueueAuditLog",
+    "QueueCounter",
+    "QueueSetting",
+    "QueueToken",
     "PostOpRecovery",
     "PreOpChecklist",
     "SurgeryNote",
@@ -218,9 +280,13 @@ __all__ = [
     "PharmacyStockMovement",
     "RefreshToken",
     "Role",
+    "ScanCode",
+    "ScanEvent",
+    "ScanSetting",
     "StaffBotAuditLog",
     "StaffBotConversation",
     "StaffBotMessage",
+    "StaffBotSetting",
     "User",
     "role_permissions",
     "user_permissions",

@@ -34,6 +34,34 @@ class PatientRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PatientIdCardTemplateRead(BaseModel):
+    card_size: str = "85.6x54mm"
+    logo_url: str | None = None
+    header: str = "Hospital Patient ID"
+    footer: str = "Please present this card at every hospital visit."
+    code_type: str = "code39"
+    theme_color: str = "#0f766e"
+    show_phone: bool = True
+    show_emergency_contact: bool = True
+    show_dob: bool = True
+    show_issue_date: bool = True
+    print_layout: str = "standard-card"
+
+
+class PatientIdCardTemplateWrite(PatientIdCardTemplateRead):
+    pass
+
+
+class PatientIdCardRead(BaseModel):
+    patient: PatientRead
+    hospital_name: str
+    scan_code: str
+    code_type: str
+    issue_date: date
+    is_reprint: bool = False
+    template: PatientIdCardTemplateRead
+
+
 class PatientLookupResult(PatientRead):
     full_name: str
 

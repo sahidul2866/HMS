@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -50,3 +50,12 @@ class StaffBotAuditLog(Base, BaseModelMixin):
     user = relationship("User")
     conversation = relationship("StaffBotConversation")
 
+
+class StaffBotSetting(Base, BaseModelMixin):
+    __tablename__ = "staff_bot_settings"
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"), nullable=True)
+    setting_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    setting_value: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (UniqueConstraint("branch_id", "setting_key", name="uq_staff_bot_settings_branch_key"),)

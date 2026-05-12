@@ -1,0 +1,19 @@
+<section class="shortcut-settings">
+  <header>
+    <div>
+      <p>Power user workflow</p>
+      <h1>Keyboard Shortcuts</h1>
+    </div>
+  </header>
+
+  <div class="group-grid">
+    <article *ngFor="let group of groups">
+      <h2>{{ group.title }}</h2>
+      <div *ngFor="let shortcut of group.shortcuts" class="shortcut-row">
+        <kbd>{{ shortcut.keys }}</kbd>
+        <span>{{ shortcut.action }}</span>
+        <small *ngIf="shortcut.safety">{{ shortcut.safety }}</small>
+      </div>
+    </article>
+  </div>
+</section>

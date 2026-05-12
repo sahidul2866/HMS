@@ -51,13 +51,38 @@ class StaffBotResponse(BaseModel):
     required_fields: list[str] = []
     permission_denied: bool = False
     context_suggestions: list[str] = []
+    context_summary: str | None = None
+    draft_content: str | None = None
+    disclaimer: str | None = None
+    actions: list[dict[str, Any]] = []
+    requires_confirmation: bool = False
+    confirmation_token: str | None = None
 
 
 class StaffBotSettingsRead(BaseModel):
     greeting_message: str
     quick_actions: list[str]
     gemini_enabled: bool
+    enabled: bool = True
+    module_availability: dict[str, bool] = {}
+    role_rules: dict[str, Any] = {}
+    action_rules: dict[str, Any] = {}
+    audit_logging: bool = True
     context: str | None = None
+
+
+class StaffBotSettingUpsert(BaseModel):
+    setting_key: str = Field(min_length=2, max_length=120)
+    setting_value: dict[str, Any]
+
+
+class StaffBotSettingRead(BaseModel):
+    id: UUID
+    setting_key: str
+    setting_value: dict[str, Any]
+
+    class Config:
+        from_attributes = True
 
 
 IntentKey = Literal[

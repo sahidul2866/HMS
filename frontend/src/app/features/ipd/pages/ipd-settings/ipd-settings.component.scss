@@ -13,6 +13,60 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-tabs button {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  padding: 0.55rem 0.85rem;
+  background: #fff;
+  color: #475569;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-tabs button.active {
+  border-color: rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+.policy-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-error,
+.permission-hint {
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  font-weight: 700;
+}
+
+.settings-error {
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  background: rgba(254, 242, 242, 0.95);
+  color: #991b1b;
+}
+
+.permission-hint {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: rgba(239, 246, 255, 0.95);
+  color: #1e3a8a;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #10233c;
+  font-weight: 800;
+}
+
 .field-wide,
 .actions-row {
   grid-column: 1 / -1;

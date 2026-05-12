@@ -264,13 +264,20 @@ class InventoryService:
             batch = self._get_batch_for_update(batch_id)
             if store_id and batch.store_id and str(batch.store_id) != str(store_id):
                 raise AppException(409, "batch_store_mismatch", "Batch does not belong to the selected store")
+            if batch.expiry_date and batch.expiry_date < date.today():
+                raise AppException(409, "expired_batch", "Expired batch cannot be issued or transferred")
             return batch
         if not item.is_batch_tracked:
             return None
-        stmt = select(StockBatch).where(StockBatch.item_id == item.id, StockBatch.quantity > 0, StockBatch.is_active.is_(True))
+        stmt = select(StockBatch).where(
+            StockBatch.item_id == item.id,
+            StockBatch.quantity > 0,
+            StockBatch.is_active.is_(True),
+            ((StockBatch.expiry_date.is_(None)) | (StockBatch.expiry_date >= date.today())),
+        )
         if store_id:
             stmt = stmt.where(StockBatch.store_id == store_id)
-        stmt = stmt.order_by(StockBatch.expiry_date.asc())
+        stmt = stmt.order_by(StockBatch.expiry_date.is_(None), StockBatch.expiry_date.asc(), StockBatch.created_at.asc())
         return self.db.scalar(stmt.with_for_update())
 
     def _serialize_category(self, category: InventoryCategory) -> InventoryCategoryRead:

@@ -15,6 +15,7 @@ from app.modules.audit.service import AuditService
 from app.modules.ipd.service import IPDService
 from app.modules.opd.repository import OPDRepository
 from app.modules.patients.repository import PatientsRepository
+from app.modules.queue.service import QueueService, patient_label
 from app.modules.users.repository import UsersRepository
 from app.schemas.encounter import (
     IPDAdmissionCreate,
@@ -27,6 +28,7 @@ from app.schemas.encounter import (
     OPDVisitOrderUpdate,
     OPDVisitUpdate,
 )
+from app.schemas.queue import QueueTokenCreate
 from app.utils.enums import AuditAction
 
 
@@ -114,6 +116,26 @@ class OPDService:
             updated_by=actor.id,
         )
         self.repository.create_visit(visit)
+        self.db.flush()
+        QueueService(self.db).ensure_token(
+            QueueTokenCreate(
+                queue_scope="opd",
+                module="opd",
+                service_area="consultation",
+                department_name=visit.department_name,
+                doctor_user_id=visit.consulting_doctor_user_id,
+                patient_id=visit.patient_id,
+                patient_label=patient_label(patient),
+                priority="follow_up" if payload.visit_type.value == "follow_up" else "normal",
+                source_type="opd_visit",
+                source_id=visit.id,
+                visit_id=visit.id,
+                due_at=slot_start_at,
+                meta={"visit_type": payload.visit_type.value, "visit_number": visit.visit_number},
+            ),
+            actor,
+            commit=False,
+        )
         if consulting_doctor and slot_start_at:
             self._create_slot_booking_for_visit(
                 visit=visit,
@@ -212,6 +234,25 @@ class OPDService:
         visit = self.get_visit(visit_id, actor)
         visit.status = status
         visit.updated_by = actor.id
+        if status == "prescribed":
+            prescription_orders = [order for order in visit.orders if order.order_type == "prescription"]
+            if prescription_orders:
+                QueueService(self.db).ensure_token(
+                    QueueTokenCreate(
+                        queue_scope="pharmacy",
+                        module="pharmacy",
+                        service_area="dispense",
+                        department_name=visit.department_name,
+                        patient_id=visit.patient_id,
+                        patient_label=patient_label(visit.patient),
+                        source_type="opd_prescription",
+                        source_id=visit.id,
+                        visit_id=visit.id,
+                        meta={"visit_number": visit.visit_number, "items": len(prescription_orders)},
+                    ),
+                    actor,
+                    commit=False,
+                )
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.OPD_VISIT_STATUS_UPDATE,
@@ -277,6 +318,23 @@ class OPDService:
                 )
                 self.db.add(lab_item)
                 order.lab_order_id = lab_order.id
+                QueueService(self.db).ensure_token(
+                    QueueTokenCreate(
+                        queue_scope="laboratory",
+                        module="laboratory",
+                        service_area="sample_collection",
+                        department_name=visit.department_name,
+                        patient_id=visit.patient_id,
+                        patient_label=patient_label(visit.patient),
+                        source_type="lab_order",
+                        source_id=lab_order.id,
+                        visit_id=visit.id,
+                        order_id=lab_order.id,
+                        meta={"visit_number": visit.visit_number, "test": order.item_name},
+                    ),
+                    actor,
+                    commit=False,
+                )
             elif order.service_area == "radiology":
                 rad_order = RadiologyOrder(
                     branch_id=visit.branch_id,
@@ -291,6 +349,23 @@ class OPDService:
                 self.db.add(rad_order)
                 self.db.flush()
                 order.radiology_order_id = rad_order.id
+                QueueService(self.db).ensure_token(
+                    QueueTokenCreate(
+                        queue_scope="radiology",
+                        module="radiology",
+                        service_area="imaging",
+                        department_name=visit.department_name,
+                        patient_id=visit.patient_id,
+                        patient_label=patient_label(visit.patient),
+                        source_type="radiology_order",
+                        source_id=rad_order.id,
+                        visit_id=visit.id,
+                        order_id=rad_order.id,
+                        meta={"visit_number": visit.visit_number, "study": order.item_name},
+                    ),
+                    actor,
+                    commit=False,
+                )
 
         AuditService(self.db).log(
             user_id=actor.id,

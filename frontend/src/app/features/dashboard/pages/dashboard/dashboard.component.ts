@@ -7,12 +7,11 @@ import { HasPermissionDirective } from '../../../../shared/directives/has-permis
 import { SessionService } from '../../../../core/services/session.service';
 import { DashboardAnalytics, DashboardKpi, DashboardPoint } from '../../models/dashboard-analytics.models';
 import { DashboardAnalyticsService, DashboardFilters } from '../../services/dashboard-analytics.service';
-import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, HasPermissionDirective, FloatingAssistantComponent],
+  imports: [CommonModule, FormsModule, RouterLink, HasPermissionDirective],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
 })

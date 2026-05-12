@@ -27,6 +27,29 @@
           <button class="ghost-btn" type="button" (click)="resetForm()">Clear</button>
         </div>
 
+        <div class="queue-filter-grid">
+          <input [(ngModel)]="queueFilters.patient" (input)="applyFilters()" placeholder="Patient" />
+          <input [(ngModel)]="queueFilters.doctor" (input)="applyFilters()" placeholder="Doctor" />
+          <select [(ngModel)]="queueFilters.prescription_status" (change)="applyFilters()">
+            <option value="">All prescription status</option>
+            <option value="pending">Pending</option>
+            <option value="available">Available</option>
+            <option value="partially_available">Partially available</option>
+            <option value="partially_dispensed">Partially dispensed</option>
+          </select>
+          <select [(ngModel)]="queueFilters.payment_status" (change)="applyFilters()">
+            <option value="">All payment status</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+          <select [(ngModel)]="queueFilters.availability_status" (change)="applyFilters()">
+            <option value="">All availability</option>
+            <option value="available">Available</option>
+            <option value="partially_available">Partial</option>
+            <option value="out_of_stock">Out of stock</option>
+          </select>
+        </div>
+
         <div class="context-stack">
           @if (form.getRawValue().patient_id) {
             <app-patient-context-panel
@@ -44,7 +67,28 @@
               </div>
               <div class="context-copy">
                 {{ selectedPrescription.item_name }} · Rx {{ selectedPrescription.quantity }} · Remaining {{ selectedPrescription.remaining_quantity }}<br />
-                {{ selectedPrescription.instructions || 'No instructions provided' }}
+                {{ selectedPrescription.instructions || 'No instructions provided' }}<br />
+                <span [class]="availabilityClass(selectedPrescription.availability_status)">{{ selectedPrescription.availability_status }}</span>
+                <span class="pill">Available {{ selectedPrescription.available_quantity }}</span>
+                <span class="pill">Payment {{ selectedPrescription.payment_status || 'unknown' }}</span>
+              </div>
+            </div>
+          }
+
+          @if (stockAvailability) {
+            <div class="context-card">
+              <div>
+                <strong>Live Stock</strong>
+                <div class="page-subtitle">{{ stockAvailability.medicine_name }} · {{ stockAvailability.status }} · Available {{ stockAvailability.total_available_quantity }}</div>
+              </div>
+              <div class="stock-chip-grid">
+                @for (batch of stockAvailability.batches.slice(0, 8); track batch.batch_id || batch.store_name || batch.source) {
+                  <span [class]="batch.is_expired ? 'stock-chip danger' : batch.is_near_expiry ? 'stock-chip warn' : 'stock-chip'">
+                    {{ batch.store_name || batch.source }} · {{ batch.available_quantity }}
+                    @if (batch.batch_no) { · Batch {{ batch.batch_no }} }
+                    @if (batch.expiry_date) { · Exp {{ batch.expiry_date }} }
+                  </span>
+                }
               </div>
             </div>
           }
@@ -97,7 +141,7 @@
           </label>
           <label class="field">
             <span>Medicine</span>
-            <input type="text" formControlName="medicine_name" />
+            <input type="text" formControlName="medicine_name" (blur)="loadMedicineAvailability()" />
           </label>
           <label class="field">
             <span>Quantity</span>

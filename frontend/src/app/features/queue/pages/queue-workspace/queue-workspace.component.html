@@ -1,0 +1,130 @@
+<section class="queue-workspace" [class.display-mode]="displayMode">
+  <header class="queue-hero">
+    <div>
+      <p>Hospital Flow</p>
+      <h1>Queue Management</h1>
+      <span>Run OPD, billing, pharmacy, lab, radiology, blood bank, and emergency queues from one counter-aware workspace.</span>
+    </div>
+    <div class="hero-actions">
+      <button type="button" (click)="displayMode = !displayMode">{{ displayMode ? 'Staff View' : 'Display Screen' }}</button>
+      <button type="button" (click)="loadAll()">Refresh</button>
+    </div>
+  </header>
+
+  <section class="queue-stats" *ngIf="summary">
+    <article><span>Waiting</span><strong>{{ summary.total_waiting }}</strong></article>
+    <article><span>Called</span><strong>{{ summary.total_called }}</strong></article>
+    <article><span>In Progress</span><strong>{{ summary.total_in_progress }}</strong></article>
+    <article><span>Completed</span><strong>{{ summary.total_completed }}</strong></article>
+    <article><span>Longest Wait</span><strong>{{ summary.longest_wait_minutes }}m</strong></article>
+    <article><span>Avg Wait</span><strong>{{ summary.average_wait_minutes }}m</strong></article>
+  </section>
+
+  <section class="queue-controls" *ngIf="!displayMode">
+    <label>Queue
+      <select [(ngModel)]="selectedScope" (ngModelChange)="loadTokens()">
+        <option *ngFor="let scope of scopes" [value]="scope.value">{{ scope.label }}</option>
+      </select>
+    </label>
+    <label>Status
+      <select [(ngModel)]="selectedStatus" (ngModelChange)="loadTokens()">
+        <option value="">All active</option>
+        <option value="waiting">Waiting</option>
+        <option value="called">Called</option>
+        <option value="in_progress">In progress</option>
+        <option value="skipped">Skipped</option>
+        <option value="completed">Completed</option>
+      </select>
+    </label>
+    <label>Counter
+      <select [(ngModel)]="selectedCounterId">
+        <option value="">No counter</option>
+        <option *ngFor="let counter of counters" [value]="counter.id">{{ counter.name }} · {{ counter.module }}</option>
+      </select>
+    </label>
+    <label>Search
+      <input type="search" [(ngModel)]="search" (ngModelChange)="loadTokens()" placeholder="Token or patient" />
+    </label>
+    <button type="button" class="call-next" (click)="callNext()">Call Next</button>
+  </section>
+
+  <section class="display-board" *ngIf="displayMode">
+    <div class="now-calling">
+      <span>Now Calling</span>
+      <strong>{{ tokens.length ? tokens[0].token_number : '-' }}</strong>
+      <em>{{ tokens.length ? (tokens[0].department_name || selectedScope) : selectedScope }}</em>
+    </div>
+    <div class="next-list">
+      <h2>Next Tokens</h2>
+      <div *ngFor="let token of tokens | slice:1:8">{{ token.token_number }} <span>{{ token.department_name || token.queue_scope }}</span></div>
+    </div>
+  </section>
+
+  <section class="queue-grid" *ngIf="!displayMode">
+    <article class="token-card" *ngFor="let token of tokens; trackBy: trackById" [ngClass]="[statusClass(token), priorityClass(token)]">
+      <div class="token-head">
+        <strong>{{ token.token_number }}</strong>
+        <span>{{ token.status.replaceAll('_', ' ') }}</span>
+      </div>
+      <div class="token-body">
+        <h3>{{ token.patient_label || 'Patient' }}</h3>
+        <p>{{ token.queue_scope.replaceAll('_', ' ') }} · {{ token.department_name || token.service_area || 'General' }}</p>
+        <small>Waiting {{ token.waiting_minutes }}m · Priority {{ token.priority.replaceAll('_', ' ') }}</small>
+      </div>
+      <div class="token-actions">
+        <button type="button" (click)="update(token, 'called')">Call</button>
+        <button type="button" (click)="update(token, 'in_progress')">Start</button>
+        <button type="button" (click)="update(token, 'completed')">Complete</button>
+        <button type="button" (click)="update(token, 'skipped')">Skip</button>
+        <button type="button" (click)="update(token, 'recalled')">Recall</button>
+        <button type="button" (click)="transfer(token, 'billing')">To Billing</button>
+        <button type="button" (click)="transfer(token, 'pharmacy')">To Pharmacy</button>
+      </div>
+    </article>
+    <p class="empty" *ngIf="!tokens.length">No queue tokens match the selected filters.</p>
+  </section>
+
+  <section class="queue-admin" *ngIf="!displayMode && session.hasPermission('queue.counter.manage')">
+    <article>
+      <h2>Counter Setup</h2>
+      <div class="form-grid">
+        <input [(ngModel)]="counterDraft.code" placeholder="Counter code" />
+        <input [(ngModel)]="counterDraft.name" placeholder="Counter name" />
+        <select [(ngModel)]="counterDraft.module">
+          <option *ngFor="let scope of scopes" [value]="scope.value">{{ scope.label }}</option>
+        </select>
+        <input [(ngModel)]="counterDraft.service_area" placeholder="Service area" />
+        <input [(ngModel)]="counterDraft.department_name" placeholder="Department" />
+        <input [(ngModel)]="counterDraft.room_number" placeholder="Room/counter no" />
+        <label><input type="checkbox" [(ngModel)]="counterDraft.audio_enabled" /> Audio</label>
+        <label><input type="checkbox" [(ngModel)]="counterDraft.display_enabled" /> Display</label>
+      </div>
+      <button type="button" (click)="createCounter()">Create Counter</button>
+    </article>
+
+    <article>
+      <h2>Queue Settings</h2>
+      <p *ngIf="settingsMessage">{{ settingsMessage }}</p>
+      <div class="form-grid">
+        <select [(ngModel)]="settingDraft.setting_key">
+          <option value="global">Global</option>
+          <option value="opd">OPD</option>
+          <option value="display">Display</option>
+          <option value="audio">Audio</option>
+        </select>
+        <input [(ngModel)]="settingDraft.queue_prefix" placeholder="Queue prefix" />
+        <input [(ngModel)]="settingDraft.token_format" placeholder="Token format" />
+        <select [(ngModel)]="settingDraft.appointment_policy">
+          <option value="mixed">Mixed appointment and walk-in</option>
+          <option value="first_come">First come first served</option>
+          <option value="appointment_time">Appointment time priority</option>
+        </select>
+        <input type="number" [(ngModel)]="settingDraft.waiting_alert_minutes" placeholder="Wait alert minutes" />
+        <input type="number" [(ngModel)]="settingDraft.auto_skip_minutes" placeholder="Auto skip minutes" />
+        <input [(ngModel)]="settingDraft.audio_language" placeholder="Audio language" />
+        <label><input type="checkbox" [(ngModel)]="settingDraft.audio_enabled" /> Audio enabled</label>
+      </div>
+      <button type="button" (click)="saveSettings()">Save Settings</button>
+    </article>
+  </section>
+</section>

@@ -1,0 +1,82 @@
+.shortcut-settings {
+  display: grid;
+  gap: 14px;
+}
+
+header,
+article {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+header {
+  padding: 14px 16px;
+}
+
+p,
+h1,
+h2 {
+  margin: 0;
+}
+
+p {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+article {
+  padding: 14px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+kbd {
+  display: inline-flex;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: var(--surface-soft);
+  font-family: inherit;
+  font-weight: 850;
+}
+
+small {
+  grid-column: 2;
+  color: var(--text-muted);
+}
+
+@media (max-width: 780px) {
+  .group-grid,
+  .shortcut-row {
+    grid-template-columns: 1fr;
+  }
+
+  small {
+    grid-column: auto;
+  }
+}

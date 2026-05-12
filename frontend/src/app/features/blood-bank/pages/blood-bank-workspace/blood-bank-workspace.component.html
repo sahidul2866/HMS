@@ -1,0 +1,276 @@
+<section class="blood-bank-shell">
+  <header class="page-head">
+    <div>
+      <p class="eyebrow">Clinical services</p>
+      <h1>{{ activeTabLabel() }}</h1>
+    </div>
+    <button type="button" class="icon-btn" title="Refresh" (click)="reload()">Refresh</button>
+  </header>
+
+  <div class="filters">
+    <input [(ngModel)]="filters.q" name="donorSearch" placeholder="Search donor or phone" />
+    <select [(ngModel)]="filters.blood_group" name="bloodGroup"><option value="">All groups</option><option *ngFor="let group of bloodGroups" [value]="group">{{ group }}</option></select>
+    <select [(ngModel)]="filters.component_type" name="componentType"><option value="">All components</option><option *ngFor="let component of components" [value]="component">{{ component }}</option></select>
+    <select [(ngModel)]="filters.status_value" name="unitStatus"><option value="">All unit status</option><option *ngFor="let status of unitStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select>
+    <select [(ngModel)]="filters.request_status" name="requestStatus"><option value="">All requests</option><option *ngFor="let status of requestStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select>
+    <select [(ngModel)]="filters.storage_location_id" name="locationFilter"><option value="">All locations</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
+    <button type="button" (click)="reload()">Apply</button>
+  </div>
+
+  <p *ngIf="message" class="message">{{ message }}</p>
+
+  <section *ngIf="activeTab === 'dashboard'" class="panel">
+    <div class="kpi-grid">
+      <article><span>Pending Screening</span><strong>{{ dashboard?.pending_donor_screening || 0 }}</strong></article>
+      <article><span>Crossmatch Queue</span><strong>{{ dashboard?.pending_crossmatch_requests || 0 }}</strong></article>
+      <article><span>Ready to Issue</span><strong>{{ dashboard?.pending_issue_requests || 0 }}</strong></article>
+      <article class="danger"><span>Expired</span><strong>{{ dashboard?.expired_units || 0 }}</strong></article>
+      <article class="warning"><span>Near Expiry</span><strong>{{ dashboard?.near_expiry_units || 0 }}</strong></article>
+      <article><span>Issued</span><strong>{{ dashboard?.issued_units || 0 }}</strong></article>
+      <article class="danger"><span>Discarded</span><strong>{{ dashboard?.discarded_units || 0 }}</strong></article>
+      <article class="warning"><span>Emergency</span><strong>{{ dashboard?.emergency_requests || 0 }}</strong></article>
+    </div>
+    <div class="split">
+      <div>
+        <h2>Available Blood</h2>
+        <div class="group-grid"><span *ngFor="let group of bloodGroups">{{ group }} <strong>{{ dashboard?.available_units_by_group?.[group] || 0 }}</strong></span></div>
+      </div>
+      <div>
+        <h2>Low Stock</h2>
+        <p class="badges"><span *ngFor="let group of dashboard?.low_stock_groups" class="badge warning">{{ group }}</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'queue'" class="panel">
+    <div class="queue-toolbar">
+      <div>
+        <h2>Blood Bank Live Queue</h2>
+        <p>Requests move from sample to crossmatch, readiness, issue, return, or discard with audit-backed status updates.</p>
+      </div>
+      <div class="queue-actions">
+        <button type="button" (click)="callNextBloodRequest()">Call Next Request</button>
+        <button type="button" (click)="loadQueue()">Refresh Queue</button>
+      </div>
+    </div>
+
+    <div class="blood-queue-grid">
+      <article *ngFor="let token of queueTokens" class="blood-queue-card" [class.emergency-card]="token.priority === 'emergency'">
+        <header>
+          <div>
+            <strong>{{ queueMeta(token, 'request_number') }}</strong>
+            <span>{{ token.token_number }} · {{ token.patient_label || 'Patient not linked' }}</span>
+          </div>
+          <span class="badge" [ngClass]="queueTone(token)">{{ token.status.replaceAll('_', ' ') }}</span>
+        </header>
+        <div class="queue-facts">
+          <span>Group <strong>{{ queueMeta(token, 'blood_group') }}</strong></span>
+          <span>Component <strong>{{ queueMeta(token, 'component_type') }}</strong></span>
+          <span>Units <strong>{{ queueMeta(token, 'quantity_units') }}</strong></span>
+          <span>Urgency <strong>{{ queueMeta(token, 'urgency') }}</strong></span>
+          <span>Department <strong>{{ queueMeta(token, 'department') }}</strong></span>
+          <span>Required <strong>{{ queueMeta(token, 'required_at') }}</strong></span>
+          <span>Waiting <strong>{{ token.waiting_minutes }}m</strong></span>
+        </div>
+        <p class="queue-note" *ngIf="token.notes">{{ token.notes }}</p>
+        <footer>
+          <button type="button" (click)="updateQueueStatus(token, 'sample_collected')">Sample</button>
+          <button type="button" (click)="updateQueueStatus(token, 'crossmatch_pending')">Crossmatch</button>
+          <button type="button" (click)="updateQueueStatus(token, 'ready_to_issue')">Ready</button>
+          <button type="button" (click)="updateQueueStatus(token, 'issued')">Issue</button>
+          <button type="button" (click)="updateQueueStatus(token, 'returned')">Return</button>
+          <button type="button" (click)="updateQueueStatus(token, 'rejected')">Reject</button>
+          <button type="button" (click)="updateQueueStatus(token, 'discarded')">Discard</button>
+          <button type="button" (click)="printToken(token)">Print Token</button>
+        </footer>
+      </article>
+      <p class="empty" *ngIf="!queueTokens.length">No active blood bank queue requests for today.</p>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'donors'" class="panel grid-two">
+    <form class="form" (ngSubmit)="createDonor()" *appHasPermission="'blood_bank.donor.create'">
+      <h2>Register Donor</h2>
+      <input required [(ngModel)]="donorForm.name" name="donorName" placeholder="Donor name" />
+      <input type="number" [(ngModel)]="donorForm.age" name="age" placeholder="Age" />
+      <select [(ngModel)]="donorForm.gender" name="gender"><option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option></select>
+      <select [(ngModel)]="donorForm.blood_group" name="donorGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
+      <input [(ngModel)]="donorForm.phone" name="phone" placeholder="Phone" />
+      <textarea [(ngModel)]="donorForm.address" name="address" placeholder="Address"></textarea>
+      <textarea [(ngModel)]="donorForm.remarks" name="remarks" placeholder="Remarks"></textarea>
+      <button type="submit">Save Donor</button>
+    </form>
+    <div class="table-wrap">
+      <h2>Donor Register</h2>
+      <table><thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Group</th><th>Eligibility</th><th>Last Donation</th></tr></thead><tbody><tr *ngFor="let donor of donors"><td>{{ donor.donor_number }}</td><td>{{ donor.name }}</td><td>{{ donor.phone }}</td><td>{{ donor.blood_group }}</td><td><span class="badge" [ngClass]="statusTone(donor.eligibility_status)">{{ donor.eligibility_status }}</span></td><td>{{ donor.last_donation_date || '-' }}</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'screening'" class="panel">
+    <form class="form columns" (ngSubmit)="screenDonor()">
+      <h2>Donor Screening</h2>
+      <select required [(ngModel)]="screeningForm.donor_id" name="screenDonor"><option value="">Donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select>
+      <input type="number" [(ngModel)]="screeningForm.weight" name="weight" placeholder="Weight kg" />
+      <input type="number" [(ngModel)]="screeningForm.hemoglobin_level" name="hb" placeholder="Hemoglobin" />
+      <input [(ngModel)]="screeningForm.blood_pressure" name="bp" placeholder="Blood pressure" />
+      <input type="number" [(ngModel)]="screeningForm.temperature" name="temp" placeholder="Temperature" />
+      <input type="number" [(ngModel)]="screeningForm.pulse" name="pulse" placeholder="Pulse" />
+      <select [(ngModel)]="screeningForm.eligibility_result" name="eligibility"><option value="eligible">Eligible</option><option value="temporarily_deferred">Temporarily deferred</option><option value="permanently_deferred">Permanently deferred</option></select>
+      <input type="date" [(ngModel)]="screeningForm.next_eligible_date" name="nextEligible" />
+      <textarea [(ngModel)]="screeningForm.deferral_reason" name="deferral" placeholder="Deferral reason"></textarea>
+      <textarea [(ngModel)]="screeningForm.recent_illness" name="illness" placeholder="Recent illness"></textarea>
+      <textarea [(ngModel)]="screeningForm.medication_history" name="meds" placeholder="Medication history"></textarea>
+      <textarea [(ngModel)]="screeningForm.travel_history" name="travel" placeholder="Travel history"></textarea>
+      <button type="submit">Save Screening</button>
+    </form>
+  </section>
+
+  <section *ngIf="activeTab === 'collection'" class="panel">
+    <form class="form columns" (ngSubmit)="collectBlood()">
+      <h2>Blood Collection</h2>
+      <select required [(ngModel)]="collectionForm.donor_id" name="collectionDonor"><option value="">Eligible donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select>
+      <select required [(ngModel)]="collectionForm.blood_group" name="collectionGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
+      <input type="number" [(ngModel)]="collectionForm.collection_volume_ml" name="volume" placeholder="Volume ml" />
+      <input [(ngModel)]="collectionForm.bag_type" name="bagType" placeholder="Bag type" />
+      <input [(ngModel)]="collectionForm.anticoagulant_type" name="anticoagulant" placeholder="Anticoagulant" />
+      <input [(ngModel)]="collectionForm.collection_location" name="collectionLocation" placeholder="Collection location" />
+      <textarea [(ngModel)]="collectionForm.remarks" name="collectionRemarks" placeholder="Remarks"></textarea>
+      <button type="submit">Create Unit & Label</button>
+    </form>
+  </section>
+
+  <section *ngIf="activeTab === 'testing' || activeTab === 'components' || activeTab === 'stock'" class="panel grid-two">
+    <form *ngIf="activeTab === 'testing'" class="form" (ngSubmit)="updateTest()">
+      <h2>Blood Testing</h2>
+      <select required [(ngModel)]="testForm.unit_id" name="testUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }} {{ unit.component_type }}</option></select>
+      <input [(ngModel)]="testForm.test_name" name="testName" placeholder="Test name" />
+      <select [(ngModel)]="testForm.status" name="testStatus"><option>pending</option><option>in_progress</option><option>completed</option><option>reactive</option><option>positive</option><option>negative</option><option>rejected</option></select>
+      <input [(ngModel)]="testForm.result" name="testResult" placeholder="Result" />
+      <label><input type="checkbox" [(ngModel)]="testForm.verified" name="verified" /> Verified</label>
+      <button type="submit">Save Test</button>
+    </form>
+    <form *ngIf="activeTab === 'components'" class="form" (ngSubmit)="prepareComponent()">
+      <h2>Component Preparation</h2>
+      <select required [(ngModel)]="componentForm.source_unit_id" name="sourceUnit"><option value="">Source unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select>
+      <select [(ngModel)]="componentForm.component_type" name="component"><option *ngFor="let component of components">{{ component }}</option></select>
+      <input type="date" required [(ngModel)]="componentForm.expiry_date" name="expiry" />
+      <input type="number" [(ngModel)]="componentForm.volume_ml" name="componentVolume" placeholder="Volume ml" />
+      <select [(ngModel)]="componentForm.storage_location_id" name="componentStorage"><option value="">Storage location</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
+      <button type="submit">Prepare Component</button>
+    </form>
+    <form *ngIf="activeTab === 'stock'" class="form" (ngSubmit)="moveUnit()">
+      <h2>Move Unit</h2>
+      <select required [(ngModel)]="moveForm.unit_id" name="moveUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }}</option></select>
+      <select required [(ngModel)]="moveForm.storage_location_id" name="moveLocation"><option value="">Destination</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
+      <input [(ngModel)]="moveForm.remarks" name="moveRemarks" placeholder="Move note" />
+      <button type="submit">Move</button>
+    </form>
+    <div class="table-wrap">
+      <h2>Blood Stock</h2>
+      <table><thead><tr><th>Unit</th><th>Group</th><th>Component</th><th>Expiry</th><th>Location</th><th>Status</th><th>Testing</th></tr></thead><tbody><tr *ngFor="let unit of units" [class.blocked]="!safeUnit(unit)"><td>{{ unit.unit_number }}</td><td>{{ unit.blood_group }}</td><td>{{ unit.component_type }}</td><td>{{ unit.expiry_date || '-' }}</td><td>{{ unit.storage_location_name || '-' }}</td><td><span class="badge" [ngClass]="statusTone(unit.status)">{{ unit.status.replaceAll('_', ' ') }}</span></td><td>{{ unit.testing_status }}</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'requests' || activeTab === 'crossmatch' || activeTab === 'issue'" class="panel grid-two">
+    <form *ngIf="activeTab === 'requests'" class="form" (ngSubmit)="createRequest()">
+      <h2>Blood Request</h2>
+      <input required [(ngModel)]="requestForm.patient_id" name="patientId" placeholder="Patient ID" />
+      <select required [(ngModel)]="requestForm.blood_group" name="requestGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
+      <select [(ngModel)]="requestForm.component_type" name="requestComponent"><option *ngFor="let component of components">{{ component }}</option></select>
+      <input type="number" min="1" [(ngModel)]="requestForm.quantity_units" name="quantity" placeholder="Units" />
+      <select [(ngModel)]="requestForm.urgency" name="urgency"><option>routine</option><option>urgent</option><option>emergency</option></select>
+      <input [(ngModel)]="requestForm.department_name" name="department" placeholder="Department / ward / OT" />
+      <textarea [(ngModel)]="requestForm.indication" name="indication" placeholder="Indication"></textarea>
+      <textarea [(ngModel)]="requestForm.diagnosis" name="diagnosis" placeholder="Diagnosis"></textarea>
+      <button type="submit">Create Request</button>
+    </form>
+    <form *ngIf="activeTab === 'crossmatch'" class="form" (ngSubmit)="crossmatch()">
+      <h2>Crossmatch</h2>
+      <select required [(ngModel)]="crossmatchForm.request_id" name="crossRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.blood_group }}</option></select>
+      <select required [(ngModel)]="crossmatchForm.unit_id" name="crossUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select>
+      <select [(ngModel)]="crossmatchForm.patient_blood_group" name="patientGroup"><option value="">Patient group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
+      <select [(ngModel)]="crossmatchForm.compatibility_status" name="compatibility"><option>compatible</option><option>incompatible</option></select>
+      <input [(ngModel)]="crossmatchForm.result" name="crossResult" placeholder="Result" />
+      <label><input type="checkbox" [(ngModel)]="crossmatchForm.emergency_override" name="crossOverride" /> Emergency override</label>
+      <textarea [(ngModel)]="crossmatchForm.override_reason" name="crossOverrideReason" placeholder="Override reason"></textarea>
+      <button type="submit">Record Crossmatch</button>
+    </form>
+    <form *ngIf="activeTab === 'issue'" class="form" (ngSubmit)="issue()">
+      <h2>Issue Unit</h2>
+      <select required [(ngModel)]="issueForm.request_id" name="issueRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.status }}</option></select>
+      <select required [(ngModel)]="issueForm.unit_id" name="issueUnit"><option value="">Safe unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select>
+      <input [(ngModel)]="issueForm.received_by" name="receivedBy" placeholder="Received by" />
+      <input [(ngModel)]="issueForm.destination" name="destination" placeholder="Ward / OT / emergency" />
+      <input [(ngModel)]="issueForm.transport_condition" name="transport" placeholder="Transport condition" />
+      <label><input type="checkbox" [(ngModel)]="issueForm.emergency_override" name="issueOverride" /> Emergency override</label>
+      <textarea [(ngModel)]="issueForm.override_reason" name="issueOverrideReason" placeholder="Override reason"></textarea>
+      <button type="submit">Issue Blood</button>
+    </form>
+    <div class="table-wrap">
+      <h2>Request Queue</h2>
+      <table><thead><tr><th>No</th><th>Group</th><th>Component</th><th>Qty</th><th>Urgency</th><th>Status</th></tr></thead><tbody><tr *ngFor="let request of requests" [class.emergency]="request.urgency === 'emergency'"><td>{{ request.request_number }}</td><td>{{ request.blood_group }}</td><td>{{ request.component_type }}</td><td>{{ request.quantity_units }}</td><td><span class="badge" [ngClass]="statusTone(request.urgency)">{{ request.urgency }}</span></td><td>{{ request.status.replaceAll('_', ' ') }}</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'transfusion' || activeTab === 'return' || activeTab === 'discard'" class="panel">
+    <form *ngIf="activeTab === 'transfusion'" class="form columns" (ngSubmit)="updateTransfusion()">
+      <h2>Transfusion Tracking</h2>
+      <input required [(ngModel)]="transfusionForm.issue_id" name="transIssue" placeholder="Issue ID" />
+      <select [(ngModel)]="transfusionForm.status" name="transStatus"><option>started</option><option>held</option><option>stopped</option><option>completed</option><option>reaction</option></select>
+      <textarea [(ngModel)]="transfusionForm.vitals" name="vitals" placeholder='Vitals JSON or note'></textarea>
+      <label><input type="checkbox" [(ngModel)]="transfusionForm.reaction_observed" name="reaction" /> Reaction observed</label>
+      <textarea [(ngModel)]="transfusionForm.reaction_details" name="reactionDetails" placeholder="Reaction details"></textarea>
+      <textarea [(ngModel)]="transfusionForm.remarks" name="transRemarks" placeholder="Remarks"></textarea>
+      <button type="submit">Update Transfusion</button>
+    </form>
+    <form *ngIf="activeTab === 'return'" class="form columns" (ngSubmit)="returnUnit()">
+      <h2>Return Unit</h2>
+      <input required [(ngModel)]="returnForm.issue_id" name="returnIssue" placeholder="Issue ID" />
+      <input [(ngModel)]="returnForm.returned_by" name="returnedBy" placeholder="Returned by" />
+      <input [(ngModel)]="returnForm.condition_on_return" name="condition" placeholder="Condition" />
+      <input type="number" [(ngModel)]="returnForm.minutes_outside_bank" name="outsideTime" placeholder="Minutes outside bank" />
+      <select [(ngModel)]="returnForm.decision" name="returnDecision"><option>accept</option><option>quarantine</option><option>discard</option></select>
+      <textarea [(ngModel)]="returnForm.reason" name="returnReason" placeholder="Reason"></textarea>
+      <button type="submit">Save Return</button>
+    </form>
+    <form *ngIf="activeTab === 'discard'" class="form columns" (ngSubmit)="discard()">
+      <h2>Discard Unit</h2>
+      <select required [(ngModel)]="discardForm.unit_id" name="discardUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select>
+      <select [(ngModel)]="discardForm.reason" name="discardReason"><option>Expired</option><option>Reactive/positive test</option><option>Damaged bag</option><option>Temperature excursion</option><option>Contamination concern</option><option>Return not acceptable</option><option>Hemolysis</option><option>Leakage</option><option>Other reason</option></select>
+      <textarea [(ngModel)]="discardForm.details" name="discardDetails" placeholder="Details"></textarea>
+      <button type="submit">Discard</button>
+    </form>
+  </section>
+
+  <section *ngIf="activeTab === 'reports'" class="panel">
+    <div class="filters report-filter">
+      <select [(ngModel)]="reportFilters.report_type" name="reportType"><option *ngFor="let item of reports" [value]="item">{{ item.replaceAll('_', ' ') }}</option></select>
+      <input type="date" [(ngModel)]="reportFilters.date_from" name="dateFrom" />
+      <input type="date" [(ngModel)]="reportFilters.date_to" name="dateTo" />
+      <button type="button" (click)="loadReport()">Run</button>
+    </div>
+    <div class="table-wrap">
+      <h2>Report Results</h2>
+      <table><thead><tr><th>#</th><th>Record</th></tr></thead><tbody><tr *ngFor="let row of report?.rows; let i = index"><td>{{ i + 1 }}</td><td><code>{{ row | json }}</code></td></tr></tbody></table>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'settings'" class="panel grid-two">
+    <form class="form" (ngSubmit)="createLocation()">
+      <h2>Storage Location</h2>
+      <input required [(ngModel)]="locationForm.code" name="locationCode" placeholder="Code" />
+      <input required [(ngModel)]="locationForm.name" name="locationName" placeholder="Name" />
+      <select [(ngModel)]="locationForm.location_type" name="locationType"><option>refrigerator</option><option>freezer</option><option>shelf</option><option>rack</option><option>compartment</option></select>
+      <input type="number" [(ngModel)]="locationForm.temperature_min" name="tempMin" placeholder="Min C" />
+      <input type="number" [(ngModel)]="locationForm.temperature_max" name="tempMax" placeholder="Max C" />
+      <input type="number" [(ngModel)]="locationForm.current_temperature" name="currentTemp" placeholder="Current C" />
+      <button type="submit">Save Location</button>
+    </form>
+    <div class="settings-list">
+      <h2>Configured Rules</h2>
+      <p>Blood groups: {{ bloodGroups.join(', ') }}</p>
+      <p>Components: {{ components.join(', ') }}</p>
+      <p>Blocked issue statuses: expired, discarded, quarantined, failed-test, untested, incompatible.</p>
+    </div>
+  </section>
+</section>

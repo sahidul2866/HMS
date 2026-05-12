@@ -14,18 +14,28 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.models.billing import BillingInvoice, BillingPayment
-from app.models.encounter import IPDBed, IPDAdmission, OPDVisit, Appointment
+from app.models.blood_bank import BloodRequest, BloodUnit
+from app.models.encounter import ERVisit, IPDBed, IPDAdmission, OPDVisit, Appointment
 from app.models.inventory import InventoryItem
 from app.models.laboratory import LabOrder
 from app.models.patient import Patient
 from app.models.pharmacy import PharmacyMedicine, PharmacyPurchase
 from app.models.radiology import RadiologyOrder
-from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage
+from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage, StaffBotSetting
 from app.models.user import User
 from app.modules.appointments.service import AppointmentsService
 from app.modules.auth.service import AuthService
 from app.schemas.appointment import AppointmentCreate
-from app.schemas.staff_bot import StaffBotContext, StaffBotDetailRow, StaffBotMessageCreate, StaffBotResetCreate, StaffBotResponse, StaffBotSettingsRead
+from app.schemas.staff_bot import (
+    StaffBotContext,
+    StaffBotDetailRow,
+    StaffBotMessageCreate,
+    StaffBotResetCreate,
+    StaffBotResponse,
+    StaffBotSettingRead,
+    StaffBotSettingsRead,
+    StaffBotSettingUpsert,
+)
 
 
 SYSTEM_PROMPT = (
@@ -58,6 +68,13 @@ INTENT_PERMISSIONS: dict[str, list[str]] = {
     "lab_pending": ["laboratory.view"],
     "radiology_pending": ["radiology.view"],
     "payroll_exceptions": ["payroll.view"],
+    "patient_summary": ["patient.view"],
+    "invoice_explanation": ["billing.view"],
+    "discharge_readiness": ["ipd.view"],
+    "emergency_summary": ["er.view", "emergency.view"],
+    "blood_bank_stock": ["blood_bank.view", "blood_bank.stock.view"],
+    "workflow_checklist": ["dashboard.view"],
+    "draft_discharge_summary": ["ipd.discharge", "ipd.discharge.request"],
 }
 
 
@@ -79,6 +96,7 @@ class StaffBotService:
     def settings(self, actor: User) -> StaffBotSettingsRead:
         try:
             permissions = set(self.auth.get_effective_permissions(actor))
+            admin_config = self._merged_settings(actor)
             quick_actions: list[str] = []
             for _, required, actions in ROLE_QUICK_ACTIONS:
                 if any(code in permissions for code in required):
@@ -93,9 +111,14 @@ class StaffBotService:
                 ]
                 quick_actions = [label for label, permission in fallback_actions if permission in permissions]
             return StaffBotSettingsRead(
-                greeting_message=DEFAULT_GREETING,
+                greeting_message=str(admin_config.get("greeting_message") or DEFAULT_GREETING),
                 quick_actions=sorted(set(quick_actions)),
                 gemini_enabled=bool(self.app_settings.gemini_api_key),
+                enabled=bool(admin_config.get("enabled", True)),
+                module_availability=dict(admin_config.get("module_availability") or {}),
+                role_rules=dict(admin_config.get("role_rules") or {}),
+                action_rules=dict(admin_config.get("action_rules") or {}),
+                audit_logging=bool(admin_config.get("audit_logging", True)),
             )
         except SQLAlchemyError as exc:
             raise AppException(
@@ -103,6 +126,79 @@ class StaffBotService:
                 "staff_bot_unavailable",
                 "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
             ) from exc
+
+    def list_admin_settings(self, actor: User) -> list[StaffBotSettingRead]:
+        stmt = select(StaffBotSetting).where(StaffBotSetting.is_active.is_(True))
+        if actor.branch_id:
+            stmt = stmt.where(or_(StaffBotSetting.branch_id == actor.branch_id, StaffBotSetting.branch_id.is_(None)))
+        return list(self.db.scalars(stmt.order_by(StaffBotSetting.setting_key.asc())))
+
+    def save_admin_setting(self, payload: StaffBotSettingUpsert, actor: User) -> StaffBotSettingRead:
+        setting_key = payload.setting_key.strip().lower().replace(" ", "_")
+        stmt = select(StaffBotSetting).where(StaffBotSetting.branch_id == actor.branch_id, StaffBotSetting.setting_key == setting_key)
+        item = self.db.scalar(stmt)
+        if item is None:
+            item = StaffBotSetting(
+                branch_id=actor.branch_id,
+                setting_key=setting_key,
+                setting_value=payload.setting_value,
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+            self.db.add(item)
+        else:
+            item.setting_value = payload.setting_value
+            item.updated_by = actor.id
+        self.db.commit()
+        self.db.refresh(item)
+        self.db.add(
+            StaffBotAuditLog(
+                branch_id=actor.branch_id,
+                user_id=actor.id,
+                question=f"AI setting saved: {setting_key}",
+                intent="admin_setting",
+                source_module="AI Settings",
+                used_database=True,
+                used_gemini=False,
+                response_summary="setting_updated",
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+        )
+        self.db.commit()
+        return item
+
+    def _merged_settings(self, actor: User) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "enabled": True,
+            "greeting_message": DEFAULT_GREETING,
+            "audit_logging": True,
+            "module_availability": {
+                "patients": True,
+                "opd": True,
+                "ipd": True,
+                "er": True,
+                "billing": True,
+                "pharmacy": True,
+                "laboratory": True,
+                "radiology": True,
+                "inventory": True,
+                "blood_bank": True,
+                "hr": True,
+                "payroll": True,
+                "accounting": True,
+                "reports": True,
+            },
+            "action_rules": {"require_confirmation_for_sensitive_actions": True},
+            "role_rules": {},
+        }
+        stmt = select(StaffBotSetting).where(StaffBotSetting.is_active.is_(True))
+        if actor.branch_id:
+            stmt = stmt.where(or_(StaffBotSetting.branch_id == actor.branch_id, StaffBotSetting.branch_id.is_(None)))
+        for setting in self.db.scalars(stmt):
+            if isinstance(setting.setting_value, dict):
+                defaults.update(setting.setting_value)
+        return defaults
 
     def _contextual_suggestions(self, actor: User, assistant_context: StaffBotContext | None) -> list[str]:
         permissions = set(self.auth.get_effective_permissions(actor))
@@ -233,6 +329,14 @@ class StaffBotService:
             conversation = self._get_or_create_conversation(payload.conversation_id, actor, assistant_context=assistant_context)
             self._merge_context(conversation, assistant_context)
             self._save_message(conversation, "user", message, meta={})
+            admin_config = self._merged_settings(actor)
+            module_key = str((conversation.context or {}).get("module") or "").replace("-", "_")
+            module_availability = dict(admin_config.get("module_availability") or {})
+            if not admin_config.get("enabled", True) or (module_key and module_availability.get(module_key) is False):
+                reply = "AI Assistant is disabled for this module by hospital configuration."
+                self._audit(actor, conversation, message, intent="disabled", source_module="AI Settings", used_db=True, used_gemini=False, response_summary="disabled")
+                self._save_message(conversation, "bot", reply, meta={"intent": "disabled", "source_module": "AI Settings"})
+                return StaffBotResponse(conversation_id=conversation.id, message=reply, intent="disabled", source_module="AI Settings", permission_denied=True)
 
             normalized = self._normalize(message)
             intent = self._detect_intent(normalized)
@@ -258,6 +362,7 @@ class StaffBotService:
 
             answer = self._database_first_answer(intent, normalized, actor, conversation)
             if answer is not None:
+                self._decorate_response(answer, actor, conversation)
                 self._audit(
                     actor,
                     conversation,
@@ -281,7 +386,9 @@ class StaffBotService:
                 reply = "I couldn’t find enough system data to answer that. Please rephrase or provide more details (patient/invoice/medicine/visit)."
                 self._audit(actor, conversation, message, intent=intent, source_module="assistant", used_db=False, used_gemini=False, response_summary="no_gemini")
                 self._save_message(conversation, "bot", reply, meta={"intent": "unknown", "source_module": "assistant"})
-                return StaffBotResponse(conversation_id=conversation.id, message=reply, intent="unknown", source_module="assistant", quick_replies=self.settings(actor).quick_actions[:6])
+                response = StaffBotResponse(conversation_id=conversation.id, message=reply, intent="unknown", source_module="assistant", quick_replies=self.settings(actor).quick_actions[:6])
+                self._decorate_response(response, actor, conversation)
+                return response
 
             gemini_message = self._gemini_fallback(actor, question=message, conversation=conversation)
             used_gemini = True
@@ -303,6 +410,15 @@ class StaffBotService:
                 "staff_bot_unavailable",
                 "Staff assistant is not ready. Database connection/migrations may be missing. Ensure Postgres is running and restart backend (AUTO_DB_BOOTSTRAP=true).",
             ) from exc
+
+    def _decorate_response(self, response: StaffBotResponse, actor: User, conversation: StaffBotConversation) -> None:
+        assistant_context = self._coerce_context(conversation.context if isinstance(conversation.context, str) else None)
+        if not response.context_suggestions:
+            response.context_suggestions = self._contextual_suggestions(actor, assistant_context or StaffBotContext(**(conversation.context or {})))
+        if not response.context_summary:
+            response.context_summary = self._context_summary(conversation.context or {})
+        if response.intent in {"patient_summary", "draft_discharge_summary"} and not response.disclaimer:
+            response.disclaimer = "AI suggestions must be reviewed and approved by authorized clinical staff."
 
     def _database_first_answer(self, intent: str, normalized: str, actor: User, conversation: StaffBotConversation) -> StaffBotResponse | None:
         if intent == "hospital_summary":
@@ -327,6 +443,20 @@ class StaffBotService:
             return self._book_opd_appointment(actor, conversation, normalized)
         if intent == "patient_info":
             return self._patient_lookup(actor, conversation, normalized)
+        if intent == "patient_summary":
+            return self._patient_summary(actor, conversation, normalized)
+        if intent == "invoice_explanation":
+            return self._invoice_explanation(actor, conversation, normalized)
+        if intent == "discharge_readiness":
+            return self._discharge_readiness(actor, conversation, normalized)
+        if intent == "emergency_summary":
+            return self._emergency_summary(actor, conversation)
+        if intent == "blood_bank_stock":
+            return self._blood_bank_stock(actor, conversation)
+        if intent == "workflow_checklist":
+            return self._workflow_checklist(actor, conversation)
+        if intent == "draft_discharge_summary":
+            return self._draft_discharge_summary(actor, conversation, normalized)
         if intent == "low_stock":
             return self._low_stock_summary(actor, conversation, normalized)
         if intent == "lab_pending":
@@ -339,6 +469,220 @@ class StaffBotService:
             # Intentionally no DB lookup; prefer Gemini for explanation.
             return None
         return None
+
+    def _patient_summary(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        patient = self._context_patient(conversation, actor) or self._find_patient(self._extract_patient_token(normalized) or "", actor.branch_id)
+        if not patient:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message="Select a patient or provide a patient number before I summarize.",
+                intent="patient_summary",
+                source_module="Patient Module",
+                follow_up=True,
+                required_fields=["patient"],
+                quick_replies=["Search patient", "Show patient PAT-DEMO-0001"],
+            )
+
+        permissions = set(self.auth.get_effective_permissions(actor))
+        details = [
+            StaffBotDetailRow(label="Patient", value=f"{patient.patient_number} - {patient.first_name} {patient.last_name}"),
+            StaffBotDetailRow(label="Gender", value=patient.gender or "Not recorded"),
+            StaffBotDetailRow(label="Phone", value=patient.phone or "Not recorded"),
+        ]
+        latest_opd = self._latest_for_patient(OPDVisit, patient.id, actor.branch_id)
+        active_ipd = self._active_ipd(patient.id, actor.branch_id)
+        active_er = self._active_er(patient.id, actor.branch_id)
+        if latest_opd and "opd.view" in permissions:
+            details.append(StaffBotDetailRow(label="Latest OPD", value=f"{latest_opd.visit_number} · {latest_opd.status}"))
+            if latest_opd.final_diagnosis or latest_opd.provisional_diagnosis:
+                details.append(StaffBotDetailRow(label="OPD diagnosis", value=(latest_opd.final_diagnosis or latest_opd.provisional_diagnosis or "")[:120]))
+        if active_ipd and "ipd.view" in permissions:
+            details.append(StaffBotDetailRow(label="Active IPD", value=f"{active_ipd.admission_number} · {active_ipd.ward_name}/{active_ipd.bed_number}"))
+            details.append(StaffBotDetailRow(label="Discharge status", value=active_ipd.discharge_status))
+        if active_er and ("er.view" in permissions or "emergency.view" in permissions):
+            details.append(StaffBotDetailRow(label="Active ER", value=f"{active_er.visit_number} · {active_er.triage_category} · {active_er.status}"))
+        if "laboratory.view" in permissions:
+            pending_lab = self._patient_pending_count(LabOrder, patient.id, actor.branch_id)
+            details.append(StaffBotDetailRow(label="Pending lab orders", value=str(pending_lab)))
+        if "radiology.view" in permissions:
+            pending_rad = self._patient_pending_count(RadiologyOrder, patient.id, actor.branch_id)
+            details.append(StaffBotDetailRow(label="Pending radiology orders", value=str(pending_rad)))
+        if "billing.view" in permissions:
+            due = self._patient_due(patient.id, actor.branch_id)
+            details.append(StaffBotDetailRow(label="Open billing due", value=f"{due:,.0f} BDT"))
+
+        conversation.context = {**(conversation.context or {}), "active_patient_id": str(patient.id), "active_patient_token": patient.patient_number}
+        self.db.commit()
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Patient summary for {patient.patient_number}: current permitted records are shown below.",
+            intent="patient_summary",
+            source_module="Patient Timeline",
+            used_database=True,
+            details=details,
+            next_action="Use the patient profile, OPD/IPD/ER, or Billing page for full record-level actions.",
+            quick_replies=["Show patient due", "Check discharge readiness", "List pending lab/radiology orders"],
+        )
+
+    def _invoice_explanation(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        invoice = self._context_invoice(conversation, actor) or self._find_invoice(normalized, actor.branch_id)
+        if not invoice:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message="Select an invoice or provide an invoice number to explain.",
+                intent="invoice_explanation",
+                source_module="Billing Module",
+                follow_up=True,
+                required_fields=["invoice_number"],
+                quick_replies=["Show pending payments", "Explain invoice INV-0001"],
+            )
+        details = [
+            StaffBotDetailRow(label="Invoice", value=invoice.invoice_number),
+            StaffBotDetailRow(label="Status", value=f"{invoice.status} / {invoice.payment_status}"),
+            StaffBotDetailRow(label="Total", value=f"{float(invoice.total_amount):,.0f} BDT"),
+            StaffBotDetailRow(label="Paid", value=f"{float(invoice.paid_amount):,.0f} BDT"),
+            StaffBotDetailRow(label="Due", value=f"{float(invoice.due_amount):,.0f} BDT"),
+        ]
+        message = f"Invoice {invoice.invoice_number}: total {float(invoice.total_amount):,.0f} BDT, paid {float(invoice.paid_amount):,.0f} BDT, due {float(invoice.due_amount):,.0f} BDT."
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=message,
+            intent="invoice_explanation",
+            source_module="Billing Module",
+            used_database=True,
+            details=details,
+            next_action="Collect payment, print receipt, or review line items from Billing if permitted.",
+            quick_replies=["Show pending payments", "Find billing discrepancies"],
+        )
+
+    def _discharge_readiness(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        admission = self._context_admission(conversation, actor) or self._active_ipd_for_context(conversation, actor, normalized)
+        if not admission:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message="Select an active IPD admission or provide the patient/admission number before checking discharge readiness.",
+                intent="discharge_readiness",
+                source_module="IPD Module",
+                follow_up=True,
+                required_fields=["admission_or_patient"],
+            )
+        details = [
+            StaffBotDetailRow(label="Admission", value=admission.admission_number),
+            StaffBotDetailRow(label="Patient location", value=f"{admission.ward_name} / Bed {admission.bed_number}"),
+            StaffBotDetailRow(label="Discharge status", value=admission.discharge_status),
+            StaffBotDetailRow(label="Billing", value=admission.billing_status),
+            StaffBotDetailRow(label="Pharmacy clearance", value=admission.pharmacy_clearance_status),
+            StaffBotDetailRow(label="Lab clearance", value=admission.lab_clearance_status),
+            StaffBotDetailRow(label="Radiology clearance", value=admission.radiology_clearance_status),
+        ]
+        blockers = [
+            label
+            for label, value in [
+                ("billing", admission.billing_status),
+                ("pharmacy", admission.pharmacy_clearance_status),
+                ("lab", admission.lab_clearance_status),
+                ("radiology", admission.radiology_clearance_status),
+            ]
+            if str(value).lower() not in {"cleared", "paid", "complete", "completed", "not_required", "none"}
+        ]
+        message = "Discharge readiness: ready for final review." if not blockers else f"Discharge readiness: {', '.join(blockers)} still need clearance/review."
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=message,
+            intent="discharge_readiness",
+            source_module="IPD Discharge Workflow",
+            used_database=True,
+            details=details,
+            next_action="Proceed only through the IPD discharge workflow. Final discharge remains permission-controlled.",
+            quick_replies=["Draft discharge summary", "Explain interim bill", "Show pending lab tests"],
+            actions=[{"label": "Prepare discharge checklist", "action": "ipd.discharge.checklist", "sensitive": False}],
+        )
+
+    def _emergency_summary(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        stmt = select(ERVisit.status, func.count(ERVisit.id)).group_by(ERVisit.status)
+        if actor.branch_id:
+            stmt = stmt.where(ERVisit.branch_id == actor.branch_id)
+        rows = {str(status or "unknown"): int(count or 0) for status, count in self.db.execute(stmt)}
+        active = sum(value for key, value in rows.items() if key not in {"discharged", "admitted", "referred"})
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Emergency workload: {active} active case(s) currently need triage, treatment, or disposition.",
+            intent="emergency_summary",
+            source_module="Emergency Module",
+            used_database=True,
+            details=[StaffBotDetailRow(label=key.replace("_", " ").title(), value=str(value)) for key, value in sorted(rows.items())],
+            next_action="Open ER command center for patient-specific triage and disposition actions.",
+            quick_replies=["Show pending actions", "Summarize today’s emergency cases"],
+        )
+
+    def _blood_bank_stock(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        available_stmt = select(BloodUnit.blood_group, BloodUnit.component_type, func.count(BloodUnit.id)).where(BloodUnit.status == "available").group_by(BloodUnit.blood_group, BloodUnit.component_type)
+        near_expiry_stmt = select(func.count(BloodUnit.id)).where(BloodUnit.status.in_(["available", "reserved", "crossmatched"]), BloodUnit.expiry_date <= date.today().fromordinal(date.today().toordinal() + 7))
+        request_stmt = select(func.count(BloodRequest.id)).where(BloodRequest.status.in_(["requested", "under_review", "crossmatch_pending", "ready_to_issue"]))
+        rows = list(self.db.execute(available_stmt))
+        details = [StaffBotDetailRow(label=f"{group} {component}", value=str(count)) for group, component, count in rows[:8]]
+        details.append(StaffBotDetailRow(label="Near-expiry units", value=str(int(self.db.scalar(near_expiry_stmt) or 0))))
+        details.append(StaffBotDetailRow(label="Pending requests", value=str(int(self.db.scalar(request_stmt) or 0))))
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Blood bank stock: {sum(int(count or 0) for _, _, count in rows)} available unit/component record(s).",
+            intent="blood_bank_stock",
+            source_module="Blood Bank Module",
+            used_database=True,
+            details=details,
+            next_action="Open Blood Bank for crossmatch, issue, expiry, or discard workflows.",
+            quick_replies=["Find near-expiry blood units", "Show pending crossmatch requests"],
+        )
+
+    def _workflow_checklist(self, actor: User, conversation: StaffBotConversation) -> StaffBotResponse:
+        module = str((conversation.context or {}).get("module") or "current").replace("_", " ")
+        sensitive = ["finalize", "approve", "issue", "refund", "delete", "discharge", "post voucher"]
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message=f"Workflow checklist for {module}: verify the selected record, complete required fields, review pending linked tasks, save draft when uncertain, and use module actions for final changes.",
+            intent="workflow_checklist",
+            source_module="Workflow Assistant",
+            used_database=False,
+            details=[
+                StaffBotDetailRow(label="Context", value=self._context_summary(conversation.context or {})),
+                StaffBotDetailRow(label="Sensitive actions", value=", ".join(sensitive)),
+                StaffBotDetailRow(label="Rule", value="AI never bypasses backend validation or permissions."),
+            ],
+            next_action="Ask for a record-specific summary after selecting a patient, invoice, order, admission, or stock item.",
+            quick_replies=["Find missing required fields", "Summarize this patient", "Show pending tasks"],
+        )
+
+    def _draft_discharge_summary(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
+        admission = self._context_admission(conversation, actor) or self._active_ipd_for_context(conversation, actor, normalized)
+        if not admission:
+            return StaffBotResponse(
+                conversation_id=conversation.id,
+                message="Select an IPD admission before drafting a discharge summary.",
+                intent="draft_discharge_summary",
+                source_module="IPD Module",
+                follow_up=True,
+                required_fields=["admission"],
+            )
+        draft = (
+            f"Discharge Summary Draft\n\n"
+            f"Admission: {admission.admission_number}\n"
+            f"Ward/Bed: {admission.ward_name} / {admission.bed_number}\n"
+            f"Diagnosis: {admission.diagnosis or admission.discharge_diagnosis or 'To be completed by doctor'}\n"
+            f"Hospital Course: Summarize clinical progress, investigations, procedures, and response to treatment.\n"
+            f"Condition at Discharge: {admission.discharge_condition or 'To be documented'}\n"
+            f"Follow-up Advice: To be reviewed and finalized by authorized clinical staff."
+        )
+        return StaffBotResponse(
+            conversation_id=conversation.id,
+            message="I prepared an editable discharge summary draft from the selected admission context. It is not saved as an official record.",
+            intent="draft_discharge_summary",
+            source_module="IPD Discharge Workflow",
+            used_database=True,
+            draft_content=draft,
+            next_action="Review, edit, and save through the IPD discharge screen only after doctor approval.",
+            requires_confirmation=False,
+            actions=[{"label": "Insert draft into focused field", "action": "ui.insert_draft", "sensitive": False}],
+        )
 
     def _low_stock_summary(self, actor: User, conversation: StaffBotConversation, normalized: str) -> StaffBotResponse:
         details: list[StaffBotDetailRow] = []
@@ -1042,6 +1386,20 @@ class StaffBotService:
         return normalized
 
     def _detect_intent(self, normalized: str) -> str:
+        if any(key in normalized for key in ["summarize this patient", "patient summary", "summarize patient", "current medicines", "pending orders for patient"]):
+            return "patient_summary"
+        if any(key in normalized for key in ["explain this bill", "explain this invoice", "invoice explanation", "billing discrepancy", "billing mistake"]):
+            return "invoice_explanation"
+        if any(key in normalized for key in ["discharge readiness", "ready for discharge", "discharge checklist", "clearance status"]):
+            return "discharge_readiness"
+        if any(key in normalized for key in ["draft discharge summary", "create discharge summary draft", "discharge summary draft"]):
+            return "draft_discharge_summary"
+        if any(key in normalized for key in ["emergency summary", "today emergency", "er summary", "triage summary"]):
+            return "emergency_summary"
+        if any(key in normalized for key in ["blood bank", "blood stock", "blood unit", "near-expiry blood"]):
+            return "blood_bank_stock"
+        if any(key in normalized for key in ["pending task", "pending tasks", "missing required", "workflow checklist", "next actions"]):
+            return "workflow_checklist"
         if any(key in normalized for key in ["hospital summary", "today summary", "overall summary", "dashboard summary"]):
             return "hospital_summary"
         if any(key in normalized for key in ["low-stock", "low stock", "reorder", "stock out"]):
@@ -1167,8 +1525,110 @@ class StaffBotService:
         )
         self.db.commit()
 
+    def _context_summary(self, context: dict[str, Any]) -> str:
+        module = context.get("module") or context.get("page") or "current page"
+        record_type = context.get("record_type")
+        record_id = context.get("record_id") or context.get("patient_id") or context.get("invoice_id") or context.get("order_id")
+        if record_type and record_id:
+            return f"{module} · {record_type} selected"
+        if record_id:
+            return f"{module} · selected record"
+        return str(module)
+
+    def _uuid_value(self, value: Any) -> UUID | None:
+        if not value:
+            return None
+        try:
+            return value if isinstance(value, UUID) else UUID(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    def _context_patient(self, conversation: StaffBotConversation, actor: User) -> Patient | None:
+        context = conversation.context or {}
+        patient_id = self._uuid_value(context.get("patient_id") or context.get("active_patient_id") or (context.get("record_id") if context.get("record_type") == "patient" else None))
+        if not patient_id:
+            return None
+        stmt = select(Patient).where(Patient.id == patient_id, Patient.is_active.is_(True))
+        if actor.branch_id:
+            stmt = stmt.where(Patient.branch_id == actor.branch_id)
+        return self.db.scalar(stmt)
+
+    def _context_invoice(self, conversation: StaffBotConversation, actor: User) -> BillingInvoice | None:
+        context = conversation.context or {}
+        invoice_id = self._uuid_value(context.get("invoice_id") or (context.get("record_id") if context.get("record_type") == "invoice" else None))
+        if not invoice_id:
+            return None
+        stmt = select(BillingInvoice).where(BillingInvoice.id == invoice_id)
+        if actor.branch_id:
+            stmt = stmt.where(BillingInvoice.branch_id == actor.branch_id)
+        return self.db.scalar(stmt)
+
+    def _context_admission(self, conversation: StaffBotConversation, actor: User) -> IPDAdmission | None:
+        context = conversation.context or {}
+        admission_id = self._uuid_value(context.get("admission_id") or (context.get("record_id") if context.get("record_type") == "admission" else None))
+        if not admission_id:
+            return None
+        stmt = select(IPDAdmission).where(IPDAdmission.id == admission_id)
+        if actor.branch_id:
+            stmt = stmt.where(IPDAdmission.branch_id == actor.branch_id)
+        return self.db.scalar(stmt)
+
+    def _latest_for_patient(self, model: Any, patient_id: UUID, branch_id: UUID | None) -> Any | None:
+        stmt = select(model).where(model.patient_id == patient_id)
+        if branch_id and hasattr(model, "branch_id"):
+            stmt = stmt.where(model.branch_id == branch_id)
+        order_col = getattr(model, "created_at", None)
+        if order_col is None:
+            order_col = getattr(model, "updated_at", None)
+        if order_col is not None:
+            stmt = stmt.order_by(order_col.desc())
+        return self.db.scalar(stmt.limit(1))
+
+    def _active_ipd(self, patient_id: UUID, branch_id: UUID | None) -> IPDAdmission | None:
+        stmt = select(IPDAdmission).where(IPDAdmission.patient_id == patient_id, IPDAdmission.status == "admitted")
+        if branch_id:
+            stmt = stmt.where(IPDAdmission.branch_id == branch_id)
+        return self.db.scalar(stmt.order_by(IPDAdmission.admitted_at.desc()).limit(1))
+
+    def _active_er(self, patient_id: UUID, branch_id: UUID | None) -> ERVisit | None:
+        stmt = select(ERVisit).where(ERVisit.patient_id == patient_id, ERVisit.status.notin_(["discharged", "admitted", "referred"]))
+        if branch_id:
+            stmt = stmt.where(ERVisit.branch_id == branch_id)
+        return self.db.scalar(stmt.order_by(ERVisit.arrival_time.desc()).limit(1))
+
+    def _patient_pending_count(self, model: Any, patient_id: UUID, branch_id: UUID | None) -> int:
+        stmt = select(func.count(model.id)).where(model.patient_id == patient_id, model.status.in_(["pending", "collected", "in_progress", "reported"]))
+        if branch_id and hasattr(model, "branch_id"):
+            stmt = stmt.where(model.branch_id == branch_id)
+        return int(self.db.scalar(stmt) or 0)
+
+    def _patient_due(self, patient_id: UUID, branch_id: UUID | None) -> float:
+        stmt = select(func.coalesce(func.sum(BillingInvoice.due_amount), 0)).where(BillingInvoice.patient_id == patient_id, BillingInvoice.status == "posted")
+        if branch_id:
+            stmt = stmt.where(BillingInvoice.branch_id == branch_id)
+        return float(self.db.scalar(stmt) or 0)
+
+    def _find_invoice(self, normalized: str, branch_id: UUID | None) -> BillingInvoice | None:
+        match = re.search(r"((?:inv|bill|invoice)[\w\-]{2,60})", normalized, re.IGNORECASE)
+        token = match.group(1).upper() if match else None
+        if not token:
+            return None
+        stmt = select(BillingInvoice).where(BillingInvoice.invoice_number.ilike(token))
+        if branch_id:
+            stmt = stmt.where(BillingInvoice.branch_id == branch_id)
+        return self.db.scalar(stmt)
+
+    def _active_ipd_for_context(self, conversation: StaffBotConversation, actor: User, normalized: str) -> IPDAdmission | None:
+        patient = self._context_patient(conversation, actor)
+        if not patient:
+            token = self._extract_patient_token(normalized)
+            patient = self._find_patient(token, actor.branch_id) if token else None
+        return self._active_ipd(patient.id, actor.branch_id) if patient else None
+
     def _find_patient(self, token: str, branch_id: UUID | None) -> Patient | None:
         token = token.strip()
+        if not token:
+            return None
         stmt = select(Patient).where(Patient.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(Patient.branch_id == branch_id)

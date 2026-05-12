@@ -44,6 +44,7 @@ class PharmacyRepository:
             select(PharmacyDispense)
             .options(
                 joinedload(PharmacyDispense.patient),
+                joinedload(PharmacyDispense.billing_invoice),
                 joinedload(PharmacyDispense.source_visit),
                 joinedload(PharmacyDispense.dispensed_by),
             )
@@ -59,6 +60,7 @@ class PharmacyRepository:
             select(PharmacyDispense)
             .options(
                 joinedload(PharmacyDispense.patient),
+                joinedload(PharmacyDispense.billing_invoice),
                 joinedload(PharmacyDispense.source_visit),
                 joinedload(PharmacyDispense.dispensed_by),
                 joinedload(PharmacyDispense.source_visit_order),
@@ -71,6 +73,7 @@ class PharmacyRepository:
         stmt = select(func.coalesce(func.sum(PharmacyDispense.quantity - PharmacyDispense.returned_quantity), 0)).where(
             PharmacyDispense.source_visit_order_id == order_id,
             PharmacyDispense.is_active.is_(True),
+            PharmacyDispense.status.in_(["dispensed", "partial", "partially_returned", "returned"]),
         )
         return float(self.db.scalar(stmt) or 0)
 

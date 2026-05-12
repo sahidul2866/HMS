@@ -7,16 +7,22 @@ import {
   HRAttendance,
   HRDashboardSummary,
   HREmployee,
+  HREmployeeDocument,
   HRLeaveRequest,
   HRLeaveType,
+  HRLoan,
+  HROvertime,
+  HRPayrollDashboard,
   HRPayrollRun,
+  HRReportSummary,
   HRRoster,
+  HRSalaryStructure,
   HRSetting,
   HRShift,
 } from '../../models/hr.models';
 import { HRService } from '../../services/hr.service';
 
-type HRTab = 'dashboard' | 'employees' | 'attendance' | 'roster' | 'leave' | 'payroll' | 'recruitment' | 'performance' | 'reports' | 'settings';
+type HRTab = 'dashboard' | 'employees' | 'attendance' | 'roster' | 'leave' | 'documents' | 'payroll' | 'recruitment' | 'performance' | 'reports' | 'settings';
 
 @Component({
   selector: 'app-hr-payroll',
@@ -38,27 +44,38 @@ export class HRPayrollComponent {
   query = '';
   employeeStatus = '';
   attendanceDate = this.today();
+  attendanceStatus = '';
+  payrollMonth = this.currentMonth();
 
   summary: HRDashboardSummary | null = null;
+  payrollSummary: HRPayrollDashboard | null = null;
+  reportSummary: HRReportSummary | null = null;
   employees: HREmployee[] = [];
   attendance: HRAttendance[] = [];
   shifts: HRShift[] = [];
   roster: HRRoster[] = [];
   leaveTypes: HRLeaveType[] = [];
   leaveRequests: HRLeaveRequest[] = [];
+  documents: HREmployeeDocument[] = [];
+  salaries: HRSalaryStructure[] = [];
+  overtime: HROvertime[] = [];
+  loans: HRLoan[] = [];
   payrollRuns: HRPayrollRun[] = [];
   settings: HRSetting[] = [];
 
   selectedEmployee: HREmployee | null = null;
   selectedPayroll: HRPayrollRun | null = null;
-  modal: '' | 'employee' | 'attendance' | 'shift' | 'roster' | 'leave' | 'salary' | 'payroll' | 'job' | 'candidate' | 'performance' | 'resignation' | 'setting' = '';
+  modal: '' | 'employee' | 'document' | 'attendance' | 'shift' | 'roster' | 'leave' | 'salary' | 'overtime' | 'loan' | 'payroll' | 'job' | 'candidate' | 'performance' | 'resignation' | 'setting' = '';
 
   employeeForm: Partial<HREmployee> = this.blankEmployee();
+  documentForm: Record<string, unknown> = {};
   attendanceForm: Record<string, unknown> = {};
   shiftForm: Record<string, unknown> = {};
   rosterForm: Record<string, unknown> = {};
   leaveForm: Record<string, unknown> = {};
   salaryForm: Record<string, unknown> = {};
+  overtimeForm: Record<string, unknown> = {};
+  loanForm: Record<string, unknown> = {};
   payrollForm = { payroll_month: this.currentMonth(), department_id: null as string | null, note: '' };
   jobForm: Record<string, unknown> = {};
   candidateForm: Record<string, unknown> = {};
@@ -90,7 +107,9 @@ export class HRPayrollComponent {
     if (this.tab() === 'attendance') this.loadAttendance();
     if (this.tab() === 'roster') this.loadRoster();
     if (this.tab() === 'leave') this.loadLeave();
+    if (this.tab() === 'documents') this.loadDocuments();
     if (this.tab() === 'payroll') this.loadPayroll();
+    if (this.tab() === 'reports') this.loadReports();
     if (this.tab() === 'settings') this.loadSettings();
   }
 
@@ -108,7 +127,7 @@ export class HRPayrollComponent {
   }
 
   loadAttendance(): void {
-    this.hrService.listAttendance(this.attendanceDate).subscribe({ next: (rows) => (this.attendance = rows), error: (error) => this.showError(error) });
+    this.hrService.listAttendance(this.attendanceDate, { status: this.attendanceStatus }).subscribe({ next: (rows) => (this.attendance = rows), error: (error) => this.showError(error) });
   }
 
   loadRoster(): void {
@@ -119,8 +138,20 @@ export class HRPayrollComponent {
     this.hrService.listLeaveRequests().subscribe({ next: (rows) => (this.leaveRequests = rows), error: (error) => this.showError(error) });
   }
 
+  loadDocuments(): void {
+    this.hrService.listDocuments().subscribe({ next: (rows) => (this.documents = rows), error: (error) => this.showError(error) });
+  }
+
   loadPayroll(): void {
     this.hrService.listPayrollRuns().subscribe({ next: (rows) => (this.payrollRuns = rows), error: (error) => this.showError(error) });
+    this.hrService.payrollDashboard(this.payrollMonth).subscribe({ next: (summary) => (this.payrollSummary = summary), error: (error) => this.showError(error) });
+    this.hrService.listSalaryStructures().subscribe((rows) => (this.salaries = rows));
+    this.hrService.listOvertime().subscribe((rows) => (this.overtime = rows));
+    this.hrService.listLoans().subscribe((rows) => (this.loans = rows));
+  }
+
+  loadReports(): void {
+    this.hrService.reportSummary({ payroll_month: this.payrollMonth }).subscribe({ next: (summary) => (this.reportSummary = summary), error: (error) => this.showError(error) });
   }
 
   loadSettings(): void {
@@ -133,11 +164,14 @@ export class HRPayrollComponent {
     this.modal = name;
     this.selectedEmployee = employee ?? null;
     if (name === 'employee') this.employeeForm = employee ? { ...employee } : this.blankEmployee();
+    if (name === 'document') this.documentForm = { employee_id: employee?.id ?? this.employees[0]?.id ?? '', document_type: 'license', file_name: '', file_url: '', expiry_date: '', note: '' };
     if (name === 'attendance') this.attendanceForm = { employee_id: employee?.id ?? '', attendance_date: this.today(), status: 'present', working_hours: 8, late_minutes: 0, early_leave_minutes: 0 };
     if (name === 'shift') this.shiftForm = { name: '', code: '', shift_type: 'morning', start_time: '08:00', end_time: '14:00', break_minutes: 30, allowance_amount: 0 };
     if (name === 'roster') this.rosterForm = { employee_id: employee?.id ?? '', shift_id: this.shifts[0]?.id ?? '', roster_date: this.today(), duty_area: 'General Ward', duty_type: 'regular', status: 'assigned' };
     if (name === 'leave') this.leaveForm = { employee_id: employee?.id ?? '', leave_type_id: this.leaveTypes[0]?.id ?? '', start_date: this.today(), end_date: this.today(), number_of_days: 1, reason: '' };
     if (name === 'salary') this.salaryForm = { employee_id: employee?.id ?? '', effective_from: this.today(), basic_salary: 30000, house_rent_allowance: 15000, medical_allowance: 3000, transport_allowance: 2000, food_allowance: 1500, night_duty_allowance: 0, on_call_allowance: 0, emergency_duty_allowance: 0, overtime_hourly_rate: 250, bonus_incentive: 0, tax_deduction: 0, provident_fund_deduction: 1500, other_deductions: 0 };
+    if (name === 'overtime') this.overtimeForm = { employee_id: employee?.id ?? this.employees[0]?.id ?? '', overtime_date: this.today(), overtime_hours: 2, overtime_type: 'regular', reason: '' };
+    if (name === 'loan') this.loanForm = { employee_id: employee?.id ?? this.employees[0]?.id ?? '', loan_type: 'advance', approved_amount: 10000, monthly_installment: 1000, deduction_start_month: this.currentMonth(), note: '' };
     if (name === 'payroll') this.payrollForm = { payroll_month: this.currentMonth(), department_id: null, note: 'Monthly payroll preview' };
     if (name === 'job') this.jobForm = { title: '', number_of_positions: 1, status: 'open', closing_date: this.today(), salary_range: '', description: '' };
     if (name === 'candidate') this.candidateForm = { full_name: '', phone: '', email: '', status: 'applied', notes: '' };
@@ -153,6 +187,10 @@ export class HRPayrollComponent {
   saveEmployee(): void {
     const payload = { ...this.employeeForm, joining_date: this.employeeForm.joining_date || this.today(), employee_type: this.employeeForm.employee_type || 'full_time', employee_category: this.employeeForm.employee_category || 'other', employment_status: this.employeeForm.employment_status || 'active' };
     this.submit(this.selectedEmployee ? this.hrService.updateEmployee(this.selectedEmployee.id, payload) : this.hrService.createEmployee(payload), 'Employee saved');
+  }
+
+  saveDocument(): void {
+    this.submit(this.hrService.createDocument(this.documentForm), 'Document saved');
   }
 
   saveAttendance(): void {
@@ -179,11 +217,20 @@ export class HRPayrollComponent {
     this.submit(this.hrService.upsertSalary(this.salaryForm), 'Salary structure saved');
   }
 
+  saveOvertime(): void {
+    this.submit(this.hrService.createOvertime(this.overtimeForm), 'Overtime request saved');
+  }
+
+  saveLoan(): void {
+    this.submit(this.hrService.createLoan(this.loanForm), 'Loan or advance saved');
+  }
+
   savePayroll(): void {
     this.submit(this.hrService.processPayroll(this.payrollForm), 'Payroll preview generated');
   }
 
   decidePayroll(run: HRPayrollRun, status: string): void {
+    if (['approved', 'paid', 'locked', 'cancelled'].includes(status) && !window.confirm(`Confirm payroll status change to ${status}?`)) return;
     this.submit(this.hrService.decidePayroll(run.id, status), `Payroll marked ${status}`);
   }
 
@@ -216,6 +263,14 @@ export class HRPayrollComponent {
     window.print();
   }
 
+  canPay(run: HRPayrollRun): boolean {
+    return ['approved', 'finalized'].includes(run.status);
+  }
+
+  canApprove(run: HRPayrollRun): boolean {
+    return ['draft', 'calculated', 'reviewed'].includes(run.status);
+  }
+
   exportEmployees(): void {
     const rows = this.filteredEmployees().map((employee) => [employee.staff_code, employee.full_name, employee.department_name || '', employee.employee_category, employee.phone || '', employee.employment_status].join(','));
     const blob = new Blob([['Staff Code,Name,Department,Category,Phone,Status', ...rows].join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -236,6 +291,10 @@ export class HRPayrollComponent {
 
   attendanceTotal(status: string): number {
     return this.attendance.filter((item) => item.status === status).length;
+  }
+
+  documentTotal(status: string): number {
+    return this.documents.filter((item) => item.status === status).length;
   }
 
   private submit<T>(request$: import('rxjs').Observable<T>, message: string): void {

@@ -177,8 +177,25 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: none;
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, white 28%);
+  outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+tbody tr:focus-visible,
+.keyboard-row-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 72%, white 28%);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface) 92%);
+}
+
+.app-submitting {
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+[data-danger-action='true']:focus-visible {
+  outline-color: #dc2626;
 }
 
 .breadcrumbs {

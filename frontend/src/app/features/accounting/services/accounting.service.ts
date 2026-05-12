@@ -6,10 +6,13 @@ import { ApiBaseService } from '../../../core/services/api-base.service';
 import {
   Account,
   AccountingDashboard,
+  AccountingReportSummary,
+  AccountingSyncResult,
   AccountingJournal,
   AccountingWorkspace,
   CreateJournalPayload,
   FinanceRecord,
+  GeneralLedgerLine,
   JournalEntry,
 } from '../models/accounting.models';
 
@@ -37,6 +40,14 @@ export class AccountingService extends ApiBaseService {
     return this.cache.get('accounting:journal-entries', () => this.http.get<JournalEntry[]>(this.url('/accounting/journal-entries')));
   }
 
+  ledger(): Observable<GeneralLedgerLine[]> {
+    return this.cache.get('accounting:ledger', () => this.http.get<GeneralLedgerLine[]>(this.url('/accounting/ledger')));
+  }
+
+  reports(): Observable<AccountingReportSummary> {
+    return this.cache.get('accounting:reports', () => this.http.get<AccountingReportSummary>(this.url('/accounting/reports')));
+  }
+
   createJournalEntry(payload: Record<string, unknown>): Observable<JournalEntry> {
     return this.http.post<JournalEntry>(this.url('/accounting/journal-entries'), payload).pipe(tap(() => this.clear()));
   }
@@ -51,6 +62,18 @@ export class AccountingService extends ApiBaseService {
 
   createWorkflow(kind: string, payload: Record<string, unknown>): Observable<FinanceRecord> {
     return this.http.post<FinanceRecord>(this.url(`/accounting/${kind}`), payload).pipe(tap(() => this.clear()));
+  }
+
+  voucherAction(entryId: string, action: string): Observable<{ id: string; journal_number: string; status: string; message: string }> {
+    return this.http.post<{ id: string; journal_number: string; status: string; message: string }>(this.url(`/accounting/journal-entries/${entryId}/${action}`), {}).pipe(tap(() => this.clear()));
+  }
+
+  updateFinanceStatus(kind: string, recordId: string, status: string): Observable<FinanceRecord> {
+    return this.http.post<FinanceRecord>(this.url(`/accounting/finance-records/${kind}/${recordId}/${status}`), {}).pipe(tap(() => this.clear()));
+  }
+
+  syncIntegrations(): Observable<AccountingSyncResult> {
+    return this.http.post<AccountingSyncResult>(this.url('/accounting/sync-integrations'), {}).pipe(tap(() => this.clear()));
   }
 
   clear(): void {

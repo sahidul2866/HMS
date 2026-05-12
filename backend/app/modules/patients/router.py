@@ -8,7 +8,16 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.patients.service import PatientsService
 from app.schemas.encounter import OPDVisitRead
-from app.schemas.patient import PatientClinicalHistoryRead, PatientCreate, PatientLookupResult, PatientMobileLookupRead, PatientRead
+from app.schemas.patient import (
+    PatientClinicalHistoryRead,
+    PatientCreate,
+    PatientIdCardRead,
+    PatientIdCardTemplateRead,
+    PatientIdCardTemplateWrite,
+    PatientLookupResult,
+    PatientMobileLookupRead,
+    PatientRead,
+)
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
@@ -46,6 +55,36 @@ def get_patient(patient_id: UUID, user=Depends(get_current_user), db: Session = 
 @router.get("/{patient_id}/history", response_model=PatientClinicalHistoryRead, dependencies=[Depends(require_permissions("patient.view"))])
 def get_patient_history(patient_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientClinicalHistoryRead:
     return PatientsService(db).get_clinical_history(patient_id, user)
+
+
+@router.get("/{patient_id}/id-card", response_model=PatientIdCardRead, dependencies=[Depends(require_permissions("patient.id_card.view"))])
+def get_patient_id_card(patient_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardRead:
+    return PatientsService(db).get_id_card(patient_id, user, context)
+
+
+@router.post("/{patient_id}/id-card/generate", response_model=PatientIdCardRead, dependencies=[Depends(require_permissions("patient.id_card.generate"))])
+def generate_patient_id_card(patient_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardRead:
+    return PatientsService(db).generate_id_card(patient_id, user, context)
+
+
+@router.post("/{patient_id}/id-card/print", response_model=PatientIdCardRead, dependencies=[Depends(require_permissions("patient.id_card.print"))])
+def print_patient_id_card(patient_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardRead:
+    return PatientsService(db).print_id_card(patient_id, user, context)
+
+
+@router.post("/{patient_id}/id-card/reprint", response_model=PatientIdCardRead, dependencies=[Depends(require_permissions("patient.id_card.reprint"))])
+def reprint_patient_id_card(patient_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardRead:
+    return PatientsService(db).print_id_card(patient_id, user, context, reprint=True)
+
+
+@router.get("/id-card/template", response_model=PatientIdCardTemplateRead, dependencies=[Depends(require_permissions("patient.id_card.configure"))])
+def get_patient_id_card_template(user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardTemplateRead:
+    return PatientsService(db).get_id_card_template(user)
+
+
+@router.put("/id-card/template", response_model=PatientIdCardTemplateRead, dependencies=[Depends(require_permissions("patient.id_card.configure"))])
+def update_patient_id_card_template(payload: PatientIdCardTemplateWrite, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PatientIdCardTemplateRead:
+    return PatientsService(db).update_id_card_template(payload, user, context)
 
 
 @router.get("/{patient_id}/opd-visits", response_model=list[OPDVisitRead], dependencies=[Depends(require_permissions("opd.view"))])

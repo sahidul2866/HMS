@@ -4,6 +4,7 @@ import { Router, RouterOutlet } from '@angular/router';
 
 import { PERMISSIONS } from '../../core/constants/permissions';
 import { AuthService } from '../../core/services/auth.service';
+import { CommandPaletteService } from '../../core/services/command-palette.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { SessionService } from '../../core/services/session.service';
 import { TabService } from '../../core/services/tab.service';
@@ -11,7 +12,10 @@ import { ThemeService } from '../../core/services/theme.service';
 import { MenuItem, menuConfig } from '../../navigation/menu.config';
 import { SidebarComponent } from '../../navigation/sidebar/sidebar.component';
 import { BreadcrumbsComponent } from '../../shared/components/breadcrumbs/breadcrumbs.component';
+import { CommandPaletteComponent } from '../../shared/components/command-palette/command-palette.component';
 import { FloatingAssistantComponent } from '../../shared/components/floating-assistant/floating-assistant.component';
+import { GlobalScannerComponent } from '../../shared/components/global-scanner/global-scanner.component';
+import { NotificationCenterComponent } from '../../shared/components/notification-center/notification-center.component';
 import { TabStripComponent } from '../../shared/components/tab-strip/tab-strip.component';
 
 type ChromeDensity = 'full' | 'compact' | 'focus';
@@ -19,7 +23,7 @@ type ChromeDensity = 'full' | 'compact' | 'focus';
 @Component({
   selector: 'app-app-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, SidebarComponent, TabStripComponent, BreadcrumbsComponent, FloatingAssistantComponent],
+  imports: [CommonModule, RouterOutlet, SidebarComponent, TabStripComponent, BreadcrumbsComponent, FloatingAssistantComponent, GlobalScannerComponent, CommandPaletteComponent, NotificationCenterComponent],
   templateUrl: './app-layout.component.html',
   styleUrl: './app-layout.component.scss',
 })
@@ -50,12 +54,19 @@ export class AppLayoutComponent {
     { key: 'Alt+5', label: 'Pharmacy Sale' },
     { key: 'Alt+6', label: 'Lab Worklist' },
     { key: 'Alt+7', label: 'Radiology' },
+    { key: 'Alt+Q', label: 'Queue center' },
+    { key: 'Alt+B', label: 'Global barcode/QR scan' },
+    { key: 'Ctrl/Cmd+K', label: 'Command palette' },
+    { key: 'Ctrl/Cmd+S', label: 'Save focused form' },
+    { key: 'Ctrl/Cmd+P', label: 'Print on supported pages' },
+    { key: '? or Ctrl+/', label: 'Shortcut help' },
     { key: 'Alt+S', label: 'Sidebar' },
     { key: 'Alt+M', label: 'Top density' },
     { key: 'Alt+/', label: 'Search/filter' },
     { key: 'Alt+[ / ]', label: 'Previous/next open page' },
   ];
   private readonly authService = inject(AuthService);
+  private readonly commandPalette = inject(CommandPaletteService);
   private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
 
@@ -80,6 +91,19 @@ export class AppLayoutComponent {
 
   @HostListener('window:keydown', ['$event'])
   onWindowKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.commandPalette.show({ module: this.activeModule()?.label });
+      return;
+    }
+
+    if ((event.key === '?' || ((event.ctrlKey || event.metaKey) && event.key === '/')) && !this.isTypingTarget(event.target)) {
+      event.preventDefault();
+      this.shortcutsOpen = true;
+      this.accountMenuOpen = false;
+      return;
+    }
+
     if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || this.isTypingTarget(event.target)) {
       return;
     }
@@ -93,6 +117,7 @@ export class AppLayoutComponent {
       '5': '/pharmacy/sales',
       '6': '/laboratory',
       '7': '/radiology',
+      q: '/queue',
     };
 
     if (routeMap[key]) {
@@ -269,7 +294,7 @@ export class AppLayoutComponent {
 
   showStaffAssistant(): boolean {
     const user = this.sessionService.snapshot.user;
-    return !!user && user.principal_type !== 'patient' && !user.patient_id;
+    return !!user && user.principal_type !== 'patient' && !user.patient_id && this.sessionService.hasPermission('ai.assistant.use');
   }
 
   private syncViewport(): void {

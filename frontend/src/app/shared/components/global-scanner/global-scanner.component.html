@@ -1,0 +1,48 @@
+<button type="button" class="scan-trigger" [class.compact]="compact" (click)="show()" title="Global scan (Alt+B)">
+  <span class="scan-glyph">▦</span>
+  <span *ngIf="!compact">Scan</span>
+</button>
+
+<section *ngIf="open" class="scan-backdrop" role="dialog" aria-label="Global scanner">
+  <div class="scan-panel">
+    <header>
+      <div>
+        <h2>Scan Barcode / QR</h2>
+        <p>Scanner, camera output, or manual fallback</p>
+      </div>
+      <button type="button" class="ghost" (click)="close()">Close</button>
+    </header>
+
+    <form class="scan-form" (ngSubmit)="resolve()">
+      <input id="global-scan-input" [(ngModel)]="code" name="code" autocomplete="off" placeholder="Scan or type code" />
+      <button type="submit" [disabled]="loading">{{ loading ? 'Scanning' : 'Find' }}</button>
+    </form>
+
+    <div class="camera-row">
+      <button type="button" class="ghost" (click)="cameraActive ? stopCamera() : startCamera()">{{ cameraActive ? 'Stop Camera' : 'Camera Scan' }}</button>
+      <span>{{ cameraSupported ? 'Camera supported' : 'Manual or hardware scanner fallback' }}</span>
+    </div>
+    <video *ngIf="cameraActive" id="global-scan-video" class="camera-preview" muted playsinline></video>
+
+    <p class="scan-message" [class.error]="message === 'Invalid barcode' || message === 'Permission denied'">{{ message || 'Ready for scanner input' }}</p>
+
+    <div *ngIf="records.length" class="scan-results">
+      <article *ngFor="let record of records">
+        <div>
+          <strong>{{ record.display }}</strong>
+          <span>{{ record.record_type.replaceAll('_', ' ') }} · {{ record.module }}</span>
+          <small *ngIf="record.status">{{ record.status }}</small>
+        </div>
+        <div class="scan-actions">
+          <button type="button" (click)="select(record)">Open</button>
+          <button type="button" class="ghost" (click)="print(record)">Print</button>
+        </div>
+      </article>
+    </div>
+
+    <footer>
+      <span>Alt+B opens scanner</span>
+      <span>Repeated scans are debounced</span>
+    </footer>
+  </div>
+</section>

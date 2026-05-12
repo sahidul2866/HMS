@@ -1,0 +1,39 @@
+<section class="notification-settings">
+  <header>
+    <div>
+      <p>Administration</p>
+      <h1>Notification Settings</h1>
+      <span>Configure in-app channels, escalation timing, reminders, and alert behavior.</span>
+    </div>
+  </header>
+
+  <p class="message" *ngIf="message">{{ message }}</p>
+
+  <form class="settings-form" (ngSubmit)="save()">
+    <label>Scope
+      <select [(ngModel)]="form.setting_key" name="settingKey">
+        <option value="global">Global defaults</option>
+        <option value="clinical">Clinical safety</option>
+        <option value="operations">Operations</option>
+        <option value="finance_hr">Finance and HR</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.in_app" name="inApp" /> In-app notifications</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.email" name="email" /> Email channel</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.sms_whatsapp" name="sms" /> SMS/WhatsApp channel</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.sound_for_critical" name="sound" /> Sound for critical alerts</label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.mute_non_critical" name="mute" /> Mute non-critical alerts</label>
+    <label>Medicine overdue escalation minutes <input type="number" [(ngModel)]="form.medication_overdue_minutes" name="medOverdue" /></label>
+    <label>Critical result acknowledgement minutes <input type="number" [(ngModel)]="form.critical_result_ack_minutes" name="criticalAck" /></label>
+    <label>Discharge clearance escalation minutes <input type="number" [(ngModel)]="form.discharge_clearance_minutes" name="dischargeClearance" /></label>
+    <label>Emergency waiting escalation minutes <input type="number" [(ngModel)]="form.emergency_wait_minutes" name="erWait" /></label>
+    <button type="submit">Save Settings</button>
+  </form>
+
+  <div class="settings-list">
+    <article *ngFor="let setting of settings">
+      <strong>{{ setting.setting_key.replaceAll('_', ' ') }}</strong>
+      <code>{{ setting.setting_value | json }}</code>
+    </article>
+  </div>
+</section>

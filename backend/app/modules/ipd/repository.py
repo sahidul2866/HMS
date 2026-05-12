@@ -1,7 +1,19 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.encounter import IPDAdmission, IPDAdmissionMovement, IPDBed
+from app.models.encounter import (
+    IPDAdmission,
+    IPDAdmissionMovement,
+    IPDBed,
+    IPDClinicalNote,
+    IPDHandover,
+    IPDMedicationAdministration,
+    IPDNursingNote,
+    IPDNursingTask,
+    IPDOrder,
+    IPDStaffAssignment,
+    IPDTimelineEvent,
+)
 
 
 class IPDRepository:
@@ -11,7 +23,15 @@ class IPDRepository:
     def list_admissions(self, branch_id=None) -> list[IPDAdmission]:
         stmt = (
             select(IPDAdmission)
-            .options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed), joinedload(IPDAdmission.movements))
+            .options(
+                joinedload(IPDAdmission.patient),
+                joinedload(IPDAdmission.bed),
+                joinedload(IPDAdmission.movements),
+                joinedload(IPDAdmission.orders),
+                joinedload(IPDAdmission.handovers),
+                joinedload(IPDAdmission.medication_administrations),
+                joinedload(IPDAdmission.nursing_tasks),
+            )
             .order_by(IPDAdmission.admitted_at.desc())
         )
         if branch_id:
@@ -21,7 +41,19 @@ class IPDRepository:
     def get_admission(self, admission_id) -> IPDAdmission | None:
         stmt = (
             select(IPDAdmission)
-            .options(joinedload(IPDAdmission.patient), joinedload(IPDAdmission.bed), joinedload(IPDAdmission.movements))
+            .options(
+                joinedload(IPDAdmission.patient),
+                joinedload(IPDAdmission.bed),
+                joinedload(IPDAdmission.movements),
+                joinedload(IPDAdmission.staff_assignments),
+                joinedload(IPDAdmission.clinical_notes),
+                joinedload(IPDAdmission.nursing_notes),
+                joinedload(IPDAdmission.orders),
+                joinedload(IPDAdmission.medication_administrations),
+                joinedload(IPDAdmission.nursing_tasks),
+                joinedload(IPDAdmission.handovers),
+                joinedload(IPDAdmission.timeline_events),
+            )
             .where(IPDAdmission.id == admission_id)
         )
         return self.db.scalar(stmt)
@@ -67,3 +99,8 @@ class IPDRepository:
         self.db.add(bed)
         self.db.flush()
         return bed
+
+    def create(self, entity):
+        self.db.add(entity)
+        self.db.flush()
+        return entity

@@ -71,6 +71,7 @@
       <thead>
         <tr>
           <th class="sortable-th" [ngClass]="sortClass('visit_number')" (click)="toggleSort('visit_number')">Visit No</th>
+          <th>Token</th>
           <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
           <th class="sortable-th" [ngClass]="sortClass('department')" (click)="toggleSort('department')">Department</th>
           <th class="sortable-th" [ngClass]="sortClass('doctor')" (click)="toggleSort('doctor')">Doctor</th>
@@ -84,6 +85,10 @@
         @for (visit of displayedVisits; track visit.id) {
           <tr class="list-row" (click)="openVisit(visit.id)">
             <td>{{ visit.visit_number }}</td>
+            <td>
+              <strong>{{ visit.queue_number || '-' }}</strong>
+              <span class="page-subtitle">{{ (visit.queue_status || 'waiting').replace('_', ' ') }}</span>
+            </td>
             <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
             <td>{{ visit.department_name }}</td>
             <td>{{ visit.consulting_doctor_name }}</td>
@@ -144,6 +149,7 @@
           <div><strong>Department:</strong> {{ selectedVisit.department_name }}</div>
           <div><strong>Doctor:</strong> {{ selectedVisit.consulting_doctor_name }}</div>
           <div><strong>Status:</strong> {{ selectedVisit.status }}</div>
+          <div><strong>Queue:</strong> {{ selectedVisit.queue_number || 'Not generated' }} · {{ selectedVisit.queue_status || 'waiting' }}</div>
           <div><strong>Visit Date:</strong> {{ selectedVisit.visit_date }}</div>
           <div><strong>Payment:</strong> {{ selectedVisit.consultation_payment_status || 'unpaid' }}</div>
           <div><strong>Visit Fee:</strong> {{ formatCurrency(selectedVisit.consultation_total || selectedVisit.consultation_fee) }}</div>

@@ -10,6 +10,7 @@ import { AuthService } from './core/services/auth.service';
 import { DataSyncService } from './core/services/data-sync.service';
 import { GlobalFormValidationService } from './core/services/global-form-validation.service';
 import { GlobalSmartInputService } from './core/services/global-smart-input.service';
+import { KeyboardWorkflowService } from './core/services/keyboard-workflow.service';
 import { TabRouteReuseStrategy } from './core/services/tab-route-reuse.strategy';
 
 function bootstrapSession(authService: AuthService) {
@@ -26,6 +27,10 @@ function bootstrapSmartInputs(smartInputService: GlobalSmartInputService) {
 
 function bootstrapDataSync(dataSyncService: DataSyncService) {
   return () => dataSyncService.start();
+}
+
+function bootstrapKeyboardWorkflow(keyboardWorkflowService: KeyboardWorkflowService) {
+  return () => keyboardWorkflowService.start();
 }
 
 export const appConfig: ApplicationConfig = {
@@ -61,6 +66,12 @@ export const appConfig: ApplicationConfig = {
       multi: true,
       deps: [DataSyncService],
       useFactory: bootstrapDataSync,
+    },
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      deps: [KeyboardWorkflowService],
+      useFactory: bootstrapKeyboardWorkflow,
     },
   ],
 };

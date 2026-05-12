@@ -125,8 +125,10 @@
 
 .capacity-card,
 .bed-card,
+.bed-board-card,
 .admission-card,
 .movement-card,
+.handover-card,
 .control-card,
 .discharge-summary {
   border-radius: 20px;
@@ -144,6 +146,9 @@
 .metric-row__copy span,
 .summary-list span,
 .movement-card__note,
+.handover-card__head span,
+.handover-card__summary,
+.readiness-banner span,
 .empty-state {
   color: #64748b;
 }
@@ -158,7 +163,9 @@
 .chart-stack,
 .main-stack,
 .control-stack,
-.movement-list {
+.movement-list,
+.handover-board,
+.handover-history {
   display: grid;
   gap: 1rem;
 }
@@ -196,20 +203,94 @@
 }
 
 .bed-grid,
-.admission-grid {
+.admission-grid,
+.bed-board-grid {
   display: grid;
   gap: 0.85rem;
   margin-top: 1rem;
 }
 
-.bed-grid {
+.bed-grid,
+.bed-board-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.bed-board-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 1rem;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .bed-card,
+.bed-board-card,
 .admission-card,
-.movement-card {
+.movement-card,
+.handover-card {
   padding: 1rem;
+}
+
+.bed-board-card {
+  min-height: 178px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+}
+
+.bed-board-card--available {
+  border-left: 4px solid #16a34a;
+}
+
+.bed-board-card--occupied {
+  border-left: 4px solid #2563eb;
+}
+
+.bed-board-card--reserved {
+  border-left: 4px solid #7c3aed;
+}
+
+.bed-board-card--cleaning {
+  border-left: 4px solid #0891b2;
+}
+
+.bed-board-card--maintenance,
+.bed-board-card--blocked {
+  border-left: 4px solid #64748b;
+}
+
+.bed-board-card--discharge_pending {
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.92), rgba(255, 255, 255, 0.94));
+}
+
+.bed-board-patient {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.8rem;
+}
+
+.bed-board-patient strong {
+  color: #10233c;
+}
+
+.bed-board-patient span,
+.bed-board-team span {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.bed-board-team {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.65rem;
 }
 
 .bed-card--occupied {
@@ -220,7 +301,8 @@
 
 .bed-card__head,
 .admission-card__head,
-.movement-card__head {
+.movement-card__head,
+.handover-card__head {
   display: flex;
   justify-content: space-between;
   gap: 0.8rem;
@@ -356,6 +438,30 @@
   margin-top: 0.65rem;
 }
 
+.readiness-banner {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.75rem 0;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.readiness-banner strong {
+  color: #10233c;
+}
+
+.readiness-banner.ready {
+  border-left: 4px solid #16a34a;
+  background: rgba(240, 253, 244, 0.96);
+}
+
+.readiness-banner.blocked {
+  border-left: 4px solid #f59e0b;
+  background: rgba(255, 251, 235, 0.96);
+}
+
 .movement-card__route {
   display: flex;
   gap: 0.55rem;
@@ -363,6 +469,119 @@
   align-items: center;
   margin-top: 0.8rem;
   color: #10233c;
+}
+
+.handover-card__head strong,
+.care-chip strong,
+.availability-row strong,
+.coverage-strip strong {
+  display: block;
+  color: #10233c;
+}
+
+.handover-card__summary {
+  margin-top: 0.75rem;
+  line-height: 1.4;
+}
+
+.care-team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.care-team-column > span {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.care-chip,
+.availability-row,
+.coverage-strip {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.care-chip + .care-chip {
+  margin-top: 0.55rem;
+}
+
+.care-chip small,
+.availability-row span,
+.availability-row small,
+.coverage-strip span {
+  display: block;
+  margin-top: 0.2rem;
+  color: #64748b;
+}
+
+.compact-empty {
+  padding: 0.75rem;
+}
+
+.coverage-strip {
+  margin-bottom: 0.9rem;
+  border-left: 4px solid #16a34a;
+}
+
+.coverage-strip.coverage-gap {
+  border-left-color: #f59e0b;
+  background: rgba(255, 251, 235, 0.96);
+}
+
+.availability-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.availability-row.ok {
+  border-left: 4px solid #16a34a;
+}
+
+.availability-row.warn {
+  border-left: 4px solid #f59e0b;
+}
+
+.inline-check {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: center;
+  color: #10233c;
+  font-weight: 700;
+}
+
+.mini-badges {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.mini-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.09);
+  color: #1d4ed8;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.mini-badge.warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.mini-badge.danger {
+  background: rgba(220, 38, 38, 0.11);
+  color: #991b1b;
 }
 
 .empty-state {
@@ -385,7 +604,8 @@
 
 @media (max-width: 860px) {
   .capacity-grid,
-  .admission-card__grid {
+  .admission-card__grid,
+  .bed-board-filters {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -399,6 +619,13 @@
 }
 
 @media (max-width: 640px) {
+  .bed-board-filters,
+  .care-team-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
   .capacity-grid,
   .admission-card__grid {
     grid-template-columns: 1fr;
@@ -407,8 +634,13 @@
   .bed-card__head,
   .admission-card__head,
   .movement-card__head,
+  .handover-card__head,
   .summary-list li {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .care-team-grid {
+    grid-template-columns: 1fr;
   }
 }

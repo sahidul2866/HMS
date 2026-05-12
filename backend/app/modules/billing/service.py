@@ -9,7 +9,7 @@ from app.core.exceptions import AppException
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, ReferredDoctor
 from app.models.billing import BillingRefund, BillingSetting
 from app.models.billing_links import BillingItemLink
-from app.models.encounter import IPDAdmission, IPDBed, OPDVisit, OPDVisitOrder
+from app.models.encounter import IPDAdmission, IPDBed, IPDOrder, OPDVisit, OPDVisitOrder
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
 from app.models.patient import Patient
@@ -420,6 +420,33 @@ class BillingServiceManager:
             exact_amount=Decimal(admission.daily_charge or Decimal("0")),
         )
         warning = None if service else f"No IPD billing service matched {admission.ward_name} / {stage}."
+        items = [
+            BillingDraftItemRead(
+                source_label=f"{stage.title()} Bed Charge · {admission.ward_name} / {admission.bed_number}",
+                source_module="ipd_bed_charge",
+                billing_service_id=service.id if service else None,
+                billing_service_name=service.service_name if service else None,
+                quantity=Decimal(str(billable_days)),
+                warning=warning,
+            )
+        ]
+        active_orders = [order for order in admission.orders if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"]
+        for order in active_orders:
+            order_service = self._match_billing_service(
+                branch_id=actor.branch_id,
+                keywords=[order.item_name, order.order_type, order.service_area or "", "ipd"],
+            )
+            if order_service:
+                items.append(
+                    BillingDraftItemRead(
+                        source_label=f"IPD {order.order_type.title()} · {order.item_name}",
+                        source_module="ipd_order",
+                        billing_service_id=order_service.id,
+                        billing_service_name=order_service.service_name,
+                        quantity=order.quantity,
+                        warning=None,
+                    )
+                )
         return BillingDraftRead(
             patient_id=admission.patient_id,
             patient_name=f"{admission.patient.first_name} {admission.patient.last_name}",
@@ -428,17 +455,8 @@ class BillingServiceManager:
             source_ipd_admission_id=admission.id,
             internal_referral_user_id=admission.attending_doctor_user_id,
             note=self._build_ipd_note(admission, stage=stage, billable_days=billable_days),
-            message=f"{stage.title()} billing draft prepared for {billable_days} bed-day(s).",
-            items=[
-                BillingDraftItemRead(
-                    source_label=f"{stage.title()} Bed Charge · {admission.ward_name} / {admission.bed_number}",
-                    source_module="ipd_bed_charge",
-                    billing_service_id=service.id if service else None,
-                    billing_service_name=service.service_name if service else None,
-                    quantity=Decimal(str(billable_days)),
-                    warning=warning,
-                )
-            ],
+            message=f"{stage.title()} billing draft prepared for {billable_days} bed-day(s) and {len(items) - 1} active IPD order(s).",
+            items=items,
         )
 
     def create_invoice(self, payload: BillingInvoiceCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
@@ -1003,15 +1021,21 @@ class BillingServiceManager:
                 order.radiology_order_id = rad_order.id
             elif module == "pharmacy":
                 existing_dispense = self.db.scalar(
-                    select(PharmacyDispense.id).where(
+                    select(PharmacyDispense).where(
                         PharmacyDispense.source_visit_order_id == order.id,
                         PharmacyDispense.is_active.is_(True),
                     )
                 )
-                if not existing_dispense:
+                if existing_dispense:
+                    existing_dispense.billing_invoice_id = invoice.id
+                    existing_dispense.billing_invoice_item_id = item.id
+                    existing_dispense.updated_by = actor.id
+                else:
                     dispense = PharmacyDispense(
                         patient_id=invoice.patient_id,
                         branch_id=invoice.branch_id,
+                        billing_invoice_id=invoice.id,
+                        billing_invoice_item_id=item.id,
                         source_visit_id=order.visit_id,
                         source_visit_order_id=order.id,
                         prescription_ref=invoice.invoice_number,

@@ -25,6 +25,8 @@
       <div class="metric danger"><span>Absent</span><strong>{{ summary?.attendance?.['absent'] || 0 }}</strong></div>
       <div class="metric"><span>Pending Leave</span><strong>{{ summary?.pending_leave_requests || 0 }}</strong></div>
       <div class="metric money"><span>Salary Payable</span><strong>{{ formatMoney(summary?.monthly_salary_payable) }}</strong></div>
+      <div class="metric warn"><span>Documents</span><strong>{{ summary?.expiring_documents || 0 }}</strong></div>
+      <div class="metric money"><span>OT Cost</span><strong>{{ formatMoney(summary?.total_overtime_cost) }}</strong></div>
     </section>
 
     <section class="content-grid">
@@ -91,6 +93,7 @@
                 <td><span [class]="statusClass(employee.employment_status)">{{ employee.employment_status }}</span></td>
                 <td class="actions">
                   <button type="button" (click)="openModal('employee', employee)">Edit</button>
+                  <button type="button" (click)="openModal('document', employee)">Docs {{ employee.document_count || 0 }}</button>
                   <button type="button" (click)="openModal('salary', employee)">Salary</button>
                   <button type="button" (click)="openModal('leave', employee)">Leave</button>
                 </td>
@@ -106,6 +109,14 @@
     <section class="panel">
       <div class="list-toolbar">
         <input type="date" [(ngModel)]="attendanceDate" (change)="loadAttendance()" />
+        <select [(ngModel)]="attendanceStatus" (change)="loadAttendance()">
+          <option value="">All status</option>
+          <option value="present">Present</option>
+          <option value="late">Late</option>
+          <option value="absent">Absent</option>
+          <option value="half_day">Half day</option>
+          <option value="on_leave">On leave</option>
+        </select>
         <button type="button" (click)="openModal('attendance')">Mark Attendance</button>
         <span class="status status-present">Present {{ attendanceTotal('present') }}</span>
         <span class="status status-late">Late {{ attendanceTotal('late') }}</span>
@@ -164,20 +175,73 @@
     </section>
   }
 
+  @if (tab() === 'documents') {
+    <section class="panel">
+      <div class="list-toolbar">
+        <button type="button" (click)="openModal('document')">Add Document</button>
+        <span class="status status-expiring">Expiring {{ documentTotal('expiring') }}</span>
+        <span class="status status-expired">Expired {{ documentTotal('expired') }}</span>
+      </div>
+      <div class="responsive-table">
+        <table>
+          <thead><tr><th>Employee</th><th>Document</th><th>File</th><th>Expiry</th><th>Status</th><th>Note</th></tr></thead>
+          <tbody>
+            @for (document of documents; track document.id) {
+              <tr>
+                <td><strong>{{ document.employee_name }}</strong><small>{{ document.staff_code }}</small></td>
+                <td>{{ document.document_type }}</td>
+                <td>@if (document.file_url) { <a [href]="document.file_url" target="_blank" rel="noopener">{{ document.file_name || 'Open' }}</a> } @else { {{ document.file_name || '-' }} }</td>
+                <td>{{ document.expiry_date || '-' }}</td>
+                <td><span [class]="statusClass(document.status)">{{ document.status }}</span></td>
+                <td>{{ document.note || '-' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
   @if (tab() === 'payroll') {
     <section class="payroll-layout">
       <div class="panel">
-        <div class="list-toolbar"><button type="button" (click)="openModal('payroll')">Run Payroll</button></div>
+        <div class="list-toolbar">
+          <input type="month" [(ngModel)]="payrollMonth" (change)="loadPayroll()" />
+          <button type="button" (click)="openModal('payroll')">Run Payroll</button>
+          <button type="button" (click)="openModal('overtime')">Overtime</button>
+          <button type="button" (click)="openModal('loan')">Loan/Advance</button>
+        </div>
+        @if (payrollSummary) {
+          <div class="payroll-summary-grid">
+            <div><span>Status</span><strong>{{ payrollSummary.status || 'not run' }}</strong></div>
+            <div><span>Payable</span><strong>{{ formatMoney(payrollSummary.total_salary_payable) }}</strong></div>
+            <div><span>OT</span><strong>{{ formatMoney(payrollSummary.overtime_cost) }}</strong></div>
+            <div><span>Deductions</span><strong>{{ formatMoney(payrollSummary.deduction_total) }}</strong></div>
+          </div>
+        }
         @for (run of payrollRuns; track run.id) {
           <div class="payroll-row" (click)="viewPayslip(run)">
             <div><strong>{{ run.payroll_month }}</strong><small>{{ run.total_employees }} employees · {{ run.status }}</small></div>
             <b>{{ formatMoney(run.total_net_salary) }}</b>
             <div class="actions">
-              <button type="button" (click)="decidePayroll(run, 'approved'); $event.stopPropagation()">Approve</button>
-              <button type="button" (click)="decidePayroll(run, 'paid'); $event.stopPropagation()">Paid</button>
+              @if (canApprove(run)) { <button type="button" (click)="decidePayroll(run, 'approved'); $event.stopPropagation()">Approve</button> }
+              @if (canPay(run)) { <button type="button" (click)="decidePayroll(run, 'paid'); $event.stopPropagation()">Paid</button> }
+              @if (run.status === 'paid') { <button type="button" (click)="decidePayroll(run, 'locked'); $event.stopPropagation()">Lock</button> }
             </div>
           </div>
         }
+        <div class="subsection">
+          <h3>Salary Structures</h3>
+          @for (salary of salaries.slice(0, 8); track salary.id) {
+            <div class="mini-row"><span>{{ salary.employee_name }}</span><b>{{ formatMoney(salary.net_salary) }}</b></div>
+          }
+        </div>
+        <div class="subsection">
+          <h3>Loans / Advances</h3>
+          @for (loan of loans.slice(0, 8); track loan.id) {
+            <div class="mini-row"><span>{{ loan.employee_name }} · {{ loan.loan_type }}</span><b>{{ formatMoney(loan.remaining_balance) }}</b></div>
+          }
+        </div>
       </div>
       <aside class="panel payslip-panel">
         <div class="panel-head"><h2>Payslip Preview</h2><button type="button" (click)="printPayslip()">Print</button></div>
@@ -188,6 +252,10 @@
               <p>{{ item.staff_code }} · {{ selectedPayroll?.payroll_month }}</p>
               <dl>
                 <dt>Gross</dt><dd>{{ formatMoney(item.gross_salary) }}</dd>
+                <dt>Allowances</dt><dd>{{ formatMoney(item.total_allowances) }}</dd>
+                <dt>Overtime</dt><dd>{{ formatMoney(item.overtime_amount) }}</dd>
+                <dt>Loan</dt><dd>{{ formatMoney(item.loan_deduction) }}</dd>
+                <dt>Attendance Deduction</dt><dd>{{ formatMoney(item.attendance_deduction) }}</dd>
                 <dt>Deductions</dt><dd>{{ formatMoney(item.total_deductions) }}</dd>
                 <dt>Net Payable</dt><dd>{{ formatMoney(item.net_salary) }}</dd>
                 <dt>Attendance</dt><dd>{{ item.calculation_note }}</dd>
@@ -219,10 +287,12 @@
 
   @if (tab() === 'reports') {
     <section class="metric-grid">
-      <div class="metric"><span>Employees</span><strong>{{ employees.length }}</strong></div>
-      <div class="metric"><span>Attendance Rows</span><strong>{{ attendance.length }}</strong></div>
-      <div class="metric"><span>Leave Requests</span><strong>{{ leaveRequests.length }}</strong></div>
-      <div class="metric money"><span>Payroll Runs</span><strong>{{ payrollRuns.length }}</strong></div>
+      <div class="metric"><span>Employees</span><strong>{{ reportSummary?.employee_count || employees.length }}</strong></div>
+      <div class="metric warn"><span>Absent</span><strong>{{ reportSummary?.attendance_summary?.['absent'] || 0 }}</strong></div>
+      <div class="metric"><span>Leave Pending</span><strong>{{ reportSummary?.leave_summary?.['pending'] || 0 }}</strong></div>
+      <div class="metric money"><span>Payroll Net</span><strong>{{ formatMoney(reportSummary?.payroll_net_total) }}</strong></div>
+      <div class="metric money"><span>Loan Outstanding</span><strong>{{ formatMoney(reportSummary?.loan_outstanding) }}</strong></div>
+      <div class="metric warn"><span>Expiring Docs</span><strong>{{ reportSummary?.expiring_documents || 0 }}</strong></div>
     </section>
   }
 
@@ -260,8 +330,24 @@
           <label>Status<select [(ngModel)]="employeeForm.employment_status" name="status"><option>active</option><option>inactive</option><option>resigned</option><option>terminated</option></select></label>
           <label>License<input [(ngModel)]="employeeForm.license_number" name="license" /></label>
           <label>Bank Account<input [(ngModel)]="employeeForm.bank_account_number" name="bank" /></label>
+          <label>Emergency Contact<input [(ngModel)]="employeeForm.emergency_contact_name" name="emergency_name" /></label>
+          <label>Emergency Phone<input [(ngModel)]="employeeForm.emergency_contact_phone" name="emergency_phone" /></label>
+          <label>License Expiry<input type="date" [(ngModel)]="employeeForm.license_expiry_date" name="license_expiry" /></label>
+          <label>Contract End<input type="date" [(ngModel)]="employeeForm.contract_end_date" name="contract_end" /></label>
         </div>
         <button class="primary" type="button" (click)="saveEmployee()" [disabled]="saving">Save Employee</button>
+      }
+
+      @if (modal === 'document') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="documentForm['employee_id']" name="doc_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Type<select [(ngModel)]="documentForm['document_type']" name="doc_type"><option>nid</option><option>passport</option><option>certificate</option><option>appointment_letter</option><option>contract</option><option>license</option><option>experience_letter</option><option>training</option><option>hr_letter</option></select></label>
+          <label>File Name<input [(ngModel)]="documentForm['file_name']" name="doc_file_name" /></label>
+          <label>File URL<input [(ngModel)]="documentForm['file_url']" name="doc_file_url" /></label>
+          <label>Expiry<input type="date" [(ngModel)]="documentForm['expiry_date']" name="doc_expiry" /></label>
+          <label class="wide">Note<input [(ngModel)]="documentForm['note']" name="doc_note" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveDocument()">Save Document</button>
       }
 
       @if (modal === 'attendance') {
@@ -319,6 +405,29 @@
           <label>PF<input type="number" [(ngModel)]="salaryForm['provident_fund_deduction']" name="pf" /></label>
         </div>
         <button class="primary" type="button" (click)="saveSalary()">Save Salary</button>
+      }
+
+      @if (modal === 'overtime') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="overtimeForm['employee_id']" name="ot_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Date<input type="date" [(ngModel)]="overtimeForm['overtime_date']" name="ot_date" /></label>
+          <label>Hours<input type="number" [(ngModel)]="overtimeForm['overtime_hours']" name="ot_hours" /></label>
+          <label>Type<select [(ngModel)]="overtimeForm['overtime_type']" name="ot_type"><option>regular</option><option>night_shift</option><option>holiday</option><option>emergency</option><option>on_call</option></select></label>
+          <label class="wide">Reason<input [(ngModel)]="overtimeForm['reason']" name="ot_reason" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveOvertime()">Save Overtime</button>
+      }
+
+      @if (modal === 'loan') {
+        <div class="form-grid">
+          <label>Employee<select [(ngModel)]="loanForm['employee_id']" name="loan_emp">@for (employee of employees; track employee.id) { <option [value]="employee.id">{{ employee.full_name }}</option> }</select></label>
+          <label>Type<select [(ngModel)]="loanForm['loan_type']" name="loan_type"><option>advance</option><option>loan</option><option>deduction</option></select></label>
+          <label>Amount<input type="number" [(ngModel)]="loanForm['approved_amount']" name="loan_amount" /></label>
+          <label>Installment<input type="number" [(ngModel)]="loanForm['monthly_installment']" name="loan_installment" /></label>
+          <label>Start Month<input type="month" [(ngModel)]="loanForm['deduction_start_month']" name="loan_start" /></label>
+          <label class="wide">Note<input [(ngModel)]="loanForm['note']" name="loan_note" /></label>
+        </div>
+        <button class="primary" type="button" (click)="saveLoan()">Save Loan/Advance</button>
       }
 
       @if (modal === 'payroll') {

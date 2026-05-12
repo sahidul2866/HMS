@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from math import ceil
 from typing import Type
@@ -10,6 +10,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppException
+from app.models.billing import BillingInvoice, BillingInvoiceItem
 from app.models.pharmacy import (
     PharmacyCompany,
     PharmacyCustomer,
@@ -26,6 +27,7 @@ from app.models.pharmacy import (
     PharmacySaleReturn,
     PharmacyStockMovement,
 )
+from app.models.inventory import InventoryItem, InventoryStockTransaction, InventoryStoreItem, StockBatch
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.opd.repository import OPDRepository
@@ -58,6 +60,8 @@ from app.schemas.pharmacy import (
     PharmacyInvestigationSettingUpdate,
     PharmacyInvestigationUpdate,
     PharmacyMedicineCreate,
+    PharmacyMedicineAvailabilityRead,
+    PharmacyMedicineBatchAvailabilityRead,
     PharmacyMedicineRead,
     PharmacyMedicineTypeCreate,
     PharmacyMedicineTypeRead,
@@ -242,6 +246,386 @@ class PharmacyService:
     def _normalize_text(self, value: str | None) -> str | None:
         normalized = (value or "").strip()
         return normalized or None
+
+    def _medicine_name_pattern(self, medicine_name: str) -> str:
+        normalized = medicine_name.strip().lower()
+        return f"%{normalized}%"
+
+    def _find_inventory_item_for_medicine(self, medicine_name: str, actor: User) -> InventoryItem | None:
+        normalized = medicine_name.strip()
+        if not normalized:
+            return None
+        pattern = self._medicine_name_pattern(normalized)
+        stmt = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.is_active.is_(True),
+                or_(
+                    func.lower(InventoryItem.name) == normalized.lower(),
+                    func.lower(InventoryItem.name).like(pattern),
+                    func.lower(func.coalesce(InventoryItem.item_code, "")).like(pattern),
+                ),
+            )
+            .order_by(
+                (func.lower(InventoryItem.name) == normalized.lower()).desc(),
+                InventoryItem.name.asc(),
+            )
+        )
+        if actor.branch_id:
+            stmt = stmt.where(InventoryItem.branch_id == actor.branch_id)
+        return self.db.scalar(stmt.limit(1))
+
+    def _available_inventory_quantity(self, item: InventoryItem) -> Decimal:
+        today = date.today()
+        total = Decimal("0")
+        batch_stmt = (
+            select(StockBatch, InventoryStoreItem)
+            .join(InventoryStoreItem, (InventoryStoreItem.item_id == StockBatch.item_id) & (InventoryStoreItem.store_id == StockBatch.store_id))
+            .where(
+                StockBatch.item_id == item.id,
+                StockBatch.quantity > 0,
+                StockBatch.is_active.is_(True),
+                InventoryStoreItem.is_active.is_(True),
+                InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
+                or_(StockBatch.expiry_date.is_(None), StockBatch.expiry_date >= today),
+            )
+        )
+        batch_store_ids = set()
+        for batch, balance in self.db.execute(batch_stmt).all():
+            batch_store_ids.add(balance.store_id)
+            total += min(
+                Decimal(batch.quantity or 0),
+                max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0)),
+            )
+        balance_stmt = select(InventoryStoreItem).where(
+            InventoryStoreItem.item_id == item.id,
+            InventoryStoreItem.is_active.is_(True),
+            InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
+        )
+        if batch_store_ids:
+            balance_stmt = balance_stmt.where(InventoryStoreItem.store_id.notin_(batch_store_ids))
+        for balance in self.db.scalars(balance_stmt):
+            total += max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0))
+        return total
+
+    def _deduct_inventory_for_dispense(self, *, item: InventoryItem, quantity: Decimal, actor: User, reference_id, note: str | None) -> Decimal:
+        remaining = Decimal(quantity)
+        today = date.today()
+
+        batch_stmt = (
+            select(StockBatch)
+            .options(joinedload(StockBatch.store))
+            .where(
+                StockBatch.item_id == item.id,
+                StockBatch.quantity > 0,
+                StockBatch.is_active.is_(True),
+                or_(StockBatch.expiry_date.is_(None), StockBatch.expiry_date >= today),
+            )
+            .order_by(StockBatch.expiry_date.is_(None), StockBatch.expiry_date.asc(), StockBatch.created_at.asc())
+        )
+        for batch in self.db.scalars(batch_stmt).unique():
+            if remaining <= 0:
+                break
+            balance = self.db.scalar(
+                select(InventoryStoreItem).where(
+                    InventoryStoreItem.item_id == item.id,
+                    InventoryStoreItem.store_id == batch.store_id,
+                    InventoryStoreItem.is_active.is_(True),
+                )
+            )
+            if not balance:
+                continue
+            available = min(
+                max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0)),
+                Decimal(batch.quantity or 0),
+            )
+            if available <= 0:
+                continue
+            issued = min(remaining, available)
+            self._post_inventory_dispense_transaction(item=item, balance=balance, actor=actor, reference_id=reference_id, quantity=-issued, batch=batch, note=note)
+            batch.quantity = Decimal(batch.quantity or 0) - issued
+            batch.total_cost = max(Decimal("0"), Decimal(batch.quantity or 0) * Decimal(batch.unit_cost or 0))
+            batch.updated_by = actor.id
+            remaining -= issued
+
+        if remaining > 0:
+            balance_stmt = (
+                select(InventoryStoreItem)
+                .options(joinedload(InventoryStoreItem.store))
+                .where(
+                    InventoryStoreItem.item_id == item.id,
+                    InventoryStoreItem.is_active.is_(True),
+                    InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
+                )
+                .order_by(InventoryStoreItem.updated_at.asc())
+            )
+            for balance in self.db.scalars(balance_stmt).unique():
+                if remaining <= 0:
+                    break
+                available = max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0))
+                if available <= 0:
+                    continue
+                issued = min(remaining, available)
+                self._post_inventory_dispense_transaction(item=item, balance=balance, actor=actor, reference_id=reference_id, quantity=-issued, batch=None, note=note)
+                remaining -= issued
+
+        deducted = Decimal(quantity) - remaining
+        if deducted:
+            item.stock_quantity = max(Decimal("0"), Decimal(item.stock_quantity or 0) - deducted)
+            item.updated_by = actor.id
+        return deducted
+
+    def _post_inventory_dispense_transaction(self, *, item: InventoryItem, balance: InventoryStoreItem, actor: User, reference_id, quantity: Decimal, batch: StockBatch | None, note: str | None) -> None:
+        stock_before = Decimal(balance.quantity_on_hand or 0)
+        stock_after = stock_before + Decimal(quantity)
+        if stock_after < 0:
+            raise AppException(409, "inventory_stock_conflict", f"{item.name} stock would go below zero")
+        balance.quantity_on_hand = stock_after
+        balance.updated_by = actor.id
+        self.repository.create(
+            InventoryStockTransaction(
+                id=uuid4(),
+                item_id=item.id,
+                batch_id=batch.id if batch else None,
+                store_id=balance.store_id,
+                transaction_type="dispense_out",
+                reference_type="pharmacy_dispense",
+                reference_id=reference_id,
+                quantity_change=Decimal(quantity),
+                stock_before=stock_before,
+                stock_after=stock_after,
+                note=self._normalize_text(note),
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+        )
+
+    def _resolve_or_create_dispense_billing(
+        self,
+        *,
+        payload: PharmacyDispenseCreate,
+        actor: User,
+        patient_id,
+        source_order,
+        medicine_name: str,
+        quantity: Decimal,
+        unit_price: Decimal,
+        total_price: Decimal,
+        prescription_ref: str | None,
+    ) -> tuple[BillingInvoice | None, BillingInvoiceItem | None, bool]:
+        invoice = None
+        invoice_item = None
+        created_invoice = False
+
+        if payload.billing_invoice_id:
+            invoice = self.db.get(BillingInvoice, payload.billing_invoice_id)
+            if not invoice or not invoice.is_active or invoice.status == "void":
+                raise AppException(404, "billing_invoice_not_found", "Billing invoice for this dispense was not found")
+            if actor.branch_id and invoice.branch_id and actor.branch_id != invoice.branch_id:
+                raise AppException(403, "forbidden", "Billing invoice belongs to a different branch")
+            if patient_id and invoice.patient_id != patient_id:
+                raise AppException(409, "billing_patient_mismatch", "Billing invoice patient does not match dispense patient")
+
+        if payload.billing_invoice_item_id:
+            invoice_item = self.db.get(BillingInvoiceItem, payload.billing_invoice_item_id)
+            if not invoice_item:
+                raise AppException(404, "billing_invoice_item_not_found", "Billing invoice item for this dispense was not found")
+            if invoice and invoice_item.invoice_id != invoice.id:
+                raise AppException(409, "billing_item_invoice_mismatch", "Billing invoice item does not belong to the selected invoice")
+            invoice = invoice or self.db.get(BillingInvoice, invoice_item.invoice_id)
+
+        if not invoice_item and source_order:
+            invoice_item = self.db.scalar(
+                select(BillingInvoiceItem)
+                .join(BillingInvoice, BillingInvoiceItem.invoice_id == BillingInvoice.id)
+                .where(
+                    BillingInvoiceItem.source_opd_visit_order_id == source_order.id,
+                    BillingInvoice.status != "void",
+                    BillingInvoice.is_active.is_(True),
+                    BillingInvoiceItem.is_active.is_(True),
+                )
+                .order_by(BillingInvoice.created_at.desc())
+            )
+            if invoice_item:
+                invoice = self.db.get(BillingInvoice, invoice_item.invoice_id)
+
+        if invoice:
+            return invoice, invoice_item, created_invoice
+
+        if not patient_id:
+            return None, None, created_invoice
+
+        now_stamp = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:4].upper()}"
+        branch_id = payload.branch_id or actor.branch_id or (source_order.visit.branch_id if source_order else None)
+        invoice = BillingInvoice(
+            patient_id=patient_id,
+            source_opd_visit_id=source_order.visit_id if source_order else payload.source_visit_id,
+            source_ipd_admission_id=None,
+            source_module="pharmacy",
+            billing_stage="pharmacy_dispense",
+            invoice_number=f"INV-PH-{now_stamp}",
+            branch_id=branch_id,
+            sub_total=total_price,
+            item_discount_amount=Decimal("0"),
+            discount_percentage=Decimal("0"),
+            invoice_discount_amount=Decimal("0"),
+            discount_amount=Decimal("0"),
+            total_amount=total_price,
+            paid_amount=Decimal("0"),
+            refunded_amount=Decimal("0"),
+            due_amount=total_price,
+            payment_status="unpaid",
+            referred_doctor_amount=Decimal("0"),
+            status="posted",
+            note=f"Auto-created from pharmacy dispense for {medicine_name}{f' / {prescription_ref}' if prescription_ref else ''}",
+            billed_by_user_id=actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        invoice_item = BillingInvoiceItem(
+            source_opd_visit_order_id=source_order.id if source_order else payload.source_visit_order_id,
+            source_label=medicine_name,
+            source_module="pharmacy",
+            service_name=medicine_name,
+            quantity=quantity,
+            unit_price=unit_price,
+            discount_percentage=Decimal("0"),
+            discount_amount=Decimal("0"),
+            line_total=total_price,
+            doctor_share_percentage=Decimal("0"),
+            doctor_share_amount=Decimal("0"),
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        invoice.items.append(invoice_item)
+        self.repository.create(invoice)
+        created_invoice = True
+        return invoice, invoice_item, created_invoice
+
+    def get_medicine_availability(self, medicine_name: str, actor: User) -> PharmacyMedicineAvailabilityRead:
+        normalized = medicine_name.strip()
+        if len(normalized) < 2:
+            raise AppException(422, "medicine_name_required", "Medicine name is required")
+
+        medicine_stmt = select(PharmacyMedicine).where(
+            PharmacyMedicine.is_active.is_(True),
+            func.lower(PharmacyMedicine.name) == normalized.lower(),
+        )
+        if actor.branch_id:
+            medicine_stmt = medicine_stmt.where(PharmacyMedicine.branch_id == actor.branch_id)
+        pharmacy_medicine = self.db.scalar(medicine_stmt)
+
+        item_stmt = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.is_active.is_(True),
+                or_(
+                    func.lower(InventoryItem.name) == normalized.lower(),
+                    func.lower(InventoryItem.name).like(self._medicine_name_pattern(normalized)),
+                    func.lower(func.coalesce(InventoryItem.item_code, "")).like(self._medicine_name_pattern(normalized)),
+                ),
+            )
+            .order_by(InventoryItem.name.asc())
+        )
+        if actor.branch_id:
+            item_stmt = item_stmt.where(InventoryItem.branch_id == actor.branch_id)
+        inventory_item = self.db.scalar(item_stmt.limit(1))
+
+        today = date.today()
+        near_expiry_cutoff = today + timedelta(days=90)
+        batches: list[PharmacyMedicineBatchAvailabilityRead] = []
+        total_available = Decimal("0")
+        total_reserved = Decimal("0")
+
+        if inventory_item:
+            balance_stmt = (
+                select(InventoryStoreItem)
+                .options(joinedload(InventoryStoreItem.store), joinedload(InventoryStoreItem.item))
+                .where(InventoryStoreItem.item_id == inventory_item.id, InventoryStoreItem.is_active.is_(True))
+            )
+            balances = list(self.db.scalars(balance_stmt).unique())
+            for balance in balances:
+                available = max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0))
+                total_available += available
+                total_reserved += Decimal(balance.reserved_quantity or 0)
+                batch_stmt = (
+                    select(StockBatch)
+                    .where(
+                        StockBatch.item_id == inventory_item.id,
+                        StockBatch.store_id == balance.store_id,
+                        StockBatch.quantity > 0,
+                        StockBatch.is_active.is_(True),
+                    )
+                    .order_by(StockBatch.expiry_date.is_(None), StockBatch.expiry_date.asc(), StockBatch.created_at.asc())
+                )
+                stock_batches = list(self.db.scalars(batch_stmt))
+                if stock_batches:
+                    for batch in stock_batches:
+                        is_expired = bool(batch.expiry_date and batch.expiry_date < today)
+                        batch_available = Decimal("0") if is_expired else Decimal(batch.quantity or 0)
+                        batches.append(
+                            PharmacyMedicineBatchAvailabilityRead(
+                                store_id=balance.store_id,
+                                store_name=balance.store.name if balance.store else None,
+                                store_type=balance.store.store_type if balance.store else None,
+                                department_name=balance.store.department_name if balance.store else None,
+                                batch_id=batch.id,
+                                batch_no=batch.batch_no,
+                                expiry_date=batch.expiry_date,
+                                available_quantity=batch_available,
+                                reserved_quantity=balance.reserved_quantity,
+                                is_expired=is_expired,
+                                is_near_expiry=bool(batch.expiry_date and today <= batch.expiry_date <= near_expiry_cutoff),
+                                source="inventory",
+                            )
+                        )
+                elif available > 0:
+                    batches.append(
+                        PharmacyMedicineBatchAvailabilityRead(
+                            store_id=balance.store_id,
+                            store_name=balance.store.name if balance.store else None,
+                            store_type=balance.store.store_type if balance.store else None,
+                            department_name=balance.store.department_name if balance.store else None,
+                            available_quantity=available,
+                            reserved_quantity=balance.reserved_quantity,
+                            source="inventory",
+                        )
+                    )
+
+        pharmacy_stock = Decimal(pharmacy_medicine.stock_quantity or 0) if pharmacy_medicine else Decimal("0")
+        if pharmacy_stock > 0 and not batches:
+            total_available += pharmacy_stock
+            batches.append(
+                PharmacyMedicineBatchAvailabilityRead(
+                    store_name="Pharmacy Store",
+                    store_type="pharmacy",
+                    available_quantity=pharmacy_stock,
+                    source="pharmacy",
+                )
+            )
+
+        usable_batches = [batch for batch in batches if batch.available_quantity > 0 and not batch.is_expired]
+        usable_batches.sort(key=lambda batch: (batch.expiry_date is None, batch.expiry_date or date.max, batch.store_name or ""))
+        preferred = usable_batches[0] if usable_batches else None
+        status = "out_of_stock"
+        if usable_batches:
+            status = "available"
+        elif total_available > 0:
+            status = "expired_only"
+
+        return PharmacyMedicineAvailabilityRead(
+            medicine_name=normalized,
+            pharmacy_medicine_id=pharmacy_medicine.id if pharmacy_medicine else None,
+            inventory_item_id=inventory_item.id if inventory_item else None,
+            total_available_quantity=total_available,
+            total_reserved_quantity=total_reserved,
+            pharmacy_stock_quantity=pharmacy_stock,
+            status=status,
+            preferred_batch_id=preferred.batch_id if preferred else None,
+            preferred_batch_no=preferred.batch_no if preferred else None,
+            preferred_expiry_date=preferred.expiry_date if preferred else None,
+            batches=batches,
+        )
 
     def _validate_purchase_payload(self, payload: PharmacyPurchaseCreate | PharmacyPurchaseUpdate) -> None:
         if payload.expiry_date and payload.expiry_date < payload.purchase_date:
@@ -1901,8 +2285,29 @@ class PharmacyService:
 
     def list_pending_prescriptions(self, actor: User) -> list[PharmacyPendingPrescriptionRead]:
         orders = self.opd_repository.list_pending_prescription_orders(actor.branch_id)
-        return [
-            PharmacyPendingPrescriptionRead(
+        pending: list[PharmacyPendingPrescriptionRead] = []
+        for order in orders:
+            dispensed_quantity = Decimal(str(self.repository.get_net_dispensed_quantity(order.id)))
+            remaining_quantity = max(Decimal("0"), order.quantity - dispensed_quantity)
+            if remaining_quantity <= 0:
+                continue
+            availability = self.get_medicine_availability(order.item_name, actor)
+            usable_quantity = sum(batch.available_quantity for batch in availability.batches if not batch.is_expired)
+            if usable_quantity <= 0:
+                availability_status = "out_of_stock"
+            elif usable_quantity >= remaining_quantity:
+                availability_status = "available"
+            else:
+                availability_status = "partially_available"
+            prescription_status = "pending"
+            if dispensed_quantity > 0:
+                prescription_status = "partially_dispensed"
+            elif availability_status == "available":
+                prescription_status = "available"
+            elif availability_status == "partially_available":
+                prescription_status = "partially_available"
+            pending.append(
+                PharmacyPendingPrescriptionRead(
                 order_id=order.id,
                 visit_id=order.visit_id,
                 visit_number=order.visit.visit_number,
@@ -1914,15 +2319,22 @@ class PharmacyService:
                 visit_status=order.visit.status,
                 item_name=order.item_name,
                 quantity=order.quantity,
-                dispensed_quantity=Decimal(str(self.repository.get_net_dispensed_quantity(order.id))),
-                remaining_quantity=max(Decimal("0"), order.quantity - Decimal(str(self.repository.get_net_dispensed_quantity(order.id)))),
+                dispensed_quantity=dispensed_quantity,
+                remaining_quantity=remaining_quantity,
                 instructions=order.instructions,
                 chief_complaint=order.visit.chief_complaint,
                 diagnosis=order.visit.final_diagnosis or order.visit.provisional_diagnosis,
+                prescription_status=prescription_status,
+                payment_status="paid" if order.visit.status in ["billed", "completed"] else "unpaid",
+                availability_status=availability_status,
+                available_quantity=usable_quantity,
+                reserved_quantity=availability.total_reserved_quantity,
+                preferred_batch_no=availability.preferred_batch_no,
+                preferred_expiry_date=availability.preferred_expiry_date,
+                available_stores=[batch.store_name for batch in availability.batches if batch.store_name and batch.available_quantity > 0 and not batch.is_expired],
             )
-            for order in orders
-            if order.quantity - Decimal(str(self.repository.get_net_dispensed_quantity(order.id))) > 0
-        ]
+            )
+        return pending
 
     def dispense(self, payload: PharmacyDispenseCreate, actor: User, context: dict[str, str | None]) -> PharmacyDispense:
         source_order = None
@@ -1952,25 +2364,67 @@ class PharmacyService:
         else:
             remaining_quantity = quantity
         total_price = quantity * payload.unit_price
+        billing_invoice, billing_invoice_item, billing_created = self._resolve_or_create_dispense_billing(
+            payload=payload,
+            actor=actor,
+            patient_id=patient_id,
+            source_order=source_order,
+            medicine_name=medicine_name,
+            quantity=quantity,
+            unit_price=payload.unit_price,
+            total_price=total_price,
+            prescription_ref=prescription_ref,
+        )
         order_remaining_after = remaining_quantity - quantity if source_order else Decimal("0")
         dispense_status = "partial" if source_order and order_remaining_after > 0 else "dispensed"
-        dispense = PharmacyDispense(
-            **payload.model_dump(),
-            patient_id=patient_id,
-            prescription_ref=prescription_ref,
-            medicine_name=medicine_name,
-            requested_quantity=requested_quantity,
-            quantity=quantity,
-            returned_quantity=Decimal("0"),
-            source_visit_id=source_order.visit_id if source_order else payload.source_visit_id,
-            source_visit_order_id=source_order.id if source_order else payload.source_visit_order_id,
-            total_price=total_price,
-            status=dispense_status,
-            branch_id=payload.branch_id or actor.branch_id,
-            dispensed_by_user_id=actor.id,
-            created_by=actor.id,
-            updated_by=actor.id,
-        )
+        dispense = None
+        if source_order:
+            dispense = self.db.scalar(
+                select(PharmacyDispense).where(
+                    PharmacyDispense.source_visit_order_id == source_order.id,
+                    PharmacyDispense.status == "pending",
+                    PharmacyDispense.is_active.is_(True),
+                )
+            )
+        if dispense:
+            dispense.patient_id = patient_id
+            dispense.source_visit_id = source_order.visit_id if source_order else payload.source_visit_id
+            dispense.source_visit_order_id = source_order.id if source_order else payload.source_visit_order_id
+            dispense.prescription_ref = prescription_ref
+            dispense.medicine_name = medicine_name
+            dispense.billing_invoice_id = billing_invoice.id if billing_invoice else None
+            dispense.billing_invoice_item_id = billing_invoice_item.id if billing_invoice_item else None
+            dispense.requested_quantity = requested_quantity
+            dispense.quantity = quantity
+            dispense.returned_quantity = Decimal("0")
+            dispense.unit_price = payload.unit_price
+            dispense.total_price = total_price
+            dispense.status = dispense_status
+            dispense.note = payload.note
+            dispense.dispensed_by_user_id = actor.id
+            dispense.updated_by = actor.id
+        else:
+            dispense = PharmacyDispense(
+                patient_id=patient_id,
+                billing_invoice_id=billing_invoice.id if billing_invoice else payload.billing_invoice_id,
+                billing_invoice_item_id=billing_invoice_item.id if billing_invoice_item else payload.billing_invoice_item_id,
+                branch_id=payload.branch_id or actor.branch_id,
+                source_visit_id=source_order.visit_id if source_order else payload.source_visit_id,
+                source_visit_order_id=source_order.id if source_order else payload.source_visit_order_id,
+                prescription_ref=prescription_ref,
+                medicine_name=medicine_name,
+                requested_quantity=requested_quantity,
+                quantity=quantity,
+                returned_quantity=Decimal("0"),
+                unit_price=payload.unit_price,
+                total_price=total_price,
+                status=dispense_status,
+                note=payload.note,
+                dispensed_by_user_id=actor.id,
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+            self.repository.create(dispense)
         matched_medicine_query = select(PharmacyMedicine).where(
             PharmacyMedicine.is_active.is_(True),
             func.lower(PharmacyMedicine.name) == medicine_name.strip().lower(),
@@ -1978,16 +2432,51 @@ class PharmacyService:
         if actor.branch_id:
             matched_medicine_query = matched_medicine_query.where(PharmacyMedicine.branch_id == actor.branch_id)
         matched_medicine = self.db.scalar(matched_medicine_query)
-        if matched_medicine:
+        inventory_item = self._find_inventory_item_for_medicine(medicine_name, actor)
+        inventory_available = self._available_inventory_quantity(inventory_item) if inventory_item else Decimal("0")
+        dispensed_from_inventory = False
+        if inventory_item and inventory_available >= Decimal(quantity):
+            deducted = self._deduct_inventory_for_dispense(
+                item=inventory_item,
+                quantity=Decimal(quantity),
+                actor=actor,
+                reference_id=dispense.id,
+                note=payload.note,
+            )
+            dispensed_from_inventory = deducted == Decimal(quantity)
+            if not dispensed_from_inventory:
+                raise AppException(409, "inventory_stock_conflict", f"Could not issue enough non-expired inventory stock for {medicine_name}")
+        if not dispensed_from_inventory and matched_medicine:
             if Decimal(matched_medicine.stock_quantity) < Decimal(quantity):
                 raise AppException(409, "insufficient_stock", f"Insufficient stock for {matched_medicine.name}")
-            matched_medicine.stock_quantity = Decimal(matched_medicine.stock_quantity) - Decimal(quantity)
-            matched_medicine.updated_by = actor.id
-        self.repository.create(dispense)
+            self._change_stock(
+                medicine=matched_medicine,
+                delta=-Decimal(quantity),
+                actor=actor,
+                movement_type="dispense_out",
+                reference_type="dispense",
+                reference_id=dispense.id,
+                note=payload.note,
+            )
+        elif not dispensed_from_inventory:
+            raise AppException(409, "insufficient_stock", f"No available stock found for {medicine_name}")
         if source_order:
             source_order.status = "completed" if order_remaining_after <= 0 else "in_progress"
             source_order.updated_by = actor.id
-        self._commit_and_log(actor=actor, action="pharmacy.dispense", entity_type="pharmacy_dispense", entity_id=str(dispense.id), detail={"medicine_name": dispense.medicine_name, "total_price": str(dispense.total_price)}, context=context)
+        self._commit_and_log(
+            actor=actor,
+            action="pharmacy.dispense",
+            entity_type="pharmacy_dispense",
+            entity_id=str(dispense.id),
+            detail={
+                "medicine_name": dispense.medicine_name,
+                "total_price": str(dispense.total_price),
+                "billing_invoice_id": str(dispense.billing_invoice_id) if dispense.billing_invoice_id else None,
+                "billing_invoice_number": billing_invoice.invoice_number if billing_invoice else None,
+                "billing_created": billing_created,
+            },
+            context=context,
+        )
         self.db.refresh(dispense)
         return dispense
 
@@ -2018,8 +2507,15 @@ class PharmacyService:
             matched_medicine_query = matched_medicine_query.where(PharmacyMedicine.branch_id == actor.branch_id)
         matched_medicine = self.db.scalar(matched_medicine_query)
         if matched_medicine:
-            matched_medicine.stock_quantity = Decimal(matched_medicine.stock_quantity) + Decimal(payload.quantity)
-            matched_medicine.updated_by = actor.id
+            self._change_stock(
+                medicine=matched_medicine,
+                delta=Decimal(payload.quantity),
+                actor=actor,
+                movement_type="dispense_return_in",
+                reference_type="dispense",
+                reference_id=dispense.id,
+                note=payload.note,
+            )
 
         if dispense.source_visit_order:
             net_dispensed = Decimal(str(self.repository.get_net_dispensed_quantity(dispense.source_visit_order.id)))

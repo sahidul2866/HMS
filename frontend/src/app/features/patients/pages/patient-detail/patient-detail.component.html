@@ -23,6 +23,12 @@
           @if (sessionService.hasPermission(permissions.ipdAdmit)) {
             <button class="secondary-btn" type="button" (click)="openIpdAdmission()">Admit IPD</button>
           }
+          @if (sessionService.hasPermission(permissions.patientIdCardView)) {
+            <button class="secondary-btn" type="button" (click)="previewIdCard()" [disabled]="idCardLoading">ID Card</button>
+          }
+          @if (sessionService.hasPermission(permissions.patientIdCardPrint)) {
+            <button class="secondary-btn" type="button" (click)="printIdCard(false)" [disabled]="idCardLoading">Print Card</button>
+          }
           <button class="secondary-btn" type="button" (click)="openList()">Back To Patient List</button>
         </div>
       </div>
@@ -36,6 +42,55 @@
         <div class="hero-stat"><div class="label">Pending Follow-Ups</div><div class="value">{{ getPendingFollowUps() }}</div></div>
       </div>
     </section>
+
+    @if (idCardPreviewOpen && idCard) {
+      <section class="id-card-backdrop" role="dialog" aria-label="Patient ID card preview">
+        <div class="id-card-modal">
+          <header>
+            <div>
+              <h2>Patient ID Card Preview</h2>
+              <p>{{ idCard.patient.patient_number }} · {{ idCard.is_reprint ? 'Reprint' : 'Original issue' }}</p>
+            </div>
+            <button class="secondary-btn" type="button" aria-label="Close" (click)="closeIdCardPreview()">Close</button>
+          </header>
+          <article class="patient-id-card" [style.borderTopColor]="idCard.template.theme_color">
+            <div class="card-head">
+              @if (idCard.template.logo_url) {
+                <img [src]="idCard.template.logo_url" alt="" />
+              } @else {
+                <span class="logo-fallback">H</span>
+              }
+              <div>
+                <strong>{{ idCard.hospital_name }}</strong>
+                <small>{{ idCard.template.header }}</small>
+              </div>
+            </div>
+            <div class="card-body">
+              <h3>{{ idCard.patient.first_name }} {{ idCard.patient.last_name }}</h3>
+              <div>MRN: <strong>{{ idCard.patient.patient_number }}</strong></div>
+              @if (idCard.template.show_dob) { <div>DOB/Age: {{ idCard.patient.date_of_birth || '-' }}</div> }
+              <div>Gender: {{ idCard.patient.gender || '-' }}</div>
+              @if (idCard.template.show_phone) { <div>Phone: {{ idCard.patient.phone || '-' }}</div> }
+              @if (idCard.template.show_emergency_contact) { <div>Emergency: {{ idCard.patient.emergency_contact_name || '-' }} {{ idCard.patient.emergency_contact_phone || '' }}</div> }
+              @if (idCard.template.show_issue_date) { <div>Issued: {{ idCard.issue_date }}</div> }
+            </div>
+            <div class="barcode-preview" [innerHTML]="barcodeSvg()"></div>
+            <footer>{{ idCard.template.footer }}</footer>
+          </article>
+          <div class="toolbar-row">
+            @if (sessionService.hasPermission(permissions.patientIdCardGenerate)) {
+              <button class="secondary-btn" type="button" (click)="generateIdCard()">Regenerate Token</button>
+            }
+            @if (sessionService.hasPermission(permissions.patientIdCardPrint)) {
+              <button class="primary-btn" type="button" (click)="printIdCard(false)">Print</button>
+            }
+            @if (sessionService.hasPermission(permissions.patientIdCardReprint)) {
+              <button class="secondary-btn" type="button" (click)="printIdCard(true)">Reprint</button>
+            }
+          </div>
+        </div>
+      </section>
+    }
 
     <app-patient-context-panel
       [history]="history"

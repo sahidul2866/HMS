@@ -11,11 +11,13 @@ import { DashboardComponent } from './features/dashboard/pages/dashboard/dashboa
 import { PatientListComponent } from './features/patients/pages/patient-list/patient-list.component';
 import { PatientCreateComponent } from './features/patients/pages/patient-create/patient-create.component';
 import { PatientDetailComponent } from './features/patients/pages/patient-detail/patient-detail.component';
+import { PatientIdCardSettingsComponent } from './features/patients/pages/patient-id-card-settings/patient-id-card-settings.component';
 import { BillingCreateComponent } from './features/billing/pages/billing-create/billing-create.component';
 import { BillingDeskComponent } from './features/billing/pages/billing-desk/billing-desk.component';
 import { BillingOverviewComponent } from './features/billing/pages/billing-overview/billing-overview.component';
 import { BillingSettingsComponent } from './features/billing/pages/billing-settings/billing-settings.component';
 import { BillingServicesComponent } from './features/billing/pages/billing-services/billing-services.component';
+import { BloodBankWorkspaceComponent } from './features/blood-bank/pages/blood-bank-workspace/blood-bank-workspace.component';
 import { AppointmentCreateComponent } from './features/appointments/pages/appointment-create/appointment-create.component';
 import { AppointmentsOverviewComponent } from './features/appointments/pages/appointments-overview/appointments-overview.component';
 import { IPDOverviewComponent } from './features/ipd/pages/ipd-overview/ipd-overview.component';
@@ -41,6 +43,12 @@ import { PharmacyOverviewComponent } from './features/pharmacy/pages/pharmacy-ov
 import { PharmacySettingsComponent } from './features/pharmacy/pages/pharmacy-settings/pharmacy-settings.component';
 import { PharmacyWorkbenchComponent } from './features/pharmacy/pages/pharmacy-workbench/pharmacy-workbench.component';
 import { PharmacyMasterPageComponent } from './features/pharmacy/pages/pharmacy-master-page/pharmacy-master-page.component';
+import { ScannerSettingsComponent } from './features/scanner/pages/scanner-settings/scanner-settings.component';
+import { AiSettingsComponent } from './features/ai/pages/ai-settings/ai-settings.component';
+import { ShortcutSettingsComponent } from './features/keyboard/pages/shortcut-settings/shortcut-settings.component';
+import { NotificationCenterPageComponent } from './features/notifications/pages/notification-center-page/notification-center-page.component';
+import { NotificationSettingsComponent } from './features/notifications/pages/notification-settings/notification-settings.component';
+import { QueueWorkspaceComponent } from './features/queue/pages/queue-workspace/queue-workspace.component';
 import { PharmacyMedicinesComponent } from './features/pharmacy/pages/pharmacy-medicines/pharmacy-medicines.component';
 import { PharmacyPurchasesComponent } from './features/pharmacy/pages/pharmacy-purchases/pharmacy-purchases.component';
 import { PharmacySalesEditorComponent } from './features/pharmacy/pages/pharmacy-sales-editor/pharmacy-sales-editor.component';
@@ -55,6 +63,26 @@ import { UserManagementComponent } from './features/admin/pages/user-management/
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
 import { ConfigurationWorkspaceComponent } from './features/configuration/pages/configuration-workspace/configuration-workspace.component';
 import { AccountProfileComponent } from './features/profile/pages/account-profile/account-profile.component';
+
+const bloodBankRoutes: Routes = [
+  { path: 'blood-bank', redirectTo: 'blood-bank/dashboard', pathMatch: 'full' },
+  { path: 'blood-bank/dashboard', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.dashboard.view'], tabLabel: 'Blood Bank Dashboard', bloodBankTab: 'dashboard' } },
+  { path: 'blood-bank/queue', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.queue.manage'], tabLabel: 'Blood Bank Queue', bloodBankTab: 'queue' } },
+  { path: 'blood-bank/donors', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.view'], tabLabel: 'Blood Donors', bloodBankTab: 'donors' } },
+  { path: 'blood-bank/screening', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.donor.screen'], tabLabel: 'Donor Screening', bloodBankTab: 'screening' } },
+  { path: 'blood-bank/collection', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.collection.create'], tabLabel: 'Blood Collection', bloodBankTab: 'collection' } },
+  { path: 'blood-bank/testing', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.testing.update'], tabLabel: 'Blood Testing', bloodBankTab: 'testing' } },
+  { path: 'blood-bank/components', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.component.prepare'], tabLabel: 'Blood Components', bloodBankTab: 'components' } },
+  { path: 'blood-bank/stock', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.stock.view'], tabLabel: 'Blood Stock', bloodBankTab: 'stock' } },
+  { path: 'blood-bank/requests', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.view'], tabLabel: 'Blood Requests', bloodBankTab: 'requests' } },
+  { path: 'blood-bank/crossmatch', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.crossmatch.perform'], tabLabel: 'Blood Crossmatch', bloodBankTab: 'crossmatch' } },
+  { path: 'blood-bank/issue', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.issue'], tabLabel: 'Blood Issue', bloodBankTab: 'issue' } },
+  { path: 'blood-bank/transfusion', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.transfusion.update'], tabLabel: 'Blood Transfusion', bloodBankTab: 'transfusion' } },
+  { path: 'blood-bank/return', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.return'], tabLabel: 'Blood Return', bloodBankTab: 'return' } },
+  { path: 'blood-bank/discard', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.discard'], tabLabel: 'Blood Discard', bloodBankTab: 'discard' } },
+  { path: 'blood-bank/reports', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.report.view'], tabLabel: 'Blood Bank Reports', bloodBankTab: 'reports' } },
+  { path: 'blood-bank/settings', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.component.prepare'], tabLabel: 'Blood Bank Settings', bloodBankTab: 'settings' } },
+];
 
 export const appRoutes: Routes = [
   {
@@ -115,6 +143,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['patient.create'], tabLabel: 'New Patient' },
       },
       {
+        path: 'patients/id-card-settings',
+        component: PatientIdCardSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['patient.id_card.configure'], tabLabel: 'Patient ID Card Settings' },
+      },
+      {
         path: 'patients/:patientId',
         component: PatientDetailComponent,
         canActivate: [permissionGuard],
@@ -156,6 +190,43 @@ export const appRoutes: Routes = [
         component: BillingSettingsComponent,
         canActivate: [permissionGuard],
         data: { permissions: ['billing.service.manage'], tabLabel: 'Billing Settings' },
+      },
+      ...bloodBankRoutes,
+      {
+        path: 'scanner/settings',
+        component: ScannerSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['scanner.settings.manage'], tabLabel: 'Scanner Settings' },
+      },
+      {
+        path: 'ai/settings',
+        component: AiSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['ai.assistant.configure'], tabLabel: 'AI Assistant Settings' },
+      },
+      {
+        path: 'notifications',
+        component: NotificationCenterPageComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['notification.view'], tabLabel: 'Notification Center' },
+      },
+      {
+        path: 'notifications/settings',
+        component: NotificationSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['notification.configure'], tabLabel: 'Notification Settings' },
+      },
+      {
+        path: 'queue',
+        component: QueueWorkspaceComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['queue.view'], tabLabel: 'Queue Center' },
+      },
+      {
+        path: 'keyboard/shortcuts',
+        component: ShortcutSettingsComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['dashboard.view'], tabLabel: 'Keyboard Shortcuts' },
       },
       {
         path: 'opd',
@@ -211,7 +282,7 @@ export const appRoutes: Routes = [
         path: 'ipd/settings',
         component: IPDSettingsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['ipd.admission.manage'], tabLabel: 'IPD Settings' },
+        data: { permissions: ['ipd.settings.manage'], tabLabel: 'IPD Settings' },
       },
       {
         path: 'er',
@@ -516,6 +587,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['hr.leave.manage'], tabLabel: 'Leave', hrTab: 'leave' },
       },
       {
+        path: 'hr/documents',
+        component: HRPayrollComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['hr.view'], tabLabel: 'Documents', hrTab: 'documents' },
+      },
+      {
         path: 'hr/payroll',
         component: HRPayrollComponent,
         canActivate: [permissionGuard],
@@ -548,6 +625,8 @@ export const appRoutes: Routes = [
       ...[
         ['accounting', 'Accounting', 'dashboard', 'accounting.view'],
         ['accounting/accounts', 'Chart of Accounts', 'accounts', 'accounting.view'],
+        ['accounting/ledger', 'General Ledger', 'ledger', 'accounting.view'],
+        ['accounting/vouchers', 'Vouchers', 'vouchers', 'accounting.journal.post'],
         ['accounting/collections', 'Payment Collection', 'collections', 'accounting.view'],
         ['accounting/receivables', 'Receivables', 'receivables', 'accounting.view'],
         ['accounting/payables', 'Payables', 'payables', 'accounting.view'],
@@ -556,10 +635,10 @@ export const appRoutes: Routes = [
         ['accounting/doctor-commission', 'Doctor Commission', 'doctor', 'accounting.view'],
         ['accounting/cash-closing', 'Cash Closing', 'cash', 'accounting.view'],
         ['accounting/bank', 'Bank Reconciliation', 'bank', 'accounting.view'],
-        ['accounting/journals', 'Journal Entries', 'journals', 'accounting.journal.post'],
+        ['accounting/journals', 'Journal Entries', 'vouchers', 'accounting.journal.post'],
         ['accounting/reports', 'Finance Reports', 'reports', 'reporting.financial.view'],
         ['accounting/audit', 'Finance Audit', 'audit', 'audit.view'],
-        ['accounting/journal', 'Journal Entries', 'journals', 'accounting.journal.post'],
+        ['accounting/journal', 'Journal Entries', 'vouchers', 'accounting.journal.post'],
       ].map(([path, tabLabel, accountingTab, permission]) => ({
         path,
         component: AccountingJournalComponent,

@@ -57,6 +57,57 @@
   margin-bottom: 1rem;
 }
 
+.queue-filter-grid,
+.stock-chip-grid {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.queue-filter-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 1rem 0;
+}
+
+.queue-filter-grid input,
+.queue-filter-grid select {
+  min-width: 0;
+}
+
+.stock-chip-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.stock-chip {
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  background: rgba(240, 253, 244, 0.9);
+  color: #166534;
+  font-size: 0.83rem;
+}
+
+.stock-chip.warn,
+.pill.warn {
+  border-color: rgba(245, 158, 11, 0.36);
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
+}
+
+.stock-chip.danger,
+.pill.danger {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: rgba(254, 226, 226, 0.9);
+  color: #991b1b;
+}
+
+.pill.good {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(220, 252, 231, 0.82);
+  color: #166534;
+}
+
 .context-card {
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 1rem;
@@ -129,6 +180,16 @@
 
 @media (max-width: 1100px) {
   .spotlight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .queue-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .queue-filter-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -4,7 +4,7 @@ import { Observable, map, tap } from 'rxjs';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
-import { CreatePatientPayload, Patient, PatientClinicalHistory, PatientLookupResult, PatientMobileLookup } from '../models/patient.models';
+import { CreatePatientPayload, Patient, PatientClinicalHistory, PatientIdCard, PatientIdCardTemplate, PatientLookupResult, PatientMobileLookup } from '../models/patient.models';
 
 @Injectable({ providedIn: 'root' })
 export class PatientService extends ApiBaseService {
@@ -74,6 +74,27 @@ export class PatientService extends ApiBaseService {
         });
       })
     );
+  }
+
+  getIdCard(patientId: string): Observable<PatientIdCard> {
+    return this.http.get<PatientIdCard>(this.url(`/patients/${patientId}/id-card`));
+  }
+
+  generateIdCard(patientId: string): Observable<PatientIdCard> {
+    return this.http.post<PatientIdCard>(this.url(`/patients/${patientId}/id-card/generate`), {});
+  }
+
+  printIdCard(patientId: string, reprint = false): Observable<PatientIdCard> {
+    const path = reprint ? 'reprint' : 'print';
+    return this.http.post<PatientIdCard>(this.url(`/patients/${patientId}/id-card/${path}`), {});
+  }
+
+  getIdCardTemplate(): Observable<PatientIdCardTemplate> {
+    return this.http.get<PatientIdCardTemplate>(this.url('/patients/id-card/template'));
+  }
+
+  updateIdCardTemplate(payload: PatientIdCardTemplate): Observable<PatientIdCardTemplate> {
+    return this.http.put<PatientIdCardTemplate>(this.url('/patients/id-card/template'), payload);
   }
 
   clearCache(): void {

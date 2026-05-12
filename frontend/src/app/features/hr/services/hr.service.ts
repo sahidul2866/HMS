@@ -8,10 +8,16 @@ import {
   HRDashboardSummary,
   HRDesignation,
   HREmployee,
+  HREmployeeDocument,
   HRLeaveRequest,
   HRLeaveType,
+  HRLoan,
+  HROvertime,
+  HRPayrollDashboard,
   HRPayrollRun,
+  HRReportSummary,
   HRRoster,
+  HRSalaryStructure,
   HRSetting,
   HRShift,
   PaginatedResponse,
@@ -46,13 +52,26 @@ export class HRService extends ApiBaseService {
     return this.http.post<HRDesignation>(this.url('/hr/designations'), payload).pipe(tap(() => this.clearHRCache()));
   }
 
-  listAttendance(attendanceDate?: string): Observable<HRAttendance[]> {
-    const query = attendanceDate ? `?attendance_date=${attendanceDate}` : '';
+  listAttendance(attendanceDate?: string, filters: { employee_id?: string; status?: string } = {}): Observable<HRAttendance[]> {
+    const query = this.query({ attendance_date: attendanceDate, ...filters });
     return this.cache.get(`hr:attendance:${query}`, () => this.http.get<HRAttendance[]>(this.url(`/hr/attendance${query}`)));
   }
 
   markAttendance(payload: Partial<HRAttendance>): Observable<HRAttendance> {
     return this.http.post<HRAttendance>(this.url('/hr/attendance'), payload).pipe(tap(() => this.clearHRCache()));
+  }
+
+  listDocuments(params: { employee_id?: string; status?: string } = {}): Observable<HREmployeeDocument[]> {
+    const query = this.query(params);
+    return this.cache.get(`hr:documents:${query}`, () => this.http.get<HREmployeeDocument[]>(this.url(`/hr/documents${query}`)));
+  }
+
+  createDocument(payload: Partial<HREmployeeDocument>): Observable<HREmployeeDocument> {
+    return this.http.post<HREmployeeDocument>(this.url('/hr/documents'), payload).pipe(tap(() => this.clearHRCache()));
+  }
+
+  deleteDocument(id: string): Observable<{ success: boolean }> {
+    return this.http.delete<{ success: boolean }>(this.url(`/hr/documents/${id}`)).pipe(tap(() => this.clearHRCache()));
   }
 
   listShifts(): Observable<HRShift[]> {
@@ -91,12 +110,29 @@ export class HRService extends ApiBaseService {
     return this.http.post<Record<string, unknown>>(this.url('/hr/salary-structures'), payload).pipe(tap(() => this.clearHRCache()));
   }
 
+  listSalaryStructures(): Observable<HRSalaryStructure[]> {
+    return this.cache.get('hr:salary-structures', () => this.http.get<HRSalaryStructure[]>(this.url('/hr/salary-structures')));
+  }
+
   createOvertime(payload: Record<string, unknown>): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(this.url('/hr/overtime'), payload).pipe(tap(() => this.clearHRCache()));
   }
 
+  listOvertime(): Observable<HROvertime[]> {
+    return this.cache.get('hr:overtime', () => this.http.get<HROvertime[]>(this.url('/hr/overtime')));
+  }
+
   createLoan(payload: Record<string, unknown>): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(this.url('/hr/loans'), payload).pipe(tap(() => this.clearHRCache()));
+  }
+
+  listLoans(): Observable<HRLoan[]> {
+    return this.cache.get('hr:loans', () => this.http.get<HRLoan[]>(this.url('/hr/loans')));
+  }
+
+  payrollDashboard(payrollMonth?: string): Observable<HRPayrollDashboard> {
+    const query = this.query({ payroll_month: payrollMonth });
+    return this.cache.get(`hr:payroll-dashboard:${query}`, () => this.http.get<HRPayrollDashboard>(this.url(`/hr/payroll/dashboard${query}`)));
   }
 
   listPayrollRuns(): Observable<HRPayrollRun[]> {
@@ -109,6 +145,11 @@ export class HRService extends ApiBaseService {
 
   decidePayroll(id: string, status: string): Observable<HRPayrollRun> {
     return this.http.post<HRPayrollRun>(this.url(`/hr/payroll/runs/${id}/${status}`), {}).pipe(tap(() => this.clearHRCache()));
+  }
+
+  reportSummary(params: { date_from?: string; date_to?: string; payroll_month?: string } = {}): Observable<HRReportSummary> {
+    const query = this.query(params);
+    return this.cache.get(`hr:reports:${query}`, () => this.http.get<HRReportSummary>(this.url(`/hr/reports/summary${query}`)));
   }
 
   createRecruitmentJob(payload: Record<string, unknown>): Observable<Record<string, unknown>> {

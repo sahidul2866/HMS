@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 T = TypeVar("T")
 
@@ -349,6 +349,8 @@ class PharmacyInvestigationRead(BaseModel):
 class PharmacyDispenseCreate(BaseModel):
     patient_id: UUID | None = None
     branch_id: UUID | None = None
+    billing_invoice_id: UUID | None = None
+    billing_invoice_item_id: UUID | None = None
     source_visit_id: UUID | None = None
     source_visit_order_id: UUID | None = None
     prescription_ref: str | None = None
@@ -356,6 +358,19 @@ class PharmacyDispenseCreate(BaseModel):
     quantity: Decimal
     unit_price: Decimal
     note: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_uuid_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for key in ("patient_id", "branch_id", "billing_invoice_id", "billing_invoice_item_id", "source_visit_id", "source_visit_order_id"):
+                if data.get(key) in {"", "null", "undefined"}:
+                    data[key] = None
+            if isinstance(data.get("medicine_name"), str):
+                data["medicine_name"] = data["medicine_name"].strip()
+            if data.get("unit_price") in {"", None}:
+                data["unit_price"] = Decimal("0")
+        return data
 
 
 class PharmacyDispenseReturnCreate(BaseModel):
@@ -366,6 +381,10 @@ class PharmacyDispenseReturnCreate(BaseModel):
 class PharmacyDispenseRead(BaseModel):
     id: UUID
     patient_id: UUID | None = None
+    billing_invoice_id: UUID | None = None
+    billing_invoice_item_id: UUID | None = None
+    billing_invoice_number: str | None = None
+    billing_payment_status: str | None = None
     source_visit_id: UUID | None = None
     source_visit_order_id: UUID | None = None
     patient_name: str | None = None
@@ -405,6 +424,14 @@ class PharmacyPendingPrescriptionRead(BaseModel):
     instructions: str | None = None
     chief_complaint: str | None = None
     diagnosis: str | None = None
+    prescription_status: str = "pending"
+    payment_status: str | None = None
+    availability_status: str = "unknown"
+    available_quantity: Decimal = Decimal("0")
+    reserved_quantity: Decimal = Decimal("0")
+    preferred_batch_no: str | None = None
+    preferred_expiry_date: date | None = None
+    available_stores: list[str] = []
 
 
 class PharmacyDraftMedicineSuggestionRead(BaseModel):
@@ -496,3 +523,32 @@ class PharmacyStockMovementRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PharmacyMedicineBatchAvailabilityRead(BaseModel):
+    store_id: UUID | None = None
+    store_name: str | None = None
+    store_type: str | None = None
+    department_name: str | None = None
+    batch_id: UUID | None = None
+    batch_no: str | None = None
+    expiry_date: date | None = None
+    available_quantity: Decimal
+    reserved_quantity: Decimal = Decimal("0")
+    is_expired: bool = False
+    is_near_expiry: bool = False
+    source: str = "pharmacy"
+
+
+class PharmacyMedicineAvailabilityRead(BaseModel):
+    medicine_name: str
+    pharmacy_medicine_id: UUID | None = None
+    inventory_item_id: UUID | None = None
+    total_available_quantity: Decimal
+    total_reserved_quantity: Decimal
+    pharmacy_stock_quantity: Decimal
+    status: str
+    preferred_batch_id: UUID | None = None
+    preferred_batch_no: str | None = None
+    preferred_expiry_date: date | None = None
+    batches: list[PharmacyMedicineBatchAvailabilityRead] = []

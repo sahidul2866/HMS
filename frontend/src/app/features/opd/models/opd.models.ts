@@ -40,6 +40,9 @@ export interface OPDVisit {
   follow_up_date?: string | null;
   follow_up_note?: string | null;
   status: string;
+  queue_number?: string | null;
+  queue_status?: string | null;
+  queue_called_at?: string | null;
   converted_ipd_admission_id?: string | null;
   consultation_fee: number;
   consultation_discount?: number;

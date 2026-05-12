@@ -17,12 +17,29 @@ export interface StaffBotResponse {
   required_fields?: string[];
   permission_denied?: boolean;
   context_suggestions?: string[];
+  context_summary?: string | null;
+  draft_content?: string | null;
+  disclaimer?: string | null;
+  actions?: Array<{ label: string; action: string; sensitive?: boolean; payload?: unknown }>;
+  requires_confirmation?: boolean;
+  confirmation_token?: string | null;
 }
 
 export interface StaffBotSettings {
   greeting_message: string;
   quick_actions: string[];
   gemini_enabled: boolean;
+  enabled?: boolean;
+  module_availability?: Record<string, boolean>;
+  role_rules?: Record<string, unknown>;
+  action_rules?: Record<string, unknown>;
+  audit_logging?: boolean;
+}
+
+export interface StaffBotAdminSetting {
+  id: string;
+  setting_key: string;
+  setting_value: Record<string, unknown>;
 }
 
 export interface StaffBotContext {
@@ -57,5 +74,13 @@ export class StaffBotService extends ApiBaseService {
 
   reset(payload?: { context?: StaffBotContext | string | null }): Observable<StaffBotResponse> {
     return this.http.post<StaffBotResponse>(this.url('/staff-bot/reset'), { context: payload?.context || null });
+  }
+
+  listAdminSettings(): Observable<StaffBotAdminSetting[]> {
+    return this.http.get<StaffBotAdminSetting[]>(this.url('/staff-bot/admin-settings'));
+  }
+
+  saveAdminSetting(payload: { setting_key: string; setting_value: Record<string, unknown> }): Observable<StaffBotAdminSetting> {
+    return this.http.post<StaffBotAdminSetting>(this.url('/staff-bot/admin-settings'), payload);
   }
 }

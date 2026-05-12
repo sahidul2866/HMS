@@ -1,0 +1,34 @@
+<section class="scanner-settings">
+  <header>
+    <div>
+      <p>Administration</p>
+      <h1>Barcode & QR Settings</h1>
+    </div>
+  </header>
+
+  <p *ngIf="message" class="message">{{ message }}</p>
+
+  <form class="settings-form" (ngSubmit)="save()">
+    <label>Scope <select [(ngModel)]="form.setting_key" name="settingKey"><option value="global">Global defaults</option><option value="patient_cards">Patient cards</option><option value="clinical_labels">Clinical labels</option><option value="documents">Document verification</option></select></label>
+    <label>Barcode type <select [(ngModel)]="form.barcode_type" name="barcodeType"><option>code128</option><option>code39</option><option>ean13</option><option>qr</option></select></label>
+    <label>QR format <input [(ngModel)]="form.qr_format" name="qrFormat" /></label>
+    <label>Patient card <input [(ngModel)]="form.patient_card_format" name="patientCard" /></label>
+    <label>Wristband <input [(ngModel)]="form.wristband_format" name="wristband" /></label>
+    <label>Label size <input [(ngModel)]="form.label_size" name="labelSize" /></label>
+    <label>Lab sample label <input [(ngModel)]="form.lab_sample_label" name="labLabel" /></label>
+    <label>Blood unit label <input [(ngModel)]="form.blood_unit_label" name="bloodLabel" /></label>
+    <label>Inventory label <input [(ngModel)]="form.inventory_item_label" name="inventoryLabel" /></label>
+    <label>Invoice QR <input [(ngModel)]="form.invoice_qr_format" name="invoiceQr" /></label>
+    <label>Document QR <input [(ngModel)]="form.document_qr_format" name="documentQr" /></label>
+    <label>Printer <input [(ngModel)]="form.printer_name" name="printer" placeholder="Default label printer" /></label>
+    <label class="check"><input type="checkbox" [(ngModel)]="form.auto_print" name="autoPrint" /> Auto-print after generation</label>
+    <button type="submit">Save Settings</button>
+  </form>
+
+  <div class="settings-list">
+    <article *ngFor="let setting of settings">
+      <strong>{{ setting.setting_key.replaceAll('_', ' ') }}</strong>
+      <code>{{ setting.setting_value | json }}</code>
+    </article>
+  </div>
+</section>

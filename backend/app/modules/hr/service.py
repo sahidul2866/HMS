@@ -15,6 +15,7 @@ from app.models.hr import (
     HRDesignation,
     HRDutyRoster,
     HREmployee,
+    HREmployeeDocument,
     HREmployeeLoan,
     HRLeaveRequest,
     HRLeaveType,
@@ -36,6 +37,9 @@ from app.schemas.hr import (
     HRDesignationCreate,
     HRDutyRosterCreate,
     HREmployeeCreate,
+    HREmployeeDocumentCreate,
+    HRPayrollDashboard,
+    HRReportSummary,
     HRLeaveRequestCreate,
     HRLeaveTypeCreate,
     HRLoanCreate,
@@ -70,9 +74,18 @@ class HRService:
                 HRPayrollRun.status.in_(["draft", "approved", "finalized"]),
             )
         )
+        current_run = self.db.scalar(
+            select(HRPayrollRun).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.payroll_month == month_prefix).order_by(HRPayrollRun.created_at.desc()).limit(1)
+        )
+        overtime_cost = Decimal("0")
+        deduction_total = Decimal("0")
+        if current_run:
+            overtime_cost = sum((item.overtime_amount for item in current_run.items), Decimal("0"))
+            deduction_total = sum((item.total_deductions for item in current_run.items), Decimal("0"))
         department_counts: dict[str, int] = {}
         category_counts: dict[str, int] = {}
         alerts: list[str] = []
+        expiring_document_count = 0
         for employee in employees:
             department_counts[employee.department.name if employee.department else "Unassigned"] = department_counts.get(employee.department.name if employee.department else "Unassigned", 0) + 1
             category_counts[employee.employee_category] = category_counts.get(employee.employee_category, 0) + 1
@@ -80,6 +93,10 @@ class HRService:
                 alerts.append(f"{employee.full_name} license expires on {employee.license_expiry_date}")
             if employee.contract_end_date and (employee.contract_end_date - today).days <= 45:
                 alerts.append(f"{employee.full_name} contract expires on {employee.contract_end_date}")
+            for document in employee.documents:
+                if document.expiry_date and 0 <= (document.expiry_date - today).days <= 45:
+                    expiring_document_count += 1
+                    alerts.append(f"{employee.full_name} {document.document_type} expires on {document.expiry_date}")
         return HRDashboardSummary(
             total_employees=len(employees),
             active_employees=len(active),
@@ -98,13 +115,24 @@ class HRService:
             pending_leave_requests=self.db.scalar(select(func.count(HRLeaveRequest.id)).where(HRLeaveRequest.branch_id == actor.branch_id, HRLeaveRequest.status == "pending")) or 0,
             pending_payroll_approvals=self.db.scalar(select(func.count(HRPayrollRun.id)).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.status == "draft")) or 0,
             monthly_salary_payable=self._money(Decimal(payroll_due or 0)),
+            employees_on_leave=len([item for item in attendance_rows if item.status == "on_leave"]),
+            expiring_documents=expiring_document_count,
+            current_month_payroll_status=current_run.status if current_run else None,
+            total_overtime_cost=self._money(overtime_cost),
+            total_deductions=self._money(deduction_total),
             alerts=alerts[:8],
         )
 
     def list_employees(self, actor: User, *, page: int, page_size: int, q: str | None = None, status: str | None = None) -> tuple[list[HREmployee], int]:
         stmt = (
             select(HREmployee)
-            .options(selectinload(HREmployee.department), selectinload(HREmployee.designation), selectinload(HREmployee.salary_structure))
+            .options(
+                selectinload(HREmployee.department),
+                selectinload(HREmployee.designation),
+                selectinload(HREmployee.reporting_manager),
+                selectinload(HREmployee.documents),
+                selectinload(HREmployee.salary_structure),
+            )
             .where(HREmployee.branch_id == actor.branch_id)
             .order_by(HREmployee.created_at.desc())
         )
@@ -131,6 +159,8 @@ class HRService:
 
     def update_employee(self, employee_id: UUID, payload: HREmployeeCreate, actor: User) -> HREmployee:
         employee = self._get_employee(employee_id, actor)
+        if employee.employment_status in {"terminated", "resigned"} and payload.employment_status == "active":
+            raise AppException(409, "hr_employee_reactivation_blocked", "Use a formal rehire workflow before reactivating resigned or terminated employees")
         for key, value in payload.model_dump().items():
             setattr(employee, key, value)
         employee.updated_by = actor.id
@@ -138,6 +168,40 @@ class HRService:
         self.db.commit()
         self.db.refresh(employee)
         return employee
+
+    def list_documents(self, actor: User, *, employee_id: UUID | None = None, status: str | None = None) -> list[HREmployeeDocument]:
+        stmt = (
+            select(HREmployeeDocument)
+            .options(selectinload(HREmployeeDocument.employee))
+            .join(HREmployeeDocument.employee)
+            .where(HREmployee.branch_id == actor.branch_id, HREmployeeDocument.is_active.is_(True))
+            .order_by(HREmployeeDocument.expiry_date.asc().nulls_last(), HREmployeeDocument.created_at.desc())
+        )
+        if employee_id:
+            stmt = stmt.where(HREmployeeDocument.employee_id == employee_id)
+        documents = list(self.db.scalars(stmt))
+        if status:
+            documents = [document for document in documents if self._document_status(document) == status]
+        return documents
+
+    def create_document(self, payload: HREmployeeDocumentCreate, actor: User) -> HREmployeeDocument:
+        employee = self._get_employee(payload.employee_id, actor)
+        document = HREmployeeDocument(**payload.model_dump(), created_by=actor.id, updated_by=actor.id)
+        self.db.add(document)
+        self._audit(actor, "document.create", "hr_employee_document", None, f"{employee.full_name}: {payload.document_type}")
+        self.db.commit()
+        self.db.refresh(document)
+        return document
+
+    def delete_document(self, document_id: UUID, actor: User) -> None:
+        document = self.db.get(HREmployeeDocument, document_id)
+        if not document:
+            raise AppException(404, "hr_document_not_found", "Employee document not found")
+        employee = self._get_employee(document.employee_id, actor)
+        document.is_active = False
+        document.updated_by = actor.id
+        self._audit(actor, "document.delete", "hr_employee_document", str(document.id), employee.full_name)
+        self.db.commit()
 
     def list_designations(self, actor: User) -> list[HRDesignation]:
         return list(self.db.scalars(select(HRDesignation).where(HRDesignation.branch_id == actor.branch_id, HRDesignation.is_active.is_(True)).order_by(HRDesignation.name)))
@@ -150,10 +214,14 @@ class HRService:
         self.db.refresh(entity)
         return entity
 
-    def list_attendance(self, actor: User, *, attendance_date: date | None = None) -> list[HRAttendance]:
-        stmt = select(HRAttendance).options(selectinload(HRAttendance.employee)).where(HRAttendance.branch_id == actor.branch_id).order_by(HRAttendance.attendance_date.desc())
+    def list_attendance(self, actor: User, *, attendance_date: date | None = None, employee_id: UUID | None = None, status: str | None = None) -> list[HRAttendance]:
+        stmt = select(HRAttendance).options(selectinload(HRAttendance.employee).selectinload(HREmployee.department)).where(HRAttendance.branch_id == actor.branch_id).order_by(HRAttendance.attendance_date.desc())
         if attendance_date:
             stmt = stmt.where(HRAttendance.attendance_date == attendance_date)
+        if employee_id:
+            stmt = stmt.where(HRAttendance.employee_id == employee_id)
+        if status:
+            stmt = stmt.where(HRAttendance.status == status)
         return list(self.db.scalars(stmt))
 
     def mark_attendance(self, payload: HRAttendanceCreate, actor: User) -> HRAttendance:
@@ -233,6 +301,15 @@ class HRService:
         return request
 
     def upsert_salary(self, payload: HRSalaryStructureCreate, actor: User) -> HRSalaryStructure:
+        employee = self._get_employee(payload.employee_id, actor)
+        locked_run = self.db.scalar(
+            select(HRPayrollRun.id)
+            .join(HRPayrollRun.items)
+            .where(HRPayrollItem.employee_id == employee.id, HRPayrollRun.status.in_(["paid", "locked"]))
+            .limit(1)
+        )
+        if locked_run:
+            raise AppException(409, "salary_locked_by_payroll", "Salary structure cannot be changed after a locked or paid payroll run without an adjustment workflow")
         salary = self.db.scalar(select(HRSalaryStructure).where(HRSalaryStructure.employee_id == payload.employee_id))
         if not salary:
             salary = HRSalaryStructure(employee_id=payload.employee_id, branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
@@ -245,19 +322,39 @@ class HRService:
         self.db.refresh(salary)
         return salary
 
+    def list_salary_structures(self, actor: User) -> list[HRSalaryStructure]:
+        return list(
+            self.db.scalars(
+                select(HRSalaryStructure)
+                .options(selectinload(HRSalaryStructure.employee))
+                .where(HRSalaryStructure.branch_id == actor.branch_id)
+                .order_by(HRSalaryStructure.effective_from.desc())
+            )
+        )
+
     def create_overtime(self, payload: HROvertimeCreate, actor: User) -> HROvertimeRequest:
+        self._get_employee(payload.employee_id, actor)
         entity = HROvertimeRequest(**payload.model_dump(), branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
         self.db.add(entity)
+        self._audit(actor, "overtime.create", "hr_overtime_request", None, str(payload.overtime_hours))
         self.db.commit()
         self.db.refresh(entity)
         return entity
 
+    def list_overtime(self, actor: User) -> list[HROvertimeRequest]:
+        return list(self.db.scalars(select(HROvertimeRequest).options(selectinload(HROvertimeRequest.employee)).where(HROvertimeRequest.branch_id == actor.branch_id).order_by(HROvertimeRequest.overtime_date.desc())))
+
     def create_loan(self, payload: HRLoanCreate, actor: User) -> HREmployeeLoan:
+        self._get_employee(payload.employee_id, actor)
         entity = HREmployeeLoan(**payload.model_dump(), branch_id=actor.branch_id, remaining_balance=payload.approved_amount, created_by=actor.id, updated_by=actor.id)
         self.db.add(entity)
+        self._audit(actor, "loan.create", "hr_employee_loan", None, str(payload.approved_amount))
         self.db.commit()
         self.db.refresh(entity)
         return entity
+
+    def list_loans(self, actor: User) -> list[HREmployeeLoan]:
+        return list(self.db.scalars(select(HREmployeeLoan).options(selectinload(HREmployeeLoan.employee)).where(HREmployeeLoan.branch_id == actor.branch_id).order_by(HREmployeeLoan.created_at.desc())))
 
     def list_payroll_runs(self, actor: User) -> list[HRPayrollRun]:
         return list(self.db.scalars(select(HRPayrollRun).options(selectinload(HRPayrollRun.items).selectinload(HRPayrollItem.employee)).where(HRPayrollRun.branch_id == actor.branch_id).order_by(HRPayrollRun.created_at.desc())))
@@ -269,7 +366,7 @@ class HRService:
         employees, _ = self.list_employees(actor, page=1, page_size=10000, status="active")
         if payload.department_id:
             employees = [item for item in employees if item.department_id == payload.department_id]
-        run = HRPayrollRun(payroll_month=payload.payroll_month, department_id=payload.department_id, branch_id=actor.branch_id, note=payload.note, created_by=actor.id, updated_by=actor.id)
+        run = HRPayrollRun(payroll_month=payload.payroll_month, department_id=payload.department_id, branch_id=actor.branch_id, status="calculated", note=payload.note, created_by=actor.id, updated_by=actor.id)
         self.db.add(run)
         totals = Decimal("0")
         deductions = Decimal("0")
@@ -294,19 +391,80 @@ class HRService:
         run = self.db.get(HRPayrollRun, payroll_run_id)
         if not run or run.branch_id != actor.branch_id:
             raise AppException(404, "hr_payroll_not_found", "Payroll run not found")
+        allowed_statuses = {"draft", "calculated", "reviewed", "approved", "paid", "cancelled", "locked", "finalized"}
+        if status not in allowed_statuses:
+            raise AppException(422, "hr_payroll_invalid_status", "Invalid payroll status")
+        if run.status in {"paid", "locked"} and status not in {"locked"}:
+            raise AppException(409, "hr_payroll_locked", "Paid or locked payroll cannot be edited")
+        if status == "paid" and run.status not in {"approved", "finalized"}:
+            raise AppException(409, "hr_payroll_requires_approval", "Payroll must be approved before payment")
+        if status == "locked" and run.status != "paid":
+            raise AppException(409, "hr_payroll_lock_requires_paid", "Only paid payroll can be locked")
         run.status = status
         run.approved_by_user_id = actor.id
-        if status in {"finalized", "paid"}:
+        if status in {"finalized", "paid", "locked"}:
             run.finalized_at = datetime.now(UTC)
         if status == "paid":
             for item in run.items:
                 item.payment_status = "paid"
                 item.paid_at = datetime.now(UTC)
+                self._apply_loan_deductions(item, actor)
         run.updated_by = actor.id
         self._audit(actor, f"payroll.{status}", "hr_payroll_run", str(run.id), run.payroll_month)
         self.db.commit()
         self.db.refresh(run)
         return run
+
+    def payroll_dashboard(self, actor: User, payroll_month: str | None = None) -> HRPayrollDashboard:
+        month = payroll_month or date.today().strftime("%Y-%m")
+        runs = list(
+            self.db.scalars(
+                select(HRPayrollRun)
+                .options(selectinload(HRPayrollRun.items).selectinload(HRPayrollItem.employee).selectinload(HREmployee.department))
+                .where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.payroll_month == month)
+            )
+        )
+        latest = runs[0] if runs else None
+        items = [item for run in runs for item in run.items]
+        department_costs: dict[str, Decimal] = {}
+        for item in items:
+            department = item.employee.department.name if item.employee and item.employee.department else "Unassigned"
+            department_costs[department] = department_costs.get(department, Decimal("0")) + Decimal(item.net_salary or 0)
+        return HRPayrollDashboard(
+            payroll_month=month,
+            status=latest.status if latest else None,
+            total_salary_payable=self._money(sum((Decimal(item.net_salary or 0) for item in items), Decimal("0"))),
+            pending_approvals=len([run for run in runs if run.status in {"draft", "calculated", "reviewed"}]),
+            paid_items=len([item for item in items if item.payment_status == "paid"]),
+            unpaid_items=len([item for item in items if item.payment_status != "paid"]),
+            overtime_cost=self._money(sum((Decimal(item.overtime_amount or 0) for item in items), Decimal("0"))),
+            deduction_total=self._money(sum((Decimal(item.total_deductions or 0) for item in items), Decimal("0"))),
+            department_costs={key: self._money(value) for key, value in department_costs.items()},
+        )
+
+    def report_summary(self, actor: User, *, date_from: date | None = None, date_to: date | None = None, payroll_month: str | None = None) -> HRReportSummary:
+        start = date_from or date.today().replace(day=1)
+        end = date_to or date.today()
+        payroll_month = payroll_month or start.strftime("%Y-%m")
+        employees, _ = self.list_employees(actor, page=1, page_size=10000)
+        attendance = self.list_attendance(actor)
+        attendance = [row for row in attendance if start <= row.attendance_date <= end]
+        leaves = [row for row in self.list_leave_requests(actor) if row.start_date <= end and row.end_date >= start]
+        overtime_hours = self.db.scalar(select(func.coalesce(func.sum(HROvertimeRequest.overtime_hours), 0)).where(HROvertimeRequest.branch_id == actor.branch_id, HROvertimeRequest.overtime_date >= start, HROvertimeRequest.overtime_date <= end)) or Decimal("0")
+        payroll_net = self.db.scalar(select(func.coalesce(func.sum(HRPayrollRun.total_net_salary), 0)).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.payroll_month == payroll_month)) or Decimal("0")
+        loan_outstanding = self.db.scalar(select(func.coalesce(func.sum(HREmployeeLoan.remaining_balance), 0)).where(HREmployeeLoan.branch_id == actor.branch_id, HREmployeeLoan.status == "active")) or Decimal("0")
+        today = date.today()
+        expiring_documents = len([doc for doc in self.list_documents(actor) if doc.expiry_date and 0 <= (doc.expiry_date - today).days <= 45])
+        return HRReportSummary(
+            employee_count=len(employees),
+            attendance_summary={status: len([row for row in attendance if row.status == status]) for status in ["present", "late", "absent", "half_day", "on_leave"]},
+            leave_summary={status: len([row for row in leaves if row.status == status]) for status in ["pending", "approved", "rejected"]},
+            overtime_hours=Decimal(overtime_hours),
+            payroll_net_total=self._money(Decimal(payroll_net)),
+            loan_outstanding=self._money(Decimal(loan_outstanding)),
+            expiring_documents=expiring_documents,
+            resigned_employees=len([employee for employee in employees if employee.employment_status in {"resigned", "terminated"}]),
+        )
 
     def create_recruitment_job(self, payload: HRRecruitmentJobCreate, actor: User) -> HRRecruitmentJob:
         entity = HRRecruitmentJob(**payload.model_dump(), branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
@@ -373,17 +531,34 @@ class HRService:
         start = date(year, month, 1)
         end = date(year, month, monthrange(year, month)[1])
         attendance = list(self.db.scalars(select(HRAttendance).where(HRAttendance.employee_id == employee.id, HRAttendance.attendance_date >= start, HRAttendance.attendance_date <= end)))
-        overtime = self.db.scalar(select(func.coalesce(func.sum(HROvertimeRequest.overtime_hours), 0)).where(HROvertimeRequest.employee_id == employee.id, HROvertimeRequest.overtime_date >= start, HROvertimeRequest.overtime_date <= end, HROvertimeRequest.status.in_(["approved", "pending"])))
+        overtime = self.db.scalar(select(func.coalesce(func.sum(HROvertimeRequest.overtime_hours), 0)).where(HROvertimeRequest.employee_id == employee.id, HROvertimeRequest.overtime_date >= start, HROvertimeRequest.overtime_date <= end, HROvertimeRequest.status == "approved"))
         present = Decimal(len([item for item in attendance if item.status in {"present", "late"}]))
         absent = Decimal(len([item for item in attendance if item.status == "absent"]))
         late = Decimal(len([item for item in attendance if item.status == "late"]))
-        unpaid_leave = Decimal(len([item for item in attendance if item.status == "on_leave"]))
+        unpaid_leave_attendance = Decimal(len([item for item in attendance if item.status == "on_leave"]))
+        unpaid_leave_requests = self.db.scalar(
+            select(func.coalesce(func.sum(HRLeaveRequest.number_of_days), 0))
+            .join(HRLeaveRequest.leave_type)
+            .where(
+                HRLeaveRequest.employee_id == employee.id,
+                HRLeaveRequest.status == "approved",
+                HRLeaveRequest.start_date <= end,
+                HRLeaveRequest.end_date >= start,
+                HRLeaveType.is_paid.is_(False),
+            )
+        ) or Decimal("0")
+        unpaid_leave = max(unpaid_leave_attendance, Decimal(unpaid_leave_requests))
+        shift_allowance = self.db.scalar(
+            select(func.coalesce(func.sum(HRShift.allowance_amount), 0))
+            .join(HRDutyRoster, HRDutyRoster.shift_id == HRShift.id)
+            .where(HRDutyRoster.employee_id == employee.id, HRDutyRoster.roster_date >= start, HRDutyRoster.roster_date <= end, HRDutyRoster.status.in_(["assigned", "completed", "approved"]))
+        ) or Decimal("0")
         base_allowances = salary.house_rent_allowance + salary.medical_allowance + salary.transport_allowance + salary.food_allowance + salary.night_duty_allowance + salary.on_call_allowance + salary.emergency_duty_allowance + salary.bonus_incentive
         overtime_amount = Decimal(overtime or 0) * salary.overtime_hourly_rate
         per_day = salary.basic_salary / Decimal("26")
         attendance_deduction = (absent + unpaid_leave + (late * Decimal("0.25"))) * per_day
         loan_deduction = self.db.scalar(select(func.coalesce(func.sum(HREmployeeLoan.monthly_installment), 0)).where(HREmployeeLoan.employee_id == employee.id, HREmployeeLoan.status == "active", HREmployeeLoan.deduction_start_month <= payroll_month))
-        gross = self._money(salary.basic_salary + base_allowances + overtime_amount)
+        gross = self._money(salary.basic_salary + base_allowances + overtime_amount + Decimal(shift_allowance or 0))
         total_deduction = self._money(salary.tax_deduction + salary.provident_fund_deduction + salary.other_deductions + Decimal(loan_deduction or 0) + attendance_deduction)
         return HRPayrollItem(
             employee_id=employee.id,
@@ -394,7 +569,7 @@ class HRService:
             unpaid_leave_days=unpaid_leave,
             overtime_hours=Decimal(overtime or 0),
             basic_salary=salary.basic_salary,
-            total_allowances=self._money(base_allowances),
+            total_allowances=self._money(base_allowances + Decimal(shift_allowance or 0)),
             overtime_amount=self._money(overtime_amount),
             gross_salary=gross,
             tax_deduction=salary.tax_deduction,
@@ -408,6 +583,28 @@ class HRService:
             created_by=actor.id,
             updated_by=actor.id,
         )
+
+    def _apply_loan_deductions(self, item: HRPayrollItem, actor: User) -> None:
+        if Decimal(item.loan_deduction or 0) <= 0:
+            return
+        remaining_to_apply = Decimal(item.loan_deduction)
+        loans = list(
+            self.db.scalars(
+                select(HREmployeeLoan)
+                .where(HREmployeeLoan.employee_id == item.employee_id, HREmployeeLoan.status == "active", HREmployeeLoan.remaining_balance > 0)
+                .order_by(HREmployeeLoan.deduction_start_month.asc(), HREmployeeLoan.created_at.asc())
+            )
+        )
+        for loan in loans:
+            if remaining_to_apply <= 0:
+                break
+            applied = min(Decimal(loan.remaining_balance), remaining_to_apply)
+            loan.remaining_balance = Decimal(loan.remaining_balance) - applied
+            if loan.remaining_balance <= 0:
+                loan.remaining_balance = Decimal("0")
+                loan.status = "closed"
+            loan.updated_by = actor.id
+            remaining_to_apply -= applied
 
     def _get_employee(self, employee_id: UUID, actor: User) -> HREmployee:
         employee = self.db.get(HREmployee, employee_id)
@@ -433,11 +630,25 @@ class HRService:
     def _money(self, value: Decimal) -> Decimal:
         return Decimal(value or 0).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
 
+    def _document_status(self, document: HREmployeeDocument) -> str:
+        if document.expiry_date is None:
+            return "valid"
+        days = (document.expiry_date - date.today()).days
+        if days < 0:
+            return "expired"
+        if days <= 45:
+            return "expiring"
+        return "valid"
+
 
 def serialize_employee(employee: HREmployee) -> dict:
     data = {column.name: getattr(employee, column.name) for column in employee.__table__.columns}
     data["department_name"] = employee.department.name if employee.department else None
     data["designation_name"] = employee.designation.name if employee.designation else None
+    data["reporting_manager_name"] = employee.reporting_manager.full_name if employee.reporting_manager else None
+    data["document_count"] = len([document for document in employee.documents if document.is_active])
+    today = date.today()
+    data["expiring_document_count"] = len([document for document in employee.documents if document.is_active and document.expiry_date and 0 <= (document.expiry_date - today).days <= 45])
     data["salary_gross"] = None
     if employee.salary_structure:
         salary = employee.salary_structure
@@ -449,6 +660,21 @@ def serialize_attendance(item: HRAttendance) -> dict:
     data = {column.name: getattr(item, column.name) for column in item.__table__.columns}
     data["employee_name"] = item.employee.full_name if item.employee else None
     data["staff_code"] = item.employee.staff_code if item.employee else None
+    data["department_name"] = item.employee.department.name if item.employee and item.employee.department else None
+    return data
+
+
+def serialize_document(item: HREmployeeDocument) -> dict:
+    data = {column.name: getattr(item, column.name) for column in item.__table__.columns}
+    data["employee_name"] = item.employee.full_name if item.employee else None
+    data["staff_code"] = item.employee.staff_code if item.employee else None
+    if item.expiry_date is None:
+        data["status"] = "valid"
+        data["days_to_expiry"] = None
+    else:
+        days = (item.expiry_date - date.today()).days
+        data["days_to_expiry"] = days
+        data["status"] = "expired" if days < 0 else ("expiring" if days <= 45 else "valid")
     return data
 
 
@@ -464,6 +690,7 @@ def serialize_leave(item: HRLeaveRequest) -> dict:
     data = {column.name: getattr(item, column.name) for column in item.__table__.columns}
     data["employee_name"] = item.employee.full_name if item.employee else None
     data["leave_type_name"] = item.leave_type.name if item.leave_type else None
+    data["leave_type_paid"] = item.leave_type.is_paid if item.leave_type else None
     return data
 
 

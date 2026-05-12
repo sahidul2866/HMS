@@ -354,6 +354,10 @@ export interface InvestigationPayload {
 export interface PharmacyDispense {
   id: string;
   patient_id?: string | null;
+  billing_invoice_id?: string | null;
+  billing_invoice_item_id?: string | null;
+  billing_invoice_number?: string | null;
+  billing_payment_status?: string | null;
   source_visit_id?: string | null;
   source_visit_order_id?: string | null;
   patient_name?: string | null;
@@ -377,6 +381,8 @@ export interface PharmacyDispense {
 export interface DispensePayload {
   patient_id?: string | null;
   branch_id?: string | null;
+  billing_invoice_id?: string | null;
+  billing_invoice_item_id?: string | null;
   source_visit_id?: string | null;
   source_visit_order_id?: string | null;
   prescription_ref?: string | null;
@@ -403,6 +409,14 @@ export interface PharmacyPendingPrescription {
   instructions?: string | null;
   chief_complaint?: string | null;
   diagnosis?: string | null;
+  prescription_status: string;
+  payment_status?: string | null;
+  availability_status: string;
+  available_quantity: string;
+  reserved_quantity: string;
+  preferred_batch_no?: string | null;
+  preferred_expiry_date?: string | null;
+  available_stores: string[];
 }
 
 export interface PharmacySummary {
@@ -417,6 +431,35 @@ export interface PharmacySummary {
 export interface PharmacyReturnPayload {
   quantity: number;
   note?: string | null;
+}
+
+export interface PharmacyMedicineBatchAvailability {
+  store_id?: string | null;
+  store_name?: string | null;
+  store_type?: string | null;
+  department_name?: string | null;
+  batch_id?: string | null;
+  batch_no?: string | null;
+  expiry_date?: string | null;
+  available_quantity: string;
+  reserved_quantity: string;
+  is_expired: boolean;
+  is_near_expiry: boolean;
+  source: string;
+}
+
+export interface PharmacyMedicineAvailability {
+  medicine_name: string;
+  pharmacy_medicine_id?: string | null;
+  inventory_item_id?: string | null;
+  total_available_quantity: string;
+  total_reserved_quantity: string;
+  pharmacy_stock_quantity: string;
+  status: string;
+  preferred_batch_id?: string | null;
+  preferred_batch_no?: string | null;
+  preferred_expiry_date?: string | null;
+  batches: PharmacyMedicineBatchAvailability[];
 }
 
 export interface PharmacyDraftMedicineSuggestion {
