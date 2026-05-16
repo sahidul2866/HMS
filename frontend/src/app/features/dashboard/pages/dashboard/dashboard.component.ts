@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
+import { RoleExperienceService, RoleExperience, RoleMetric } from '../../../../core/services/role-experience.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { DashboardAnalytics, DashboardKpi, DashboardPoint } from '../../models/dashboard-analytics.models';
 import { DashboardAnalyticsService, DashboardFilters } from '../../services/dashboard-analytics.service';
@@ -17,6 +18,7 @@ import { DashboardAnalyticsService, DashboardFilters } from '../../services/dash
 })
 export class DashboardComponent {
   readonly session = inject(SessionService);
+  readonly roleExperienceService = inject(RoleExperienceService);
   private readonly analyticsService = inject(DashboardAnalyticsService);
   private readonly router = inject(Router);
 
@@ -40,6 +42,25 @@ export class DashboardComponent {
     this.loadAnalytics();
   }
 
+  get roleExperience(): RoleExperience {
+    return this.roleExperienceService.primaryExperience();
+  }
+
+  get roleActions() {
+    return this.roleExperienceService.visibleActions(this.roleExperience);
+  }
+
+  get roleMetrics(): RoleMetric[] {
+    return this.roleExperienceService.visibleMetrics(this.roleExperience).map((metric) => ({
+      ...metric,
+      value: this.metricValue(metric.label),
+    }));
+  }
+
+  get showExecutiveAnalytics(): boolean {
+    return this.roleExperienceService.canSeeManagementAnalytics();
+  }
+
   get demoJourneySteps(): Array<{ label: string; detail: string; route: string }> {
     return [
       { label: 'Register', detail: 'Patient, doctor, token', route: '/opd/register' },
@@ -51,6 +72,10 @@ export class DashboardComponent {
   }
 
   openDemoStep(route: string): void {
+    void this.router.navigateByUrl(route);
+  }
+
+  openRoute(route: string): void {
     void this.router.navigateByUrl(route);
   }
 
@@ -307,5 +332,21 @@ export class DashboardComponent {
     const date = new Date();
     date.setDate(date.getDate() + offset);
     return date.toISOString().slice(0, 10);
+  }
+
+  private metricValue(label: string): string {
+    if (!this.analytics) return '-';
+    const normalized = label.toLowerCase();
+    if (normalized.includes('appointment') || normalized.includes('check-in')) return String(this.kpiValue("Today's Appointments"));
+    if (normalized.includes('patient')) return String(this.kpiValue('Admitted Patients') || this.kpiValue('Total Patients'));
+    if (normalized.includes('queue') || normalized.includes('pending') || normalized.includes('opd')) return String(this.kpiValue('Pending Bills') || this.kpiValue("Today's Appointments"));
+    if (normalized.includes('emergency')) return String(this.kpiValue('Emergency Cases'));
+    if (normalized.includes('revenue')) return this.formatMoney(this.kpiValue("Today's Revenue"));
+    if (normalized.includes('bed')) return `${this.analytics.bed_analytics.occupancy_pct}%`;
+    if (normalized.includes('stock')) return String(this.analytics.pharmacy_inventory_analytics.low_stock_medicines + this.analytics.pharmacy_inventory_analytics.low_stock_items);
+    if (normalized.includes('leave')) return String(this.analytics.hr_analytics.pending_leave);
+    if (normalized.includes('attendance')) return `${this.analytics.hr_analytics.attendance_pct}%`;
+    if (normalized.includes('alert')) return String(this.analytics.alerts.length);
+    return '-';
   }
 }

@@ -8,6 +8,7 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.admin.service import AdminService
 from app.schemas.role import RoleCreate, RoleRead, RoleUpdatePermissions
+from app.schemas.scope import EffectiveAccessRead, RoleScopeCreate, RoleScopeRead, UserScopeCreate, UserScopeRead
 from app.schemas.user import UserCreate, UserOPDSettingsUpdate, UserRead
 
 router = APIRouter(prefix="/admin", tags=["Administration"])
@@ -67,3 +68,58 @@ def update_role_permissions(
 ) -> RoleRead:
     role = AdminService(db).update_role_permissions(code, payload, user.id, context)
     return RoleRead.model_validate(role, from_attributes=True)
+
+
+@router.get("/scopes/users", response_model=list[UserScopeRead], dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def list_user_scopes(user_id: UUID | None = None, db: Session = Depends(get_db)) -> list[UserScopeRead]:
+    return [UserScopeRead.model_validate(item, from_attributes=True) for item in AdminService(db).list_user_scopes(user_id)]
+
+
+@router.post("/scopes/users", response_model=UserScopeRead, dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def create_user_scope(
+    payload: UserScopeCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserScopeRead:
+    return UserScopeRead.model_validate(AdminService(db).create_user_scope(payload, user, context), from_attributes=True)
+
+
+@router.delete("/scopes/users/{scope_id}", response_model=UserScopeRead, dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def deactivate_user_scope(
+    scope_id: UUID,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserScopeRead:
+    return UserScopeRead.model_validate(AdminService(db).deactivate_user_scope(scope_id, user, context), from_attributes=True)
+
+
+@router.get("/scopes/roles", response_model=list[RoleScopeRead], dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def list_role_scopes(role_id: UUID | None = None, db: Session = Depends(get_db)) -> list[RoleScopeRead]:
+    return [RoleScopeRead.model_validate(item, from_attributes=True) for item in AdminService(db).list_role_scopes(role_id)]
+
+
+@router.post("/scopes/roles", response_model=RoleScopeRead, dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def create_role_scope(
+    payload: RoleScopeCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RoleScopeRead:
+    return RoleScopeRead.model_validate(AdminService(db).create_role_scope(payload, user, context), from_attributes=True)
+
+
+@router.delete("/scopes/roles/{scope_id}", response_model=RoleScopeRead, dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def deactivate_role_scope(
+    scope_id: UUID,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RoleScopeRead:
+    return RoleScopeRead.model_validate(AdminService(db).deactivate_role_scope(scope_id, user, context), from_attributes=True)
+
+
+@router.get("/users/{user_id}/effective-access", response_model=EffectiveAccessRead, dependencies=[Depends(require_permissions("settings.scope.manage"))])
+def effective_access(user_id: UUID, db: Session = Depends(get_db)) -> EffectiveAccessRead:
+    return AdminService(db).effective_access(user_id)

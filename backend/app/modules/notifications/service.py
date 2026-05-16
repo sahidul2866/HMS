@@ -17,6 +17,7 @@ from app.models.notification import Notification, NotificationAuditLog, Notifica
 from app.models.pharmacy import PharmacyMedicine
 from app.models.radiology import RadiologyOrder
 from app.models.user import User
+from app.modules.access_scope.service import AccessScopeService
 from app.modules.auth.service import AuthService
 from app.schemas.notification import NotificationRead, NotificationSettingRead, NotificationSettingUpsert, NotificationSummary
 
@@ -29,6 +30,7 @@ class NotificationsService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.auth = AuthService(db)
+        self.scopes = AccessScopeService(db)
 
     def summary(self, actor: User) -> NotificationSummary:
         self.sync_for_user(actor)
@@ -212,6 +214,19 @@ class NotificationsService:
         stmt = select(IPDAdmission).where(IPDAdmission.status == "admitted")
         if actor.branch_id:
             stmt = stmt.where(IPDAdmission.branch_id == actor.branch_id)
+        if not self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            wards = self.scopes.scope_values(actor, "ward", module="ipd")
+            doctor_refs = self.scopes.scope_refs(actor, "doctor_profile", module="ipd")
+            nurse_refs = self.scopes.scope_refs(actor, "nurse_station", module="ipd")
+            clauses = []
+            if wards:
+                clauses.append(func.lower(IPDAdmission.ward_name).in_(wards))
+            if doctor_refs:
+                clauses.append(IPDAdmission.attending_doctor_user_id.in_(doctor_refs))
+            if nurse_refs:
+                clauses.append(IPDAdmission.assigned_nurse_user_id.in_(nurse_refs))
+            if clauses:
+                stmt = stmt.where(or_(*clauses))
         if "DOCTOR" in role_codes:
             stmt = stmt.where(IPDAdmission.attending_doctor_user_id == actor.id)
         if any(code in role_codes for code in {"NURSE", "OT_NURSE"}) or "ipd.medication.administer" in permissions:
@@ -290,6 +305,16 @@ class NotificationsService:
                 )
         if "ipd.handover.acknowledge" in permissions:
             tasks = select(IPDNursingTask).where(IPDNursingTask.status.in_(["pending", "assigned", "overdue"]))
+            if not self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+                wards = self.scopes.scope_values(actor, "ward", module="ipd")
+                nurse_refs = self.scopes.scope_refs(actor, "nurse_station", module="ipd")
+                clauses = [IPDNursingTask.assigned_nurse_user_id == actor.id]
+                if wards:
+                    clauses.append(func.lower(IPDNursingTask.ward_name).in_(wards))
+                if nurse_refs:
+                    clauses.append(IPDNursingTask.assigned_nurse_user_id.in_(nurse_refs))
+                if self.scopes.has_scope_assignments(actor, "ward", "nurse_station", module="ipd"):
+                    tasks = tasks.where(or_(*clauses))
             for task in self.db.scalars(tasks.limit(5)):
                 self._ensure(
                     actor,

@@ -14,6 +14,20 @@ from app.models.user import User
 from app.scripts.script_checkpoints import run_checkpoint_step
 from app.utils.seed_data import PERMISSION_CATALOG, ROLE_CATALOG, ROLE_FLAGS
 
+DEPARTMENTS = [
+    ("CLN", "Clinical", "General clinical services"),
+    ("NUR", "Nursing", "Ward, emergency, and bedside nursing teams"),
+    ("PHR", "Pharmacy", "Pharmacy operations"),
+    ("ACC", "Accounting", "Finance and accounting"),
+    ("ADM", "Administration", "Administrative services"),
+    ("LAB", "Laboratory", "Laboratory diagnostics"),
+    ("RAD", "Radiology", "Radiology and imaging"),
+    ("INV", "Inventory", "Stores and procurement"),
+    ("HR", "Human Resources", "HR and payroll operations"),
+    ("OT", "Operation Theatre", "Surgery and operation theatre services"),
+    ("BBK", "Blood Bank", "Blood donor, stock, and transfusion services"),
+]
+
 
 def catalog_signature() -> str:
     payload = {
@@ -121,10 +135,8 @@ def main() -> None:
         session = SessionLocal()
         try:
             hq = get_or_create_branch(session, "HQ", "Headquarters", "Primary operating branch")
-            get_or_create_department(session, hq.id, "CLN", "Clinical", "General clinical services")
-            get_or_create_department(session, hq.id, "PHR", "Pharmacy", "Pharmacy operations")
-            get_or_create_department(session, hq.id, "ACC", "Accounting", "Finance and accounting")
-            get_or_create_department(session, hq.id, "ADM", "Administration", "Administrative services")
+            for code, name, description in DEPARTMENTS:
+                get_or_create_department(session, hq.id, code, name, description)
             session.commit()
             return "Branch and departments synchronized"
         finally:
@@ -162,6 +174,7 @@ def main() -> None:
             session.close()
 
     run_checkpoint_step("seed_access_control", "structure", seed_structure)
+    run_checkpoint_step("seed_access_control", "departments:v2", seed_structure)
     run_checkpoint_step("seed_access_control", f"roles_permissions:{signature}", seed_roles_and_permissions)
     run_checkpoint_step("seed_access_control", f"superadmin:{signature}", seed_superadmin)
     print("Access-control seed completed.")

@@ -26,6 +26,7 @@ from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
 from app.models.role import Role
 from app.models.user import User
+from app.modules.access_scope.service import AccessScopeService
 from app.modules.audit.service import AuditService
 from app.modules.auth.service import AuthService
 from app.modules.ipd.repository import IPDRepository
@@ -72,12 +73,19 @@ class IPDService:
         self.repository = IPDRepository(db)
         self.patients = PatientsRepository(db)
         self.users = UsersRepository(db)
+        self.scopes = AccessScopeService(db)
 
     def list_admissions(self, actor: User) -> list[IPDAdmission]:
-        return self.repository.list_admissions(actor.branch_id)
+        return [admission for admission in self.repository.list_admissions(actor.branch_id) if self._admission_in_scope(actor, admission)]
 
     def list_beds(self, actor: User) -> list[IPDBed]:
-        return self.repository.list_beds(actor.branch_id)
+        beds = self.repository.list_beds(actor.branch_id)
+        if self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            return beds
+        wards = self.scopes.scope_values(actor, "ward", module="ipd")
+        if not wards:
+            return beds
+        return [bed for bed in beds if bed.ward_name.lower() in wards]
 
     def bed_board(
         self,
@@ -89,11 +97,11 @@ class IPDService:
         department_name: str | None = None,
         status: str | None = None,
     ) -> list[IPDBedBoardRow]:
-        admissions = [item for item in self.repository.list_admissions(actor.branch_id) if item.status != "discharged"]
+        admissions = [item for item in self.repository.list_admissions(actor.branch_id) if item.status != "discharged" and self._admission_in_scope(actor, item)]
         admission_by_bed = {item.bed_id: item for item in admissions if item.bed_id}
         rows: list[IPDBedBoardRow] = []
         now = datetime.now(UTC)
-        for bed in self.repository.list_beds(actor.branch_id):
+        for bed in self.list_beds(actor):
             admission = admission_by_bed.get(bed.id)
             board_status = bed.status
             if admission and admission.discharge_status in {"requested", "planned", "summary_drafted", "ready"}:
@@ -157,16 +165,16 @@ class IPDService:
             raise AppException(404, "ipd_admission_not_found", "IPD admission not found")
         if actor.branch_id and admission.branch_id and actor.branch_id != admission.branch_id:
             raise AppException(403, "forbidden", "IPD admission belongs to a different branch")
+        self._assert_admission_scope(actor, admission)
         return admission
 
     def get_summary(self, actor: User) -> IPDSummary:
-        totals = self.repository.get_summary(actor.branch_id)
-        admissions = self.repository.list_admissions(actor.branch_id)
+        admissions = self.list_admissions(actor)
         return IPDSummary(
-            total_admissions=totals[0],
-            active_admissions=totals[1],
-            discharged_admissions=totals[2],
-            occupied_beds=totals[3],
+            total_admissions=len(admissions),
+            active_admissions=sum(1 for admission in admissions if admission.status == "admitted"),
+            discharged_admissions=sum(1 for admission in admissions if admission.status == "discharged"),
+            occupied_beds=sum(1 for admission in admissions if admission.status == "admitted"),
             pending_orders=sum(1 for admission in admissions for order in admission.orders if order.status not in {"completed", "verified", "cancelled"}),
             pending_handovers=sum(1 for admission in admissions for handover in admission.handovers if handover.status == "pending_ack"),
             discharge_planned=sum(1 for admission in admissions if admission.discharge_status in {"requested", "planned", "summary_drafted", "ready"}),
@@ -573,6 +581,7 @@ class IPDService:
         stmt = select(IPDMedicationAdministration).join(IPDMedicationAdministration.admission).where(IPDAdmission.is_active.is_(True)).order_by(IPDMedicationAdministration.scheduled_at.asc().nulls_last())
         if actor.branch_id:
             stmt = stmt.where(IPDAdmission.branch_id == actor.branch_id)
+        stmt = self._apply_admission_scope_filter(stmt, actor)
         if ward_name:
             stmt = stmt.where(IPDAdmission.ward_name == ward_name)
         if status:
@@ -615,6 +624,7 @@ class IPDService:
         stmt = select(IPDNursingTask).join(IPDNursingTask.admission).where(IPDAdmission.is_active.is_(True)).order_by(IPDNursingTask.due_at.asc().nulls_last(), IPDNursingTask.created_at.desc())
         if actor.branch_id:
             stmt = stmt.where(IPDAdmission.branch_id == actor.branch_id)
+        stmt = self._apply_nursing_task_scope_filter(stmt, actor)
         if ward_name:
             stmt = stmt.where(IPDNursingTask.ward_name == ward_name)
         if nurse_user_id:
@@ -665,6 +675,7 @@ class IPDService:
         )
         if actor.branch_id:
             stmt = stmt.where(IPDAdmission.branch_id == actor.branch_id)
+        stmt = self._apply_handover_scope_filter(stmt, actor)
         if status:
             stmt = stmt.where(IPDHandover.status == status)
         if ward_name:
@@ -1185,6 +1196,83 @@ class IPDService:
         missing = [field for field in required_fields if values.get(field) in (None, "", [])]
         if missing:
             raise AppException(422, f"ipd_{label.replace(' ', '_')}_required_fields", f"Missing required {label} fields: {', '.join(missing)}")
+
+    def _admission_in_scope(self, actor: User, admission: IPDAdmission) -> bool:
+        if self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            return True
+        has_scopes = self.scopes.has_scope_assignments(actor, "ward", "doctor_profile", "nurse_station", "shift", module="ipd")
+        if not has_scopes:
+            return True
+        wards = self.scopes.scope_values(actor, "ward", module="ipd")
+        doctor_refs = self.scopes.scope_refs(actor, "doctor_profile", module="ipd")
+        nurse_refs = self.scopes.scope_refs(actor, "nurse_station", module="ipd")
+        shifts = self.scopes.scope_values(actor, "shift", module="ipd")
+        if admission.ward_name and admission.ward_name.lower() in wards:
+            return True
+        if admission.attending_doctor_user_id and admission.attending_doctor_user_id in doctor_refs:
+            return True
+        if admission.assigned_nurse_user_id and admission.assigned_nurse_user_id in nurse_refs:
+            return True
+        if admission.attending_doctor_user_id == actor.id or admission.assigned_nurse_user_id == actor.id:
+            return True
+        if shifts:
+            active = [assignment for assignment in admission.staff_assignments if assignment.staff_user_id == actor.id and not assignment.ended_at]
+            if any((assignment.shift_name or "").lower() in shifts for assignment in active):
+                return True
+        return False
+
+    def _assert_admission_scope(self, actor: User, admission: IPDAdmission) -> None:
+        if not self._admission_in_scope(actor, admission):
+            self.scopes.assert_in_scope(actor, module="ipd", scope_type="ward", scope_value=admission.ward_name)
+
+    def _apply_admission_scope_filter(self, stmt, actor: User):
+        if self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            return stmt
+        if not self.scopes.has_scope_assignments(actor, "ward", "doctor_profile", "nurse_station", module="ipd"):
+            return stmt
+        clauses = []
+        wards = self.scopes.scope_values(actor, "ward", module="ipd")
+        doctor_refs = self.scopes.scope_refs(actor, "doctor_profile", module="ipd")
+        nurse_refs = self.scopes.scope_refs(actor, "nurse_station", module="ipd")
+        if wards:
+            clauses.append(func.lower(IPDAdmission.ward_name).in_(wards))
+        if doctor_refs:
+            clauses.append(IPDAdmission.attending_doctor_user_id.in_(doctor_refs))
+        if nurse_refs:
+            clauses.append(IPDAdmission.assigned_nurse_user_id.in_(nurse_refs))
+        clauses.extend([IPDAdmission.attending_doctor_user_id == actor.id, IPDAdmission.assigned_nurse_user_id == actor.id])
+        return stmt.where(or_(*clauses))
+
+    def _apply_nursing_task_scope_filter(self, stmt, actor: User):
+        if self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            return stmt
+        if not self.scopes.has_scope_assignments(actor, "ward", "nurse_station", "shift", module="ipd"):
+            return stmt
+        clauses = [IPDNursingTask.assigned_nurse_user_id == actor.id]
+        wards = self.scopes.scope_values(actor, "ward", module="ipd")
+        nurse_refs = self.scopes.scope_refs(actor, "nurse_station", module="ipd")
+        shifts = self.scopes.scope_values(actor, "shift", module="ipd")
+        if wards:
+            clauses.append(func.lower(IPDNursingTask.ward_name).in_(wards))
+        if nurse_refs:
+            clauses.append(IPDNursingTask.assigned_nurse_user_id.in_(nurse_refs))
+        if shifts:
+            clauses.append(func.lower(IPDNursingTask.shift_name).in_(shifts))
+        return stmt.where(or_(*clauses))
+
+    def _apply_handover_scope_filter(self, stmt, actor: User):
+        if self.scopes.has_unrestricted_access(actor, module="ipd", scope_type="ward"):
+            return stmt
+        if not self.scopes.has_scope_assignments(actor, "ward", "shift", module="ipd"):
+            return stmt
+        clauses = [IPDHandover.sender_user_id == actor.id, IPDHandover.receiver_user_id == actor.id]
+        wards = self.scopes.scope_values(actor, "ward", module="ipd")
+        shifts = self.scopes.scope_values(actor, "shift", module="ipd")
+        if wards:
+            clauses.append(func.lower(IPDAdmission.ward_name).in_(wards))
+        if shifts:
+            clauses.append(func.lower(IPDHandover.shift_name).in_(shifts))
+        return stmt.where(or_(*clauses))
 
     def _generate_admission_number(self, branch_id, number_format: str) -> str:
         now = datetime.now(UTC)

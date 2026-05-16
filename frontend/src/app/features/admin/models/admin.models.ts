@@ -47,3 +47,51 @@ export interface CreateRolePayload {
 
 export type AdminUser = User;
 export type AdminRole = Role;
+
+export interface ScopeAssignment {
+  id: string;
+  user_id?: string;
+  role_id?: string;
+  branch_id?: string | null;
+  scope_type: string;
+  scope_value?: string | null;
+  scope_ref_id?: string | null;
+  module?: string | null;
+  status: string;
+  is_primary: boolean;
+  is_temporary: boolean;
+  is_override: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  reason?: string | null;
+  meta: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScopeAssignmentPayload {
+  user_id: string;
+  scope_type: string;
+  scope_value?: string | null;
+  scope_ref_id?: string | null;
+  module?: string | null;
+  status: string;
+  is_primary: boolean;
+  is_temporary: boolean;
+  is_override: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  reason?: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface EffectiveAccess {
+  user_id: string;
+  roles: Array<{ id: string; code: string; name: string }>;
+  permissions: string[];
+  user_scopes: ScopeAssignment[];
+  role_scopes: ScopeAssignment[];
+  effective_scopes: Record<string, Array<Record<string, unknown>>>;
+  unrestricted_modules: string[];
+}

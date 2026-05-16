@@ -135,6 +135,7 @@ from app.models.pharmacy import (
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.scanner import ScanCode, ScanEvent, ScanSetting
+from app.models.scope import RoleScope, UserScope
 from app.models.user import User, role_permissions, user_permissions, user_roles
 from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage, StaffBotSetting
 

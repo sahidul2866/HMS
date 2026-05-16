@@ -4,7 +4,7 @@ import { Observable, tap } from 'rxjs';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
-import { AdminUser, CreateUserPayload, UpdateUserOPDSettingsPayload } from '../models/admin.models';
+import { AdminUser, CreateUserPayload, EffectiveAccess, ScopeAssignment, ScopeAssignmentPayload, UpdateUserOPDSettingsPayload } from '../models/admin.models';
 
 @Injectable({ providedIn: 'root' })
 export class AdminUserService extends ApiBaseService {
@@ -35,6 +35,18 @@ export class AdminUserService extends ApiBaseService {
         this.publishUserEvent(user.id, 'Doctor settings updated.');
       })
     );
+  }
+
+  effectiveAccess(userId: string): Observable<EffectiveAccess> {
+    return this.http.get<EffectiveAccess>(this.url(`/admin/users/${userId}/effective-access`));
+  }
+
+  listUserScopes(userId: string): Observable<ScopeAssignment[]> {
+    return this.http.get<ScopeAssignment[]>(this.url('/admin/scopes/users'), { params: { user_id: userId } });
+  }
+
+  createUserScope(payload: ScopeAssignmentPayload): Observable<ScopeAssignment> {
+    return this.http.post<ScopeAssignment>(this.url('/admin/scopes/users'), payload).pipe(tap(() => this.clearCache()));
   }
 
   clearCache(): void {

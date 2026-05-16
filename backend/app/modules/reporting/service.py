@@ -64,7 +64,98 @@ class ReportingService:
             payment_status=payment_status,
             module_type=module_type,
         )
+        self._apply_dashboard_permissions(actor, data)
         return DashboardAnalyticsRead(**data)
+
+    def _effective_permissions(self, actor: User) -> set[str]:
+        permissions = {permission.code for permission in actor.direct_permissions if permission.is_active}
+        for role in actor.roles:
+            if role.is_active:
+                permissions.update(permission.code for permission in role.permissions if permission.is_active)
+        return permissions
+
+    def _apply_dashboard_permissions(self, actor: User, data: dict) -> None:
+        permissions = self._effective_permissions(actor)
+
+        def has_any(*codes: str) -> bool:
+            return any(code in permissions for code in codes)
+
+        if not has_any("billing.view", "accounting.view", "reporting.financial.view"):
+            data["revenue_analytics"] = {
+                "daily_revenue": [],
+                "payment_breakdown": [],
+                "paid_vs_pending": [],
+                "module_breakdown": [],
+                "outstanding_due": 0,
+            }
+            data["finance_line"] = self._blank_finance_line()
+            data["kpis"] = [kpi for kpi in data.get("kpis", []) if "revenue" not in kpi.get("title", "").lower() and "bill" not in kpi.get("title", "").lower()]
+
+        if not has_any("hr.view", "payroll.view"):
+            data["hr_analytics"] = {
+                "total_staff": 0,
+                "present": 0,
+                "absent": 0,
+                "on_leave": 0,
+                "attendance_pct": 0,
+                "department_staff": [],
+                "payroll_summary": 0,
+                "pending_leave": 0,
+            }
+            data["kpis"] = [kpi for kpi in data.get("kpis", []) if "staff" not in kpi.get("title", "").lower()]
+
+        if not has_any("laboratory.view", "radiology.view"):
+            data["lab_radiology_analytics"] = {
+                "lab_today": 0,
+                "radiology_today": 0,
+                "status": [],
+                "test_volume": [],
+                "average_turnaround_minutes": 0,
+            }
+
+        if not has_any("pharmacy.view", "inventory.view"):
+            data["pharmacy_inventory_analytics"] = {
+                "sales_today": 0,
+                "top_medicines": [],
+                "low_stock_medicines": 0,
+                "low_stock_items": 0,
+                "near_expiry": 0,
+                "inventory_value": 0,
+                "stock_consumption_trend": [],
+            }
+
+        if not has_any("ot.view"):
+            data["ot_analytics"] = {
+                "today_surgeries": 0,
+                "upcoming": 0,
+                "completed": 0,
+                "cancelled": 0,
+                "room_utilization": [],
+                "surgeon_count": [],
+                "timeline": [],
+                "status": "Restricted",
+            }
+
+        if not has_any("reporting.view", "admin.manage_users"):
+            data["activity_feed"] = []
+            data["report_shortcuts"] = []
+
+    def _blank_finance_line(self) -> dict:
+        empty_range = {
+            "revenue_current": [],
+            "cost_current": [],
+            "revenue_goal": [],
+            "cost_goal": [],
+        }
+        return {
+            "goals": {
+                "revenue": {"daily": 0, "monthly": 0, "yearly": 0},
+                "cost": {"daily": 0, "monthly": 0, "yearly": 0},
+            },
+            "daily": empty_range,
+            "monthly": empty_range,
+            "yearly": empty_range,
+        }
 
     def get_report_catalog(self, actor: User) -> ReportCatalogRead:
         categories: dict[str, list[str]] = {

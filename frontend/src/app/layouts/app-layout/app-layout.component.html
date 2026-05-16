@@ -57,6 +57,12 @@
             </button>
             @if (shortcutsOpen) {
               <div class="shortcut-panel" role="dialog" aria-label="Keyboard shortcuts">
+                @for (shortcut of roleKeyboardShortcuts(); track shortcut.key) {
+                  <div class="shortcut-row">
+                    <kbd>{{ shortcut.key }}</kbd>
+                    <span>{{ shortcut.label }}</span>
+                  </div>
+                }
                 @for (shortcut of keyboardShortcuts; track shortcut.key) {
                   <div class="shortcut-row">
                     <kbd>{{ shortcut.key }}</kbd>

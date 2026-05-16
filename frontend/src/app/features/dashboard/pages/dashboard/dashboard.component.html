@@ -2,18 +2,60 @@
   <section class="page-card module-hero">
     <div class="hero-row">
       <div>
-        <div class="hero-kicker">Executive Analytics</div>
-        <h1 class="page-title">Hospital Command Dashboard</h1>
-        <div class="page-subtitle">Live operations, revenue, stock, HR and OT.</div>
+        <div class="hero-kicker">{{ roleExperience.label }} Workspace</div>
+        <h1 class="page-title">{{ roleExperience.homeTitle }}</h1>
+        <div class="page-subtitle">{{ roleExperience.homeSubtitle }}</div>
       </div>
       <div class="toolbar-row">
-        <button class="secondary-btn" type="button" (click)="printDashboard()">Print</button>
-        <button class="secondary-btn" type="button" (click)="exportDashboard()">Export CSV</button>
-        <a class="secondary-btn" routerLink="/reporting">Reports</a>
+        @if (showExecutiveAnalytics) {
+          <button class="secondary-btn" type="button" (click)="printDashboard()">Print</button>
+          <button class="secondary-btn" type="button" (click)="exportDashboard()">Export CSV</button>
+          <a class="secondary-btn" routerLink="/reporting">Reports</a>
+        }
       </div>
     </div>
   </section>
 
+  <section class="role-home-grid">
+    <article class="page-card dashboard-panel">
+      <div class="card-head"><h2>Role Focus</h2><span>What this account should work on first</span></div>
+      <div class="compact-list">
+        @for (item of roleExperience.focus; track item) {
+          <div><span>{{ item }}</span><b>Ready</b></div>
+        }
+      </div>
+    </article>
+
+    <article class="page-card dashboard-panel">
+      <div class="card-head"><h2>Quick Actions</h2><span>Filtered by effective permissions</span></div>
+      <div class="quick-link-grid">
+        @for (action of roleActions; track action.label) {
+          <button class="quick-link-card" type="button" (click)="openRoute(action.route)">
+            <strong>{{ action.label }}</strong>
+            <small>{{ action.detail }}</small>
+          </button>
+        }
+      </div>
+    </article>
+  </section>
+
+  @if (!loading && analytics) {
+    <section class="kpi-grid">
+      @for (metric of roleMetrics; track metric.label) {
+        <article class="page-card kpi-card clickable" [ngClass]="metric.tone" (click)="openRoute(metric.route)" role="link" tabindex="0">
+          <div class="kpi-top">
+            <span class="kpi-icon">●</span>
+            <span class="trend trend-flat">Role</span>
+          </div>
+          <strong>{{ metric.value }}</strong>
+          <h3>{{ metric.label }}</h3>
+          <p>{{ metric.detail }}</p>
+        </article>
+      }
+    </section>
+  }
+
+  @if (showExecutiveAnalytics) {
   <section class="page-card data-panel">
     <div class="panel-head">
       <div>
@@ -55,7 +97,9 @@
       </label>
     </div>
   </section>
+  }
 
+  @if (showExecutiveAnalytics) {
   <section class="page-card demo-flow-card">
     <div class="demo-flow-header">
       <div>
@@ -74,6 +118,7 @@
       }
     </div>
   </section>
+  }
 
   @if (error) {
     <div class="alert error">{{ error }}</div>
@@ -86,6 +131,7 @@
       }
     </section>
   } @else if (analytics) {
+    @if (showExecutiveAnalytics) {
     <section class="page-card summary-band">
       <div class="summary-copy">
         <strong>Today at a Glance</strong>
@@ -376,6 +422,8 @@
         </div>
       </article>
     </section>
+
+    }
 
     <section class="module-access">
       <a class="page-card" *appHasPermission="'billing.invoice.create'" routerLink="/billing/list">Billing <small>{{ kpiValue('Pending Bills') }} pending</small></a>

@@ -6,42 +6,198 @@ from app.core.database import SessionLocal
 from app.core.security import get_password_hash
 from app.models.branch import Branch
 from app.models.department import Department
+from app.models.inventory import InventoryStore
 from app.models.patient import Patient
 from app.models.patient_portal_account import PatientPortalAccount
 from app.models.role import Role
+from app.models.scope import UserScope
 from app.models.user import User
 from app.scripts.script_checkpoints import run_checkpoint_step
 
+STAFF_DEMO_PASSWORD = "Demo12345!"
+
 SAMPLE_USERS = [
+    {
+        "username": "admin_maya",
+        "email": "maya.admin@hms.local",
+        "full_name": "Maya Chowdhury",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "ADMIN",
+        "department_code": "ADM",
+    },
+    {
+        "username": "reception_isha",
+        "email": "isha.reception@hms.local",
+        "full_name": "Isha Karim",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "RECEPTIONIST",
+        "department_code": "ADM",
+    },
     {
         "username": "dr_rahman",
         "email": "dr.rahman@hms.local",
         "full_name": "Dr. Rahman",
-        "password": "Doctor123!",
+        "password": STAFF_DEMO_PASSWORD,
         "role_code": "DOCTOR",
         "department_code": "CLN",
+    },
+    {
+        "username": "nurse_lima",
+        "email": "lima.nursing@hms.local",
+        "full_name": "Lima Akter",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "NURSE",
+        "department_code": "NUR",
+    },
+    {
+        "username": "assistant_milon",
+        "email": "milon.assistant@hms.local",
+        "full_name": "Milon Ahmed",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "DOCTOR_ASSISTANT",
+        "department_code": "CLN",
+    },
+    {
+        "username": "lab_tanvir",
+        "email": "tanvir.lab@hms.local",
+        "full_name": "Tanvir Ahmed",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "LAB_TECHNICIAN",
+        "department_code": "LAB",
+    },
+    {
+        "username": "radio_mina",
+        "email": "mina.radiology@hms.local",
+        "full_name": "Mina Das",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "RADIOLOGY_TECHNICIAN",
+        "department_code": "RAD",
     },
     {
         "username": "pharma_nadia",
         "email": "nadia.pharmacy@hms.local",
         "full_name": "Nadia Sultana",
-        "password": "Pharma123!",
+        "password": STAFF_DEMO_PASSWORD,
         "role_code": "PHARMACIST",
         "department_code": "PHR",
+    },
+    {
+        "username": "blood_rubel",
+        "email": "rubel.bloodbank@hms.local",
+        "full_name": "Rubel Hasan",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "BLOOD_BANK_OFFICER",
+        "department_code": "BBK",
+    },
+    {
+        "username": "inventory_shuvo",
+        "email": "shuvo.inventory@hms.local",
+        "full_name": "Shuvo Islam",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "INVENTORY_STAFF",
+        "department_code": "INV",
     },
     {
         "username": "acct_kamal",
         "email": "kamal.accounts@hms.local",
         "full_name": "Kamal Hossain",
-        "password": "Account123!",
+        "password": STAFF_DEMO_PASSWORD,
         "role_code": "ACCOUNTANT",
         "department_code": "ACC",
+    },
+    {
+        "username": "billing_rashid",
+        "email": "rashid.billing@hms.local",
+        "full_name": "Rashid Khan",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "BILLING_STAFF",
+        "department_code": "ACC",
+    },
+    {
+        "username": "manager_farzana",
+        "email": "farzana.management@hms.local",
+        "full_name": "Farzana Hoque",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "MANAGEMENT",
+        "department_code": "ADM",
+    },
+    {
+        "username": "hr_sadia",
+        "email": "sadia.hr@hms.local",
+        "full_name": "Sadia Islam",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "HR_MANAGER",
+        "department_code": "HR",
+    },
+    {
+        "username": "payroll_jamal",
+        "email": "jamal.payroll@hms.local",
+        "full_name": "Jamal Uddin",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "PAYROLL_OFFICER",
+        "department_code": "HR",
+    },
+    {
+        "username": "dept_head_anika",
+        "email": "anika.department@hms.local",
+        "full_name": "Anika Rahman",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "DEPARTMENT_HEAD",
+        "department_code": "CLN",
+    },
+    {
+        "username": "employee_rina",
+        "email": "rina.employee@hms.local",
+        "full_name": "Rina Begum",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "EMPLOYEE",
+        "department_code": "ADM",
+    },
+    {
+        "username": "ot_manager_selim",
+        "email": "selim.ot@hms.local",
+        "full_name": "Selim Hossain",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "OT_MANAGER",
+        "department_code": "OT",
+    },
+    {
+        "username": "surgeon_arif",
+        "email": "arif.surgeon@hms.local",
+        "full_name": "Dr. Arif Khan",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "SURGEON",
+        "department_code": "OT",
+    },
+    {
+        "username": "anesthetist_faria",
+        "email": "faria.anesthesia@hms.local",
+        "full_name": "Dr. Faria Islam",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "ANESTHETIST",
+        "department_code": "OT",
+    },
+    {
+        "username": "ot_nurse_joya",
+        "email": "joya.otnurse@hms.local",
+        "full_name": "Joya Sultana",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "OT_NURSE",
+        "department_code": "OT",
+    },
+    {
+        "username": "ot_billing_tarek",
+        "email": "tarek.otbilling@hms.local",
+        "full_name": "Tarek Mahmud",
+        "password": STAFF_DEMO_PASSWORD,
+        "role_code": "OT_BILLING_OFFICER",
+        "department_code": "OT",
     },
     {
         "username": "ref_dr_sadia",
         "email": "sadia.referral@hms.local",
         "full_name": "Dr. Sadia Noor",
-        "password": "Doctor123!",
+        "password": STAFF_DEMO_PASSWORD,
         "role_code": "REFERRABLE_DOCTOR",
         "department_code": "CLN",
     },
@@ -155,6 +311,7 @@ def create_or_update_staff_user(session, *, branch: Branch, role: Role, departme
     else:
         user.email = payload["email"]
         user.full_name = payload["full_name"]
+        user.hashed_password = get_password_hash(payload["password"])
         user.branch_id = branch.id
         user.department_id = department.id
         user.is_active = True
@@ -211,6 +368,78 @@ def create_or_update_demo_patient_user(session, *, branch: Branch, payload: dict
         legacy_user.is_active = False
 
 
+DEMO_USER_SCOPES = {
+    "nurse_lima": [
+        {"scope_type": "ward", "scope_value": "General Ward", "module": "ipd", "is_primary": True, "reason": "Demo ward nursing assignment"},
+        {"scope_type": "shift", "scope_value": "morning", "module": "ipd", "reason": "Demo morning duty"},
+    ],
+    "assistant_milon": [
+        {"scope_type": "queue_scope", "scope_value": "opd", "module": "queue", "is_primary": True, "reason": "Doctor assistant OPD queue support"},
+        {"scope_type": "doctor_profile", "scope_value": "dr_rahman", "module": "opd", "reason": "Assigned to Dr. Rahman's consultation room"},
+    ],
+    "billing_rashid": [
+        {"scope_type": "queue_scope", "scope_value": "billing", "module": "queue", "is_primary": True, "reason": "Billing counter demo assignment"},
+    ],
+    "inventory_shuvo": [
+        {"scope_type": "store", "scope_value": "OPD Store", "module": "inventory", "is_primary": True, "reason": "OPD sub-store assignment"},
+    ],
+    "lab_tanvir": [
+        {"scope_type": "lab_section", "scope_value": "hematology", "module": "laboratory", "is_primary": True, "reason": "Demo lab section assignment"},
+    ],
+    "radio_mina": [
+        {"scope_type": "radiology_unit", "scope_value": "xray", "module": "radiology", "is_primary": True, "reason": "Demo imaging unit assignment"},
+    ],
+    "blood_rubel": [
+        {"scope_type": "blood_bank_unit", "scope_value": "main", "module": "blood_bank", "is_primary": True, "reason": "Main blood bank unit assignment"},
+    ],
+}
+
+
+def create_or_update_user_scopes(session, username: str) -> None:
+    user = session.scalar(select(User).where(User.username == username))
+    if not user:
+        return
+    for payload in DEMO_USER_SCOPES.get(username, []):
+        data = dict(payload)
+        if data["scope_type"] == "store" and data.get("scope_value"):
+            store = session.scalar(
+                select(InventoryStore).where(
+                    InventoryStore.branch_id == user.branch_id,
+                    InventoryStore.is_active.is_(True),
+                    InventoryStore.name == data["scope_value"],
+                )
+            )
+            if store:
+                data["scope_ref_id"] = store.id
+        existing = session.scalar(
+            select(UserScope).where(
+                UserScope.user_id == user.id,
+                UserScope.scope_type == data["scope_type"],
+                UserScope.scope_value == data["scope_value"],
+                UserScope.module == data.get("module"),
+            )
+        )
+        if existing:
+            existing.is_active = True
+            existing.status = "active"
+            existing.is_primary = data.get("is_primary", False)
+            existing.reason = data.get("reason")
+            existing.branch_id = user.branch_id
+            existing.scope_ref_id = data.get("scope_ref_id")
+            continue
+        session.add(
+            UserScope(
+                branch_id=user.branch_id,
+                user_id=user.id,
+                status="active",
+                is_active=True,
+                created_by=user.id,
+                updated_by=user.id,
+                **data,
+            )
+        )
+
+
 def main() -> None:
     def make_staff_step(payload: dict) -> Callable[[], str]:
         def runner() -> str:
@@ -228,7 +457,22 @@ def main() -> None:
         return runner
 
     for payload in SAMPLE_USERS:
-        run_checkpoint_step("seed_sample_staff", payload["username"], make_staff_step(payload))
+        run_checkpoint_step("seed_sample_staff", f"staff:v2:{payload['username']}", make_staff_step(payload))
+
+    def make_scope_step(username: str) -> Callable[[], str]:
+        def runner() -> str:
+            session = SessionLocal()
+            try:
+                create_or_update_user_scopes(session, username)
+                session.commit()
+                return f"{username} scopes synchronized"
+            finally:
+                session.close()
+
+        return runner
+
+    for username in DEMO_USER_SCOPES:
+        run_checkpoint_step("seed_sample_staff", f"scopes:v1:{username}", make_scope_step(username))
 
     def make_demo_patient_step(payload: dict) -> Callable[[], str]:
         def runner() -> str:
@@ -247,10 +491,30 @@ def main() -> None:
         run_checkpoint_step("seed_sample_staff", payload["username"], make_demo_patient_step(payload))
 
     print("Sample staff seed completed.")
-    print("Doctor: dr_rahman / Doctor123!")
-    print("Referral Doctor: ref_dr_sadia / Doctor123!")
-    print("Pharmacist: pharma_nadia / Pharma123!")
-    print("Accountant: acct_kamal / Account123!")
+    print(f"Demo staff password: {STAFF_DEMO_PASSWORD}")
+    print("Admin: admin_maya")
+    print("Reception: reception_isha")
+    print("Doctor: dr_rahman")
+    print("Nurse: nurse_lima")
+    print("Doctor Assistant: assistant_milon")
+    print("Lab: lab_tanvir")
+    print("Radiology: radio_mina")
+    print("Pharmacist: pharma_nadia")
+    print("Blood Bank: blood_rubel")
+    print("Inventory: inventory_shuvo")
+    print("Accountant: acct_kamal")
+    print("Billing Staff: billing_rashid")
+    print("Management: manager_farzana")
+    print("HR Manager: hr_sadia")
+    print("Payroll Officer: payroll_jamal")
+    print("Department Head: dept_head_anika")
+    print("Employee: employee_rina")
+    print("OT Manager: ot_manager_selim")
+    print("Surgeon: surgeon_arif")
+    print("Anesthetist: anesthetist_faria")
+    print("OT Nurse: ot_nurse_joya")
+    print("OT Billing: ot_billing_tarek")
+    print("Referral Doctor: ref_dr_sadia")
     print("Patient demo: patient_fatema / Patient123!")
     print("Patient demo: patient_rakib / Patient123!")
     print("Patient demo: patient_sumaiya / Patient123!")

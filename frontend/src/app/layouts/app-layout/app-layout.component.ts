@@ -6,6 +6,7 @@ import { PERMISSIONS } from '../../core/constants/permissions';
 import { AuthService } from '../../core/services/auth.service';
 import { CommandPaletteService } from '../../core/services/command-palette.service';
 import { NotificationService } from '../../core/services/notification.service';
+import { RoleExperienceService } from '../../core/services/role-experience.service';
 import { SessionService } from '../../core/services/session.service';
 import { TabService } from '../../core/services/tab.service';
 import { ThemeService } from '../../core/services/theme.service';
@@ -68,6 +69,7 @@ export class AppLayoutComponent {
   private readonly authService = inject(AuthService);
   private readonly commandPalette = inject(CommandPaletteService);
   private readonly notificationService = inject(NotificationService);
+  private readonly roleExperience = inject(RoleExperienceService);
   private readonly router = inject(Router);
 
   sidebarCollapsed = false;
@@ -109,6 +111,13 @@ export class AppLayoutComponent {
     }
 
     const key = event.key.toLowerCase();
+    const roleRoute = this.roleShortcutRoute(key);
+    if (roleRoute) {
+      event.preventDefault();
+      this.navigate(roleRoute);
+      return;
+    }
+
     const routeMap: Record<string, string> = {
       '1': '/dashboard',
       '2': '/patients',
@@ -203,8 +212,17 @@ export class AppLayoutComponent {
     this.accountMenuOpen = false;
   }
 
-  visibleQuickActions(): typeof this.quickActions {
-    return this.quickActions.filter((action) => this.sessionService.hasPermission(action.permissions));
+  visibleQuickActions(): Array<{ label: string; route: string; permissions: string[]; tone?: string }> {
+    const roleActions = this.roleExperience.visibleActions().map((action) => ({
+      label: action.label,
+      route: action.route,
+      permissions: action.permissions,
+      tone: action.tone,
+    }));
+    const genericActions = this.quickActions.filter((action) => this.sessionService.hasPermission(action.permissions));
+    const byRoute = new Map<string, { label: string; route: string; permissions: string[]; tone?: string }>();
+    [...roleActions, ...genericActions].forEach((action) => byRoute.set(action.route, action));
+    return [...byRoute.values()].slice(0, 8);
   }
 
   activeModule(): MenuItem | null {
@@ -292,6 +310,10 @@ export class AppLayoutComponent {
     return user?.roles?.[0]?.name || 'Staff Account';
   }
 
+  roleKeyboardShortcuts(): Array<{ key: string; label: string }> {
+    return this.roleExperience.visibleShortcuts().map((item) => ({ key: item.key, label: item.label }));
+  }
+
   showStaffAssistant(): boolean {
     const user = this.sessionService.snapshot.user;
     return !!user && user.principal_type !== 'patient' && !user.patient_id && this.sessionService.hasPermission('ai.assistant.use');
@@ -358,5 +380,14 @@ export class AppLayoutComponent {
     const currentIndex = tabs.findIndex((tab) => tab.path === activePath);
     const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
     this.tabService.activate(tabs[nextIndex]?.path ?? tabs[0].path);
+  }
+
+  private roleShortcutRoute(key: string): string | null {
+    const candidates = [`Alt+${key.toUpperCase()}`, `Alt+${key}`];
+    for (const candidate of candidates) {
+      const route = this.roleExperience.routeForShortcut(candidate);
+      if (route) return route;
+    }
+    return null;
   }
 }

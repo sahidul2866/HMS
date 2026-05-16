@@ -15,6 +15,7 @@ from app.models.patient import Patient
 from app.models.queue import QueueAuditLog, QueueCounter, QueueSetting, QueueToken
 from app.models.scanner import ScanCode
 from app.models.user import User
+from app.modules.access_scope.service import AccessScopeService
 from app.modules.auth.service import AuthService
 from app.schemas.queue import QueueCounterCreate, QueueSettingRead, QueueSettingUpsert, QueueTokenCreate, QueueTokenRead
 
@@ -55,6 +56,7 @@ class QueueService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.auth = AuthService(db)
+        self.scopes = AccessScopeService(db)
 
     def list_counters(self, actor: User, module: str | None = None) -> list[QueueCounter]:
         stmt = select(QueueCounter).where(QueueCounter.is_active.is_(True)).order_by(QueueCounter.module, QueueCounter.code)
@@ -62,6 +64,16 @@ class QueueService:
             stmt = stmt.where(or_(QueueCounter.branch_id == actor.branch_id, QueueCounter.branch_id.is_(None)))
         if module:
             stmt = stmt.where(QueueCounter.module == module)
+        if not self.scopes.has_unrestricted_access(actor, module="queue", scope_type="queue_counter"):
+            counter_refs = self.scopes.scope_refs(actor, "queue_counter", module="queue")
+            scope_values = self.scopes.scope_values(actor, "queue_scope", module="queue")
+            clauses = []
+            if counter_refs:
+                clauses.append(QueueCounter.id.in_(counter_refs))
+            if scope_values:
+                clauses.append(QueueCounter.module.in_(scope_values))
+            if clauses:
+                stmt = stmt.where(or_(*clauses))
         return list(self.db.scalars(stmt))
 
     def create_counter(self, payload: QueueCounterCreate, actor: User) -> QueueCounter:
@@ -96,6 +108,7 @@ class QueueService:
             clauses.append(QueueToken.status == status)
         if counter_id:
             clauses.append(QueueToken.counter_id == counter_id)
+            self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_counter", scope_ref_id=counter_id)
         if department_name:
             clauses.append(QueueToken.department_name.ilike(f"%{department_name}%"))
         if doctor_user_id:
@@ -107,12 +120,16 @@ class QueueService:
         if search:
             token = f"%{search.strip()}%"
             clauses.append(or_(QueueToken.token_number.ilike(token), QueueToken.patient_label.ilike(token)))
+        stmt = (
+            select(QueueToken)
+            .where(*clauses)
+            .order_by(QueueToken.status == "called", QueueToken.created_at.desc())
+            .limit(min(max(limit, 1), 200))
+        )
+        stmt = self._apply_token_scope_filter(stmt, actor)
         items = list(
             self.db.scalars(
-                select(QueueToken)
-                .where(*clauses)
-                .order_by(QueueToken.status == "called", QueueToken.created_at.desc())
-                .limit(min(max(limit, 1), 200))
+                stmt
             )
         )
         return [self._read(item) for item in sorted(items, key=self._sort_key)]
@@ -148,17 +165,19 @@ class QueueService:
     def call_next(self, actor: User, *, queue_scope: str, counter_id: UUID | None = None, doctor_user_id: UUID | None = None) -> QueueTokenRead:
         self._assert_scope(actor, queue_scope)
         counter = self._get_counter(counter_id, actor) if counter_id else None
+        stmt = select(QueueToken).where(
+            QueueToken.queue_scope == queue_scope,
+            QueueToken.status.in_(["registered", "waiting", "recalled", "requested", "sample_pending", "crossmatch_pending", "ready_to_issue"]),
+            QueueToken.token_date == date.today(),
+            QueueToken.is_active.is_(True),
+            *([or_(QueueToken.branch_id == actor.branch_id, QueueToken.branch_id.is_(None))] if actor.branch_id else []),
+            *([QueueToken.doctor_user_id == doctor_user_id] if doctor_user_id else []),
+        )
+        stmt = self._apply_token_scope_filter(stmt, actor)
         waiting = [
             item
             for item in self.db.scalars(
-                select(QueueToken).where(
-                    QueueToken.queue_scope == queue_scope,
-                    QueueToken.status.in_(["registered", "waiting", "recalled", "requested", "sample_pending", "crossmatch_pending", "ready_to_issue"]),
-                    QueueToken.token_date == date.today(),
-                    QueueToken.is_active.is_(True),
-                    *([or_(QueueToken.branch_id == actor.branch_id, QueueToken.branch_id.is_(None))] if actor.branch_id else []),
-                    *([QueueToken.doctor_user_id == doctor_user_id] if doctor_user_id else []),
-                )
+                stmt
             )
         ]
         if not waiting:
@@ -226,6 +245,11 @@ class QueueService:
         if actor.branch_id:
             clauses.append(or_(QueueToken.branch_id == actor.branch_id, QueueToken.branch_id.is_(None)))
         rows = list(self.db.scalars(select(QueueToken).where(*clauses)))
+        if not self.scopes.has_unrestricted_access(actor, module="queue", scope_type="queue_scope"):
+            allowed_scopes = self.scopes.scope_values(actor, "queue_scope", module="queue")
+            allowed_counters = self.scopes.scope_refs(actor, "queue_counter", module="queue")
+            if allowed_scopes or allowed_counters:
+                rows = [item for item in rows if item.queue_scope.lower() in allowed_scopes or (item.counter_id and item.counter_id in allowed_counters)]
         waits = [self._waiting_minutes(item) for item in rows if item.status in {"waiting", "registered", "called", "recalled"}]
         by_scope: dict[str, int] = {}
         by_counter: dict[str, int] = {}
@@ -280,6 +304,7 @@ class QueueService:
         allowed.update(scope_permissions.get(scope, ()))
         if not any(code in permissions for code in allowed):
             raise AppException(403, "forbidden", "You do not have permission for this queue")
+        self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_scope", scope_value=scope)
 
     def _next_sequence(self, branch_id: UUID | None, scope: str, token_date: date) -> int:
         stmt = select(func.coalesce(func.max(QueueToken.token_sequence), 0)).where(QueueToken.queue_scope == scope, QueueToken.token_date == token_date)
@@ -318,13 +343,31 @@ class QueueService:
         counter = self.db.get(QueueCounter, counter_id)
         if not counter or not counter.is_active or (actor.branch_id and counter.branch_id not in {None, actor.branch_id}):
             raise AppException(404, "counter_not_found", "Queue counter not found")
+        self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_counter", scope_ref_id=counter.id)
         return counter
 
     def _get_token(self, token_id: UUID, actor: User) -> QueueToken:
         token = self.db.get(QueueToken, token_id)
         if not token or not token.is_active or (actor.branch_id and token.branch_id not in {None, actor.branch_id}):
             raise AppException(404, "queue_token_not_found", "Queue token not found")
+        self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_scope", scope_value=token.queue_scope)
+        if token.counter_id:
+            self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_counter", scope_ref_id=token.counter_id)
         return token
+
+    def _apply_token_scope_filter(self, stmt, actor: User):
+        if self.scopes.has_unrestricted_access(actor, module="queue", scope_type="queue_scope"):
+            return stmt
+        allowed_scopes = self.scopes.scope_values(actor, "queue_scope", module="queue")
+        allowed_counters = self.scopes.scope_refs(actor, "queue_counter", module="queue")
+        clauses = []
+        if allowed_scopes:
+            clauses.append(func.lower(QueueToken.queue_scope).in_(allowed_scopes))
+        if allowed_counters:
+            clauses.append(QueueToken.counter_id.in_(allowed_counters))
+        if not clauses:
+            return stmt
+        return stmt.where(or_(*clauses))
 
     def _sync_source_queue_fields(self, item: QueueToken, actor: User) -> None:
         if item.visit_id:

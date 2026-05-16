@@ -5,10 +5,11 @@ from decimal import Decimal
 from typing import Type
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppException
+from app.modules.access_scope.service import AccessScopeService
 from app.models.inventory import (
     InventoryCategory,
     InventoryRequisition,
@@ -74,6 +75,7 @@ class InventoryService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repository = InventoryRepository(db)
+        self.scopes = AccessScopeService(db)
 
     def _normalize_pagination(self, page: int, page_size: int) -> tuple[int, int]:
         return max(page, 1), min(max(page_size, 1), 100)
@@ -171,7 +173,86 @@ class InventoryService:
         if not store or not store.is_active:
             raise AppException(404, "store_not_found", "Inventory store not found")
         self._ensure_branch_scope(store, actor)
+        self._assert_store_in_scope(actor, store)
         return store
+
+    def _allowed_store_ids(self, actor: User | None) -> set:
+        if not actor or self.scopes.has_unrestricted_access(actor, module="inventory", scope_type="store"):
+            return set()
+        return self.scopes.scope_refs(actor, "store", module="inventory")
+
+    def _allowed_store_values(self, actor: User | None) -> set[str]:
+        if not actor or self.scopes.has_unrestricted_access(actor, module="inventory", scope_type="store"):
+            return set()
+        return self.scopes.scope_values(actor, "store", module="inventory")
+
+    def _store_ids_for_scope_values(self, values: set[str]):
+        return select(InventoryStore.id).where(
+            InventoryStore.is_active.is_(True),
+            or_(
+                func.lower(InventoryStore.name).in_(values),
+                func.lower(InventoryStore.code).in_(values),
+                func.lower(func.coalesce(InventoryStore.department_name, "")).in_(values),
+                func.lower(func.coalesce(InventoryStore.location, "")).in_(values),
+            ),
+        )
+
+    def _assert_store_in_scope(self, actor: User, store: InventoryStore) -> None:
+        if self.scopes.has_unrestricted_access(actor, module="inventory", scope_type="store"):
+            return
+        if not self.scopes.has_scope_assignments(actor, "store", module="inventory"):
+            return
+        refs = self.scopes.scope_refs(actor, "store", module="inventory")
+        if store.id in refs:
+            return
+        values = self.scopes.scope_values(actor, "store", module="inventory")
+        candidates = {
+            (store.name or "").strip().lower(),
+            (store.code or "").strip().lower(),
+            (store.department_name or "").strip().lower(),
+            (store.location or "").strip().lower(),
+        }
+        if values.intersection(candidates):
+            return
+        self.scopes.assert_in_scope(actor, module="inventory", scope_type="store", scope_value=store.name, scope_ref_id=store.id)
+
+    def _filter_store_stmt(self, stmt, actor: User | None, column):
+        allowed_ids = self._allowed_store_ids(actor)
+        allowed_values = self._allowed_store_values(actor)
+        if not allowed_ids and not allowed_values:
+            return stmt
+        conditions = []
+        if allowed_ids:
+            conditions.append(column.in_(allowed_ids))
+        if allowed_values:
+            conditions.append(column.in_(self._store_ids_for_scope_values(allowed_values)))
+        return stmt.where(or_(*conditions))
+
+    def _filter_transfer_store_stmt(self, stmt, actor: User | None):
+        allowed_ids = self._allowed_store_ids(actor)
+        allowed_values = self._allowed_store_values(actor)
+        if not allowed_ids and not allowed_values:
+            return stmt
+        conditions = []
+        if allowed_ids:
+            conditions.extend([StockTransfer.source_store_id.in_(allowed_ids), StockTransfer.destination_store_id.in_(allowed_ids)])
+        if allowed_values:
+            scoped_store_ids = self._store_ids_for_scope_values(allowed_values)
+            conditions.extend([StockTransfer.source_store_id.in_(scoped_store_ids), StockTransfer.destination_store_id.in_(scoped_store_ids)])
+        return stmt.where(or_(*conditions))
+
+    def _filter_requisition_store_stmt(self, stmt, actor: User | None):
+        allowed_ids = self._allowed_store_ids(actor)
+        allowed_values = self._allowed_store_values(actor)
+        if not allowed_ids and not allowed_values:
+            return stmt
+        conditions = []
+        if allowed_ids:
+            conditions.extend([InventoryRequisition.source_store_id.in_(allowed_ids), InventoryRequisition.destination_store_id.in_(allowed_ids)])
+        if allowed_values:
+            scoped_store_ids = self._store_ids_for_scope_values(allowed_values)
+            conditions.extend([InventoryRequisition.source_store_id.in_(scoped_store_ids), InventoryRequisition.destination_store_id.in_(scoped_store_ids)])
+        return stmt.where(or_(*conditions))
 
     def _get_or_create_balance(self, store: InventoryStore, item: InventoryItem, actor: User, *, for_update: bool = True) -> InventoryStoreItem:
         balance = self.repository.get_store_balance(store.id, item.id, for_update=for_update)
@@ -383,6 +464,7 @@ class InventoryService:
         if user:
             self._ensure_default_stores(user)
         stmt = self.repository.list_stores(branch_id=user.branch_id if user else None, q=q, include_inactive=include_inactive)
+        stmt = self._filter_store_stmt(stmt, user, InventoryStore.id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [self._serialize_store(store) for store in items], total
 
@@ -431,6 +513,7 @@ class InventoryService:
         if user:
             self._ensure_default_stores(user)
         stmt = self.repository.list_store_balances(branch_id=user.branch_id if user else None, store_id=store_id, item_id=item_id, q=q, stock_status=stock_status)
+        stmt = self._filter_store_stmt(stmt, user, InventoryStoreItem.store_id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [self._serialize_balance(balance) for balance in items], total
 
@@ -575,6 +658,7 @@ class InventoryService:
 
     def list_receivings(self, page: int = 1, page_size: int = 20, q: str | None = None, user: User | None = None):
         stmt = self.repository.list_receivings(branch_id=user.branch_id if user else None, q=q)
+        stmt = self._filter_store_stmt(stmt, user, StockReceiving.store_id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [StockReceivingRead(
             id=record.id,
@@ -676,6 +760,7 @@ class InventoryService:
 
     def list_issues(self, page: int = 1, page_size: int = 20, q: str | None = None, user: User | None = None):
         stmt = self.repository.list_issues(branch_id=user.branch_id if user else None, q=q)
+        stmt = self._filter_store_stmt(stmt, user, StockIssue.store_id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [StockIssueRead(
             id=issue.id,
@@ -747,6 +832,7 @@ class InventoryService:
 
     def list_transfers(self, page: int = 1, page_size: int = 20, q: str | None = None, user: User | None = None):
         stmt = self.repository.list_transfers(branch_id=user.branch_id if user else None, q=q)
+        stmt = self._filter_transfer_store_stmt(stmt, user)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [StockTransferRead(
             id=transfer.id,
@@ -868,6 +954,7 @@ class InventoryService:
         if q:
             pattern = f"%{q.strip().lower()}%"
             stmt = stmt.where(func.lower(func.coalesce(StockAdjustment.reason, "")).like(pattern))
+        stmt = self._filter_store_stmt(stmt, user, StockAdjustment.store_id)
         items, total = self._paginate(stmt.order_by(StockAdjustment.created_at.desc()), page=page, page_size=page_size)
         return [StockAdjustmentRead(
             id=adjustment.id,
@@ -1048,6 +1135,7 @@ class InventoryService:
         if user:
             self._ensure_default_stores(user)
         stmt = self.repository.list_requisitions(branch_id=user.branch_id if user else None, q=q, store_id=store_id, status=status)
+        stmt = self._filter_requisition_store_stmt(stmt, user)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [self._serialize_requisition(req) for req in items], total
 
@@ -1415,39 +1503,75 @@ class InventoryService:
         branch_id = user.branch_id if user else None
         if user:
             self._ensure_default_stores(user)
+        allowed_store_ids = self._allowed_store_ids(user)
+        allowed_store_values = self._allowed_store_values(user)
+        scoped_store_ids = self._store_ids_for_scope_values(allowed_store_values) if allowed_store_values else None
         stmt = select(func.coalesce(func.sum(InventoryItem.stock_value), 0)).where(InventoryItem.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(InventoryItem.branch_id == branch_id)
+        if allowed_store_ids or scoped_store_ids is not None:
+            stmt = select(func.coalesce(func.sum(InventoryStoreItem.quantity_on_hand), 0)).where(InventoryStoreItem.is_active.is_(True), InventoryStoreItem.store_id.in_(allowed_store_ids))
+            if allowed_store_ids and scoped_store_ids is not None:
+                stmt = select(func.coalesce(func.sum(InventoryStoreItem.quantity_on_hand), 0)).where(
+                    InventoryStoreItem.is_active.is_(True),
+                    or_(InventoryStoreItem.store_id.in_(allowed_store_ids), InventoryStoreItem.store_id.in_(scoped_store_ids)),
+                )
+            elif scoped_store_ids is not None:
+                stmt = select(func.coalesce(func.sum(InventoryStoreItem.quantity_on_hand), 0)).where(
+                    InventoryStoreItem.is_active.is_(True),
+                    InventoryStoreItem.store_id.in_(scoped_store_ids),
+                )
         total_stock = Decimal(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(InventoryItem.id)).where(InventoryItem.is_active.is_(True))
         if branch_id:
             stmt = stmt.where(InventoryItem.branch_id == branch_id)
+        if allowed_store_ids or scoped_store_ids is not None:
+            stmt = select(func.count(func.distinct(InventoryStoreItem.item_id))).where(InventoryStoreItem.is_active.is_(True))
+            stmt = self._filter_store_stmt(stmt, user, InventoryStoreItem.store_id)
         total_items = int(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(InventoryItem.id)).where(InventoryItem.is_active.is_(True), InventoryItem.stock_quantity <= InventoryItem.reorder_level)
         if branch_id:
             stmt = stmt.where(InventoryItem.branch_id == branch_id)
+        if allowed_store_ids or scoped_store_ids is not None:
+            stmt = select(func.count(InventoryStoreItem.id)).where(
+                InventoryStoreItem.is_active.is_(True),
+                InventoryStoreItem.quantity_on_hand <= InventoryStoreItem.reorder_level,
+            )
+            stmt = self._filter_store_stmt(stmt, user, InventoryStoreItem.store_id)
         low_stock = int(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(InventoryItem.id)).where(InventoryItem.is_active.is_(True), InventoryItem.stock_quantity <= 0)
         if branch_id:
             stmt = stmt.where(InventoryItem.branch_id == branch_id)
+        if allowed_store_ids or scoped_store_ids is not None:
+            stmt = select(func.count(InventoryStoreItem.id)).where(InventoryStoreItem.is_active.is_(True), InventoryStoreItem.quantity_on_hand <= 0)
+            stmt = self._filter_store_stmt(stmt, user, InventoryStoreItem.store_id)
         out_of_stock = int(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(StockBatch.id)).where(StockBatch.is_active.is_(True), StockBatch.expiry_date <= date.today())
         if branch_id:
             stmt = stmt.where(StockBatch.item.has(InventoryItem.branch_id == branch_id))
+        if allowed_store_ids or scoped_store_ids is not None:
+            conditions = []
+            if allowed_store_ids:
+                conditions.append(StockBatch.store_id.in_(allowed_store_ids))
+            if scoped_store_ids is not None:
+                conditions.append(StockBatch.store_id.in_(scoped_store_ids))
+            stmt = stmt.where(or_(*conditions))
         near_expiry = int(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(StockReceiving.id)).where(StockReceiving.received_date >= date.today())
         if branch_id:
             stmt = stmt.where(StockReceiving.item.has(InventoryItem.branch_id == branch_id))
+        stmt = self._filter_store_stmt(stmt, user, StockReceiving.store_id)
         recent_receivings = int(self.db.scalar(stmt) or 0)
 
         stmt = select(func.count(StockIssue.id)).where(StockIssue.issue_date >= date.today())
         if branch_id:
             stmt = stmt.where(StockIssue.item.has(InventoryItem.branch_id == branch_id))
+        stmt = self._filter_store_stmt(stmt, user, StockIssue.store_id)
         recent_issues = int(self.db.scalar(stmt) or 0)
 
         category_stmt = select(InventoryItem.item_type, func.count(InventoryItem.id)).where(InventoryItem.is_active.is_(True))
@@ -1458,16 +1582,37 @@ class InventoryService:
         stores_stmt = select(InventoryStore).where(InventoryStore.is_active.is_(True))
         if branch_id:
             stores_stmt = stores_stmt.where(InventoryStore.branch_id == branch_id)
+        if allowed_store_ids or scoped_store_ids is not None:
+            conditions = []
+            if allowed_store_ids:
+                conditions.append(InventoryStore.id.in_(allowed_store_ids))
+            if scoped_store_ids is not None:
+                conditions.append(InventoryStore.id.in_(scoped_store_ids))
+            stores_stmt = stores_stmt.where(or_(*conditions))
         stores = list(self.db.scalars(stores_stmt))
         store_stock_value = {store.name: Decimal(0) for store in stores}
         for balance in self.db.scalars(select(InventoryStoreItem).options(joinedload(InventoryStoreItem.store), joinedload(InventoryStoreItem.item)).where(InventoryStoreItem.is_active.is_(True))).all():
             if branch_id and balance.store and balance.store.branch_id != branch_id:
                 continue
+            if allowed_store_ids or allowed_store_values:
+                candidates = {
+                    balance.store_id in allowed_store_ids,
+                    (balance.store.name or "").strip().lower() in allowed_store_values if balance.store else False,
+                    (balance.store.code or "").strip().lower() in allowed_store_values if balance.store else False,
+                    (balance.store.department_name or "").strip().lower() in allowed_store_values if balance.store else False,
+                    (balance.store.location or "").strip().lower() in allowed_store_values if balance.store else False,
+                }
+                if not any(candidates):
+                    continue
             unit_value = Decimal(balance.item.stock_value or 0) / Decimal(balance.item.stock_quantity or 1) if balance.item and Decimal(balance.item.stock_quantity or 0) > 0 else Decimal(0)
             store_stock_value[balance.store.name if balance.store else "Store"] = store_stock_value.get(balance.store.name if balance.store else "Store", Decimal(0)) + Decimal(balance.quantity_on_hand or 0) * unit_value
 
-        open_requisitions = int(self.db.scalar(select(func.count(InventoryRequisition.id)).where(InventoryRequisition.status.in_(["draft", "requested", "approved", "partially_approved"]))) or 0)
-        open_transfers = int(self.db.scalar(select(func.count(StockTransfer.id)).where(StockTransfer.status.in_(["draft", "requested", "approved", "partially_issued", "issued", "partially_received"]))) or 0)
+        requisitions_stmt = select(func.count(InventoryRequisition.id)).where(InventoryRequisition.status.in_(["draft", "requested", "approved", "partially_approved"]))
+        requisitions_stmt = self._filter_requisition_store_stmt(requisitions_stmt, user)
+        open_requisitions = int(self.db.scalar(requisitions_stmt) or 0)
+        transfers_stmt = select(func.count(StockTransfer.id)).where(StockTransfer.status.in_(["draft", "requested", "approved", "partially_issued", "issued", "partially_received"]))
+        transfers_stmt = self._filter_transfer_store_stmt(transfers_stmt, user)
+        open_transfers = int(self.db.scalar(transfers_stmt) or 0)
 
         return InventoryDashboardSummaryRead(
             total_stock_value=total_stock,

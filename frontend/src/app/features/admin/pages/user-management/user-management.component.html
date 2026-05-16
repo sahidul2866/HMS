@@ -81,7 +81,7 @@
               <th>Role Profile</th>
               <th>Branch / Dept</th>
               <th>Status</th>
-              <th>OPD Settings</th>
+              <th>Access</th>
             </tr>
           </thead>
           <tbody>
@@ -132,9 +132,10 @@
                       <strong class="doctor-settings-title">{{ getOPDHeaderTitle(user) }}</strong>
                       <span class="muted-line">{{ getOPDHeaderMeta(user) }}</span>
                       <button class="secondary-btn" type="button" (click)="openOPDSettingsModal(user)">Open OPD Settings</button>
+                      <button class="secondary-btn" type="button" (click)="openScopeModal(user)">Effective Access</button>
                     </div>
                   } @else {
-                    <span class="muted-line">Not a doctor user</span>
+                    <button class="secondary-btn" type="button" (click)="openScopeModal(user)">Effective Access</button>
                   }
                 </td>
               </tr>
@@ -251,6 +252,91 @@
             <button class="primary-btn" type="submit" [disabled]="creating">{{ creating ? 'Creating...' : 'Create User' }}</button>
           </div>
         </form>
+      </section>
+    </div>
+  }
+
+  @if (scopeModalOpen && selectedScopeUser) {
+    <div class="modal-backdrop" (click)="closeScopeModal()">
+      <section class="modal-card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <p class="modal-label">Assignment Scope</p>
+            <h3>{{ selectedScopeUser.full_name }}</h3>
+            <p class="page-subtitle">View effective roles, permissions, inherited scopes, and active operational assignments.</p>
+          </div>
+          <button class="icon-btn" type="button" (click)="closeScopeModal()">×</button>
+        </div>
+
+        <div class="modal-grid">
+          <section class="field field--wide">
+            <span>Effective Roles</span>
+            <div class="role-pill-group">
+              @for (role of selectedAccess?.roles || []; track role.id) {
+                <span class="role-pill">{{ role.name }}</span>
+              }
+            </div>
+          </section>
+
+          <section class="field field--wide">
+            <span>Active User Scopes</span>
+            <div class="insight-list">
+              @for (scope of selectedAccess?.user_scopes || []; track scope.id) {
+                <article class="insight-item">
+                  <strong>{{ scope.scope_type }} · {{ scope.scope_value || scope.scope_ref_id || 'All' }}</strong>
+                  <p>{{ scope.module || 'Any module' }} · {{ scope.is_temporary ? 'Temporary' : 'Standing' }} · {{ scope.reason || 'No remarks' }}</p>
+                </article>
+              }
+            </div>
+          </section>
+
+          <form class="field field--wide modal-grid" [formGroup]="scopeForm" (ngSubmit)="submitScope()">
+            <label class="field">
+              <span>Scope Type</span>
+              <select formControlName="scope_type">
+                <option value="ward">Ward</option>
+                <option value="store">Store</option>
+                <option value="queue_scope">Queue Scope</option>
+                <option value="queue_counter">Queue Counter</option>
+                <option value="doctor_profile">Doctor Profile</option>
+                <option value="nurse_station">Nurse Station</option>
+                <option value="shift">Shift</option>
+                <option value="lab_section">Lab Section</option>
+                <option value="radiology_unit">Radiology Unit</option>
+                <option value="blood_bank_unit">Blood Bank Unit</option>
+                <option value="department">Department</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Scope Value</span>
+              <input type="text" formControlName="scope_value" placeholder="Ward A, morning, opd, hematology" />
+            </label>
+            <label class="field">
+              <span>Record ID</span>
+              <input type="text" formControlName="scope_ref_id" placeholder="Optional UUID for store/counter/user" />
+            </label>
+            <label class="field">
+              <span>Module</span>
+              <input type="text" formControlName="module" placeholder="ipd, inventory, queue..." />
+            </label>
+            <label class="field">
+              <span>Starts At</span>
+              <input type="datetime-local" formControlName="starts_at" />
+            </label>
+            <label class="field">
+              <span>Ends At</span>
+              <input type="datetime-local" formControlName="ends_at" />
+            </label>
+            <label class="field field--wide">
+              <span>Reason</span>
+              <input type="text" formControlName="reason" placeholder="Roster assignment, temporary coverage, supervisor override" />
+            </label>
+            <div class="modal-actions field--wide">
+              <button class="secondary-btn" type="button" (click)="closeScopeModal()">Close</button>
+              <button class="primary-btn" type="submit">Assign Scope</button>
+            </div>
+          </form>
+        </div>
       </section>
     </div>
   }

@@ -6,7 +6,7 @@ import { Router } from '@angular/router';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { Patient } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
-import { AdminUser, AdminRole } from '../../models/admin.models';
+import { AdminUser, AdminRole, EffectiveAccess } from '../../models/admin.models';
 import { AdminUserService } from '../../services/admin-user.service';
 import { RoleService } from '../../services/role.service';
 
@@ -29,6 +29,9 @@ export class UserManagementComponent {
   roles: AdminRole[] = [];
   patients: Patient[] = [];
   createModalOpen = false;
+  scopeModalOpen = false;
+  selectedAccess: EffectiveAccess | null = null;
+  selectedScopeUser: AdminUser | null = null;
   creating = false;
 
   readonly filterForm = this.fb.group({
@@ -44,6 +47,19 @@ export class UserManagementComponent {
     password: ['ChangeMe123!', Validators.required],
     role_code: ['ADMIN', Validators.required],
     patient_id: [''],
+  });
+
+  readonly scopeForm = this.fb.group({
+    scope_type: ['ward', Validators.required],
+    scope_value: ['', Validators.required],
+    scope_ref_id: [''],
+    module: [''],
+    is_primary: [false],
+    is_temporary: [false],
+    is_override: [false],
+    starts_at: [''],
+    ends_at: [''],
+    reason: [''],
   });
 
   constructor() {
@@ -75,6 +91,23 @@ export class UserManagementComponent {
 
   openOPDSettingsModal(user: AdminUser): void {
     void this.router.navigate(['/opd/settings'], { queryParams: { doctor: user.id } });
+  }
+
+  openScopeModal(user: AdminUser): void {
+    this.selectedScopeUser = user;
+    this.scopeModalOpen = true;
+    this.loadEffectiveAccess(user);
+  }
+
+  closeScopeModal(): void {
+    this.scopeModalOpen = false;
+    this.selectedScopeUser = null;
+    this.selectedAccess = null;
+    this.scopeForm.reset({ scope_type: 'ward', scope_value: '', scope_ref_id: '', module: '', is_primary: false, is_temporary: false, is_override: false, starts_at: '', ends_at: '', reason: '' });
+  }
+
+  loadEffectiveAccess(user: AdminUser): void {
+    this.adminUserService.effectiveAccess(user.id).subscribe((access) => (this.selectedAccess = access));
   }
 
   get selectedRoleCode(): string {
@@ -217,6 +250,31 @@ export class UserManagementComponent {
         error: () => {
           this.creating = false;
         },
+      });
+  }
+
+  submitScope(): void {
+    if (!this.selectedScopeUser || this.scopeForm.invalid) return;
+    const value = this.scopeForm.getRawValue();
+    this.adminUserService
+      .createUserScope({
+        user_id: this.selectedScopeUser.id,
+        scope_type: value.scope_type!,
+        scope_value: value.scope_value || null,
+        scope_ref_id: value.scope_ref_id || null,
+        module: value.module || null,
+        status: 'active',
+        is_primary: !!value.is_primary,
+        is_temporary: !!value.is_temporary,
+        is_override: !!value.is_override,
+        starts_at: value.starts_at || null,
+        ends_at: value.ends_at || null,
+        reason: value.reason || null,
+        meta: {},
+      })
+      .subscribe(() => {
+        this.notificationService.success('Scope assignment saved.');
+        if (this.selectedScopeUser) this.loadEffectiveAccess(this.selectedScopeUser);
       });
   }
 
