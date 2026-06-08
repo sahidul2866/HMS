@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_current_user_optional, get_request_context
 from app.modules.auth.service import AuthService
 from app.modules.patient_auth.service import PatientAuthService
-from app.schemas.auth import LoginRequest, LoginResponse, LogoutRequest, PatientLoginResponse, PatientRegisterRequest, RefreshRequest
+from app.schemas.auth import LoginRequest, LoginResponse, LogoutRequest, PasswordResetRequest, PatientLoginResponse, PatientRegisterRequest, RefreshRequest
 from app.schemas.common import MessageResponse
 from app.schemas.user import CurrentUserRead
 
@@ -45,3 +45,14 @@ def me(user=Depends(get_current_user), db: Session = Depends(get_db)) -> Current
     if not refreshed_user:
         return service.to_current_user(user)
     return service.to_current_user(refreshed_user)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(
+    payload: PasswordResetRequest,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    AuthService(db).reset_password(user, payload, context)
+    return MessageResponse(message="Password updated successfully")

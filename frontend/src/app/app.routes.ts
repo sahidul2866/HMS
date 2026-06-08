@@ -18,6 +18,7 @@ import { BillingOverviewComponent } from './features/billing/pages/billing-overv
 import { BillingSettingsComponent } from './features/billing/pages/billing-settings/billing-settings.component';
 import { BillingServicesComponent } from './features/billing/pages/billing-services/billing-services.component';
 import { BloodBankWorkspaceComponent } from './features/blood-bank/pages/blood-bank-workspace/blood-bank-workspace.component';
+import { CateringWorkspaceComponent } from './features/catering/pages/catering-workspace/catering-workspace.component';
 import { AppointmentCreateComponent } from './features/appointments/pages/appointment-create/appointment-create.component';
 import { AppointmentsOverviewComponent } from './features/appointments/pages/appointments-overview/appointments-overview.component';
 import { IPDOverviewComponent } from './features/ipd/pages/ipd-overview/ipd-overview.component';
@@ -82,6 +83,19 @@ const bloodBankRoutes: Routes = [
   { path: 'blood-bank/discard', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.discard'], tabLabel: 'Blood Discard', bloodBankTab: 'discard' } },
   { path: 'blood-bank/reports', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.report.view'], tabLabel: 'Blood Bank Reports', bloodBankTab: 'reports' } },
   { path: 'blood-bank/settings', component: BloodBankWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['blood_bank.component.prepare'], tabLabel: 'Blood Bank Settings', bloodBankTab: 'settings' } },
+];
+
+const cateringRoutes: Routes = [
+  { path: 'catering', redirectTo: 'catering/dashboard', pathMatch: 'full' },
+  { path: 'catering/dashboard', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.dashboard.view'], tabLabel: 'Catering Dashboard', cateringTab: 'dashboard' } },
+  { path: 'catering/diet-orders', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.view'], tabLabel: 'Patient Diet Orders', cateringTab: 'diet-orders' } },
+  { path: 'catering/kitchen', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.kitchen_queue.view'], tabLabel: 'Kitchen Queue', cateringTab: 'kitchen' } },
+  { path: 'catering/schedule', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.settings.manage'], tabLabel: 'Meal Schedule', cateringTab: 'schedule' } },
+  { path: 'catering/delivery', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.meal.deliver'], tabLabel: 'Meal Delivery', cateringTab: 'delivery' } },
+  { path: 'catering/staff-meals', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.staff_meal.manage'], tabLabel: 'Staff Meals', cateringTab: 'staff-meals' } },
+  { path: 'catering/inventory', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.kitchen_queue.view'], tabLabel: 'Kitchen Inventory', cateringTab: 'inventory' } },
+  { path: 'catering/reports', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.report.view'], tabLabel: 'Catering Reports', cateringTab: 'reports' } },
+  { path: 'catering/settings', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.settings.manage'], tabLabel: 'Catering Settings', cateringTab: 'settings' } },
 ];
 
 export const appRoutes: Routes = [
@@ -192,6 +206,7 @@ export const appRoutes: Routes = [
         data: { permissions: ['billing.service.manage'], tabLabel: 'Billing Settings' },
       },
       ...bloodBankRoutes,
+      ...cateringRoutes,
       {
         path: 'scanner/settings',
         component: ScannerSettingsComponent,
@@ -223,11 +238,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['queue.view'], tabLabel: 'Queue Center' },
       },
       {
-        path: 'keyboard/shortcuts',
+        path: 'manual',
         component: ShortcutSettingsComponent,
         canActivate: [permissionGuard],
-        data: { permissions: ['dashboard.view'], tabLabel: 'Keyboard Shortcuts' },
+        data: { permissions: ['dashboard.view'], tabLabel: 'User Manual' },
       },
+      { path: 'keyboard/shortcuts', redirectTo: 'manual', pathMatch: 'full' },
       {
         path: 'opd',
         component: OPDOverviewComponent,

@@ -6,6 +6,7 @@ from app.modules.admin.router import router as admin_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.branches.router import router as branches_router
+from app.modules.catering.router import router as catering_router
 from app.modules.billing.router import router as billing_router
 from app.modules.blood_bank.router import router as blood_bank_router
 from app.modules.configuration.router import router as configuration_router
@@ -51,6 +52,7 @@ api_router.include_router(departments_router)
 api_router.include_router(audit_router)
 api_router.include_router(billing_router)
 api_router.include_router(blood_bank_router)
+api_router.include_router(catering_router)
 api_router.include_router(configuration_router)
 api_router.include_router(opd_router)
 api_router.include_router(ot_router)

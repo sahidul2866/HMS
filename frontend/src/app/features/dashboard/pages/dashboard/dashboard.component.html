@@ -16,110 +16,6 @@
     </div>
   </section>
 
-  <section class="role-home-grid">
-    <article class="page-card dashboard-panel">
-      <div class="card-head"><h2>Role Focus</h2><span>What this account should work on first</span></div>
-      <div class="compact-list">
-        @for (item of roleExperience.focus; track item) {
-          <div><span>{{ item }}</span><b>Ready</b></div>
-        }
-      </div>
-    </article>
-
-    <article class="page-card dashboard-panel">
-      <div class="card-head"><h2>Quick Actions</h2><span>Filtered by effective permissions</span></div>
-      <div class="quick-link-grid">
-        @for (action of roleActions; track action.label) {
-          <button class="quick-link-card" type="button" (click)="openRoute(action.route)">
-            <strong>{{ action.label }}</strong>
-            <small>{{ action.detail }}</small>
-          </button>
-        }
-      </div>
-    </article>
-  </section>
-
-  @if (!loading && analytics) {
-    <section class="kpi-grid">
-      @for (metric of roleMetrics; track metric.label) {
-        <article class="page-card kpi-card clickable" [ngClass]="metric.tone" (click)="openRoute(metric.route)" role="link" tabindex="0">
-          <div class="kpi-top">
-            <span class="kpi-icon">●</span>
-            <span class="trend trend-flat">Role</span>
-          </div>
-          <strong>{{ metric.value }}</strong>
-          <h3>{{ metric.label }}</h3>
-          <p>{{ metric.detail }}</p>
-        </article>
-      }
-    </section>
-  }
-
-  @if (showExecutiveAnalytics) {
-  <section class="page-card data-panel">
-    <div class="panel-head">
-      <div>
-        <h2 class="section-title">Filters</h2>
-        <div class="section-copy">Narrow the dashboard by date, patient type, and module.</div>
-      </div>
-    </div>
-    <div class="filter-bar">
-      <label class="field"><span>Date From</span><input type="date" [(ngModel)]="filters.date_from" (ngModelChange)="onFilterChanged()" /></label>
-      <label class="field"><span>Date To</span><input type="date" [(ngModel)]="filters.date_to" (ngModelChange)="onFilterChanged()" /></label>
-      <label class="field"><span>Department</span><input placeholder="All departments" [(ngModel)]="filters.department" (ngModelChange)="onFilterChanged(true)" /></label>
-      <label class="field">
-        <span>Patient Type</span>
-        <select [(ngModel)]="filters.patient_type" (ngModelChange)="onFilterChanged()">
-          <option value="">All</option>
-          <option value="opd">OPD</option>
-          <option value="ipd">IPD</option>
-          <option value="er">Emergency</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Payment</span>
-        <select [(ngModel)]="filters.payment_status" (ngModelChange)="onFilterChanged()">
-          <option value="">All</option>
-          <option value="paid">Paid</option>
-          <option value="partial">Partial</option>
-          <option value="unpaid">Unpaid</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Module</span>
-        <select [(ngModel)]="filters.module_type" (ngModelChange)="onFilterChanged()">
-          <option value="">All</option>
-          <option value="billing">Billing</option>
-          <option value="lab">Lab</option>
-          <option value="pharmacy">Pharmacy</option>
-          <option value="hr">HR</option>
-        </select>
-      </label>
-    </div>
-  </section>
-  }
-
-  @if (showExecutiveAnalytics) {
-  <section class="page-card demo-flow-card">
-    <div class="demo-flow-header">
-      <div>
-        <div class="hero-kicker">Client Demo Flow</div>
-        <h2 class="section-title">OPD → IPD → Settlement</h2>
-      </div>
-      <a class="primary-btn" routerLink="/opd/register">Start Registration</a>
-    </div>
-    <div class="demo-flow">
-      @for (step of demoJourneySteps; track step.label; let index = $index) {
-        <button class="demo-step" type="button" (click)="openDemoStep(step.route)">
-          <span>{{ index + 1 }}</span>
-          <strong>{{ step.label }}</strong>
-          <small>{{ step.detail }}</small>
-        </button>
-      }
-    </div>
-  </section>
-  }
-
   @if (error) {
     <div class="alert error">{{ error }}</div>
   }
@@ -131,7 +27,6 @@
       }
     </section>
   } @else if (analytics) {
-    @if (showExecutiveAnalytics) {
     <section class="page-card summary-band">
       <div class="summary-copy">
         <strong>Today at a Glance</strong>
@@ -155,6 +50,141 @@
       </div>
     </section>
 
+    <section class="page-card chart-card combined-stat-chart">
+      <div class="card-head">
+        <h2>Hospital Trend</h2>
+        <span>Revenue, cost, patients, appointments, and IPD movement</span>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-group">
+          <label><input type="radio" name="statRange" value="daily" [(ngModel)]="statRange" /> Daily</label>
+          <label><input type="radio" name="statRange" value="weekly" [(ngModel)]="statRange" /> Weekly</label>
+          <label><input type="radio" name="statRange" value="monthly" [(ngModel)]="statRange" /> Monthly</label>
+          <label><input type="radio" name="statRange" value="yearly" [(ngModel)]="statRange" /> Yearly</label>
+        </div>
+        <div class="toggle-group metric-toggle-group">
+          <label><input type="radio" name="statMetric" value="all" [(ngModel)]="statMetric" /> All</label>
+          <label><input type="radio" name="statMetric" value="revenue" [(ngModel)]="statMetric" /> Revenue</label>
+          <label><input type="radio" name="statMetric" value="cost" [(ngModel)]="statMetric" /> Cost</label>
+          <label><input type="radio" name="statMetric" value="patients" [(ngModel)]="statMetric" /> Patients</label>
+          <label><input type="radio" name="statMetric" value="appointments" [(ngModel)]="statMetric" /> Appointments</label>
+          <label><input type="radio" name="statMetric" value="admissions" [(ngModel)]="statMetric" /> IPD Movement</label>
+        </div>
+      </div>
+      <svg class="finance-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+        @for (series of statChartSeries(); track series.key) {
+          <polyline class="line" [ngClass]="series.tone" [attr.points]="statLinePoints(series.values)"></polyline>
+        }
+      </svg>
+      <div class="legend-row finance-legend">
+        @for (series of statChartSeries(); track series.key) {
+          <span><b>{{ series.key === 'revenue' || series.key === 'cost' ? formatMoney(statSummary(series.values)) : statSummary(series.values) }}</b>{{ series.label }}</span>
+        }
+      </div>
+    </section>
+
+    <section class="page-card monthly-financial-card">
+      <div class="financial-card-head">
+        <div>
+          <h2>DDT MediProfit AI - Monthly Financial Performance</h2>
+          <p>Monthly comparison of hospital revenue, expenses, and net profit.</p>
+        </div>
+      </div>
+      <div class="financial-chart-shell">
+        <div class="financial-y-axis">
+          @for (label of monthlyFinancialAxisLabels(); track label) {
+            <span>{{ formatCompactMoney(label) }}</span>
+          }
+        </div>
+        <div class="financial-plot">
+          <div class="financial-gridlines" aria-hidden="true">
+            @for (label of monthlyFinancialAxisLabels(); track label) {
+              <span></span>
+            }
+          </div>
+          <div class="financial-bars">
+            @for (row of monthlyFinancialPerformanceRows(); track row.label) {
+              <div class="financial-month">
+                <div class="financial-bar-group">
+                  <i class="financial-bar revenue" [style.height.%]="monthlyFinancialBarHeight(row.revenue)" [title]="'Revenue ' + formatMoney(row.revenue)"></i>
+                  <i class="financial-bar expenses" [style.height.%]="monthlyFinancialBarHeight(row.expenses)" [title]="'Expenses ' + formatMoney(row.expenses)"></i>
+                  <i class="financial-bar profit" [style.height.%]="monthlyFinancialBarHeight(row.netProfit)" [title]="'Net profit ' + formatMoney(row.netProfit)"></i>
+                </div>
+                <span>{{ row.label }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+      <div class="financial-legend">
+        <span><i class="revenue"></i>Revenue</span>
+        <span><i class="expenses"></i>Expenses</span>
+        <span><i class="profit"></i>Net Profit</span>
+      </div>
+    </section>
+
+    @if (showExecutiveAnalytics) {
+      <section class="page-card data-panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="section-title">Filters</h2>
+            <div class="section-copy">Narrow the dashboard by date, patient type, and module.</div>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <label class="field"><span>Date From</span><input type="date" [(ngModel)]="filters.date_from" (ngModelChange)="onFilterChanged()" /></label>
+          <label class="field"><span>Date To</span><input type="date" [(ngModel)]="filters.date_to" (ngModelChange)="onFilterChanged()" /></label>
+          <label class="field"><span>Department</span><input placeholder="All departments" [(ngModel)]="filters.department" (ngModelChange)="onFilterChanged(true)" /></label>
+          <label class="field">
+            <span>Patient Type</span>
+            <select [(ngModel)]="filters.patient_type" (ngModelChange)="onFilterChanged()">
+              <option value="">All</option>
+              <option value="opd">OPD</option>
+              <option value="ipd">IPD</option>
+              <option value="er">Emergency</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Payment</span>
+            <select [(ngModel)]="filters.payment_status" (ngModelChange)="onFilterChanged()">
+              <option value="">All</option>
+              <option value="paid">Paid</option>
+              <option value="partial">Partial</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Module</span>
+            <select [(ngModel)]="filters.module_type" (ngModelChange)="onFilterChanged()">
+              <option value="">All</option>
+              <option value="billing">Billing</option>
+              <option value="lab">Lab</option>
+              <option value="pharmacy">Pharmacy</option>
+              <option value="hr">HR</option>
+            </select>
+          </label>
+        </div>
+      </section>
+    }
+
+    @if (showRoleAnalytics) {
+      <section class="kpi-grid role-dashboard-grid">
+        @for (card of roleDashboardCards; track card.label) {
+          <article class="page-card kpi-card role-dashboard-card clickable" [ngClass]="card.tone" (click)="openRoute(card.route)" role="link" tabindex="0">
+            <div class="kpi-top">
+              <span class="kpi-icon">●</span>
+              <span class="trend trend-flat">My Work</span>
+            </div>
+            <strong>{{ card.value }}</strong>
+            <h3>{{ card.label }}</h3>
+            <p>{{ card.detail }}</p>
+          </article>
+        }
+      </section>
+    }
+
+    @if (showExecutiveAnalytics) {
+
     <section class="kpi-grid">
       @for (kpi of priorityKpis; track kpi.title) {
         <article class="page-card kpi-card clickable" [ngClass]="kpi.tone" [routerLink]="kpiRoute(kpi)" role="link" tabindex="0">
@@ -170,32 +200,6 @@
           </svg>
         </article>
       }
-    </section>
-
-    <section class="decision-grid">
-      <article class="page-card dashboard-panel">
-        <div class="card-head"><h2>Action Queue</h2><span>High-impact work to clear first</span></div>
-        <div class="task-list">
-          @for (task of pendingTaskItems; track task.label) {
-            <a class="task-item" [class]="task.tone" [routerLink]="task.route">
-              <span><strong>{{ task.label }}</strong><span>{{ task.detail }}</span></span>
-              <b>{{ task.value }}</b>
-            </a>
-          }
-        </div>
-      </article>
-
-      <article class="page-card dashboard-panel">
-        <div class="card-head"><h2>Quick Links</h2><span>Common daily actions</span></div>
-        <div class="quick-link-grid">
-          @for (link of dashboardQuickLinks; track link.label) {
-            <a class="quick-link-card" [routerLink]="link.route">
-              <strong>{{ link.label }}</strong>
-              <small>{{ link.detail }}</small>
-            </a>
-          }
-        </div>
-      </article>
     </section>
 
     <section class="dashboard-grid">
@@ -227,61 +231,6 @@
         </div>
         <strong>{{ formatMoney(total(analytics.revenue_analytics.daily_revenue)) }}</strong>
         <div class="metric-pill">Outstanding due {{ formatMoney(analytics.revenue_analytics.outstanding_due) }}</div>
-      </article>
-
-      <article class="page-card chart-card span-2 clickable" routerLink="/accounting" role="link" tabindex="0">
-        <div class="card-head">
-          <h2>Revenue vs Cost</h2>
-          <span>Goal vs current</span>
-        </div>
-
-        <div class="toggle-row" (click)="$event.stopPropagation()">
-          <div class="toggle-group">
-            <label><input type="radio" name="financeRange" value="daily" [(ngModel)]="financeRange" /> Daily</label>
-            <label><input type="radio" name="financeRange" value="monthly" [(ngModel)]="financeRange" /> Monthly</label>
-            <label><input type="radio" name="financeRange" value="yearly" [(ngModel)]="financeRange" /> Yearly</label>
-          </div>
-          <div class="toggle-group">
-            <label><input type="radio" name="financeMetric" value="all" [(ngModel)]="financeMetric" /> All</label>
-            <label><input type="radio" name="financeMetric" value="revenue" [(ngModel)]="financeMetric" /> Revenue</label>
-            <label><input type="radio" name="financeMetric" value="cost" [(ngModel)]="financeMetric" /> Cost</label>
-          </div>
-          <div class="toggle-group">
-            <label><input type="radio" name="financeCompare" value="both" [(ngModel)]="financeCompare" /> Both</label>
-            <label><input type="radio" name="financeCompare" value="current" [(ngModel)]="financeCompare" /> Current</label>
-            <label><input type="radio" name="financeCompare" value="goal" [(ngModel)]="financeCompare" /> Goal</label>
-          </div>
-        </div>
-
-        <svg class="finance-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
-          @if (financeMetric !== 'cost' && financeCompare !== 'goal') {
-            <polyline class="line revenue" [attr.points]="financeLinePoints(financeSeries('revenue', 'current'))"></polyline>
-          }
-          @if (financeMetric !== 'cost' && financeCompare !== 'current') {
-            <polyline class="line revenue goal" [attr.points]="financeLinePoints(financeSeries('revenue', 'goal'))"></polyline>
-          }
-          @if (financeMetric !== 'revenue' && financeCompare !== 'goal') {
-            <polyline class="line cost" [attr.points]="financeLinePoints(financeSeries('cost', 'current'))"></polyline>
-          }
-          @if (financeMetric !== 'revenue' && financeCompare !== 'current') {
-            <polyline class="line cost goal" [attr.points]="financeLinePoints(financeSeries('cost', 'goal'))"></polyline>
-          }
-        </svg>
-
-        <div class="legend-row finance-legend">
-          @if (financeMetric !== 'cost') {
-            <span><b>{{ formatMoney(financeSummary('revenue','current')) }}</b>Revenue (current)</span>
-          }
-          @if (financeMetric !== 'cost') {
-            <span><b>{{ formatMoney(financeSummary('revenue','goal')) }}</b>Revenue (goal)</span>
-          }
-          @if (financeMetric !== 'revenue') {
-            <span><b>{{ formatMoney(financeSummary('cost','current')) }}</b>Cost (current)</span>
-          }
-          @if (financeMetric !== 'revenue') {
-            <span><b>{{ formatMoney(financeSummary('cost','goal')) }}</b>Cost (goal)</span>
-          }
-        </div>
       </article>
 
       <article class="page-card chart-card clickable" routerLink="/appointments" role="link" tabindex="0">

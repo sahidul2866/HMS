@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from secrets import token_hex
 
 from fastapi import status
 from sqlalchemy import or_, select
@@ -19,7 +20,7 @@ from app.core.security import (
 from app.models.branch import Branch
 from app.models.patient import Patient
 from app.models.patient_portal_account import PatientPortalAccount, PatientPortalRefreshToken
-from app.schemas.auth import PatientLoginResponse, PatientPortalAccountRead, PatientRegisterRequest, TokenPair
+from app.schemas.auth import PatientLoginResponse, PatientPortalAccountCreate, PatientPortalAccountRead, PatientPortalSearchResult, PatientRegisterRequest, TokenPair
 from app.utils.phone import normalize_phone
 
 PATIENT_PORTAL_PERMISSIONS = ["patient.portal.view", "appointment.view", "appointment.book"]
@@ -41,30 +42,43 @@ class PatientAuthService:
     def register(self, payload: PatientRegisterRequest, context: dict[str, str | None]) -> PatientLoginResponse:
         if self.find_account_for_login(payload.username) or self.find_account_for_login(payload.email):
             raise AppException(status.HTTP_409_CONFLICT, "patient_account_exists", "Patient portal account already exists")
-        branch = self.db.scalar(select(Branch).where(Branch.code == "HQ"))
         normalized_phone = normalize_phone(payload.phone)
-        patient = Patient(
-            branch_id=branch.id if branch else None,
-            patient_number=f"PAT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
-            first_name=payload.full_name.split(" ", 1)[0],
-            last_name=payload.full_name.split(" ", 1)[1] if " " in payload.full_name else "Patient",
-            phone=normalized_phone,
-            email=payload.email,
-            gender=payload.gender,
-            date_of_birth=payload.date_of_birth,
-            address=payload.address,
-            emergency_contact_name=payload.emergency_contact_name,
-            emergency_contact_phone=payload.emergency_contact_phone,
-        )
-        self.db.add(patient)
+        patient = self.db.get(Patient, payload.patient_id) if payload.patient_id else None
+        if payload.patient_id and not patient:
+            raise AppException(status.HTTP_404_NOT_FOUND, "patient_not_found", "Patient not found")
+        if patient:
+            existing = self.db.scalar(select(PatientPortalAccount).where(PatientPortalAccount.patient_id == patient.id, PatientPortalAccount.is_active.is_(True)))
+            if existing:
+                raise AppException(status.HTTP_409_CONFLICT, "patient_account_exists", "This patient already has a portal account")
+            if payload.email and not patient.email:
+                patient.email = payload.email
+            if normalized_phone and not patient.phone:
+                patient.phone = normalized_phone
+        else:
+            branch = self.db.scalar(select(Branch).where(Branch.code == "HQ"))
+            patient = Patient(
+                branch_id=branch.id if branch else None,
+                patient_number=f"PAT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{token_hex(2).upper()}",
+                first_name=payload.full_name.split(" ", 1)[0],
+                last_name=payload.full_name.split(" ", 1)[1] if " " in payload.full_name else "Patient",
+                phone=normalized_phone,
+                email=payload.email,
+                gender=payload.gender,
+                date_of_birth=payload.date_of_birth,
+                address=payload.address,
+                emergency_contact_name=payload.emergency_contact_name,
+                emergency_contact_phone=payload.emergency_contact_phone,
+            )
+            self.db.add(patient)
         self.db.flush()
+        full_name = f"{patient.first_name} {patient.last_name}".strip()
         account = PatientPortalAccount(
             branch_id=patient.branch_id,
             patient_id=patient.id,
             username=payload.username,
             email=payload.email,
-            full_name=payload.full_name,
-            phone=normalized_phone,
+            full_name=full_name,
+            phone=patient.phone or normalized_phone,
             hashed_password=get_password_hash(payload.password),
             is_active=True,
             created_by=None,
@@ -75,6 +89,76 @@ class PatientAuthService:
         response = self._issue_tokens(account, context)
         self.db.commit()
         return response
+
+    def search_patients_for_registration(self, query: str, limit: int = 10) -> list[PatientPortalSearchResult]:
+        normalized = query.strip()
+        if len(normalized) < 2:
+            return []
+        pattern = f"%{normalized.lower()}%"
+        patients = list(
+            self.db.scalars(
+                select(Patient)
+                .where(
+                    or_(
+                        Patient.patient_number.ilike(pattern),
+                        Patient.first_name.ilike(pattern),
+                        Patient.last_name.ilike(pattern),
+                        Patient.phone.ilike(pattern),
+                        Patient.email.ilike(pattern),
+                    )
+                )
+                .order_by(Patient.updated_at.desc(), Patient.created_at.desc())
+                .limit(limit)
+            )
+        )
+        account_patient_ids = {
+            row[0]
+            for row in self.db.execute(
+                select(PatientPortalAccount.patient_id).where(
+                    PatientPortalAccount.patient_id.in_([patient.id for patient in patients]),
+                    PatientPortalAccount.is_active.is_(True),
+                )
+            )
+        } if patients else set()
+        return [
+            PatientPortalSearchResult(
+                id=str(patient.id),
+                patient_number=patient.patient_number,
+                full_name=f"{patient.first_name} {patient.last_name}".strip(),
+                phone=patient.phone,
+                email=patient.email,
+                gender=patient.gender,
+                date_of_birth=patient.date_of_birth,
+                has_portal_account=patient.id in account_patient_ids,
+            )
+            for patient in patients
+        ]
+
+    def create_existing_patient_account(self, payload: PatientPortalAccountCreate, actor_id=None) -> PatientPortalAccount:
+        if self.find_account_for_login(payload.username) or self.find_account_for_login(payload.email):
+            raise AppException(status.HTTP_409_CONFLICT, "patient_account_exists", "Patient portal account already exists")
+        patient = self.db.get(Patient, payload.patient_id)
+        if not patient:
+            raise AppException(status.HTTP_404_NOT_FOUND, "patient_not_found", "Patient not found")
+        existing = self.db.scalar(select(PatientPortalAccount).where(PatientPortalAccount.patient_id == patient.id, PatientPortalAccount.is_active.is_(True)))
+        if existing:
+            raise AppException(status.HTTP_409_CONFLICT, "patient_account_exists", "This patient already has a portal account")
+        account = PatientPortalAccount(
+            branch_id=patient.branch_id,
+            patient_id=patient.id,
+            username=payload.username,
+            email=payload.email,
+            full_name=f"{patient.first_name} {patient.last_name}".strip(),
+            phone=patient.phone,
+            hashed_password=get_password_hash(payload.password),
+            is_active=True,
+            created_by=actor_id,
+            updated_by=actor_id,
+        )
+        self.db.add(account)
+        self.db.commit()
+        self.db.refresh(account)
+        return account
 
     def refresh(self, refresh_token: str, context: dict[str, str | None]) -> PatientLoginResponse:
         payload = decode_token_safe(refresh_token)

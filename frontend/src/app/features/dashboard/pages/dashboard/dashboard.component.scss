@@ -24,6 +24,23 @@
   min-height: 170px;
 }
 
+.role-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.role-summary-card {
+  min-height: 176px;
+  padding: 18px;
+}
+
+.role-summary-card strong {
+  font-size: 34px;
+}
+
+.role-summary-card h3 {
+  font-size: 16px;
+}
+
 .quick-link-card {
   cursor: pointer;
   text-align: left;
@@ -99,7 +116,14 @@ select {
 
 .summary-band {
   display: grid;
+  align-items: center;
+  gap: 0.75rem;
   grid-template-columns: 1fr repeat(3, 170px);
+}
+
+.combined-stat-chart {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .summary-copy {
@@ -130,10 +154,14 @@ select {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: stretch;
 }
 
 .kpi-card {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
   min-height: 138px;
+  min-width: 0;
   overflow: hidden;
   padding: 14px;
   position: relative;
@@ -176,27 +204,43 @@ select {
   color: #102033;
   display: block;
   font-size: 25px;
+  line-height: 1.1;
   margin-top: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  position: relative;
+  z-index: 1;
 }
 
 .kpi-card h3 {
   color: #334155;
   font-size: 14px;
   margin-top: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  position: relative;
+  z-index: 1;
 }
 
 .kpi-card p {
   color: #64748b;
   font-size: 12px;
   margin-top: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-bottom: 34px;
+  position: relative;
+  z-index: 1;
 }
 
 .kpi-card svg {
   bottom: 0;
   height: 42px;
   left: 0;
+  pointer-events: none;
   position: absolute;
   width: 100%;
+  z-index: 0;
 }
 
 .kpi-card polyline {
@@ -286,6 +330,11 @@ select {
   min-height: auto;
 }
 
+.metric-toggle-group {
+  flex-wrap: wrap;
+  border-radius: 8px;
+}
+
 .finance-lines {
   width: 100%;
   height: 132px;
@@ -308,6 +357,18 @@ select {
   stroke: #f59e0b;
 }
 
+.finance-lines .line.patients {
+  stroke: #0f766e;
+}
+
+.finance-lines .line.appointments {
+  stroke: #7c3aed;
+}
+
+.finance-lines .line.admissions {
+  stroke: #dc2626;
+}
+
 .finance-lines .line.goal {
   stroke-dasharray: 4 4;
   opacity: 0.9;
@@ -316,6 +377,156 @@ select {
 .finance-legend span b {
   font-size: 16px;
 }
+
+.monthly-financial-card {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+  display: grid;
+  gap: 1.1rem;
+  min-height: 430px;
+  overflow: hidden;
+  padding: 1.25rem;
+}
+
+.financial-card-head {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.financial-card-head h2 {
+  color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.financial-card-head p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0.55rem 0 0;
+}
+
+.financial-chart-shell {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  min-height: 270px;
+}
+
+.financial-y-axis {
+  color: var(--text-muted);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 800;
+  grid-template-rows: repeat(5, 1fr);
+  padding: 0.15rem 0 2rem;
+}
+
+.financial-y-axis span {
+  align-self: start;
+}
+
+.financial-plot {
+  min-width: 0;
+  position: relative;
+}
+
+.financial-gridlines {
+  inset: 0 0 2rem;
+  position: absolute;
+  z-index: 0;
+}
+
+.financial-gridlines span {
+  border-top: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+  display: block;
+  height: 25%;
+}
+
+.financial-bars {
+  align-items: end;
+  display: flex;
+  gap: 1rem;
+  height: 100%;
+  min-height: 270px;
+  overflow-x: auto;
+  padding: 0.2rem 0 0;
+  position: relative;
+  z-index: 1;
+}
+
+.financial-month {
+  align-items: stretch;
+  display: grid;
+  flex: 1 0 5rem;
+  gap: 0.65rem;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
+}
+
+.financial-month > span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.financial-bar-group {
+  align-items: end;
+  display: grid;
+  gap: 0.28rem;
+  grid-template-columns: repeat(3, minmax(0.85rem, 1fr));
+  height: 238px;
+}
+
+.financial-bar {
+  border-radius: 7px 7px 2px 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  display: block;
+  min-height: 0;
+}
+
+.financial-bar.revenue {
+  background: linear-gradient(180deg, #0b65b7, #064987);
+}
+
+.financial-bar.expenses {
+  background: linear-gradient(180deg, #05a63f, #047b30);
+}
+
+.financial-bar.profit {
+  background: linear-gradient(180deg, #d05b12, #a13b08);
+}
+
+.financial-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.3rem;
+  justify-content: center;
+}
+
+.financial-legend span {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  font-weight: 800;
+  gap: 0.45rem;
+}
+
+.financial-legend i {
+  border-radius: 50%;
+  display: inline-block;
+  height: 0.65rem;
+  width: 0.65rem;
+}
+
+.financial-legend .revenue { background: #0b65b7; }
+.financial-legend .expenses { background: #05a63f; }
+.financial-legend .profit { background: #d05b12; }
 
 .card-head {
   align-items: baseline;
@@ -510,6 +721,10 @@ select {
 }
 
 @media (max-width: 1200px) {
+  .summary-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dashboard-grid,
   .side-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -532,8 +747,36 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .score-card {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+
   .span-2 {
     grid-column: span 1;
+  }
+
+  .monthly-financial-card {
+    padding: 1rem;
+  }
+
+  .financial-chart-shell {
+    grid-template-columns: 3.1rem minmax(0, 1fr);
+  }
+
+  .financial-bars {
+    gap: 0.65rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .financial-month {
+    flex-basis: 4.2rem;
+  }
+
+  .financial-bar-group {
+    height: 210px;
   }
 }
 

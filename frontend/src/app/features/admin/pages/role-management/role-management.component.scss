@@ -96,6 +96,7 @@
 }
 
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   padding: 0.8rem 0.9rem;
@@ -177,6 +178,56 @@
   flex-direction: column;
   align-items: end;
   gap: 0.75rem;
+}
+
+.scope-editor {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.scope-editor__header h3 {
+  margin: 0;
+}
+
+.scope-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.field-wide,
+.actions-row {
+  grid-column: 1 / -1;
+}
+
+.actions-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.scope-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.scope-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.scope-item strong,
+.scope-item span {
+  display: block;
 }
 
 .bulk-toggle {
@@ -295,8 +346,13 @@
 
   .section-heading,
   .module-panel__header,
+  .scope-item,
   .modal-header {
     flex-direction: column;
+  }
+
+  .scope-form {
+    grid-template-columns: 1fr;
   }
 
   .role-hero__stats {

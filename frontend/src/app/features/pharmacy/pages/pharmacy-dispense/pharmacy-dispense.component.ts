@@ -96,6 +96,13 @@ export class PharmacyDispenseComponent {
     );
   }
 
+  reminderLabel(note: string | null | undefined): string {
+    if (!note?.includes('Medication reminder:')) {
+      return '';
+    }
+    return note.split('Medication reminder:').slice(1).join('Medication reminder:').trim();
+  }
+
   openWorkbench(orderId?: string, invoiceId?: string, dispenseId?: string): void {
     void this.router.navigate(['/pharmacy/dispense/workbench'], {
       queryParams: {

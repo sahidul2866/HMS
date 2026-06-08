@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import Date, cast, desc, func, select
 from sqlalchemy.orm import Session
@@ -453,12 +454,21 @@ class ReportingRepository:
         start = date_from or today - timedelta(days=29)
         end = date_to or today
         month_start = today.replace(day=1)
+        doctor_uuid = None
+        if doctor_id:
+            try:
+                doctor_uuid = UUID(str(doctor_id))
+            except ValueError:
+                doctor_uuid = None
+        opd_doctor_filter = [OPDVisit.consulting_doctor_user_id == doctor_uuid] if doctor_uuid else []
+        appointment_doctor_filter = [Appointment.doctor_user_id == doctor_uuid] if doctor_uuid else []
+        ipd_doctor_filter = [IPDAdmission.attending_doctor_user_id == doctor_uuid] if doctor_uuid else []
 
         total_patients = self._count(Patient, branch_id=branch_id)
         new_patients_today = self._count(Patient, branch_id=branch_id, date_column=Patient.created_at, start=today, end=today)
-        appointments_today = self._count(Appointment, branch_id=branch_id, date_column=Appointment.appointment_at, start=today, end=today)
-        admitted = self._count(IPDAdmission, branch_id=branch_id, extra=[IPDAdmission.status == "admitted"])
-        discharged_today = self._count(IPDAdmission, branch_id=branch_id, date_column=IPDAdmission.discharged_at, start=today, end=today, extra=[IPDAdmission.status == "discharged"])
+        appointments_today = self._count(Appointment, branch_id=branch_id, date_column=Appointment.appointment_at, start=today, end=today, extra=appointment_doctor_filter)
+        admitted = self._count(IPDAdmission, branch_id=branch_id, extra=[IPDAdmission.status == "admitted", *ipd_doctor_filter])
+        discharged_today = self._count(IPDAdmission, branch_id=branch_id, date_column=IPDAdmission.discharged_at, start=today, end=today, extra=[IPDAdmission.status == "discharged", *ipd_doctor_filter])
         emergency_today = self._count(ERVisit, branch_id=branch_id, date_column=ERVisit.arrival_time, start=today, end=today)
         available_beds = self._count(IPDBed, branch_id=branch_id, extra=[IPDBed.status == "available"])
         occupied_beds = self._count(IPDBed, branch_id=branch_id, extra=[IPDBed.status.in_(["occupied", "booked"])])
@@ -508,12 +518,12 @@ class ReportingRepository:
             self._kpi("Staff Present", staff_present, f"{attendance_pct}% attendance", "staff", "good" if attendance_pct >= 80 else "warn", 3),
         ]
 
-        patient_trend = self._daily_series(OPDVisit, OPDVisit.visit_date, branch_id, start, end)
+        patient_trend = self._daily_series(OPDVisit, OPDVisit.visit_date, branch_id, start, end, extra=opd_doctor_filter)
         revenue_trend = self._daily_sum_series(BillingPayment, BillingPayment.received_at, BillingPayment.amount, branch_id, start, end)
         cost_trend = self._daily_sum_series(Expense, Expense.expense_date, Expense.amount, branch_id, start, end)
-        appointment_trend = self._daily_series(Appointment, Appointment.appointment_at, branch_id, start, end)
-        admission_trend = self._daily_series(IPDAdmission, IPDAdmission.admitted_at, branch_id, start, end)
-        discharge_trend = self._daily_series(IPDAdmission, IPDAdmission.discharged_at, branch_id, start, end, extra=[IPDAdmission.status == "discharged"])
+        appointment_trend = self._daily_series(Appointment, Appointment.appointment_at, branch_id, start, end, extra=appointment_doctor_filter)
+        admission_trend = self._daily_series(IPDAdmission, IPDAdmission.admitted_at, branch_id, start, end, extra=ipd_doctor_filter)
+        discharge_trend = self._daily_series(IPDAdmission, IPDAdmission.discharged_at, branch_id, start, end, extra=[IPDAdmission.status == "discharged", *ipd_doctor_filter])
 
         goals = self._dashboard_goals(branch_id, revenue_month=revenue_month)
         finance_series = self._finance_line_series(
@@ -554,15 +564,15 @@ class ReportingRepository:
                 "daily_visits": patient_trend,
                 "opd_vs_ipd": [{"label": "OPD", "value": sum(item["value"] for item in patient_trend)}, {"label": "IPD", "value": admitted}],
                 "new_vs_returning": [{"label": "New", "value": new_patients_today}, {"label": "Returning", "value": max(appointments_today - new_patients_today, 0)}],
-                "department_counts": self._group_counts(OPDVisit.department_name, OPDVisit, branch_id, limit=8),
-                "doctor_load": self._group_counts(OPDVisit.consulting_doctor_name, OPDVisit, branch_id, limit=8),
+                "department_counts": self._group_counts(OPDVisit.department_name, OPDVisit, branch_id, limit=8, extra=opd_doctor_filter),
+                "doctor_load": self._group_counts(OPDVisit.consulting_doctor_name, OPDVisit, branch_id, limit=8, extra=opd_doctor_filter),
                 "gender_distribution": self._group_counts(Patient.gender, Patient, branch_id, limit=4),
                 "monthly_growth": self._monthly_series(Patient, Patient.created_at, branch_id),
             },
             "appointment_analytics": {
-                "status_breakdown": self._group_counts(Appointment.status, Appointment, branch_id),
+                "status_breakdown": self._group_counts(Appointment.status, Appointment, branch_id, extra=appointment_doctor_filter),
                 "trend": appointment_trend,
-                "upcoming": self._upcoming_appointments(branch_id),
+                "upcoming": self._upcoming_appointments(branch_id, doctor_uuid=doctor_uuid),
             },
             "bed_analytics": {
                 "available": available_beds,
@@ -732,10 +742,12 @@ class ReportingRepository:
         stmt = stmt.group_by("month").order_by("month")
         return [{"label": label, "value": int(value or 0)} for label, value in self.db.execute(stmt)]
 
-    def _group_counts(self, column, model, branch_id, limit: int = 8) -> list[dict]:
+    def _group_counts(self, column, model, branch_id, limit: int = 8, extra: list | None = None) -> list[dict]:
         stmt = select(func.coalesce(column, "Unassigned"), func.count(model.id))
         if branch_id and hasattr(model, "branch_id"):
             stmt = stmt.where(model.branch_id == branch_id)
+        for clause in extra or []:
+            stmt = stmt.where(clause)
         stmt = stmt.group_by(column).order_by(desc(func.count(model.id))).limit(limit)
         return [{"label": str(label or "Unassigned"), "value": int(value or 0)} for label, value in self.db.execute(stmt)]
 
@@ -838,10 +850,12 @@ class ReportingRepository:
             pharmacy = pharmacy.where(PharmacyPurchase.branch_id == branch_id)
         return (self.db.scalar(pharmacy) or 0) + (self.db.scalar(stock) or 0) + (self.db.scalar(reagent) or 0)
 
-    def _upcoming_appointments(self, branch_id) -> list[dict]:
+    def _upcoming_appointments(self, branch_id, *, doctor_uuid: UUID | None = None) -> list[dict]:
         stmt = select(Appointment).where(Appointment.appointment_at >= datetime.now(UTC)).order_by(Appointment.appointment_at).limit(6)
         if branch_id:
             stmt = stmt.where(Appointment.branch_id == branch_id)
+        if doctor_uuid:
+            stmt = stmt.where(Appointment.doctor_user_id == doctor_uuid)
         return [
             {
                 "label": item.patient.first_name + " " + item.patient.last_name if item.patient else item.appointment_number,

@@ -91,6 +91,9 @@ export interface PatientHistoryIPDAdmission {
   ward_name: string;
   bed_number: string;
   discharged_at?: string | null;
+  active_doctors?: string[];
+  active_nurses?: string[];
+  tracking?: Array<{ title: string; detail?: string | null; time?: string | null; type?: string | null }>;
 }
 
 export interface PatientHistoryBillingInvoice {

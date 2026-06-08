@@ -124,6 +124,8 @@ export interface BillingRefund {
   patient_id: string;
   refund_number: string;
   amount: string;
+  refund_type?: 'refund' | 'return' | string;
+  return_items?: Array<Record<string, unknown>> | null;
   reason: string;
   refunded_at: string;
   refunded_by_user_id: string;
@@ -132,6 +134,13 @@ export interface BillingRefund {
 
 export interface BillingRefundPayload {
   amount: number;
+  payment_id?: string | null;
+  reason: string;
+  refunded_at?: string | null;
+}
+
+export interface BillingReturnPayload {
+  items: Array<{ invoice_item_id: string; quantity: number }>;
   payment_id?: string | null;
   reason: string;
   refunded_at?: string | null;

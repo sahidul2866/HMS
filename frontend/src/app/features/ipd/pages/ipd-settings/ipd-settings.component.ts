@@ -3,6 +3,8 @@ import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { NotificationService } from '../../../../core/services/notification.service';
+import { AdminRole, ScopeAssignment } from '../../../admin/models/admin.models';
+import { RoleService } from '../../../admin/services/role.service';
 import { IPDBed, IPDSettings } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
@@ -16,9 +18,12 @@ import { IPDService } from '../../services/ipd.service';
 export class IPDSettingsComponent {
   private readonly fb = inject(FormBuilder);
   private readonly ipdService = inject(IPDService);
+  private readonly roleService = inject(RoleService);
   private readonly notificationService = inject(NotificationService);
 
   beds: IPDBed[] = [];
+  roles: AdminRole[] = [];
+  roleScopes: ScopeAssignment[] = [];
   settings: IPDSettings | null = null;
   activeTab: 'beds' | 'admission' | 'assignment' | 'handover' | 'clinical' | 'discharge' | 'permissions' = 'beds';
   savingSettings = false;
@@ -30,6 +35,13 @@ export class IPDSettingsComponent {
     bed_type: ['General', Validators.required],
     daily_rate: [0, Validators.required],
     note: [''],
+  });
+
+  readonly wardResponsibilityForm = this.fb.group({
+    role_id: ['', Validators.required],
+    ward_name: ['', Validators.required],
+    responsibility_type: ['ward_responsibility', Validators.required],
+    reason: [''],
   });
 
   readonly settingsForm = this.fb.group({
@@ -78,6 +90,8 @@ export class IPDSettingsComponent {
   constructor() {
     this.loadBeds();
     this.loadSettings();
+    this.loadRoles();
+    this.loadRoleScopes();
   }
 
   loadBeds(): void {
@@ -88,6 +102,18 @@ export class IPDSettingsComponent {
     this.ipdService.getSettings().subscribe((settings) => {
       this.settings = settings;
       this.patchSettingsForm(settings);
+    });
+  }
+
+  loadRoles(): void {
+    this.roleService.list().subscribe((roles) => {
+      this.roles = roles.filter((role) => role.is_doctor_role || role.code.toLowerCase().includes('nurse') || role.name.toLowerCase().includes('nurse'));
+    });
+  }
+
+  loadRoleScopes(): void {
+    this.roleService.listRoleScopes().subscribe((scopes) => {
+      this.roleScopes = scopes.filter((scope) => scope.is_active && scope.module === 'ipd' && scope.scope_type === 'ward');
     });
   }
 
@@ -115,6 +141,51 @@ export class IPDSettingsComponent {
 
   get bedTypeOptions(): string[] {
     return [...new Set([...(this.settings?.bed_types || []), ...this.beds.map((bed) => bed.bed_type).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
+  }
+
+  get ipdWardResponsibilities(): ScopeAssignment[] {
+    return this.roleScopes;
+  }
+
+  roleName(roleId?: string | null): string {
+    const role = this.roles.find((item) => item.id === roleId);
+    return role ? role.name || role.code : 'Role';
+  }
+
+  submitWardResponsibility(): void {
+    if (this.wardResponsibilityForm.invalid) {
+      this.wardResponsibilityForm.markAllAsTouched();
+      return;
+    }
+    const value = this.wardResponsibilityForm.getRawValue();
+    this.roleService
+      .createRoleScope({
+        role_id: value.role_id!,
+        scope_type: 'ward',
+        scope_value: value.ward_name!,
+        scope_ref_id: null,
+        module: 'ipd',
+        status: 'active',
+        is_primary: true,
+        is_temporary: false,
+        is_override: false,
+        starts_at: null,
+        ends_at: null,
+        reason: value.reason || value.responsibility_type || 'IPD ward responsibility',
+        meta: { responsibility_type: value.responsibility_type },
+      })
+      .subscribe(() => {
+        this.notificationService.success('IPD ward responsibility assigned.');
+        this.wardResponsibilityForm.patchValue({ ward_name: '', reason: '' });
+        this.loadRoleScopes();
+      });
+  }
+
+  removeWardResponsibility(scope: ScopeAssignment): void {
+    this.roleService.deactivateRoleScope(scope.id).subscribe(() => {
+      this.notificationService.success('IPD ward responsibility removed.');
+      this.loadRoleScopes();
+    });
   }
 
   saveSettings(): void {

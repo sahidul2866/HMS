@@ -151,6 +151,25 @@ class PatientsService:
                     ward_name=admission.ward_name,
                     bed_number=admission.bed_number,
                     discharged_at=admission.discharged_at,
+                    active_doctors=[
+                        assignment.staff_name
+                        for assignment in admission.staff_assignments
+                        if assignment.role_type == "doctor" and not assignment.ended_at
+                    ],
+                    active_nurses=[
+                        assignment.staff_name
+                        for assignment in admission.staff_assignments
+                        if assignment.role_type == "nurse" and not assignment.ended_at
+                    ],
+                    tracking=[
+                        {
+                            "title": event.title,
+                            "detail": event.detail,
+                            "time": event.occurred_at.isoformat() if event.occurred_at else None,
+                            "type": event.event_type,
+                        }
+                        for event in sorted(admission.timeline_events, key=lambda item: item.occurred_at, reverse=True)[:8]
+                    ],
                 )
                 for admission in ipd_admissions
             ],

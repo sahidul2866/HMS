@@ -112,6 +112,74 @@
     }
   </form>
 
+  @if (activeTab === 'assignment') {
+    <section class="page-card ward-responsibility-card">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Ward Responsibility</h2>
+          <div class="section-copy">Assign IPD ward responsibility to doctor and nurse roles. Users inherit these ward scopes from their roles.</div>
+        </div>
+      </div>
+
+      <form class="form-grid" [formGroup]="wardResponsibilityForm" (ngSubmit)="submitWardResponsibility()">
+        <label class="field">
+          <span>Doctor / Nurse Role</span>
+          <select formControlName="role_id">
+            <option value="">Select role</option>
+            @for (role of roles; track role.id) {
+              <option [value]="role.id">{{ role.name }} · {{ role.code }}</option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Ward</span>
+          <input type="text" formControlName="ward_name" list="ipd-ward-options" placeholder="Ward A" />
+        </label>
+        <label class="field">
+          <span>Responsibility</span>
+          <select formControlName="responsibility_type">
+            <option value="ward_responsibility">Ward Responsibility</option>
+            <option value="primary_coverage">Primary Coverage</option>
+            <option value="rounding_coverage">Rounding Coverage</option>
+            <option value="nursing_station">Nursing Station</option>
+          </select>
+        </label>
+        <label class="field field-wide">
+          <span>Note</span>
+          <input type="text" formControlName="reason" placeholder="ICU duty team, maternity ward nurses, medicine consultants" />
+        </label>
+        <div class="actions-row">
+          <button class="primary-btn" type="submit">Assign Ward Responsibility</button>
+        </div>
+      </form>
+
+      <div class="responsibility-list">
+        @for (scope of ipdWardResponsibilities; track scope.id) {
+          <article class="responsibility-item">
+            <div>
+              <strong>{{ roleName(scope.role_id) }} · {{ scope.scope_value || 'All wards' }}</strong>
+              <span>{{ scope.reason || 'IPD ward responsibility' }}</span>
+            </div>
+            <button class="secondary-btn" type="button" (click)="removeWardResponsibility(scope)">Remove</button>
+          </article>
+        } @empty {
+          <article class="responsibility-item">
+            <div>
+              <strong>No IPD ward responsibilities assigned</strong>
+              <span>Add doctor or nurse role coverage for a ward.</span>
+            </div>
+          </article>
+        }
+      </div>
+
+      <datalist id="ipd-ward-options">
+        @for (ward of wardOptions; track ward) {
+          <option [value]="ward"></option>
+        }
+      </datalist>
+    </section>
+  }
+
   <div class="settings-layout">
     <section class="page-card">
       <div class="section-header">

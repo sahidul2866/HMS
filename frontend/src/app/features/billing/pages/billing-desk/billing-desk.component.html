@@ -136,6 +136,56 @@
             <div class="empty-state">No refundable collected amount is available for this invoice.</div>
           }
         </section>
+
+        <section class="payment-panel">
+          <div class="section-header">
+            <div>
+              <h3 class="section-title">Return Billing</h3>
+              <div class="section-copy">Return billed items by quantity and post the calculated return amount against this invoice.</div>
+            </div>
+          </div>
+
+          @if (canReturn(latestInvoice) && sessionService.hasPermission('billing.payment.refund')) {
+            <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="createReturn()">
+              <div class="return-items" formArrayName="items" style="grid-column:1/-1;">
+                @for (item of latestInvoice.items; track item.id; let i = $index) {
+                  <div class="return-item" [formGroupName]="i">
+                    <div>
+                      <strong>{{ item.service_name }}</strong>
+                      <span class="page-subtitle">Billed {{ item.quantity }} · {{ formatCurrency(item.line_total) }}</span>
+                    </div>
+                    <label class="field">
+                      <span>Return Qty</span>
+                      <input type="number" min="0" [max]="item.quantity" step="0.01" formControlName="quantity" />
+                    </label>
+                  </div>
+                }
+              </div>
+              <label class="field">
+                <span>Receipt</span>
+                <select formControlName="payment_id">
+                  <option value="">Any collected payment</option>
+                  @for (payment of latestInvoice.payments; track payment.id) {
+                    <option [value]="payment.id">{{ payment.receipt_number }} · {{ formatCurrency(payment.amount) }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field">
+                <span>Return Amount</span>
+                <input type="text" [value]="formatCurrency(returnTotal)" readonly />
+              </label>
+              <label class="field" style="grid-column:1/-1;">
+                <span>Reason</span>
+                <textarea rows="2" formControlName="reason" placeholder="Returned service/item reason"></textarea>
+              </label>
+              <div style="grid-column:1/-1;">
+                <button class="danger-btn is-destructive" type="submit" [disabled]="returning" [attr.aria-busy]="returning">{{ returning ? 'Posting...' : 'Post Return Billing' }}</button>
+              </div>
+            </form>
+          } @else {
+            <div class="empty-state">No return billing is available for this invoice.</div>
+          }
+        </section>
         }
 
         <section class="payment-panel">
@@ -184,9 +234,16 @@
                     <div class="page-subtitle">{{ refund.refunded_at | date:'medium' }}</div>
                   </div>
                   <div class="receipt-meta">
-                    <span class="pill">REFUND</span>
+                    <span class="pill">{{ refund.refund_type === 'return' ? 'RETURN' : 'REFUND' }}</span>
                     <strong>{{ formatCurrency(refund.amount) }}</strong>
                   </div>
+                  @if (refund.return_items?.length) {
+                    <div class="page-subtitle">
+                      @for (item of refund.return_items; track $index) {
+                        <span>{{ item['service_name'] }} · Qty {{ item['quantity'] }}</span>
+                      }
+                    </div>
+                  }
                   <div class="page-subtitle">{{ refund.reason }}</div>
                 </div>
               }

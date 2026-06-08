@@ -1,10 +1,36 @@
 <section class="shortcut-settings">
   <header>
     <div>
-      <p>Power user workflow</p>
-      <h1>Keyboard Shortcuts</h1>
+      <p>{{ userName }}</p>
+      <h1>{{ roleTitle }}</h1>
     </div>
   </header>
+
+  <div class="group-grid manual-grid">
+    <article>
+      <h2>Role Focus</h2>
+      <div *ngFor="let item of roleFocus" class="shortcut-row">
+        <span>{{ item }}</span>
+      </div>
+    </article>
+
+    <article>
+      <h2>Role Actions</h2>
+      <div *ngFor="let action of roleActions" class="shortcut-row">
+        <kbd *ngIf="action.shortcut">{{ action.shortcut }}</kbd>
+        <span>{{ action.label }}</span>
+        <small>{{ action.detail }}</small>
+      </div>
+    </article>
+
+    <article>
+      <h2>Role Shortcuts</h2>
+      <div *ngFor="let shortcut of roleShortcuts" class="shortcut-row">
+        <kbd>{{ shortcut.keys }}</kbd>
+        <span>{{ shortcut.action }}</span>
+      </div>
+    </article>
+  </div>
 
   <div class="group-grid">
     <article *ngFor="let group of groups">

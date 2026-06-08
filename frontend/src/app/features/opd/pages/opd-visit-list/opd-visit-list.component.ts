@@ -174,6 +174,37 @@ export class OPDVisitListComponent {
     void this.router.navigate(['/billing/create'], { queryParams: { opdVisitId: visit.id } });
   }
 
+  convertToIpd(visit: OPDVisit): void {
+    if (!this.session.hasPermission(PERMISSIONS.ipdAdmissionManage)) return;
+    const wardName = window.prompt('Ward name for IPD admission', 'General Ward');
+    if (!wardName) return;
+    const bedNumber = window.prompt('Bed number for IPD admission');
+    if (!bedNumber) return;
+    const dailyCharge = Number(window.prompt('Daily bed charge', '0') || 0);
+    const advanceAmount = Number(window.prompt('Advance amount', '0') || 0);
+    const attendingDoctor = visit.consulting_doctor_name || window.prompt('Attending doctor name', '') || 'Attending Doctor';
+    this.opdService.convertToIPD(visit.id, {
+      admitted_at: new Date().toISOString(),
+      admission_type: 'opd_conversion',
+      ward_name: wardName,
+      bed_number: bedNumber,
+      doctor_user_id: visit.consulting_doctor_user_id || null,
+      attending_doctor_name: attendingDoctor,
+      diagnosis: visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || null,
+      daily_charge: Number.isFinite(dailyCharge) ? dailyCharge : 0,
+      advance_amount: Number.isFinite(advanceAmount) ? advanceAmount : 0,
+    }).subscribe({
+      next: (admission) => {
+        this.notificationService.success('OPD visit converted to IPD.');
+        this.loadVisits();
+        void this.router.navigate(['/ipd/admissions'], { queryParams: { openAdmission: admission.id } });
+      },
+      error: (error) => {
+        this.notificationService.error(error?.error?.message || error?.message || 'Could not convert OPD visit to IPD.');
+      },
+    });
+  }
+
   isPaymentDone(visit: OPDVisit): boolean {
     return (visit.consultation_payment_status || '').toLowerCase() === 'paid';
   }

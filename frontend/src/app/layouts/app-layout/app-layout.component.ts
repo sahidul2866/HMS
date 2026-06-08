@@ -60,7 +60,7 @@ export class AppLayoutComponent {
     { key: 'Ctrl/Cmd+K', label: 'Command palette' },
     { key: 'Ctrl/Cmd+S', label: 'Save focused form' },
     { key: 'Ctrl/Cmd+P', label: 'Print on supported pages' },
-    { key: '? or Ctrl+/', label: 'Shortcut help' },
+    { key: '? or Ctrl+/', label: 'User manual' },
     { key: 'Alt+S', label: 'Sidebar' },
     { key: 'Alt+M', label: 'Top density' },
     { key: 'Alt+/', label: 'Search/filter' },
@@ -101,8 +101,7 @@ export class AppLayoutComponent {
 
     if ((event.key === '?' || ((event.ctrlKey || event.metaKey) && event.key === '/')) && !this.isTypingTarget(event.target)) {
       event.preventDefault();
-      this.shortcutsOpen = true;
-      this.accountMenuOpen = false;
+      this.openManual();
       return;
     }
 
@@ -195,6 +194,12 @@ export class AppLayoutComponent {
   toggleShortcuts(): void {
     this.shortcutsOpen = !this.shortcutsOpen;
     this.accountMenuOpen = false;
+  }
+
+  openManual(): void {
+    this.shortcutsOpen = false;
+    this.accountMenuOpen = false;
+    this.navigate('/manual');
   }
 
   logout(): void {

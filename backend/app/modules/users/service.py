@@ -28,15 +28,21 @@ class UsersService:
         roles = self.repository.get_roles(payload.role_codes)
         if payload.patient_id or any(role.code == "PATIENT" for role in roles):
             raise AppException(400, "patient_accounts_separated", "Patient portal accounts must be created from patient registration, not staff user management")
+        employee = self.repository.get_employee(payload.employee_id) if payload.employee_id else None
+        if payload.employee_id and not employee:
+            raise AppException(404, "employee_not_found", "Employee not found")
+        if employee and employee.user_id:
+            raise AppException(409, "employee_user_exists", "This employee already has a user account")
         permissions = self.repository.get_permissions(payload.direct_permission_codes)
         user = User(
             username=payload.username,
-            email=payload.email,
-            full_name=payload.full_name,
+            email=employee.email if employee and employee.email else payload.email,
+            full_name=employee.full_name if employee else payload.full_name,
             hashed_password=get_password_hash(payload.password),
-            branch_id=payload.branch_id,
-            department_id=payload.department_id,
+            branch_id=employee.branch_id if employee else payload.branch_id,
+            department_id=employee.department_id if employee else payload.department_id,
             patient_id=payload.patient_id,
+            must_reset_password=True,
             is_active=payload.is_active,
             opd_consultation_fee=payload.opd_consultation_fee,
             opd_follow_up_fee=payload.opd_follow_up_fee,
@@ -54,6 +60,9 @@ class UsersService:
         user.roles = roles
         user.direct_permissions = permissions
         self.repository.create_user(user)
+        if employee:
+            employee.user_id = user.id
+            employee.updated_by = actor_id
         AuditService(self.db).log(
             user_id=actor_id,
             action=AuditAction.USER_CREATE,

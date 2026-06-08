@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, ViewChild, inject } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { debounceTime } from 'rxjs';
 
@@ -48,6 +48,7 @@ export class BillingDeskComponent {
   invoicePreviewUrl: SafeResourceUrl | null = null;
   collectingPayment = false;
   refunding = false;
+  returning = false;
   viewMode: 'all' | 'due' = 'all';
   private invoicePreviewObjectUrl: string | null = null;
 
@@ -75,6 +76,12 @@ export class BillingDeskComponent {
     amount: [0, [Validators.required, Validators.min(0.01)]],
     payment_id: [''],
     reason: ['', [Validators.required, Validators.minLength(3)]],
+  });
+
+  readonly returnForm = this.fb.group({
+    payment_id: [''],
+    reason: ['', [Validators.required, Validators.minLength(3)]],
+    items: this.fb.array([]),
   });
 
   constructor() {
@@ -439,6 +446,7 @@ export class BillingDeskComponent {
       this.latestInvoice = invoice;
       this.syncPaymentForm(invoice);
       this.syncRefundForm(invoice);
+      this.syncReturnForm(invoice);
       if (openPreview) {
         this.openInvoicePreview(invoice);
       }
@@ -469,6 +477,7 @@ export class BillingDeskComponent {
           this.latestInvoice = invoice;
           this.syncPaymentForm(invoice);
           this.syncRefundForm(invoice);
+          this.syncReturnForm(invoice);
           this.loadInvoices();
           this.notificationService.success(`Payment collected for ${invoice.invoice_number}. You can print the invoice or continue the due queue.`);
         },
@@ -558,11 +567,46 @@ export class BillingDeskComponent {
           this.latestInvoice = invoice;
           this.syncPaymentForm(invoice);
           this.syncRefundForm(invoice);
+          this.syncReturnForm(invoice);
           this.loadInvoices();
           this.notificationService.warning(`Refund posted for ${invoice.invoice_number}. Receipt history has been updated.`);
         },
         error: () => {
           this.refunding = false;
+        },
+      });
+  }
+
+  createReturn(): void {
+    if (!this.latestInvoice || this.returning || this.returnForm.invalid || !this.canReturn(this.latestInvoice)) {
+      this.returnForm.markAllAsTouched();
+      return;
+    }
+    const items = this.returnItemsPayload;
+    if (!items.length) {
+      this.notificationService.warning('Enter a return quantity for at least one invoice item.');
+      return;
+    }
+    this.returning = true;
+    const raw = this.returnForm.getRawValue();
+    this.billingService
+      .createReturn(this.latestInvoice.id, {
+        items,
+        payment_id: raw.payment_id || null,
+        reason: raw.reason?.trim() || '',
+      })
+      .subscribe({
+        next: (invoice) => {
+          this.returning = false;
+          this.latestInvoice = invoice;
+          this.syncPaymentForm(invoice);
+          this.syncRefundForm(invoice);
+          this.syncReturnForm(invoice);
+          this.loadInvoices();
+          this.notificationService.warning(`Return billing posted for ${invoice.invoice_number}.`);
+        },
+        error: () => {
+          this.returning = false;
         },
       });
   }
@@ -577,6 +621,38 @@ export class BillingDeskComponent {
 
   canRefund(invoice: BillingInvoice): boolean {
     return invoice.status !== 'void' && Number(invoice.paid_amount) > 0;
+  }
+
+  canReturn(invoice: BillingInvoice): boolean {
+    return this.canRefund(invoice) && invoice.items.length > 0;
+  }
+
+  get returnItemsForm(): FormArray {
+    return this.returnForm.controls.items as FormArray;
+  }
+
+  get returnTotal(): number {
+    if (!this.latestInvoice) {
+      return 0;
+    }
+    return this.latestInvoice.items.reduce((sum, item, index) => {
+      const quantity = Number(this.returnItemsForm.at(index)?.get('quantity')?.value || 0);
+      if (quantity <= 0) {
+        return sum;
+      }
+      const billedQuantity = Number(item.quantity || 0);
+      const unitReturnAmount = billedQuantity > 0 ? Number(item.line_total || 0) / billedQuantity : 0;
+      return sum + unitReturnAmount * quantity;
+    }, 0);
+  }
+
+  get returnItemsPayload(): Array<{ invoice_item_id: string; quantity: number }> {
+    if (!this.latestInvoice) {
+      return [];
+    }
+    return this.latestInvoice.items
+      .map((item, index) => ({ invoice_item_id: item.id, quantity: Number(this.returnItemsForm.at(index)?.get('quantity')?.value || 0) }))
+      .filter((item) => item.quantity > 0);
   }
 
   private isDueInvoice(invoice: BillingInvoiceListItem): boolean {
@@ -666,6 +742,22 @@ export class BillingDeskComponent {
   private syncRefundForm(invoice: BillingInvoice): void {
     this.refundForm.patchValue({
       amount: Number(invoice.paid_amount),
+      payment_id: '',
+      reason: '',
+    });
+  }
+
+  private syncReturnForm(invoice: BillingInvoice): void {
+    this.returnItemsForm.clear();
+    for (const item of invoice.items) {
+      this.returnItemsForm.push(
+        this.fb.group({
+          invoice_item_id: [item.id],
+          quantity: [0, [Validators.min(0), Validators.max(Number(item.quantity || 0))]],
+        })
+      );
+    }
+    this.returnForm.patchValue({
       payment_id: '',
       reason: '',
     });

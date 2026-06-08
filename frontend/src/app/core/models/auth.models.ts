@@ -21,6 +21,8 @@ export interface User {
   username: string;
   email: string;
   full_name: string;
+  must_reset_password?: boolean;
+  employee_id?: string | null;
   branch_id?: string | null;
   department_id?: string | null;
   patient_id?: string | null;

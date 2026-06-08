@@ -21,6 +21,9 @@ export type AppDataEventName =
   | 'pharmacy.dispense.completed'
   | 'emergency.status.updated'
   | 'ipd.bed.assigned'
+  | 'catering.diet_order.created'
+  | 'catering.diet_order.approved'
+  | 'catering.meal.updated'
   | 'user.permission.updated'
   | 'data.updated';
 

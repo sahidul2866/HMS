@@ -117,6 +117,9 @@ class PatientHistoryIPDAdmissionRead(BaseModel):
     ward_name: str
     bed_number: str
     discharged_at: datetime | None = None
+    active_doctors: list[str] = Field(default_factory=list)
+    active_nurses: list[str] = Field(default_factory=list)
+    tracking: list[dict[str, str | None]] = Field(default_factory=list)
 
 
 class PatientHistoryBillingInvoiceRead(BaseModel):

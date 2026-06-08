@@ -18,7 +18,7 @@ def seed_dashboard_timeseries(days: int = 30) -> str:
         ctx = get_demo_context(session)
         branch = ctx["branch"]  # type: ignore[assignment]
         accountant = ctx["accountant"]  # type: ignore[assignment]
-        patient_users = ctx["patient_users"]  # type: ignore[assignment]
+        patient_accounts = ctx["patient_accounts"]  # type: ignore[assignment]
         services = ctx["services"]  # type: ignore[assignment]
 
         categories = list(
@@ -34,9 +34,9 @@ def seed_dashboard_timeseries(days: int = 30) -> str:
             categories = []
 
         patient_list: list[Patient] = []
-        for user in patient_users.values():
-            if user.patient:
-                patient_list.append(user.patient)
+        for account in patient_accounts.values():
+            if account.patient:
+                patient_list.append(account.patient)
         if not patient_list:
             # last resort: pick any patient from branch
             patient_list = list(session.scalars(select(Patient).where(Patient.branch_id == branch.id).limit(10)))

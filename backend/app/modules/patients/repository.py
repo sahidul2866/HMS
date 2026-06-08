@@ -95,8 +95,13 @@ class PatientsRepository:
         return list(self.db.scalars(stmt).unique())
 
     def list_ipd_admissions(self, patient_id) -> list[IPDAdmission]:
-        stmt = select(IPDAdmission).where(IPDAdmission.patient_id == patient_id).order_by(IPDAdmission.admitted_at.desc())
-        return list(self.db.scalars(stmt))
+        stmt = (
+            select(IPDAdmission)
+            .options(joinedload(IPDAdmission.staff_assignments), joinedload(IPDAdmission.timeline_events))
+            .where(IPDAdmission.patient_id == patient_id)
+            .order_by(IPDAdmission.admitted_at.desc())
+        )
+        return list(self.db.scalars(stmt).unique())
 
     def list_billing_invoices(self, patient_id) -> list[BillingInvoice]:
         stmt = (

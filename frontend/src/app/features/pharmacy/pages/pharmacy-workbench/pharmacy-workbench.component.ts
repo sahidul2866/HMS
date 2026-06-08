@@ -56,6 +56,9 @@ export class PharmacyWorkbenchComponent {
     medicine_name: ['', Validators.required],
     quantity: [1, Validators.required],
     unit_price: [0, Validators.required],
+    reminder_enabled: [true],
+    reminder_time: ['20:00'],
+    reminder_days: [3],
     note: [''],
   });
 
@@ -109,7 +112,7 @@ export class PharmacyWorkbenchComponent {
       this.notificationService.warning('Medicine is not available for safe dispensing.');
       return;
     }
-    this.pharmacyService.dispense(payload).subscribe({
+    this.pharmacyService.dispense(this.withReminderNote(payload)).subscribe({
       next: (result) => {
         this.resultMessage = `Issued ${result.quantity} of ${result.medicine_name}. Prescription balance updated.`;
         this.resetForm();
@@ -133,6 +136,18 @@ export class PharmacyWorkbenchComponent {
       unit_price: Number(payload['unit_price'] || 0),
       note: payload['note'] ? String(payload['note']) : null,
     } as DispensePayload;
+  }
+
+  private withReminderNote(payload: DispensePayload): DispensePayload {
+    const raw = this.form.getRawValue();
+    if (!raw.reminder_enabled) {
+      return payload;
+    }
+    const reminder = `Medication reminder: ${raw.reminder_days || 1} day(s), daily at ${raw.reminder_time || '20:00'}`;
+    return {
+      ...payload,
+      note: [payload.note, reminder].filter(Boolean).join(' · '),
+    };
   }
 
   onInvoiceChanged(): void {
@@ -208,6 +223,8 @@ export class PharmacyWorkbenchComponent {
       medicine_name: prescription.item_name,
       quantity: Number(prescription.remaining_quantity || prescription.quantity),
       unit_price: this.form.getRawValue().unit_price ?? 0,
+      reminder_enabled: true,
+      reminder_days: 3,
       note: `From OPD prescription ${prescription.visit_number} by ${prescription.doctor_name}${prescription.instructions ? ` · ${prescription.instructions}` : ''}`,
     });
     this.stockAvailability = null;
@@ -257,6 +274,9 @@ export class PharmacyWorkbenchComponent {
       medicine_name: '',
       quantity: 1,
       unit_price: 0,
+      reminder_enabled: true,
+      reminder_time: '20:00',
+      reminder_days: 3,
       note: '',
     });
     this.returnForm.reset({

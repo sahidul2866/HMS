@@ -20,6 +20,8 @@
 .metric {
   border-left: 4px solid var(--text-muted);
   padding: 0.75rem 0.85rem;
+  text-align: left;
+  cursor: pointer;
 }
 
 .metric.good { border-left-color: color-mix(in srgb, var(--success) 80%, black 20%); }
@@ -36,9 +38,17 @@
 
 .metric strong {
   display: block;
-  font-size: clamp(1.12rem, 1.7vw, 1.45rem);
+  font-size: clamp(1.35rem, 2.1vw, 1.8rem);
   margin-top: 4px;
   color: var(--text);
+}
+
+.metric small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 0.28rem;
 }
 
 button,

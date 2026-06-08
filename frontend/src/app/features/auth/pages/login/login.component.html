@@ -97,10 +97,26 @@
       <div class="error-text">{{ errorMessage }}</div>
     }
 
-    <div class="form-actions">
-      <button class="primary-btn submit-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
-      <span class="submit-meta">Protected session</span>
-    </div>
+    @if (!resetRequired) {
+      <div class="form-actions">
+        <button class="primary-btn submit-btn" type="submit">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+        <span class="submit-meta">Protected session</span>
+      </div>
+    }
+
+    @if (resetRequired) {
+      <div class="reset-panel" [formGroup]="resetForm">
+        <strong>Reset temporary password</strong>
+        <label class="field">
+          <span class="field-tag"><span>New Password</span></span>
+          <div class="input-shell input-shell-password">
+            <input type="password" formControlName="new_password" placeholder="Enter a new password" />
+          </div>
+        </label>
+        @if (resetMessage) { <div class="error-text">{{ resetMessage }}</div> }
+        <button class="primary-btn submit-btn" type="button" (click)="submitReset()">{{ resetLoading ? 'Updating...' : 'Update Password' }}</button>
+      </div>
+    }
 
     <div class="login-meta">
       <span class="meta-icon" aria-hidden="true"></span>

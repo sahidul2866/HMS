@@ -6,6 +6,8 @@ import { Router } from '@angular/router';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { Patient } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
+import { HREmployee } from '../../../hr/models/hr.models';
+import { HRService } from '../../../hr/services/hr.service';
 import { AdminUser, AdminRole, EffectiveAccess } from '../../models/admin.models';
 import { AdminUserService } from '../../services/admin-user.service';
 import { RoleService } from '../../services/role.service';
@@ -22,12 +24,15 @@ export class UserManagementComponent {
   private readonly adminUserService = inject(AdminUserService);
   private readonly roleService = inject(RoleService);
   private readonly patientService = inject(PatientService);
+  private readonly hrService = inject(HRService);
   private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
 
   users: AdminUser[] = [];
   roles: AdminRole[] = [];
   patients: Patient[] = [];
+  employees: HREmployee[] = [];
+  selectedEmployee: HREmployee | null = null;
   createModalOpen = false;
   scopeModalOpen = false;
   selectedAccess: EffectiveAccess | null = null;
@@ -46,26 +51,16 @@ export class UserManagementComponent {
     full_name: ['', Validators.required],
     password: ['ChangeMe123!', Validators.required],
     role_code: ['ADMIN', Validators.required],
+    employee_id: [''],
+    username_source: ['email'],
     patient_id: [''],
-  });
-
-  readonly scopeForm = this.fb.group({
-    scope_type: ['ward', Validators.required],
-    scope_value: ['', Validators.required],
-    scope_ref_id: [''],
-    module: [''],
-    is_primary: [false],
-    is_temporary: [false],
-    is_override: [false],
-    starts_at: [''],
-    ends_at: [''],
-    reason: [''],
   });
 
   constructor() {
     this.loadRoles();
     this.loadUsers();
     this.loadPatients();
+    this.loadEmployees();
   }
 
   loadRoles(): void {
@@ -80,13 +75,50 @@ export class UserManagementComponent {
     this.patientService.list().subscribe((patients) => (this.patients = patients));
   }
 
+  loadEmployees(): void {
+    this.hrService.listEmployees({ page_size: 500, status: 'active' }).subscribe((response) => {
+      this.employees = response.items;
+    });
+  }
+
   openCreateModal(): void {
     this.createModalOpen = true;
   }
 
   closeCreateModal(): void {
     this.createModalOpen = false;
-    this.form.reset({ password: 'ChangeMe123!', role_code: 'ADMIN', patient_id: '' });
+    this.selectedEmployee = null;
+    this.form.reset({ password: 'ChangeMe123!', role_code: 'ADMIN', patient_id: '', employee_id: '', username_source: 'email' });
+  }
+
+  onEmployeeChanged(): void {
+    const employeeId = this.form.controls.employee_id.value || '';
+    this.selectedEmployee = this.employees.find((employee) => employee.id === employeeId) || null;
+    if (!this.selectedEmployee) {
+      return;
+    }
+    const email = this.selectedEmployee.email || '';
+    this.form.patchValue({
+      full_name: this.selectedEmployee.full_name,
+      email,
+      username: this.form.controls.username_source.value === 'email' ? email : this.slugUsername(this.selectedEmployee.full_name),
+    });
+  }
+
+  onUsernameSourceChanged(): void {
+    if (this.form.controls.username_source.value === 'email') {
+      this.form.patchValue({ username: this.form.controls.email.value || '' });
+    } else if (this.selectedEmployee && !this.form.controls.username.value) {
+      this.form.patchValue({ username: this.slugUsername(this.selectedEmployee.full_name) });
+    }
+  }
+
+  get employeeOptions(): HREmployee[] {
+    return this.employees.filter((employee) => !this.users.some((user) => user.employee_id === employee.id));
+  }
+
+  private slugUsername(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.|\.$)/g, '').slice(0, 72);
   }
 
   openOPDSettingsModal(user: AdminUser): void {
@@ -103,7 +135,6 @@ export class UserManagementComponent {
     this.scopeModalOpen = false;
     this.selectedScopeUser = null;
     this.selectedAccess = null;
-    this.scopeForm.reset({ scope_type: 'ward', scope_value: '', scope_ref_id: '', module: '', is_primary: false, is_temporary: false, is_override: false, starts_at: '', ends_at: '', reason: '' });
   }
 
   loadEffectiveAccess(user: AdminUser): void {
@@ -228,12 +259,39 @@ export class UserManagementComponent {
     }
     const value = this.form.getRawValue();
     this.creating = true;
+    if (value.role_code === 'PATIENT') {
+      if (!value.patient_id) {
+        this.creating = false;
+        this.notificationService.warning('Select an existing patient for portal access.');
+        return;
+      }
+      this.adminUserService
+        .createPatientPortalAccount({
+          patient_id: value.patient_id,
+          username: value.username!,
+          email: value.email!,
+          password: value.password!,
+        })
+        .subscribe({
+          next: () => {
+            this.creating = false;
+            this.loadUsers();
+            this.closeCreateModal();
+            this.notificationService.success('Patient portal account created.');
+          },
+          error: () => {
+            this.creating = false;
+          },
+        });
+      return;
+    }
     this.adminUserService
       .create({
         username: value.username!,
         email: value.email!,
         full_name: value.full_name!,
         password: value.password!,
+        employee_id: value.employee_id || null,
         role_codes: [value.role_code!],
         direct_permission_codes: [],
         patient_id: value.patient_id || null,
@@ -250,31 +308,6 @@ export class UserManagementComponent {
         error: () => {
           this.creating = false;
         },
-      });
-  }
-
-  submitScope(): void {
-    if (!this.selectedScopeUser || this.scopeForm.invalid) return;
-    const value = this.scopeForm.getRawValue();
-    this.adminUserService
-      .createUserScope({
-        user_id: this.selectedScopeUser.id,
-        scope_type: value.scope_type!,
-        scope_value: value.scope_value || null,
-        scope_ref_id: value.scope_ref_id || null,
-        module: value.module || null,
-        status: 'active',
-        is_primary: !!value.is_primary,
-        is_temporary: !!value.is_temporary,
-        is_override: !!value.is_override,
-        starts_at: value.starts_at || null,
-        ends_at: value.ends_at || null,
-        reason: value.reason || null,
-        meta: {},
-      })
-      .subscribe(() => {
-        this.notificationService.success('Scope assignment saved.');
-        if (this.selectedScopeUser) this.loadEffectiveAccess(this.selectedScopeUser);
       });
   }
 

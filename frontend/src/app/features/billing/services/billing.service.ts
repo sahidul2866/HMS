@@ -16,6 +16,7 @@ import {
   BillingInvoiceVoidPayload,
   BillingPaymentPayload,
   BillingRefundPayload,
+  BillingReturnPayload,
   BillingInvoiceItemPayload,
   BillingSettings,
   BillingService,
@@ -135,6 +136,15 @@ export class BillingServiceApi extends ApiBaseService {
       tap((invoice) => {
         this.clearInvoiceCache(invoiceId);
         this.publishInvoiceEvent('billing.payment.received', invoice, 'Payment status updated.');
+      })
+    );
+  }
+
+  createReturn(invoiceId: string, payload: BillingReturnPayload): Observable<BillingInvoice> {
+    return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/return`), payload).pipe(
+      tap((invoice) => {
+        this.clearInvoiceCache(invoiceId);
+        this.publishInvoiceEvent('billing.payment.received', invoice, 'Return billing posted.');
       })
     );
   }

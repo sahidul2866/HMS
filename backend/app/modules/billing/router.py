@@ -23,6 +23,7 @@ from app.schemas.billing import (
     BillingInvoiceVoidRequest,
     BillingPaymentCreate,
     BillingRefundCreate,
+    BillingReturnCreate,
     BillingReferralSummaryRead,
     BillingSummaryRead,
     BillingServiceCreate,
@@ -213,6 +214,22 @@ def create_billing_refund(
     db: Session = Depends(get_db),
 ) -> BillingInvoiceRead:
     invoice = BillingServiceManager(db).create_refund(invoice_id, payload, user, context)
+    return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
+
+
+@router.post(
+    "/invoices/{invoice_id}/return",
+    response_model=BillingInvoiceRead,
+    dependencies=[Depends(require_permissions("billing.payment.refund"))],
+)
+def create_billing_return(
+    invoice_id: UUID,
+    payload: BillingReturnCreate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BillingInvoiceRead:
+    invoice = BillingServiceManager(db).create_return(invoice_id, payload, user, context)
     return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
 
 

@@ -297,6 +297,30 @@ export class HRPayrollComponent {
     return this.documents.filter((item) => item.status === status).length;
   }
 
+  openDashboardDetail(kind: 'employees' | 'active' | 'late' | 'absent' | 'leave' | 'payroll' | 'documents' | 'overtime'): void {
+    this.error = '';
+    if (kind === 'employees') {
+      this.employeeStatus = '';
+      this.tab.set('employees');
+    } else if (kind === 'active') {
+      this.employeeStatus = 'active';
+      this.tab.set('employees');
+    } else if (kind === 'late' || kind === 'absent') {
+      this.attendanceStatus = kind;
+      this.tab.set('attendance');
+    } else if (kind === 'leave') {
+      this.tab.set('leave');
+    } else if (kind === 'payroll' || kind === 'overtime') {
+      this.tab.set('payroll');
+      if (kind === 'overtime') {
+        this.openModal('overtime');
+      }
+    } else if (kind === 'documents') {
+      this.tab.set('documents');
+    }
+    this.loadCurrentTab();
+  }
+
   private submit<T>(request$: import('rxjs').Observable<T>, message: string): void {
     this.saving = true;
     this.error = '';

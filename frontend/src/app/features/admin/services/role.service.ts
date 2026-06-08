@@ -4,7 +4,7 @@ import { Observable, tap } from 'rxjs';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
-import { AdminRole } from '../models/admin.models';
+import { AdminRole, ScopeAssignment, ScopeAssignmentPayload } from '../models/admin.models';
 import { Permission } from '../../../core/models/auth.models';
 import { CreateRolePayload } from '../models/admin.models';
 
@@ -39,6 +39,29 @@ export class RoleService extends ApiBaseService {
     return this.cache.get('admin:permissions', () => this.http.get<Permission[]>(this.url('/permissions')));
   }
 
+  listRoleScopes(roleId?: string): Observable<ScopeAssignment[]> {
+    const options = roleId ? { params: { role_id: roleId } } : {};
+    return this.http.get<ScopeAssignment[]>(this.url('/admin/scopes/roles'), options);
+  }
+
+  createRoleScope(payload: ScopeAssignmentPayload): Observable<ScopeAssignment> {
+    return this.http.post<ScopeAssignment>(this.url('/admin/scopes/roles'), payload).pipe(
+      tap(() => {
+        this.clearCache();
+        this.publishPermissionEvent(payload.role_id || null, 'Role scope updated.');
+      })
+    );
+  }
+
+  deactivateRoleScope(scopeId: string): Observable<ScopeAssignment> {
+    return this.http.delete<ScopeAssignment>(this.url(`/admin/scopes/roles/${scopeId}`)).pipe(
+      tap(() => {
+        this.clearCache();
+        this.publishPermissionEvent(scopeId, 'Role scope updated.');
+      })
+    );
+  }
+
   clearCache(): void {
     this.cache.clearPrefix('admin:roles');
     this.cache.clear('admin:permissions');
@@ -49,8 +72,8 @@ export class RoleService extends ApiBaseService {
       name: 'user.permission.updated',
       entityType: 'role',
       entityId: roleCode,
-      modules: ['admin', 'dashboard'],
-      cachePrefixes: ['admin:', 'auth:', 'dashboard:'],
+      modules: ['admin', 'appointments', 'opd', 'ipd', 'er', 'billing', 'inventory', 'laboratory', 'radiology', 'dashboard'],
+      cachePrefixes: ['admin:', 'auth:', 'appointments:', 'opd:', 'ipd:', 'er:', 'billing:', 'inventory:', 'laboratory:', 'radiology:', 'dashboard:'],
       message,
     });
   }

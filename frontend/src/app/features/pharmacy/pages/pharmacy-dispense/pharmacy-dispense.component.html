@@ -138,6 +138,9 @@
               Visit: {{ dispense.visit_number || dispense.prescription_ref || 'Not linked' }} · Dispensed by {{ dispense.dispensed_by_name || 'Unknown' }}<br />
               Billing: {{ dispense.billing_invoice_number || 'Auto-bill pending / not linked' }} · Payment {{ dispense.billing_payment_status || 'unbilled' }}<br />
               Note: {{ dispense.note || 'No note recorded' }}<br />
+              @if (reminderLabel(dispense.note)) {
+                Reminder: {{ reminderLabel(dispense.note) }}<br />
+              }
               Return note: {{ dispense.return_note || 'No return note' }}
             </div>
             <div class="toolbar-row">

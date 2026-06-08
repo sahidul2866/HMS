@@ -19,14 +19,14 @@
 
   @if (tab() === 'dashboard') {
     <section class="metric-grid">
-      <div class="metric"><span>Total</span><strong>{{ summary?.total_employees || 0 }}</strong></div>
-      <div class="metric good"><span>Active</span><strong>{{ summary?.active_employees || 0 }}</strong></div>
-      <div class="metric warn"><span>Late</span><strong>{{ summary?.attendance?.['late'] || 0 }}</strong></div>
-      <div class="metric danger"><span>Absent</span><strong>{{ summary?.attendance?.['absent'] || 0 }}</strong></div>
-      <div class="metric"><span>Pending Leave</span><strong>{{ summary?.pending_leave_requests || 0 }}</strong></div>
-      <div class="metric money"><span>Salary Payable</span><strong>{{ formatMoney(summary?.monthly_salary_payable) }}</strong></div>
-      <div class="metric warn"><span>Documents</span><strong>{{ summary?.expiring_documents || 0 }}</strong></div>
-      <div class="metric money"><span>OT Cost</span><strong>{{ formatMoney(summary?.total_overtime_cost) }}</strong></div>
+      <button type="button" class="metric" (click)="openDashboardDetail('employees')"><span>Total</span><strong>{{ summary?.total_employees || 0 }}</strong><small>Open employee directory</small></button>
+      <button type="button" class="metric good" (click)="openDashboardDetail('active')"><span>Active</span><strong>{{ summary?.active_employees || 0 }}</strong><small>Active employees</small></button>
+      <button type="button" class="metric warn" (click)="openDashboardDetail('late')"><span>Late</span><strong>{{ summary?.attendance?.['late'] || 0 }}</strong><small>Today late attendance</small></button>
+      <button type="button" class="metric danger" (click)="openDashboardDetail('absent')"><span>Absent</span><strong>{{ summary?.attendance?.['absent'] || 0 }}</strong><small>Today absent attendance</small></button>
+      <button type="button" class="metric" (click)="openDashboardDetail('leave')"><span>Pending Leave</span><strong>{{ summary?.pending_leave_requests || 0 }}</strong><small>Review leave queue</small></button>
+      <button type="button" class="metric money" (click)="openDashboardDetail('payroll')"><span>Salary Payable</span><strong>{{ formatMoney(summary?.monthly_salary_payable) }}</strong><small>Payroll details</small></button>
+      <button type="button" class="metric warn" (click)="openDashboardDetail('documents')"><span>Documents</span><strong>{{ summary?.expiring_documents || 0 }}</strong><small>Expiring documents</small></button>
+      <button type="button" class="metric money" (click)="openDashboardDetail('overtime')"><span>OT Cost</span><strong>{{ formatMoney(summary?.total_overtime_cost) }}</strong><small>Overtime requests</small></button>
     </section>
 
     <section class="content-grid">

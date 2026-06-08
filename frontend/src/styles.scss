@@ -822,6 +822,10 @@ tbody tr:focus-visible,
   justify-content: flex-end;
 }
 
+.row-action-menu[open] {
+  z-index: 5200;
+}
+
 .row-action-menu summary {
   display: inline-flex;
   align-items: center;
@@ -861,7 +865,7 @@ tbody tr:focus-visible,
   position: absolute;
   top: calc(100% + 0.3rem);
   right: 0;
-  z-index: 12;
+  z-index: 5201;
   display: grid;
   gap: 0.2rem;
   min-width: 10rem;
@@ -2217,6 +2221,25 @@ body .table-wrap table,
 body .table-shell table,
 body .responsive-table table {
   width: 100%;
+}
+
+body .table-wrap:has(.row-action-menu[open]),
+body .table-shell:has(.row-action-menu[open]),
+body .responsive-table:has(.row-action-menu[open]),
+body .invoice-table-shell:has(.row-action-menu[open]),
+body .eye-exam-table-wrap:has(.row-action-menu[open]),
+body .user-table-wrap:has(.row-action-menu[open]),
+body .page-card:has(.row-action-menu[open]),
+body table:has(.row-action-menu[open]),
+body tr:has(.row-action-menu[open]),
+body td:has(.row-action-menu[open]) {
+  overflow: visible !important;
+}
+
+body tr:has(.row-action-menu[open]),
+body td:has(.row-action-menu[open]) {
+  position: relative;
+  z-index: 5200;
 }
 
 body td button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):not(.tab-button):not(.primary):not(.secondary):not(.danger),

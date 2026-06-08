@@ -49,7 +49,6 @@ type TriageDraft = {
           <p class="page-subtitle">Arrival, triage, assessment, treatment, observation, and disposition in one compact workflow.</p>
         </div>
         <div class="toolbar-row">
-          <span class="refresh-chip">Auto refresh 30s</span>
           <button class="secondary-btn" type="button" (click)="loadOverview()">Refresh</button>
           <button class="primary-btn" type="button" *ngIf="canAny(permissions.erVisitManage, permissions.emergencyRegister)" (click)="navigateToRegister()">Quick Register</button>
         </div>
@@ -336,7 +335,6 @@ export class EROverviewComponent implements OnDestroy {
   doctors: User[] = [];
   nurses: User[] = [];
   activeTab = 'triage';
-  private refreshId: ReturnType<typeof setInterval> | null = null;
 
   filters: BoardFilter = { search: '', acuity: '', status: '', doctor: '', nurse: '', zone: '', wait: '' };
   triageCategory = 'yellow';
@@ -376,11 +374,9 @@ export class EROverviewComponent implements OnDestroy {
       this.doctors = doctors;
       this.nurses = doctors;
     });
-    this.refreshId = setInterval(() => this.loadOverview(false), 30000);
   }
 
   ngOnDestroy(): void {
-    if (this.refreshId) clearInterval(this.refreshId);
   }
 
   loadOverview(showWarning = true): void {

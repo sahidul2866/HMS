@@ -90,6 +90,81 @@
         </div>
       </div>
 
+      <section class="scope-editor">
+        <div class="scope-editor__header">
+          <div>
+            <p class="editor-label">Role Scopes</p>
+            <h3>Assignable Access Boundaries</h3>
+            <p class="muted">Scopes assigned here are inherited by every user with this role.</p>
+          </div>
+        </div>
+
+        <form class="scope-form" [formGroup]="scopeForm" (ngSubmit)="submitScope()">
+          <label class="field">
+            <span>Scope Type</span>
+            <select formControlName="scope_type" [disabled]="!selectedRoleCode">
+              <option value="ward">Ward</option>
+              <option value="store">Store</option>
+              <option value="queue_scope">Queue Scope</option>
+              <option value="queue_counter">Queue Counter</option>
+              <option value="doctor_profile">Doctor Profile</option>
+              <option value="nurse_station">Nurse Station</option>
+              <option value="shift">Shift</option>
+              <option value="lab_section">Lab Section</option>
+              <option value="radiology_unit">Radiology Unit</option>
+              <option value="blood_bank_unit">Blood Bank Unit</option>
+              <option value="department">Department</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Scope Value</span>
+            <input type="text" formControlName="scope_value" [disabled]="!selectedRoleCode" placeholder="Ward A, main store, morning" />
+          </label>
+          <label class="field">
+            <span>Record ID</span>
+            <input type="text" formControlName="scope_ref_id" [disabled]="!selectedRoleCode" placeholder="Optional UUID" />
+          </label>
+          <label class="field">
+            <span>Module</span>
+            <input type="text" formControlName="module" [disabled]="!selectedRoleCode" placeholder="ipd, inventory, queue" />
+          </label>
+          <label class="field">
+            <span>Starts At</span>
+            <input type="datetime-local" formControlName="starts_at" [disabled]="!selectedRoleCode" />
+          </label>
+          <label class="field">
+            <span>Ends At</span>
+            <input type="datetime-local" formControlName="ends_at" [disabled]="!selectedRoleCode" />
+          </label>
+          <label class="field field-wide">
+            <span>Reason</span>
+            <input type="text" formControlName="reason" [disabled]="!selectedRoleCode" placeholder="Role responsibility or access policy note" />
+          </label>
+          <div class="actions-row field-wide">
+            <button class="primary-btn" type="submit" [disabled]="!selectedRoleCode">Assign Scope To Role</button>
+          </div>
+        </form>
+
+        <div class="scope-list">
+          @for (scope of selectedRoleScopes; track scope.id) {
+            <article class="scope-item">
+              <div>
+                <strong>{{ scope.scope_type }} · {{ scope.scope_value || scope.scope_ref_id || 'All' }}</strong>
+                <span class="muted">{{ scope.module || 'Any module' }} · {{ scope.reason || 'No remarks' }}</span>
+              </div>
+              <button class="secondary-btn" type="button" (click)="removeScope(scope)">Remove</button>
+            </article>
+          } @empty {
+            <article class="scope-item">
+              <div>
+                <strong>No scopes assigned</strong>
+                <span class="muted">Select a role and add a scope to restrict access by module, ward, department, or area.</span>
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+
       <div class="module-grid">
         @for (group of permissionGroups; track group.module) {
           <section class="module-panel">

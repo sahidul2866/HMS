@@ -225,6 +225,49 @@
     <section class="page-card">
       <div class="section-header">
         <div>
+          <h2 class="section-title">IPD Tracking</h2>
+          <div class="section-copy">Assigned doctor, nurse, ward responsibility, and recent inpatient movement.</div>
+        </div>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Admission</th>
+            <th>Ward / Bed</th>
+            <th>Doctor</th>
+            <th>Nurse</th>
+            <th>Status</th>
+            <th>Latest Tracking</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (admission of history.ipd_admissions; track admission.id) {
+            <tr>
+              <td>{{ admission.admission_number }}<br /><small>{{ admission.admitted_at | date:'medium' }}</small></td>
+              <td>{{ admission.ward_name }} / {{ admission.bed_number }}</td>
+              <td>{{ (admission.active_doctors || []).join(', ') || admission.attending_doctor_name || '-' }}</td>
+              <td>{{ (admission.active_nurses || []).join(', ') || '-' }}</td>
+              <td>{{ admission.status }}</td>
+              <td>
+                @if ((admission.tracking || []).length) {
+                  <div class="detail-stack">
+                    @for (event of (admission.tracking || []).slice(0, 3); track event.time + event.title) {
+                      <div><strong>{{ event.title }}</strong> {{ event.detail || '' }} <small>{{ event.time | date:'short' }}</small></div>
+                    }
+                  </div>
+                } @else {
+                  -
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="page-card">
+      <div class="section-header">
+        <div>
           <h2 class="section-title">Billing & Pharmacy</h2>
           <div class="section-copy">Invoices, receipts, and dispensed medicines.</div>
         </div>

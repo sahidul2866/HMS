@@ -236,6 +236,18 @@ class BillingRefundCreate(BaseModel):
     refunded_at: datetime | None = None
 
 
+class BillingReturnItemCreate(BaseModel):
+    invoice_item_id: UUID
+    quantity: Decimal = Field(gt=0)
+
+
+class BillingReturnCreate(BaseModel):
+    items: list[BillingReturnItemCreate] = Field(min_length=1)
+    payment_id: UUID | None = None
+    reason: str = Field(min_length=3, max_length=500)
+    refunded_at: datetime | None = None
+
+
 class BillingRefundRead(BaseModel):
     id: UUID
     invoice_id: UUID
@@ -243,6 +255,8 @@ class BillingRefundRead(BaseModel):
     patient_id: UUID
     refund_number: str
     amount: Decimal
+    refund_type: str = "refund"
+    return_items: list[dict] | None = None
     reason: str
     refunded_at: datetime
     refunded_by_user_id: UUID

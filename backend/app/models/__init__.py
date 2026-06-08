@@ -25,6 +25,16 @@ from app.models.accounting import (
 from app.models.audit_log import AuditLog
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, BillingRefund, BillingService, ReferredDoctor
 from app.models.billing_links import BillingItemLink
+from app.models.catering import (
+    CateringDietOrder,
+    CateringDietType,
+    CateringInventoryUsage,
+    CateringMealPlan,
+    CateringMealSchedule,
+    CateringMealTask,
+    CateringSetting,
+    CateringStaffMealOrder,
+)
 from app.models.blood_bank import (
     BloodBankSetting,
     BloodCollection,
@@ -170,6 +180,14 @@ __all__ = [
     "BillingService",
     "ReferredDoctor",
     "BillingItemLink",
+    "CateringDietOrder",
+    "CateringDietType",
+    "CateringInventoryUsage",
+    "CateringMealPlan",
+    "CateringMealSchedule",
+    "CateringMealTask",
+    "CateringSetting",
+    "CateringStaffMealOrder",
     "BloodBankSetting",
     "BloodCollection",
     "BloodCrossmatch",

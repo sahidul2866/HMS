@@ -17,7 +17,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     op.create_table(
         "patient_portal_accounts",
         sa.Column("branch_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -77,7 +76,7 @@ def upgrade() -> None:
         )
         SELECT
             u.branch_id, u.patient_id, u.username, u.email, u.full_name, u.hashed_password, p.phone,
-            u.last_login_at, u.created_at, now(), u.created_by, u.updated_by, gen_random_uuid(), u.is_active
+            u.last_login_at, u.created_at, now(), u.created_by, u.updated_by, u.id, u.is_active
         FROM users u
         JOIN patients p ON p.id = u.patient_id
         WHERE u.patient_id IS NOT NULL

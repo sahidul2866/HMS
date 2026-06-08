@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { Permission } from '../../../../core/models/auth.models';
 import { NotificationService } from '../../../../core/services/notification.service';
-import { AdminRole } from '../../models/admin.models';
+import { AdminRole, ScopeAssignment } from '../../models/admin.models';
 import { RoleService } from '../../services/role.service';
 
 interface PermissionGroup {
@@ -30,6 +30,7 @@ export class RoleManagementComponent {
   permissionGroups: PermissionGroup[] = [];
   selectedRoleCode = '';
   selectedPermissionCodes = new Set<string>();
+  selectedRoleScopes: ScopeAssignment[] = [];
   isCreateRoleModalOpen = false;
 
   readonly createRoleForm = this.fb.group({
@@ -38,6 +39,17 @@ export class RoleManagementComponent {
     description: [''],
     is_doctor_role: [false],
     is_referral_role: [false],
+  });
+
+  readonly scopeForm = this.fb.group({
+    scope_type: ['ward', Validators.required],
+    scope_value: ['', Validators.required],
+    scope_ref_id: [''],
+    module: ['ipd'],
+    is_primary: [false],
+    starts_at: [''],
+    ends_at: [''],
+    reason: [''],
   });
 
   constructor() {
@@ -71,6 +83,7 @@ export class RoleManagementComponent {
     this.selectedRoleCode = code;
     const role = this.roles.find((item) => item.code === code);
     this.selectedPermissionCodes = new Set(role?.permissions.map((item) => item.code) ?? []);
+    this.loadRoleScopes();
   }
 
   isSelected(code: string): boolean {
@@ -173,6 +186,53 @@ export class RoleManagementComponent {
     this.roleService.updatePermissions(this.selectedRoleCode, codes).subscribe(() => {
       this.reload();
       this.notificationService.success(`Permissions updated for ${this.selectedRoleCode}.`);
+    });
+  }
+
+  loadRoleScopes(): void {
+    if (!this.selectedRole?.id) {
+      this.selectedRoleScopes = [];
+      return;
+    }
+    this.roleService.listRoleScopes(this.selectedRole.id).subscribe((scopes) => {
+      this.selectedRoleScopes = scopes.filter((scope) => scope.is_active);
+    });
+  }
+
+  submitScope(): void {
+    const role = this.selectedRole;
+    if (!role || this.scopeForm.invalid) {
+      this.scopeForm.markAllAsTouched();
+      return;
+    }
+    const value = this.scopeForm.getRawValue();
+    this.roleService
+      .createRoleScope({
+        role_id: role.id,
+        scope_type: value.scope_type!,
+        scope_value: value.scope_value || null,
+        scope_ref_id: value.scope_ref_id || null,
+        module: value.module || null,
+        status: 'active',
+        is_primary: !!value.is_primary,
+        is_temporary: false,
+        is_override: false,
+        starts_at: value.starts_at || null,
+        ends_at: value.ends_at || null,
+        reason: value.reason || null,
+        meta: {},
+      })
+      .subscribe(() => {
+        this.notificationService.success(`Scope assigned to ${role.code}.`);
+        this.scopeForm.patchValue({ scope_value: '', scope_ref_id: '', reason: '' });
+        this.loadRoleScopes();
+      });
+  }
+
+  removeScope(scope: ScopeAssignment): void {
+    this.roleService.deactivateRoleScope(scope.id).subscribe(() => {
+      this.notificationService.success('Role scope removed.');
+      this.loadRoleScopes();
     });
   }
 

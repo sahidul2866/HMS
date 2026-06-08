@@ -40,6 +40,11 @@
   gap: 1rem;
 }
 
+.ward-responsibility-card {
+  display: grid;
+  gap: 1rem;
+}
+
 .settings-error,
 .permission-hint {
   border-radius: 12px;
@@ -114,8 +119,39 @@
   margin-bottom: 0.75rem;
 }
 
+.responsibility-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.responsibility-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.responsibility-item strong,
+.responsibility-item span {
+  display: block;
+}
+
+.responsibility-item span {
+  margin-top: 0.25rem;
+  color: #64748b;
+}
+
 @media (max-width: 980px) {
   .settings-layout {
     grid-template-columns: 1fr;
+  }
+
+  .responsibility-item {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

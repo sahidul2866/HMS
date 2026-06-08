@@ -4,7 +4,7 @@ import { Observable, tap } from 'rxjs';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
-import { AdminUser, CreateUserPayload, EffectiveAccess, ScopeAssignment, ScopeAssignmentPayload, UpdateUserOPDSettingsPayload } from '../models/admin.models';
+import { AdminUser, CreatePatientPortalAccountPayload, CreateUserPayload, EffectiveAccess, ScopeAssignment, ScopeAssignmentPayload, UpdateUserOPDSettingsPayload } from '../models/admin.models';
 
 @Injectable({ providedIn: 'root' })
 export class AdminUserService extends ApiBaseService {
@@ -24,6 +24,15 @@ export class AdminUserService extends ApiBaseService {
       tap((user) => {
         this.clearCache();
         this.publishUserEvent(user.id, 'User list updated.');
+      })
+    );
+  }
+
+  createPatientPortalAccount(payload: CreatePatientPortalAccountPayload): Observable<AdminUser> {
+    return this.http.post<AdminUser>(this.url('/admin/patient-portal-accounts'), payload).pipe(
+      tap((user) => {
+        this.clearCache();
+        this.publishUserEvent(user.id, 'Patient portal account created.');
       })
     );
   }

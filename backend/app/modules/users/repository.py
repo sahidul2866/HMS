@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.permission import Permission
 from app.models.role import Role
+from app.models.hr import HREmployee
 from app.models.user import User
 
 
@@ -17,6 +18,9 @@ class UsersRepository:
     def get_user(self, user_id) -> User | None:
         stmt = select(User).options(joinedload(User.roles), joinedload(User.direct_permissions)).where(User.id == user_id)
         return self.db.scalar(stmt)
+
+    def get_employee(self, employee_id) -> HREmployee | None:
+        return self.db.get(HREmployee, employee_id)
 
     def get_roles(self, codes: list[str]) -> list[Role]:
         if not codes:

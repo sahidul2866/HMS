@@ -25,6 +25,7 @@ from app.models.pharmacy import (
     PharmacySaleItem,
     PharmacySaleReturn,
 )
+from app.models.patient_portal_account import PatientPortalAccount
 from app.models.user import User
 from app.scripts.script_checkpoints import run_checkpoint_step
 
@@ -41,8 +42,8 @@ def get_demo_context(session) -> dict[str, object]:
     doctor = get_required(session, User, User.username, "dr_rahman", "doctor user")
     accountant = get_required(session, User, User.username, "acct_kamal", "accountant user")
     pharmacist = get_required(session, User, User.username, "pharma_nadia", "pharmacist user")
-    patient_users = {
-        username: get_required(session, User, User.username, username, "patient portal user")
+    patient_accounts = {
+        username: get_required(session, PatientPortalAccount, PatientPortalAccount.username, username, "patient portal account")
         for username in ("patient_fatema", "patient_rakib", "patient_sumaiya", "patient_arman")
     }
     services = {
@@ -54,7 +55,7 @@ def get_demo_context(session) -> dict[str, object]:
         "doctor": doctor,
         "accountant": accountant,
         "pharmacist": pharmacist,
-        "patient_users": patient_users,
+        "patient_accounts": patient_accounts,
         "services": services,
     }
 
@@ -138,10 +139,10 @@ def seed_fatema_complete_journey() -> str:
         doctor: User = ctx["doctor"]  # type: ignore[assignment]
         accountant: User = ctx["accountant"]  # type: ignore[assignment]
         pharmacist: User = ctx["pharmacist"]  # type: ignore[assignment]
-        patient_user: User = ctx["patient_users"]["patient_fatema"]  # type: ignore[index]
+        patient_account: PatientPortalAccount = ctx["patient_accounts"]["patient_fatema"]  # type: ignore[index]
         services: dict[str, BillingItemConfig] = ctx["services"]  # type: ignore[assignment]
 
-        patient = patient_user.patient
+        patient = patient_account.patient
         if patient is None:
             raise RuntimeError("patient_fatema is not linked to a patient")
 
@@ -154,9 +155,9 @@ def seed_fatema_complete_journey() -> str:
             status="completed",
             reason="Persistent cough and fever",
             note="Demo completed appointment",
-            booked_by_user_id=patient_user.id,
-            created_by=patient_user.id,
-            updated_by=patient_user.id,
+            booked_by_patient_account_id=patient_account.id,
+            created_by=patient_account.id,
+            updated_by=patient_account.id,
         )
         session.add(appointment)
         session.flush()
@@ -300,8 +301,8 @@ def seed_rakib_pending_diagnostics() -> str:
         ctx = get_demo_context(session)
         branch: Branch = ctx["branch"]  # type: ignore[assignment]
         doctor: User = ctx["doctor"]  # type: ignore[assignment]
-        patient_user: User = ctx["patient_users"]["patient_rakib"]  # type: ignore[index]
-        patient = patient_user.patient
+        patient_account: PatientPortalAccount = ctx["patient_accounts"]["patient_rakib"]  # type: ignore[index]
+        patient = patient_account.patient
         if patient is None:
             raise RuntimeError("patient_rakib is not linked to a patient")
 
@@ -385,9 +386,9 @@ def seed_sumaiya_ipd_journey() -> str:
         branch: Branch = ctx["branch"]  # type: ignore[assignment]
         doctor: User = ctx["doctor"]  # type: ignore[assignment]
         accountant: User = ctx["accountant"]  # type: ignore[assignment]
-        patient_user: User = ctx["patient_users"]["patient_sumaiya"]  # type: ignore[index]
+        patient_account: PatientPortalAccount = ctx["patient_accounts"]["patient_sumaiya"]  # type: ignore[index]
         services: dict[str, BillingItemConfig] = ctx["services"]  # type: ignore[assignment]
-        patient = patient_user.patient
+        patient = patient_account.patient
         if patient is None:
             raise RuntimeError("patient_sumaiya is not linked to a patient")
 
@@ -505,8 +506,8 @@ def seed_arman_upcoming_portal() -> str:
         ctx = get_demo_context(session)
         branch: Branch = ctx["branch"]  # type: ignore[assignment]
         doctor: User = ctx["doctor"]  # type: ignore[assignment]
-        patient_user: User = ctx["patient_users"]["patient_arman"]  # type: ignore[index]
-        patient = patient_user.patient
+        patient_account: PatientPortalAccount = ctx["patient_accounts"]["patient_arman"]  # type: ignore[index]
+        patient = patient_account.patient
         if patient is None:
             raise RuntimeError("patient_arman is not linked to a patient")
 
@@ -519,9 +520,9 @@ def seed_arman_upcoming_portal() -> str:
             status="scheduled",
             reason="Follow-up consultation for migraine",
             note="Booked from demo patient portal",
-            booked_by_user_id=patient_user.id,
-            created_by=patient_user.id,
-            updated_by=patient_user.id,
+            booked_by_patient_account_id=patient_account.id,
+            created_by=patient_account.id,
+            updated_by=patient_account.id,
         )
         session.add(appointment)
         session.commit()
@@ -540,8 +541,8 @@ def seed_pharmacy_inventory_demo() -> str:
         ctx = get_demo_context(session)
         branch: Branch = ctx["branch"]  # type: ignore[assignment]
         pharmacist: User = ctx["pharmacist"]  # type: ignore[assignment]
-        patient_fatema: User = ctx["patient_users"]["patient_fatema"]  # type: ignore[index]
-        patient_rakib: User = ctx["patient_users"]["patient_rakib"]  # type: ignore[index]
+        patient_fatema: PatientPortalAccount = ctx["patient_accounts"]["patient_fatema"]  # type: ignore[index]
+        patient_rakib: PatientPortalAccount = ctx["patient_accounts"]["patient_rakib"]  # type: ignore[index]
 
         fatema = patient_fatema.patient
         rakib = patient_rakib.patient

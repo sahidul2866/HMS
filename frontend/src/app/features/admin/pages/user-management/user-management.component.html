@@ -152,36 +152,6 @@
       </div>
     </section>
 
-    <aside class="page-card user-side-card">
-      <div class="user-section-title">
-        <div>
-          <p class="user-kicker user-kicker--accent">At A Glance</p>
-          <h3>Account Notes</h3>
-        </div>
-      </div>
-
-      <div class="insight-list">
-        <article class="insight-item">
-          <strong>Referral Doctor Visibility</strong>
-          <p>Billing now lists users whose assigned role is configured as both doctor and referral-enabled, including the new referral-doctor role.</p>
-        </article>
-
-        <article class="insight-item">
-          <strong>Operational Mix</strong>
-          <p>{{ doctorUsers }} doctor-linked users and {{ portalUsers }} patient-portal accounts are currently active in the same shared user directory.</p>
-        </article>
-
-        <article class="insight-item">
-          <strong>Portal-Ready Patients</strong>
-          <p>Patient-linked users can log into the portal, book appointments, and review their lab, radiology, and billing history.</p>
-        </article>
-
-        <article class="insight-item">
-          <strong>Safer User Creation</strong>
-          <p>New accounts are created from a focused modal so the table stays readable while data entry remains fast.</p>
-        </article>
-      </div>
-    </aside>
   </section>
 
   @if (createModalOpen) {
@@ -197,24 +167,47 @@
         </div>
 
         <form class="modal-grid" [formGroup]="form" (ngSubmit)="submit()">
+          <label class="field field--wide">
+            <span>Existing Employee</span>
+            <select formControlName="employee_id" (change)="onEmployeeChanged()">
+              <option value="">Create user without HR employee link</option>
+              @for (employee of employeeOptions; track employee.id) {
+                <option [value]="employee.id">{{ employee.staff_code }} · {{ employee.full_name }} · {{ employee.email || 'No email' }}</option>
+              }
+            </select>
+            <small class="field-hint">Selecting an employee fills identity details from HR so admin only chooses username, role, and temporary password.</small>
+          </label>
+
+          @if (selectedEmployee) {
+            <div class="employee-lock field--wide">
+              <strong>{{ selectedEmployee.full_name }}</strong>
+              <span>{{ selectedEmployee.staff_code }} · {{ selectedEmployee.department_name || 'No department' }} · {{ selectedEmployee.email || 'No email' }}</span>
+            </div>
+          }
+
           <label class="field">
             <span>Username</span>
-            <input type="text" formControlName="username" />
+            <div class="inline-choice">
+              <label><input type="radio" formControlName="username_source" value="email" (change)="onUsernameSourceChanged()" /> Email</label>
+              <label><input type="radio" formControlName="username_source" value="custom" (change)="onUsernameSourceChanged()" /> Custom</label>
+            </div>
+            <input type="text" formControlName="username" [readonly]="form.controls.username_source.value === 'email'" />
           </label>
 
           <label class="field">
             <span>Email</span>
-            <input type="email" formControlName="email" />
+            <input type="email" formControlName="email" [readonly]="!!selectedEmployee" (input)="onUsernameSourceChanged()" />
           </label>
 
           <label class="field">
             <span>Full Name</span>
-            <input type="text" formControlName="full_name" />
+            <input type="text" formControlName="full_name" [readonly]="!!selectedEmployee" />
           </label>
 
           <label class="field">
             <span>Password</span>
             <input type="text" formControlName="password" />
+            <small class="field-hint">Temporary password. User must reset it at first login.</small>
           </label>
 
           <label class="field">
@@ -236,7 +229,7 @@
             </select>
             <small class="field-hint">
               @if (isPatientRoleSelected()) {
-                Patient-role users can be linked to a registered patient profile for portal access.
+                Patient portal accounts are created against an existing patient record.
               } @else {
                 Select the Patient role to enable patient-profile linking.
               }
@@ -279,63 +272,42 @@
           </section>
 
           <section class="field field--wide">
-            <span>Active User Scopes</span>
+            <span>Role Assigned Scopes</span>
+            <div class="insight-list">
+              @for (scope of selectedAccess?.role_scopes || []; track scope.id) {
+                <article class="insight-item">
+                  <strong>{{ scope.scope_type }} · {{ scope.scope_value || scope.scope_ref_id || 'All' }}</strong>
+                  <p>{{ scope.module || 'Any module' }} · {{ scope.reason || 'No remarks' }}</p>
+                </article>
+              } @empty {
+                <article class="insight-item">
+                  <strong>No role scopes configured</strong>
+                  <p>Assign scopes in Role Management or configure IPD ward responsibility from IPD Settings.</p>
+                </article>
+              }
+            </div>
+          </section>
+
+          <section class="field field--wide">
+            <span>User Override Scopes</span>
             <div class="insight-list">
               @for (scope of selectedAccess?.user_scopes || []; track scope.id) {
                 <article class="insight-item">
                   <strong>{{ scope.scope_type }} · {{ scope.scope_value || scope.scope_ref_id || 'All' }}</strong>
                   <p>{{ scope.module || 'Any module' }} · {{ scope.is_temporary ? 'Temporary' : 'Standing' }} · {{ scope.reason || 'No remarks' }}</p>
                 </article>
+              } @empty {
+                <article class="insight-item">
+                  <strong>No user overrides</strong>
+                  <p>This user inherits access from assigned roles.</p>
+                </article>
               }
             </div>
           </section>
 
-          <form class="field field--wide modal-grid" [formGroup]="scopeForm" (ngSubmit)="submitScope()">
-            <label class="field">
-              <span>Scope Type</span>
-              <select formControlName="scope_type">
-                <option value="ward">Ward</option>
-                <option value="store">Store</option>
-                <option value="queue_scope">Queue Scope</option>
-                <option value="queue_counter">Queue Counter</option>
-                <option value="doctor_profile">Doctor Profile</option>
-                <option value="nurse_station">Nurse Station</option>
-                <option value="shift">Shift</option>
-                <option value="lab_section">Lab Section</option>
-                <option value="radiology_unit">Radiology Unit</option>
-                <option value="blood_bank_unit">Blood Bank Unit</option>
-                <option value="department">Department</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Scope Value</span>
-              <input type="text" formControlName="scope_value" placeholder="Ward A, morning, opd, hematology" />
-            </label>
-            <label class="field">
-              <span>Record ID</span>
-              <input type="text" formControlName="scope_ref_id" placeholder="Optional UUID for store/counter/user" />
-            </label>
-            <label class="field">
-              <span>Module</span>
-              <input type="text" formControlName="module" placeholder="ipd, inventory, queue..." />
-            </label>
-            <label class="field">
-              <span>Starts At</span>
-              <input type="datetime-local" formControlName="starts_at" />
-            </label>
-            <label class="field">
-              <span>Ends At</span>
-              <input type="datetime-local" formControlName="ends_at" />
-            </label>
-            <label class="field field--wide">
-              <span>Reason</span>
-              <input type="text" formControlName="reason" placeholder="Roster assignment, temporary coverage, supervisor override" />
-            </label>
-            <div class="modal-actions field--wide">
-              <button class="secondary-btn" type="button" (click)="closeScopeModal()">Close</button>
-              <button class="primary-btn" type="submit">Assign Scope</button>
-            </div>
-          </form>
+          <div class="modal-actions field--wide">
+            <button class="secondary-btn" type="button" (click)="closeScopeModal()">Close</button>
+          </div>
         </div>
       </section>
     </div>

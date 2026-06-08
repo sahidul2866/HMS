@@ -25,10 +25,18 @@ export class LoginComponent {
   errorMessage = '';
   loading = false;
   showPassword = false;
+  resetRequired = false;
+  resetLoading = false;
+  resetMessage = '';
 
   readonly form = this.fb.nonNullable.group({
     username_or_email: ['superadmin', [Validators.required]],
     password: ['Admin123!', [Validators.required, Validators.minLength(8)]],
+  });
+
+  readonly resetForm = this.fb.nonNullable.group({
+    current_password: ['', [Validators.required, Validators.minLength(8)]],
+    new_password: ['', [Validators.required, Validators.minLength(8)]],
   });
 
   constructor() {
@@ -57,12 +65,37 @@ export class LoginComponent {
     this.authService.login(this.form.getRawValue().username_or_email, this.form.getRawValue().password).subscribe({
       next: (user) => {
         this.loading = false;
+        if (user.must_reset_password) {
+          this.resetRequired = true;
+          this.resetForm.patchValue({ current_password: this.form.getRawValue().password, new_password: '' });
+          this.notificationService.warning('Reset your temporary password before continuing.');
+          return;
+        }
         this.notificationService.success('Login successful.');
         void this.redirectFromLogin(this.authService.getLandingRoute(user));
       },
       error: (error) => {
         this.loading = false;
         this.errorMessage = error.message ?? 'Unable to login';
+      },
+    });
+  }
+
+  submitReset(): void {
+    if (this.resetForm.invalid || this.resetLoading) {
+      return;
+    }
+    this.resetLoading = true;
+    this.resetMessage = '';
+    this.authService.resetPassword(this.resetForm.getRawValue()).subscribe({
+      next: () => {
+        this.resetLoading = false;
+        this.notificationService.success('Password updated.');
+        void this.redirectFromLogin(this.sessionService.getLandingRoute());
+      },
+      error: (error) => {
+        this.resetLoading = false;
+        this.resetMessage = error.message ?? 'Unable to update password';
       },
     });
   }

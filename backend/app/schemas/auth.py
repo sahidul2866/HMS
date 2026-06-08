@@ -62,7 +62,13 @@ class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
 
+class PasswordResetRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class PatientRegisterRequest(BaseModel):
+    patient_id: str | None = None
     username: str = Field(min_length=3, max_length=80)
     email: str = Field(min_length=5, max_length=255)
     full_name: str = Field(min_length=3, max_length=150)
@@ -73,3 +79,21 @@ class PatientRegisterRequest(BaseModel):
     address: str | None = None
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
+
+
+class PatientPortalSearchResult(BaseModel):
+    id: str
+    patient_number: str
+    full_name: str
+    phone: str | None = None
+    email: str | None = None
+    gender: str | None = None
+    date_of_birth: date | None = None
+    has_portal_account: bool = False
+
+
+class PatientPortalAccountCreate(BaseModel):
+    patient_id: str
+    username: str = Field(min_length=3, max_length=80)
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)

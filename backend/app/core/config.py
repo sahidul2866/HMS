@@ -81,6 +81,8 @@ class Settings(BaseSettings):
         normalized = value.strip().strip("\"'")
         if normalized.startswith("DATABASE_URL="):
             normalized = normalized.split("=", 1)[1].strip().strip("\"'")
+        if normalized.startswith("postgresql://"):
+            normalized = normalized.replace("postgresql://", "postgresql+psycopg://", 1)
         return normalized
 
 

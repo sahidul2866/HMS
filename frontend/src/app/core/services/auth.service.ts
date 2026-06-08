@@ -93,6 +93,7 @@ export class AuthService {
   }
 
   registerPatient(payload: {
+    patient_id?: string | null;
     username: string;
     email: string;
     full_name: string;
@@ -119,6 +120,28 @@ export class AuthService {
         }),
         map((response) => response.user)
       );
+  }
+
+  searchPatientsForRegistration(query: string): Observable<PatientRegistrationSearchResult[]> {
+    const params = new URLSearchParams({ q: query, limit: '10' });
+    return this.http.get<PatientRegistrationSearchResult[]>(`${runtimeConfig.apiBaseUrl}/patient-auth/patients/search?${params.toString()}`, {
+      headers: {
+        [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
+      },
+    });
+  }
+
+  resetPassword(payload: { current_password: string; new_password: string }): Observable<void> {
+    return this.http.post<void>(`${runtimeConfig.apiBaseUrl}/auth/reset-password`, payload).pipe(
+      tap(() => {
+        const user = this.sessionService.snapshot.user;
+        if (user) {
+          const updated = { ...user, must_reset_password: false };
+          this.currentUserService.setCachedUser(updated);
+          this.sessionService.setUser(updated);
+        }
+      })
+    );
   }
 
   refreshAccessToken(): Observable<LoginResponse> {
@@ -261,4 +284,15 @@ export class AuthService {
     this.sessionService.setUser(user);
     return this.sessionService.getLandingRoute();
   }
+}
+
+export interface PatientRegistrationSearchResult {
+  id: string;
+  patient_number: string;
+  full_name: string;
+  phone?: string | null;
+  email?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  has_portal_account: boolean;
 }

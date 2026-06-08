@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -157,6 +157,8 @@ class BillingRefund(Base, BaseModelMixin):
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     refund_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    refund_type: Mapped[str] = mapped_column(String(30), nullable=False, default="refund")
+    return_items: Mapped[list[dict] | None] = mapped_column(JSON)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     refunded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     refunded_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

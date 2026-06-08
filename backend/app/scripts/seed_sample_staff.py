@@ -488,7 +488,7 @@ def main() -> None:
         return runner
 
     for payload in DEMO_PATIENT_USERS:
-        run_checkpoint_step("seed_sample_staff", payload["username"], make_demo_patient_step(payload))
+        run_checkpoint_step("seed_sample_staff", f"patient:v2:{payload['username']}", make_demo_patient_step(payload))
 
     print("Sample staff seed completed.")
     print(f"Demo staff password: {STAFF_DEMO_PASSWORD}")

@@ -32,6 +32,7 @@ from app.schemas.billing import (
     BillingInvoicePreviewRequest,
     BillingPaymentCreate,
     BillingRefundCreate,
+    BillingReturnCreate,
     BillingInvoiceVoidRequest,
     BillingSettingsRead,
     BillingSettingsUpdate,
@@ -692,6 +693,8 @@ class BillingServiceManager:
             branch_id=invoice.branch_id,
             refund_number=f"RFND-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
             amount=self._money(payload.amount),
+            refund_type="refund",
+            return_items=None,
             reason=payload.reason,
             refunded_at=payload.refunded_at or datetime.now(UTC),
             refunded_by_user_id=actor.id,
@@ -718,6 +721,99 @@ class BillingServiceManager:
                 "invoice_number": entity.invoice_number,
                 "refund_number": refund.refund_number,
                 "amount": str(refund.amount),
+                "payment_id": str(refund.payment_id) if refund.payment_id else None,
+            },
+            context=context,
+        )
+        self.db.commit()
+        return self.get_invoice(invoice_id, actor)
+
+    def create_return(self, invoice_id: UUID, payload: BillingReturnCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        invoice = self.get_invoice(invoice_id, actor)
+        if invoice.status == "void":
+            raise AppException(409, "billing_invoice_void", "Cannot return items from a void invoice")
+        if invoice.paid_amount <= Decimal("0.00"):
+            raise AppException(409, "billing_invoice_unpaid", "Invoice has no collected amount to return")
+
+        items_by_id = {item.id: item for item in invoice.items if item.is_active}
+        return_items: list[dict] = []
+        return_amount = Decimal("0.00")
+        seen: set[UUID] = set()
+        for requested in payload.items:
+            if requested.invoice_item_id in seen:
+                raise AppException(400, "billing_return_duplicate_item", "Return item is duplicated")
+            seen.add(requested.invoice_item_id)
+            invoice_item = items_by_id.get(requested.invoice_item_id)
+            if not invoice_item:
+                raise AppException(404, "billing_return_item_not_found", "Invoice item was not found for this bill")
+            if requested.quantity > invoice_item.quantity:
+                raise AppException(400, "billing_return_quantity_exceeds_billed", f"Return quantity cannot exceed billed quantity for {invoice_item.service_name}")
+            unit_return_amount = self._money(invoice_item.line_total / invoice_item.quantity)
+            line_return_amount = self._money(unit_return_amount * requested.quantity)
+            return_amount += line_return_amount
+            return_items.append(
+                {
+                    "invoice_item_id": str(invoice_item.id),
+                    "service_name": invoice_item.service_name,
+                    "quantity": str(requested.quantity),
+                    "billed_quantity": str(invoice_item.quantity),
+                    "unit_return_amount": str(unit_return_amount),
+                    "return_amount": str(line_return_amount),
+                }
+            )
+
+        return_amount = self._money(return_amount)
+        if return_amount <= Decimal("0.00"):
+            raise AppException(400, "billing_return_empty", "Return amount must be greater than zero")
+        if return_amount > invoice.paid_amount:
+            raise AppException(400, "billing_return_exceeds_paid", "Return amount cannot exceed current collected balance")
+
+        payment = None
+        if payload.payment_id:
+            payment = self.repository.get_payment(payload.payment_id)
+            if not payment or payment.invoice_id != invoice.id:
+                raise AppException(404, "billing_payment_not_found", "Billing payment not found for this invoice")
+            already_refunded = sum((refund.amount for refund in payment.refunds), start=Decimal("0.00"))
+            refundable_amount = self._money(payment.amount - already_refunded)
+            if return_amount > refundable_amount:
+                raise AppException(400, "billing_return_exceeds_payment", "Return amount exceeds refundable balance for this receipt")
+
+        refund = BillingRefund(
+            invoice_id=invoice.id,
+            payment_id=payment.id if payment else None,
+            patient_id=invoice.patient_id,
+            branch_id=invoice.branch_id,
+            refund_number=f"RTRN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            amount=return_amount,
+            refund_type="return",
+            return_items=return_items,
+            reason=payload.reason,
+            refunded_at=payload.refunded_at or datetime.now(UTC),
+            refunded_by_user_id=actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.repository.create_refund(refund)
+
+        entity = self.repository.get_invoice_entity(invoice_id)
+        if not entity:
+            raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
+        entity.refunded_amount = self._money(entity.refunded_amount + refund.amount)
+        entity.paid_amount = self._money(entity.paid_amount - refund.amount)
+        self._recalculate_invoice_balance(entity)
+        entity.updated_by = actor.id
+        self.db.flush()
+        AuditService(self.db).log(
+            user_id=actor.id,
+            action=AuditAction.BILLING_REFUND_CREATE,
+            module="billing",
+            entity_type="billing_return",
+            entity_id=str(refund.id),
+            detail={
+                "invoice_number": entity.invoice_number,
+                "return_number": refund.refund_number,
+                "amount": str(refund.amount),
+                "items": return_items,
                 "payment_id": str(refund.payment_id) if refund.payment_id else None,
             },
             context=context,

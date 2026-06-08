@@ -8,6 +8,53 @@
   <form class="page-card register-form" [formGroup]="form" (ngSubmit)="submit()">
     <section class="form-section">
       <div class="section-heading">
+        <h2>Find Existing Patient</h2>
+        <p>Search by patient ID, name, mobile, or email. You can also continue as a new patient.</p>
+      </div>
+
+      <div class="lookup-shell">
+        <label class="field">
+          <span>Patient Search</span>
+          <input type="search" formControlName="patient_search" placeholder="Search existing patient" />
+        </label>
+        @if (selectedPatient) {
+          <button class="secondary-btn" type="button" (click)="createAsNewPatient()">Create as new patient</button>
+        }
+      </div>
+
+      @if (searching) {
+        <div class="lookup-state">Searching patients...</div>
+      }
+
+      @if (searchResults.length) {
+        <div class="lookup-results">
+          @for (patient of searchResults; track patient.id) {
+            <button
+              class="lookup-result"
+              type="button"
+              [class.is-disabled]="patient.has_portal_account"
+              (click)="selectPatient(patient)"
+            >
+              <strong>{{ patient.full_name }}</strong>
+              <span>{{ patient.patient_number }} · {{ patient.phone || 'No phone' }} · {{ patient.email || 'No email' }}</span>
+              @if (patient.has_portal_account) {
+                <small>Portal account already exists</small>
+              }
+            </button>
+          }
+        </div>
+      }
+
+      @if (selectedPatient) {
+        <div class="selected-patient">
+          <strong>{{ selectedPatient.full_name }}</strong>
+          <span>{{ selectedPatient.patient_number }} · Existing patient selected</span>
+        </div>
+      }
+    </section>
+
+    <section class="form-section">
+      <div class="section-heading">
         <h2>Account</h2>
         <p>Basic details used for sign-in and communication.</p>
       </div>
@@ -64,7 +111,13 @@
 
         <label class="field">
           <span>Gender</span>
-          <input type="text" formControlName="gender" placeholder="Gender" />
+          <select formControlName="gender">
+            <option value="">Select gender</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Other</option>
+            <option value="unknown">Prefer not to say</option>
+          </select>
         </label>
 
         <label class="field">

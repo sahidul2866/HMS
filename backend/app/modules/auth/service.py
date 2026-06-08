@@ -20,7 +20,7 @@ from app.models.role import Role
 from app.models.user import User
 from app.modules.audit.service import AuditService
 from app.modules.auth.repository import AuthRepository
-from app.schemas.auth import LoginResponse, TokenPair
+from app.schemas.auth import LoginResponse, PasswordResetRequest, TokenPair
 from app.schemas.auth import PatientRegisterRequest
 from app.schemas.user import CurrentUserRead, UserRead
 from app.utils.enums import AuditAction
@@ -101,6 +101,23 @@ class AuthService:
         self.db.commit()
         self.db.refresh(user)
         return self._build_login_response(user, access_token, refresh_token, access_expires_at, refresh_expires_at)
+
+    def reset_password(self, user: User, payload: PasswordResetRequest, context: dict[str, str | None]) -> None:
+        if not verify_password(payload.current_password, user.hashed_password):
+            raise AppException(status.HTTP_400_BAD_REQUEST, "invalid_current_password", "Current password is incorrect")
+        user.hashed_password = get_password_hash(payload.new_password)
+        user.must_reset_password = False
+        user.updated_by = user.id
+        AuditService(self.db).log(
+            user_id=user.id,
+            action="auth.password.reset",
+            module="auth",
+            entity_type="user",
+            entity_id=str(user.id),
+            detail={"username": user.username},
+            context=context,
+        )
+        self.db.commit()
 
     def refresh(self, refresh_token: str, context: dict[str, str | None]) -> LoginResponse:
         payload = decode_token_safe(refresh_token)

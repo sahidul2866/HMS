@@ -13,6 +13,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=3, max_length=150)
     password: str = Field(min_length=8, max_length=128)
+    employee_id: UUID | None = None
     branch_id: UUID | None = None
     department_id: UUID | None = None
     patient_id: UUID | None = None
@@ -49,6 +50,8 @@ class UserRead(BaseModel):
     username: str
     email: str
     full_name: str
+    must_reset_password: bool = False
+    employee_id: UUID | None = None
     branch_id: UUID | None = None
     department_id: UUID | None = None
     patient_id: UUID | None = None

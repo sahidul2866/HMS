@@ -9,6 +9,22 @@ import { SessionService } from '../../../../core/services/session.service';
 import { DashboardAnalytics, DashboardKpi, DashboardPoint } from '../../models/dashboard-analytics.models';
 import { DashboardAnalyticsService, DashboardFilters } from '../../services/dashboard-analytics.service';
 
+interface RoleDashboardCard {
+  label: string;
+  detail: string;
+  value: string;
+  route: string;
+  tone: string;
+  permissions: string[];
+}
+
+interface MonthlyFinancialPerformanceRow {
+  label: string;
+  revenue: number;
+  expenses: number;
+  netProfit: number;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -26,6 +42,8 @@ export class DashboardComponent {
   error = '';
   analytics: DashboardAnalytics | null = null;
   financeRange: 'daily' | 'monthly' | 'yearly' = 'daily';
+  statRange: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'daily';
+  statMetric: 'all' | 'revenue' | 'cost' | 'patients' | 'appointments' | 'admissions' = 'all';
   financeMetric: 'revenue' | 'cost' | 'all' = 'all';
   financeCompare: 'current' | 'goal' | 'both' = 'both';
   filters: DashboardFilters = {
@@ -39,6 +57,7 @@ export class DashboardComponent {
   private filterChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    this.applyRoleDefaultFilters();
     this.loadAnalytics();
   }
 
@@ -59,6 +78,89 @@ export class DashboardComponent {
 
   get showExecutiveAnalytics(): boolean {
     return this.roleExperienceService.canSeeManagementAnalytics();
+  }
+
+  get showRoleAnalytics(): boolean {
+    return !this.showExecutiveAnalytics && this.roleDashboardCards.length > 0;
+  }
+
+  get roleDashboardCards(): RoleDashboardCard[] {
+    if (!this.analytics) return [];
+    const stockLow = this.analytics.pharmacy_inventory_analytics.low_stock_medicines + this.analytics.pharmacy_inventory_analytics.low_stock_items;
+    return [
+      {
+        label: 'OPD Queue',
+        detail: 'Appointments and consultation workload',
+        value: String(this.kpiValue("Today's Appointments")),
+        route: '/opd/visits',
+        tone: 'info',
+        permissions: ['opd.view', 'opd.queue.view'],
+      },
+      {
+        label: 'Assigned IPD',
+        detail: 'Ward, bed, and admitted patient responsibility',
+        value: String(this.kpiValue('Admitted Patients')),
+        route: '/ipd/admissions',
+        tone: 'warning',
+        permissions: ['ipd.view'],
+      },
+      {
+        label: 'Emergency',
+        detail: 'ER cases and triage pressure',
+        value: String(this.kpiValue('Emergency Cases')),
+        route: '/er',
+        tone: 'danger',
+        permissions: ['er.view', 'er.triage.manage'],
+      },
+      {
+        label: 'Diagnostics',
+        detail: 'Lab and radiology work today',
+        value: String(this.analytics.lab_radiology_analytics.lab_today + this.analytics.lab_radiology_analytics.radiology_today),
+        route: this.session.hasPermission('radiology.view') && !this.session.hasPermission('laboratory.view') ? '/radiology' : '/laboratory',
+        tone: 'info',
+        permissions: ['laboratory.view', 'radiology.view'],
+      },
+      {
+        label: 'Billing Due',
+        detail: 'Invoices pending collection',
+        value: this.formatMoney(this.analytics.revenue_analytics.outstanding_due),
+        route: '/billing/due-payments',
+        tone: 'warning',
+        permissions: ['billing.view', 'billing.payment.collect'],
+      },
+      {
+        label: 'Pharmacy',
+        detail: 'Sales and dispensing work',
+        value: this.formatMoney(this.analytics.pharmacy_inventory_analytics.sales_today),
+        route: '/pharmacy',
+        tone: 'success',
+        permissions: ['pharmacy.view', 'pharmacy.dispense'],
+      },
+      {
+        label: 'Stock Alerts',
+        detail: 'Low stock medicines and inventory',
+        value: String(stockLow),
+        route: '/inventory',
+        tone: stockLow ? 'warning' : 'success',
+        permissions: ['inventory.view', 'pharmacy.view'],
+      },
+      {
+        label: 'OT Cases',
+        detail: 'Operation theatre work queue',
+        value: String(this.analytics.ot_analytics.today_surgeries),
+        route: '/ot',
+        tone: 'info',
+        permissions: ['ot.view', 'ot.preop.manage', 'ot.anesthesia.manage'],
+      },
+      {
+        label: 'HR Tasks',
+        detail: 'Attendance and leave work',
+        value: String(this.analytics.hr_analytics.pending_leave),
+        route: '/hr',
+        tone: this.analytics.hr_analytics.pending_leave ? 'warning' : 'success',
+        permissions: ['hr.view', 'payroll.view', 'hr.self_service'],
+      },
+    ].filter((card) => this.session.hasAnyPermission(card.permissions));
   }
 
   get demoJourneySteps(): Array<{ label: string; detail: string; route: string }> {
@@ -156,6 +258,86 @@ export class DashboardComponent {
           ? range.cost_current
           : range.cost_goal;
     return points.map((p) => Number(p.value || 0));
+  }
+
+  statChartSeries(): Array<{ key: string; label: string; values: number[]; tone: string }> {
+    if (!this.analytics) return [];
+    const daily = {
+      revenue: this.financeSeries('revenue', 'current'),
+      cost: this.financeSeries('cost', 'current'),
+      patients: (this.analytics.patient_analytics.daily_visits || []).map((point) => Number(point.value || 0)),
+      appointments: (this.analytics.appointment_analytics.trend || []).map((point) => Number(point.value || 0)),
+      admissions: (this.analytics.bed_analytics.admission_trend || []).map((point) => Number(point.value || 0)),
+    };
+    const series = [
+      { key: 'revenue', label: 'Revenue', values: this.rangeValues(daily.revenue), tone: 'revenue' },
+      { key: 'cost', label: 'Cost', values: this.rangeValues(daily.cost), tone: 'cost' },
+      { key: 'patients', label: 'Total Patients', values: this.rangeValues(daily.patients), tone: 'patients' },
+      { key: 'appointments', label: 'Appointments', values: this.rangeValues(daily.appointments), tone: 'appointments' },
+      { key: 'admissions', label: 'IPD Movement', values: this.rangeValues(daily.admissions), tone: 'admissions' },
+    ];
+    return this.statMetric === 'all' ? series : series.filter((item) => item.key === this.statMetric);
+  }
+
+  statChartMax(): number {
+    const values = this.statChartSeries().flatMap((series) => series.values);
+    return Math.max(...values, 1);
+  }
+
+  statLinePoints(values: number[]): string {
+    const max = this.statChartMax();
+    return values
+      .map((value, index) => {
+        const x = (index / Math.max(values.length - 1, 1)) * 100;
+        const y = 100 - (Number(value || 0) / max) * 90;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }
+
+  statSummary(values: number[]): number {
+    return values.reduce((sum, value) => sum + Number(value || 0), 0);
+  }
+
+  monthlyFinancialPerformanceRows(): MonthlyFinancialPerformanceRow[] {
+    const monthly = this.analytics?.finance_line?.monthly;
+    if (!monthly) return [];
+    const length = Math.max(monthly.revenue_current.length, monthly.cost_current.length);
+    return Array.from({ length }).map((_, index) => {
+      const revenuePoint = monthly.revenue_current[index];
+      const expensePoint = monthly.cost_current[index];
+      const revenue = Number(revenuePoint?.value || 0);
+      const expenses = Number(expensePoint?.value || 0);
+      return {
+        label: revenuePoint?.label || expensePoint?.label || revenuePoint?.date || expensePoint?.date || `M${index + 1}`,
+        revenue,
+        expenses,
+        netProfit: revenue - expenses,
+      };
+    });
+  }
+
+  monthlyFinancialMax(): number {
+    const values = this.monthlyFinancialPerformanceRows().flatMap((row) => [row.revenue, row.expenses, Math.max(row.netProfit, 0)]);
+    return Math.max(...values, 1);
+  }
+
+  monthlyFinancialAxisLabels(): number[] {
+    const max = this.monthlyFinancialMax();
+    return [max, max * 0.75, max * 0.5, max * 0.25, 0];
+  }
+
+  monthlyFinancialBarHeight(value: number): number {
+    if (value <= 0) return 0;
+    return Math.max((value / this.monthlyFinancialMax()) * 100, 3);
+  }
+
+  formatCompactMoney(value: number): string {
+    const amount = Number(value || 0);
+    if (Math.abs(amount) >= 10000000) return `৳${(amount / 10000000).toFixed(1)}Cr`;
+    if (Math.abs(amount) >= 100000) return `৳${(amount / 100000).toFixed(1)}L`;
+    if (Math.abs(amount) >= 1000) return `৳${(amount / 1000).toFixed(0)}K`;
+    return `৳${amount.toFixed(0)}`;
   }
 
   financeMax(): number {
@@ -332,6 +514,47 @@ export class DashboardComponent {
     const date = new Date();
     date.setDate(date.getDate() + offset);
     return date.toISOString().slice(0, 10);
+  }
+
+  private rangeValues(values: number[]): number[] {
+    if (this.statRange === 'daily') return values;
+    if (this.statRange === 'weekly') return this.bucketValues(values, 7);
+    if (this.statRange === 'monthly') return this.bucketValues(values, 30);
+    return [this.statSummary(values)];
+  }
+
+  private bucketValues(values: number[], size: number): number[] {
+    const buckets: number[] = [];
+    for (let index = 0; index < values.length; index += size) {
+      buckets.push(this.statSummary(values.slice(index, index + size)));
+    }
+    return buckets.length ? buckets : [0];
+  }
+
+  private applyRoleDefaultFilters(): void {
+    const user = this.session.snapshot.user;
+    if (!user) return;
+    const roleCodes = new Set(user.roles.map((role) => role.code));
+    if (roleCodes.has('DOCTOR')) {
+      this.filters.doctor_id = user.id;
+      this.filters.patient_type = '';
+      return;
+    }
+    if (roleCodes.has('NURSE')) {
+      this.filters.patient_type = 'ipd';
+      return;
+    }
+    if (roleCodes.has('LAB_TECHNICIAN')) {
+      this.filters.module_type = 'lab';
+      return;
+    }
+    if (roleCodes.has('RADIOLOGY_TECHNICIAN')) {
+      this.filters.module_type = 'radiology';
+      return;
+    }
+    if (roleCodes.has('BILLING_STAFF') || roleCodes.has('ACCOUNTANT')) {
+      this.filters.module_type = 'billing';
+    }
   }
 
   private metricValue(label: string): string {

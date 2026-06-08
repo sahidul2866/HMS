@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.admin.service import AdminService
+from app.modules.patient_auth.service import PatientAuthService
+from app.schemas.auth import PatientPortalAccountCreate, PatientPortalAccountRead
 from app.schemas.role import RoleCreate, RoleRead, RoleUpdatePermissions
 from app.schemas.scope import EffectiveAccessRead, RoleScopeCreate, RoleScopeRead, UserScopeCreate, UserScopeRead
 from app.schemas.user import UserCreate, UserOPDSettingsUpdate, UserRead
@@ -28,6 +30,16 @@ def create_user(
 ) -> UserRead:
     created = AdminService(db).create_user(payload, user.id, context)
     return UserRead.model_validate(created, from_attributes=True)
+
+
+@router.post("/patient-portal-accounts", response_model=PatientPortalAccountRead, dependencies=[Depends(require_permissions("settings.user.manage"))])
+def create_patient_portal_account(
+    payload: PatientPortalAccountCreate,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PatientPortalAccountRead:
+    account = PatientAuthService(db).create_existing_patient_account(payload, actor_id=user.id)
+    return PatientAuthService(db).to_current_patient(account)
 
 
 @router.put("/users/{user_id}/opd-settings", response_model=UserRead, dependencies=[Depends(require_any_permissions("settings.user.manage", "opd.settings.manage"))])

@@ -51,27 +51,9 @@
               </button>
             }
           </div>
-          <div class="shortcut-menu" [class.open]="shortcutsOpen">
-            <button class="shortcut-btn" type="button" (click)="toggleShortcuts()" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">
-              ?
-            </button>
-            @if (shortcutsOpen) {
-              <div class="shortcut-panel" role="dialog" aria-label="Keyboard shortcuts">
-                @for (shortcut of roleKeyboardShortcuts(); track shortcut.key) {
-                  <div class="shortcut-row">
-                    <kbd>{{ shortcut.key }}</kbd>
-                    <span>{{ shortcut.label }}</span>
-                  </div>
-                }
-                @for (shortcut of keyboardShortcuts; track shortcut.key) {
-                  <div class="shortcut-row">
-                    <kbd>{{ shortcut.key }}</kbd>
-                    <span>{{ shortcut.label }}</span>
-                  </div>
-                }
-              </div>
-            }
-          </div>
+          <button class="shortcut-btn" type="button" (click)="openManual()" aria-label="Open user manual" title="User manual">
+            Manual
+          </button>
           <label class="theme-picker">
             <span>Theme</span>
             <select [value]="themeService.activeTheme()" (change)="themeService.setTheme($any($event.target).value)">

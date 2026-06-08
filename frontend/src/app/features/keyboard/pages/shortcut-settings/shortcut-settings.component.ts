@@ -1,5 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+
+import { RoleExperienceService } from '../../../../core/services/role-experience.service';
+import { SessionService } from '../../../../core/services/session.service';
 
 interface ShortcutGroup {
   title: string;
@@ -14,13 +17,43 @@ interface ShortcutGroup {
   styleUrls: ['./shortcut-settings.component.scss'],
 })
 export class ShortcutSettingsComponent {
+  private readonly roleExperience = inject(RoleExperienceService);
+  private readonly session = inject(SessionService);
+
+  get roleTitle(): string {
+    return `${this.roleExperience.primaryExperience().label} User Manual`;
+  }
+
+  get roleFocus(): string[] {
+    return this.roleExperience.primaryExperience().focus;
+  }
+
+  get roleActions(): Array<{ label: string; detail: string; shortcut?: string }> {
+    return this.roleExperience.visibleActions().map((action) => ({
+      label: action.label,
+      detail: action.detail,
+      shortcut: action.shortcut,
+    }));
+  }
+
+  get roleShortcuts(): Array<{ keys: string; action: string }> {
+    return this.roleExperience.visibleShortcuts().map((shortcut) => ({
+      keys: shortcut.key,
+      action: shortcut.label,
+    }));
+  }
+
+  get userName(): string {
+    return this.session.snapshot.user?.full_name || 'Current user';
+  }
+
   readonly groups: ShortcutGroup[] = [
     {
       title: 'Global',
       shortcuts: [
         { keys: 'Ctrl/Cmd+K', action: 'Open command palette' },
         { keys: 'Alt+B', action: 'Open barcode/QR scanner' },
-        { keys: '? or Ctrl/Cmd+/', action: 'Open shortcut help' },
+        { keys: '? or Ctrl/Cmd+/', action: 'Open this user manual' },
         { keys: 'Alt+1...7', action: 'Jump to dashboard, patients, OPD, billing, pharmacy, lab, radiology' },
         { keys: 'Alt+[ / Alt+]', action: 'Move between open tabs' },
         { keys: 'Alt+S', action: 'Toggle sidebar' },
@@ -53,4 +86,3 @@ export class ShortcutSettingsComponent {
     },
   ];
 }
-

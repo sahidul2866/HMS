@@ -5,6 +5,7 @@ export interface CreateUserPayload {
   email: string;
   full_name: string;
   password: string;
+  employee_id?: string | null;
   role_codes: string[];
   direct_permission_codes: string[];
   branch_id?: string | null;
@@ -21,6 +22,13 @@ export interface CreateUserPayload {
   opd_prescription_header_chamber?: string | null;
   opd_prescription_header_phone?: string | null;
   opd_prescription_header_address?: string | null;
+}
+
+export interface CreatePatientPortalAccountPayload {
+  patient_id: string;
+  username: string;
+  email: string;
+  password: string;
 }
 
 export interface UpdateUserOPDSettingsPayload {
@@ -71,7 +79,8 @@ export interface ScopeAssignment {
 }
 
 export interface ScopeAssignmentPayload {
-  user_id: string;
+  user_id?: string;
+  role_id?: string;
   scope_type: string;
   scope_value?: string | null;
   scope_ref_id?: string | null;

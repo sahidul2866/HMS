@@ -262,6 +262,19 @@
   z-index: 1;
 }
 
+.reset-panel {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 251, 235, 0.86);
+}
+
+.reset-panel strong {
+  color: #92400e;
+}
+
 .hero-brand {
   display: grid;
   grid-template-columns: 4rem 1fr;

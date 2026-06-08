@@ -110,6 +110,9 @@
                   @if (!isPaymentDone(visit) && session.hasPermission(permissions.billingPaymentCollect)) {
                     <button type="button" (click)="openPayment(visit)">Collect Payment</button>
                   }
+                  @if (session.hasPermission(permissions.ipdAdmissionManage) && visit.status !== 'admitted') {
+                    <button type="button" (click)="convertToIpd(visit)">Convert to IPD</button>
+                  }
                 </div>
               </details>
             </td>
