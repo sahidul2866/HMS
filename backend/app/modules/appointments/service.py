@@ -163,8 +163,8 @@ class AppointmentsService:
             ),
             actor,
             context,
+            source_appointment_id=appointment.id,
         )
-        visit.source_appointment_id = appointment.id
         visit.updated_by = actor.id
         appointment.status = "checked_in"
         appointment.updated_by = actor.id

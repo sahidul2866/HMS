@@ -63,7 +63,7 @@ class OPDService:
             completed_visits=totals[3],
         )
 
-    def create_visit(self, payload: OPDVisitCreate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+    def create_visit(self, payload: OPDVisitCreate, actor: User, context: dict[str, str | None], source_appointment_id=None) -> OPDVisit:
         patient = self.patients.get_patient(payload.patient_id)
         if not patient:
             raise AppException(404, "patient_not_found", "Patient not found")
@@ -107,6 +107,7 @@ class OPDService:
             **payload.model_dump(exclude={"doctor_user_id", "consultation_fee", "slot_start_at"}),
             visit_number=visit_number,
             branch_id=patient.branch_id or actor.branch_id,
+            source_appointment_id=source_appointment_id,
             consulting_doctor_user_id=consulting_doctor.id if consulting_doctor else None,
             slot_start_at=slot_start_at,
             consultation_fee=consultation_fee,
@@ -567,13 +568,15 @@ class OPDService:
             raise AppException(400, "schedule_not_configured", "Doctor schedule is not configured for this day")
 
         slot_end_at = slot_start_at + timedelta(minutes=schedule.slot_duration_minutes)
-        existing_booking = self.db.scalar(
-            select(DoctorSlotBooking).where(
-                DoctorSlotBooking.appointment_id == visit.source_appointment_id,
-                DoctorSlotBooking.doctor_user_id == doctor_user_id,
-                DoctorSlotBooking.slot_start_at == slot_start_at,
+        existing_booking = None
+        if visit.source_appointment_id:
+            existing_booking = self.db.scalar(
+                select(DoctorSlotBooking).where(
+                    DoctorSlotBooking.appointment_id == visit.source_appointment_id,
+                    DoctorSlotBooking.doctor_user_id == doctor_user_id,
+                    DoctorSlotBooking.slot_start_at == slot_start_at,
+                )
             )
-        )
         if existing_booking:
             existing_booking.opd_visit_id = visit.id
             existing_booking.source_type = "visit"
