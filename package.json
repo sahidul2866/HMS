@@ -3,8 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "npm run dev:bootstrap && npm run kill:ports && (npm run dev:pacs || echo '⚠️ PACS docker start skipped; continuing HMS dev server') && sleep 2 && npx concurrently -k -n viewer,backend,frontend -c magenta,blue,green \"python3 infra/pacs/viewer_server.py --port 8080 --orthanc http://localhost:8042\" \"cd backend && . .venv/bin/activate && AUTO_DB_BOOTSTRAP=false PYTHONPATH=. python -m uvicorn app.main:app --reload\" \"cd frontend && npm start\"",
+    "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-windows.ps1",
+    "dev:win:only": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-windows.ps1 -SkipPacs -NoViewer",
     "dev:full": "bash infra/pacs/start_hms_dev.sh",
     "dev:bootstrap": "bash backend/scripts/dev-bootstrap.sh",
+    "dev:bootstrap:win": "powershell -NoProfile -ExecutionPolicy Bypass -File backend/scripts/dev-bootstrap.ps1",
     "dev:backend": "npm run dev:bootstrap && npm run kill:ports && cd backend && . .venv/bin/activate && AUTO_DB_BOOTSTRAP=false PYTHONPATH=. python -m uvicorn app.main:app --reload",
     "dev:frontend": "npm run kill:ports && cd frontend && npm start",
     "dev:pacs": "echo '🏥 Starting PACS server...' && docker compose -f docker-compose.pacs.yml down --remove-orphans 2>/dev/null || true && docker compose -f docker-compose.pacs.yml up -d && sleep 5 && echo '✓ PACS services started (Orthanc: http://localhost:8042)'",
@@ -16,7 +19,8 @@
     "dev:pacs:check": "curl -fsS http://localhost:8042/studies >/dev/null && curl -fsS http://localhost:8080/orthanc/studies >/dev/null && curl -fsS http://localhost:8080/ >/dev/null && echo '✓ PACS check passed (Orthanc + Viewer + Proxy)'",
     "test:viewer": "bash infra/pacs/test_viewer.sh",
     "deploy:backend:render": "if [ -z \"$RENDER_DEPLOY_HOOK_URL\" ]; then echo \"Set RENDER_DEPLOY_HOOK_URL to your Render deploy hook URL\"; exit 1; fi; curl -fsS -X POST \"$RENDER_DEPLOY_HOOK_URL\" && echo \"Render backend deploy triggered\"",
-    "kill:ports": "echo '🔌 Cleaning up ports 4200, 8000 and 8080...' && lsof -ti:4200,8000,8080 | xargs kill -9 2>/dev/null || true"
+    "kill:ports": "echo '🔌 Cleaning up ports 4200, 8000 and 8080...' && lsof -ti:4200,8000,8080 | xargs kill -9 2>/dev/null || true",
+    "kill:ports:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/kill-ports.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
