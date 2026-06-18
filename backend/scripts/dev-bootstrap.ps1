@@ -20,6 +20,20 @@ function Get-SystemPython {
     throw "Python was not found. Install Python 3 and make sure 'python' or 'py' is on PATH."
 }
 
+function Get-Sha256Hash {
+    param([string]$Path)
+
+    $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $Stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $HashBytes = $Sha256.ComputeHash($Stream)
+        return ([System.BitConverter]::ToString($HashBytes)).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $Stream.Dispose()
+        $Sha256.Dispose()
+    }
+}
+
 Set-Location $BackendDir
 
 if (-not (Test-Path $VenvPython)) {
@@ -33,7 +47,7 @@ if (-not (Test-Path $VenvPython)) {
     & $VenvPython -m pip install --upgrade pip
 }
 
-$CurrentRequirementsHash = (Get-FileHash -Algorithm SHA256 $RequirementsFile).Hash.ToLowerInvariant()
+$CurrentRequirementsHash = Get-Sha256Hash $RequirementsFile
 $InstalledRequirementsHash = ""
 if (Test-Path $StampFile) {
     $InstalledRequirementsHash = (Get-Content $StampFile -Raw).Trim().ToLowerInvariant()
@@ -42,7 +56,7 @@ if (Test-Path $StampFile) {
 if ($CurrentRequirementsHash -ne $InstalledRequirementsHash) {
     Write-Host "Installing backend requirements..."
     & $VenvPython -m pip install -r $RequirementsFile
-    Set-Content -Path $StampFile -Value $CurrentRequirementsHash -NoNewline
+    [System.IO.File]::WriteAllText($StampFile, $CurrentRequirementsHash)
 } else {
     Write-Host "Backend requirements are up to date."
 }
