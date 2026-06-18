@@ -19,7 +19,7 @@ foreach ($Port in $Ports) {
             Stop-Process -Id $ProcessId -Force -ErrorAction Stop
             Write-Host "Stopped process $ProcessId on port $Port"
         } catch {
-            Write-Warning "Could not stop process $ProcessId on port $Port: $($_.Exception.Message)"
+            Write-Warning ("Could not stop process {0} on port {1}: {2}" -f $ProcessId, $Port, $_.Exception.Message)
         }
     }
 }

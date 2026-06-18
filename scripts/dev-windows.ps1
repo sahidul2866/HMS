@@ -8,7 +8,9 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BootstrapScript = Join-Path $RepoRoot "backend\scripts\dev-bootstrap.ps1"
 $KillPortsScript = Join-Path $RepoRoot "scripts\kill-ports.ps1"
-$BackendPython = Join-Path $RepoRoot "backend\.venv\Scripts\python.exe"
+$BackendCommand = ".\scripts\run-backend.cmd"
+$FrontendCommand = ".\scripts\run-frontend.cmd"
+$ViewerCommand = ".\scripts\run-viewer.cmd"
 
 Set-Location $RepoRoot
 
@@ -31,10 +33,6 @@ if (-not $SkipPacs) {
         Write-Warning "Docker was not found; skipping PACS services."
     }
 }
-
-$BackendCommand = "powershell -NoProfile -ExecutionPolicy Bypass -Command `"Set-Location 'backend'; `$env:AUTO_DB_BOOTSTRAP='false'; `$env:PYTHONPATH='.'; .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload`""
-$FrontendCommand = "powershell -NoProfile -ExecutionPolicy Bypass -Command `"Set-Location 'frontend'; npm start`""
-$ViewerCommand = "powershell -NoProfile -ExecutionPolicy Bypass -Command `"& '$BackendPython' 'infra/pacs/viewer_server.py' --port 8080 --orthanc http://localhost:8042`""
 
 if ($NoViewer) {
     & npx concurrently -k -n backend,frontend -c blue,green $BackendCommand $FrontendCommand
