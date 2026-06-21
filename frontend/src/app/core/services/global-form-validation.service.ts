@@ -16,7 +16,6 @@ export class GlobalFormValidationService {
     this.started = true;
     this.zone.runOutsideAngular(() => {
       this.document.addEventListener('submit', this.handleSubmit, true);
-      this.document.addEventListener('click', this.handleClick, true);
       this.document.addEventListener('input', this.handleControlChange, true);
       this.document.addEventListener('change', this.handleControlChange, true);
       this.enhanceSearchableSelects();
@@ -27,16 +26,13 @@ export class GlobalFormValidationService {
 
   private readonly handleSubmit = (event: Event): void => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
-    if (!form || !this.isInvalidForm(form)) return;
-    this.renderValidation(form);
-  };
-
-  private readonly handleClick = (event: Event): void => {
-    const target = event.target instanceof Element ? event.target : null;
-    const button = target?.closest('button');
-    if (!button || button.type === 'submit') return;
-    const form = button.closest('form');
-    if (!form || !this.isInvalidForm(form)) return;
+    if (!form) return;
+    if (form.hasAttribute('data-skip-global-validation')) return;
+    if (!this.isInvalidForm(form)) {
+      form.classList.remove('app-form-submitted');
+      form.querySelector('.app-validation-summary')?.remove();
+      return;
+    }
     this.renderValidation(form);
   };
 
@@ -134,11 +130,6 @@ export class GlobalFormValidationService {
     for (const option of Array.from(select.options)) {
       const alwaysShow = !option.value;
       option.hidden = !alwaysShow && !!normalized && !option.text.toLowerCase().includes(normalized);
-    }
-    const selected = select.selectedOptions.item(0);
-    if (selected?.hidden) {
-      select.value = '';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
     }
   }
 }

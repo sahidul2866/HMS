@@ -31,6 +31,10 @@ class QueueCounterRead(QueueCounterCreate):
         from_attributes = True
 
 
+class QueueCounterStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(active|paused|closed)$")
+
+
 class QueueTokenCreate(BaseModel):
     queue_scope: str = Field(min_length=2, max_length=60)
     module: str = Field(min_length=2, max_length=60)
@@ -101,6 +105,11 @@ class QueueTokenStatusUpdate(BaseModel):
     )
     counter_id: UUID | None = None
     notes: str | None = None
+
+
+class QueueTokenPriorityUpdate(BaseModel):
+    priority: str = Field(pattern="^(emergency|urgent|pregnant|disabled|elderly|vip|follow_up|normal)$")
+    reason: str = Field(min_length=2, max_length=240)
 
 
 class QueueTransferRequest(BaseModel):

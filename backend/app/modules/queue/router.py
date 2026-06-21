@@ -13,11 +13,13 @@ from app.modules.queue.service import QueueService
 from app.schemas.queue import (
     QueueCounterCreate,
     QueueCounterRead,
+    QueueCounterStatusUpdate,
     QueueDisplayRead,
     QueueSettingRead,
     QueueSettingUpsert,
     QueueSummary,
     QueueTokenCreate,
+    QueueTokenPriorityUpdate,
     QueueTokenRead,
     QueueTokenStatusUpdate,
     QueueTransferRequest,
@@ -26,7 +28,7 @@ from app.schemas.queue import (
 router = APIRouter(prefix="/queue", tags=["Queue Management"])
 
 
-@router.get("/tokens", response_model=list[QueueTokenRead], dependencies=[Depends(require_permissions("queue.view"))])
+@router.get("/tokens", response_model=list[QueueTokenRead], dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
 def list_tokens(
     queue_scope: str | None = None,
     status: str | None = None,
@@ -89,6 +91,11 @@ def update_status(
     return QueueService(db).update_status(token_id, payload.status, user, counter_id=payload.counter_id, notes=payload.notes)
 
 
+@router.patch("/tokens/{token_id}/priority", response_model=QueueTokenRead, dependencies=[Depends(require_permissions("queue.priority.update"))])
+def update_priority(token_id: UUID, payload: QueueTokenPriorityUpdate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueTokenRead:
+    return QueueService(db).update_priority(token_id, payload.priority, payload.reason, user)
+
+
 @router.post("/tokens/{token_id}/transfer", response_model=QueueTokenRead, dependencies=[Depends(require_permissions("queue.transfer"))])
 def transfer_token(
     token_id: UUID,
@@ -99,7 +106,7 @@ def transfer_token(
     return QueueService(db).transfer(token_id, payload, user)
 
 
-@router.get("/counters", response_model=list[QueueCounterRead], dependencies=[Depends(require_permissions("queue.view"))])
+@router.get("/counters", response_model=list[QueueCounterRead], dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
 def list_counters(module: str | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[QueueCounterRead]:
     return QueueService(db).list_counters(user, module)
 
@@ -109,9 +116,14 @@ def create_counter(payload: QueueCounterCreate, user=Depends(get_current_user), 
     return QueueService(db).create_counter(payload, user)
 
 
-@router.get("/summary", response_model=QueueSummary, dependencies=[Depends(require_permissions("queue.view"))])
-def queue_summary(user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueSummary:
-    return QueueService(db).summary(user)
+@router.get("/summary", response_model=QueueSummary, dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
+def queue_summary(queue_scope: str | None = None, doctor_user_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueSummary:
+    return QueueService(db).summary(user, queue_scope=queue_scope, doctor_user_id=doctor_user_id)
+
+
+@router.patch("/counters/{counter_id}/status", response_model=QueueCounterRead, dependencies=[Depends(require_permissions("queue.counter.manage"))])
+def update_counter_status(counter_id: UUID, payload: QueueCounterStatusUpdate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueCounterRead:
+    return QueueService(db).update_counter_status(counter_id, payload.status, user)
 
 
 @router.get("/display/{scope}", response_model=QueueDisplayRead, dependencies=[Depends(require_permissions("queue.display.manage"))])

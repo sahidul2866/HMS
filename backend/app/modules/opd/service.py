@@ -9,6 +9,7 @@ from app.core.exceptions import AppException
 from app.models.encounter import DoctorOPDSchedule, DoctorSlotBooking, OPDVisit, OPDVisitOrder
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
+from app.models.queue import QueueToken
 from app.models.user import User
 from app.modules.auth.service import AuthService
 from app.modules.audit.service import AuditService
@@ -131,8 +132,9 @@ class OPDService:
                 source_type="opd_visit",
                 source_id=visit.id,
                 visit_id=visit.id,
+                appointment_id=source_appointment_id,
                 due_at=slot_start_at,
-                meta={"visit_type": payload.visit_type.value, "visit_number": visit.visit_number},
+                meta={"visit_type": payload.visit_type.value, "visit_number": visit.visit_number, "entry_type": "appointment" if source_appointment_id else "walk_in"},
             ),
             actor,
             commit=False,
@@ -235,6 +237,11 @@ class OPDService:
         visit = self.get_visit(visit_id, actor)
         visit.status = status
         visit.updated_by = actor.id
+        queue_token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd", QueueToken.is_active.is_(True)))
+        if queue_token and status in {"in_consultation", "completed", "cancelled"}:
+            target_queue_status = {"in_consultation": "in_progress", "completed": "completed", "cancelled": "cancelled"}[status]
+            if target_queue_status != queue_token.status:
+                QueueService(self.db).update_status(queue_token.id, target_queue_status, actor, notes=f"Synchronized from OPD visit {visit.visit_number}")
         if status == "prescribed":
             prescription_orders = [order for order in visit.orders if order.order_type == "prescription"]
             if prescription_orders:
@@ -475,6 +482,11 @@ class OPDService:
         visit.converted_ipd_admission_id = admission.id
         visit.status = "completed"
         visit.updated_by = actor.id
+        queue_token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd", QueueToken.is_active.is_(True)))
+        if queue_token and queue_token.status not in {"completed", "cancelled", "no_show"}:
+            if queue_token.status != "in_progress":
+                queue_token.status = "in_progress"
+            QueueService(self.db).update_status(queue_token.id, "completed", actor, notes=f"OPD visit converted to {admission.admission_number}")
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.IPD_ADMISSION_CREATE,

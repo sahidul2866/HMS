@@ -354,8 +354,16 @@ export class IPDAdmitComponent {
 
   submit(): void {
     this.submitted = true;
+    this.synchronizeRequiredSelections();
     if (this.form.invalid || this.saving) {
       this.form.markAllAsTouched();
+      const missing = [
+        !this.form.getRawValue().patient_id ? 'patient' : '',
+        !this.form.getRawValue().doctor_user_id ? 'attending doctor' : '',
+        !this.form.getRawValue().bed_number ? 'bed' : '',
+        !this.form.getRawValue().admitted_at ? 'admission date and time' : '',
+      ].filter(Boolean);
+      if (missing.length) this.notificationService.warning(`Complete the required admission fields: ${missing.join(', ')}.`);
       return;
     }
     this.saving = true;
@@ -392,21 +400,6 @@ export class IPDAdmitComponent {
         this.notificationService.success(this.sourceOpdVisitId
           ? `OPD visit converted to admission ${admission.admission_number}.`
           : `Admission ${admission.admission_number} created.`);
-        this.form.reset({
-          patient_id: '',
-          bed_id: '',
-          admitted_at: new Date().toISOString().slice(0, 16),
-          admission_type: 'General',
-          ward_name: 'Ward A',
-          bed_number: '',
-          doctor_user_id: '',
-          attending_doctor_name: '',
-          diagnosis: '',
-          daily_charge: 0,
-          advance_amount: 0,
-          expected_discharge_date: '',
-        });
-        this.clearPatientSelection();
         void this.router.navigate(['/ipd/admissions', admission.id]);
       },
       error: (error) => {
@@ -418,6 +411,20 @@ export class IPDAdmitComponent {
         this.notificationService.error(fieldDetail || apiError?.message || 'Unable to create IPD admission.');
       },
     });
+  }
+
+  private synchronizeRequiredSelections(): void {
+    const value = this.form.getRawValue();
+    const selectedBed = this.beds.find((bed) => bed.id === value.bed_id);
+    const selectedDoctor = this.doctors.find((doctor) => doctor.id === value.doctor_user_id);
+    this.form.patchValue({
+      patient_id: this.selectedPatient?.id || value.patient_id || '',
+      ward_name: selectedBed?.ward_name || value.ward_name || '',
+      bed_number: selectedBed?.bed_number || value.bed_number || '',
+      daily_charge: selectedBed ? Number(selectedBed.daily_rate) : Number(value.daily_charge || 0),
+      attending_doctor_name: selectedDoctor?.full_name || value.attending_doctor_name || '',
+    }, { emitEvent: false });
+    this.form.updateValueAndValidity({ emitEvent: false });
   }
 
   private syncSelectedPatient(): void {

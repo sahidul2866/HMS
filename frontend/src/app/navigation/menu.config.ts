@@ -39,6 +39,7 @@ export const menuSections: MenuSection[] = [
         children: [
           { label: 'Overview', icon: 'dashboard', route: '/opd', permissions: ['opd.view'] },
           { label: 'Visits', icon: 'list', route: '/opd/visits', permissions: ['opd.view'] },
+          { label: 'OPD Queue', icon: 'list', route: '/opd/queue', permissions: ['opd.queue.view'] },
           { label: 'New Visit', icon: 'plus-user', route: '/opd/register', permissions: ['opd.visit.create'] },
           { label: 'Appointments', icon: 'calendar', route: '/appointments', permissions: ['appointment.view'] },
           { label: 'New Appointment', icon: 'plus-user', route: '/appointments/create', permissions: ['appointment.book'] },

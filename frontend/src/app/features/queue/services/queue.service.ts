@@ -1,7 +1,9 @@
+import { HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ApiBaseService } from '../../../core/services/api-base.service';
+import { SKIP_GLOBAL_LOADER } from '../../../core/http/http-context.tokens';
 import { QueueCounter, QueueDisplay, QueueSetting, QueueSummary, QueueToken } from '../models/queue.models';
 
 @Injectable({ providedIn: 'root' })
@@ -11,7 +13,7 @@ export class QueueService extends ApiBaseService {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== null && value !== undefined && value !== '') clean[key] = value;
     });
-    return this.http.get<QueueToken[]>(this.url('/queue/tokens'), { params: clean as any });
+    return this.http.get<QueueToken[]>(this.url('/queue/tokens'), { params: clean as any, context: new HttpContext().set(SKIP_GLOBAL_LOADER, true) });
   }
 
   callNext(payload: { queue_scope: string; counter_id?: string | null; doctor_user_id?: string | null }): Observable<QueueToken> {
@@ -29,6 +31,10 @@ export class QueueService extends ApiBaseService {
     return this.http.post<QueueToken>(this.url(`/queue/tokens/${id}/transfer`), payload);
   }
 
+  updatePriority(id: string, priority: string, reason: string): Observable<QueueToken> {
+    return this.http.patch<QueueToken>(this.url(`/queue/tokens/${id}/priority`), { priority, reason });
+  }
+
   listCounters(module?: string): Observable<QueueCounter[]> {
     return this.http.get<QueueCounter[]>(this.url('/queue/counters'), { params: module ? { module } : {} });
   }
@@ -37,8 +43,9 @@ export class QueueService extends ApiBaseService {
     return this.http.post<QueueCounter>(this.url('/queue/counters'), payload);
   }
 
-  summary(): Observable<QueueSummary> {
-    return this.http.get<QueueSummary>(this.url('/queue/summary'));
+  summary(params: { queue_scope?: string | null; doctor_user_id?: string | null } = {}): Observable<QueueSummary> {
+    const clean = Object.fromEntries(Object.entries(params).filter(([, value]) => !!value)) as Record<string, string>;
+    return this.http.get<QueueSummary>(this.url('/queue/summary'), { params: clean, context: new HttpContext().set(SKIP_GLOBAL_LOADER, true) });
   }
 
   display(scope: string): Observable<QueueDisplay> {
@@ -51,5 +58,9 @@ export class QueueService extends ApiBaseService {
 
   saveSetting(payload: { setting_key: string; setting_value: Record<string, unknown> }): Observable<QueueSetting> {
     return this.http.post<QueueSetting>(this.url('/queue/settings'), payload);
+  }
+
+  updateCounterStatus(counterId: string, status: 'active' | 'paused' | 'closed'): Observable<QueueCounter> {
+    return this.http.patch<QueueCounter>(this.url(`/queue/counters/${counterId}/status`), { status });
   }
 }

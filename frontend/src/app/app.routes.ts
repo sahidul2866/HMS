@@ -251,6 +251,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['opd.view'], tabLabel: 'OPD Dashboard' },
       },
       {
+        path: 'opd/queue',
+        component: QueueWorkspaceComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['opd.queue.view'], tabLabel: 'OPD Queue', queueScope: 'opd' },
+      },
+      {
         path: 'opd/visits',
         component: OPDVisitListComponent,
         canActivate: [permissionGuard],

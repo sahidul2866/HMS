@@ -28,7 +28,7 @@
         }
       </div>
 
-      <form [formGroup]="form" (ngSubmit)="submit()">
+      <form [formGroup]="form" (ngSubmit)="submit()" data-skip-global-validation>
         @if (sourceOpdVisitId) {
           <div class="lookup-feedback">
             Creating a new IPD admission from OPD {{ sourceOpdVisitNumber || sourceOpdVisitId }}. Patient and clinical context are prefilled below.
