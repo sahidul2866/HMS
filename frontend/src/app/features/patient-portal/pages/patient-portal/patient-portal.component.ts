@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { finalize } from 'rxjs';
 
 import { SessionService } from '../../../../core/services/session.service';
 import { User } from '../../../../core/models/auth.models';
@@ -15,6 +16,7 @@ import {
   PatientHistoryPharmacyDispense,
 } from '../../../patients/models/patient.models';
 import { PatientAppointment } from '../../models/patient-portal.models';
+import { DoctorSlotAvailability } from '../../../appointments/models/appointment.models';
 import { PatientBotDoctorCard, PatientBotResponse, PatientBotSettings } from '../../models/patient-bot.models';
 import { PatientBotService } from '../../services/patient-bot.service';
 import { PatientPortalService } from '../../services/patient-portal.service';
@@ -119,6 +121,9 @@ export class PatientPortalComponent {
   reportType: 'all' | 'laboratory' | 'radiology' = 'all';
   selectedFamilyProfile = 'self';
   selectedDoctorId = '';
+  loadingSlots = false;
+  availableSlots: DoctorSlotAvailability[] = [];
+  selectedSlot: DoctorSlotAvailability | null = null;
   activeTabGroup: PortalTabGroup = 'essentials';
   quickActionsModalOpen = false;
   botConversationId: string | null = null;
@@ -135,7 +140,8 @@ export class PatientPortalComponent {
 
   readonly form = this.fb.group({
     doctor_user_id: ['', Validators.required],
-    appointment_at: [this.defaultAppointmentDate(), Validators.required],
+    slot_date: [this.defaultAppointmentDate(), Validators.required],
+    appointment_at: ['', Validators.required],
     visit_type: ['General Consultation', Validators.required],
     reason: ['', Validators.required],
     note: [''],
@@ -209,6 +215,8 @@ export class PatientPortalComponent {
       return;
     }
     this.preferences = this.readPreferences();
+    this.form.controls.doctor_user_id.valueChanges.subscribe(() => this.loadSlots());
+    this.form.controls.slot_date.valueChanges.subscribe(() => this.loadSlots());
     this.loadPortal();
     this.loadBotSettings();
   }
@@ -233,20 +241,23 @@ export class PatientPortalComponent {
   }
 
   submit(): void {
-    if (this.form.invalid) {
+    if (this.form.invalid || !this.selectedSlot) {
       this.form.markAllAsTouched();
+      this.portalMessage = 'Select an available appointment slot.';
       return;
     }
     const raw = this.form.getRawValue();
     const payload = {
       doctor_user_id: raw.doctor_user_id || '',
-      appointment_at: raw.appointment_at || '',
+      appointment_at: this.selectedSlot.slot_start_at,
       reason: raw.reason || '',
       note: [raw.visit_type, raw.note].filter(Boolean).join(' - ') || null,
     };
     this.portalService.bookAppointment(payload).subscribe((appointment) => {
       this.appointments = [appointment, ...this.appointments];
-      this.form.reset({ doctor_user_id: '', appointment_at: this.defaultAppointmentDate(), visit_type: 'General Consultation', reason: '', note: '' });
+      this.form.reset({ doctor_user_id: '', slot_date: this.defaultAppointmentDate(), appointment_at: '', visit_type: 'General Consultation', reason: '', note: '' });
+      this.availableSlots = [];
+      this.selectedSlot = null;
       this.portalMessage = `Appointment request ${appointment.appointment_number} has been submitted.`;
       this.activeTab = 'appointments';
     });
@@ -340,27 +351,8 @@ export class PatientPortalComponent {
   }
 
   botBookAppointment(doctor: PatientBotDoctorCard): void {
-    if (!this.botConversationId) {
-      this.selectBotDoctor(doctor);
-      return;
-    }
-    this.botLoading = true;
-    this.botService.bookAppointment({
-      conversation_id: this.botConversationId,
-      doctor_user_id: doctor.id,
-      appointment_at: this.form.value.appointment_at || this.defaultAppointmentDate(),
-      reason: `Patient assistant booking request for ${doctor.specialty}`,
-    }).subscribe({
-      next: (appointment) => {
-        this.appointments = [appointment, ...this.appointments];
-        this.botMessages = [...this.botMessages, { sender: 'bot', text: `Appointment request ${appointment.appointment_number} has been created with ${doctor.name}.` }];
-        this.botLoading = false;
-      },
-      error: () => {
-        this.selectBotDoctor(doctor);
-        this.botLoading = false;
-      },
-    });
+    this.selectBotDoctor(doctor);
+    this.portalMessage = `${doctor.name} selected. Choose a date and an available slot to complete booking.`;
   }
 
   setTab(tab: PortalTab): void {
@@ -394,6 +386,32 @@ export class PatientPortalComponent {
     this.form.patchValue({ doctor_user_id: doctor.id });
     this.selectedDoctorId = doctor.id;
     this.portalMessage = `${doctor.full_name} selected for appointment booking.`;
+  }
+
+  loadSlots(): void {
+    const doctorId = this.form.controls.doctor_user_id.getRawValue();
+    const slotDate = this.form.controls.slot_date.getRawValue();
+    this.selectedSlot = null;
+    this.form.controls.appointment_at.setValue('', { emitEvent: false });
+    this.availableSlots = [];
+    if (!doctorId || !slotDate) {
+      return;
+    }
+    this.loadingSlots = true;
+    this.portalService.getDoctorSlots(doctorId, slotDate)
+      .pipe(finalize(() => (this.loadingSlots = false)))
+      .subscribe({
+        next: (response) => (this.availableSlots = response.slots),
+        error: () => (this.portalMessage = 'Unable to load appointment slots.'),
+      });
+  }
+
+  selectSlot(slot: DoctorSlotAvailability): void {
+    if (slot.status !== 'available') {
+      return;
+    }
+    this.selectedSlot = slot;
+    this.form.controls.appointment_at.setValue(slot.slot_start_at);
   }
 
   viewDoctor(doctor: User): void {
@@ -506,7 +524,8 @@ export class PatientPortalComponent {
   }
 
   get selectedDoctor(): User | null {
-    return this.doctors.find((doctor) => doctor.id === this.selectedDoctorId) ?? this.filteredDoctors[0] ?? null;
+    const doctorId = this.form.controls.doctor_user_id.getRawValue();
+    return this.doctors.find((doctor) => doctor.id === doctorId) ?? null;
   }
 
   get favoriteDoctors(): User[] {
@@ -813,21 +832,22 @@ export class PatientPortalComponent {
   }
 
   nextAvailableSlot(doctor: User): string {
-    const index = this.doctors.findIndex((item) => item.id === doctor.id);
-    const dayOffset = index % 3;
-    const date = new Date();
-    date.setDate(date.getDate() + dayOffset);
-    date.setHours(10 + (index % 5), index % 2 ? 30 : 0, 0, 0);
-    return date.toLocaleString('en-BD', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    if (this.form.controls.doctor_user_id.getRawValue() !== doctor.id) {
+      return 'Select to view slots';
+    }
+    const slot = this.availableSlots.find((item) => item.status === 'available');
+    return slot ? `Next: ${this.formatSlotTime(slot.slot_start_at)}` : 'No slots on selected date';
   }
 
   doctorSlots(doctor: User): string[] {
-    const index = Math.max(0, this.doctors.findIndex((item) => item.id === doctor.id));
-    return ['10:00 AM', '12:30 PM', '5:00 PM'].map((slot, slotIndex) => {
-      const date = new Date();
-      date.setDate(date.getDate() + ((index + slotIndex) % 4));
-      return `${date.toLocaleString('en-BD', { weekday: 'short' })} ${slot}`;
-    });
+    if (this.form.controls.doctor_user_id.getRawValue() !== doctor.id) {
+      return [];
+    }
+    return this.availableSlots.filter((item) => item.status === 'available').slice(0, 3).map((item) => this.formatSlotTime(item.slot_start_at));
+  }
+
+  formatSlotTime(value: string): string {
+    return new Date(value).toLocaleTimeString('en-BD', { hour: 'numeric', minute: '2-digit' });
   }
 
   appointmentStatusLabel(status: string): string {
@@ -870,9 +890,8 @@ export class PatientPortalComponent {
   private defaultAppointmentDate(): string {
     const date = new Date();
     date.setDate(date.getDate() + 1);
-    date.setHours(10, 0, 0, 0);
     const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-    return offsetDate.toISOString().slice(0, 16);
+    return offsetDate.toISOString().slice(0, 10);
   }
 
   private requestStorageKey(): string {

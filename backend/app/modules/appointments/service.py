@@ -50,6 +50,8 @@ class AppointmentsService:
         if not slot_start:
             raise AppException(400, "slot_required", "Slot time is required")
         slot_start = self._normalize_dt(slot_start)
+        if slot_start <= datetime.now(UTC):
+            raise AppException(400, "slot_in_past", "Selected slot must be in the future")
 
         slot_end = self._slot_end_for_doctor(doctor.id, slot_start, actor)
         self._assert_slot_within_schedule(doctor.id, slot_start, actor)
@@ -85,6 +87,49 @@ class AppointmentsService:
         self.db.commit()
         self.db.refresh(appointment)
         appointment = self._get_accessible_appointment(appointment.id, actor)
+        return self._serialize(appointment)
+
+    def create_portal_appointment(self, patient_id, payload, actor) -> AppointmentRead:
+        patient, doctor = self._validate_patient_doctor(patient_id, payload.doctor_user_id, actor)
+        slot_start = self._normalize_dt(payload.appointment_at)
+        if slot_start <= datetime.now(UTC):
+            raise AppException(400, "slot_in_past", "Selected slot must be in the future")
+        slot_end = self._slot_end_for_doctor(doctor.id, slot_start, actor)
+        self._assert_slot_within_schedule(doctor.id, slot_start, actor)
+
+        appointment = Appointment(
+            branch_id=actor.branch_id or patient.branch_id or doctor.branch_id,
+            patient_id=patient.id,
+            doctor_user_id=doctor.id,
+            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            appointment_at=slot_start,
+            slot_start_at=slot_start,
+            status="scheduled",
+            reason=payload.reason,
+            note=payload.note,
+            booked_by_user_id=actor.id if isinstance(actor, User) else None,
+            booked_by_patient_account_id=None if isinstance(actor, User) else actor.id,
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.db.add(appointment)
+        self.db.flush()
+        self._create_slot_booking(
+            branch_id=appointment.branch_id,
+            doctor_user_id=doctor.id,
+            patient_id=patient.id,
+            slot_start_at=slot_start,
+            slot_end_at=slot_end,
+            source_type="appointment",
+            appointment_id=appointment.id,
+            actor=actor,
+        )
+        self.db.commit()
+        appointment = self.db.scalar(
+            select(Appointment)
+            .options(joinedload(Appointment.patient), joinedload(Appointment.doctor))
+            .where(Appointment.id == appointment.id)
+        )
         return self._serialize(appointment)
 
     def update_appointment(self, appointment_id, payload: AppointmentUpdate, actor: User) -> AppointmentRead:
@@ -137,6 +182,8 @@ class AppointmentsService:
         appointment = self._get_accessible_appointment(appointment_id, actor)
         appointment.status = status
         appointment.updated_by = actor.id
+        if status == "cancelled":
+            self._release_slot(appointment.id)
         self.db.commit()
         self.db.refresh(appointment)
         return self._serialize(appointment)
@@ -262,13 +309,15 @@ class AppointmentsService:
         }
 
         slot_rows: list[DoctorSlotAvailability] = []
+        now = datetime.now(UTC)
         for start_at, end_at in slots:
             booking = booked.get(start_at)
+            status_value = "booked" if booking else ("unavailable" if start_at <= now else "available")
             slot_rows.append(
                 DoctorSlotAvailability(
                     slot_start_at=start_at,
                     slot_end_at=end_at,
-                    status="booked" if booking else "available",
+                    status=status_value,
                     source_type=booking.source_type if booking else None,
                 )
             )
@@ -308,6 +357,11 @@ class AppointmentsService:
 
     def _normalize_dt(self, value: datetime) -> datetime:
         return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    def _release_slot(self, appointment_id) -> None:
+        booking = self.db.scalar(select(DoctorSlotBooking).where(DoctorSlotBooking.appointment_id == appointment_id))
+        if booking:
+            self.db.delete(booking)
 
     def _assert_slot_within_schedule(self, doctor_user_id, slot_start: datetime, actor: User) -> None:
         schedule = self.db.scalar(

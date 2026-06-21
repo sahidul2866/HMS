@@ -242,11 +242,16 @@ export class AppointmentCreateComponent {
       this.notificationService.warning('First name and last name are required for new patient appointment.');
       return;
     }
+    if (!raw.phone?.trim() || raw.phone.trim().replace(/\D/g, '').length < 6) {
+      this.saving = false;
+      this.notificationService.warning('A valid mobile number is required for a new patient.');
+      return;
+    }
 
     const payload: CreatePatientPayload = {
       first_name: raw.first_name.trim(),
       last_name: raw.last_name.trim(),
-      phone: raw.phone?.trim() || null,
+      phone: raw.phone.trim(),
       email: raw.email?.trim() || null,
       gender: raw.gender?.trim() || null,
       date_of_birth: raw.date_of_birth || null,

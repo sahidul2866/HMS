@@ -48,7 +48,7 @@
           </thead>
           <tbody>
             @for (patient of displayedPatients; track patient.id) {
-              <tr>
+              <tr [class.new-patient-row]="patient.id === createdPatientId">
                 <td><strong>{{ patient.patient_number }}</strong></td>
                 <td>{{ patient.first_name }} {{ patient.last_name }}</td>
                 <td>{{ patient.phone || '-' }}</td>

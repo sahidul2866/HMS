@@ -151,7 +151,7 @@ export interface CreatePatientPayload {
   branch_id?: string | null;
   first_name: string;
   last_name: string;
-  phone?: string | null;
+  phone: string;
   email?: string | null;
   gender?: string | null;
   date_of_birth?: string | null;

@@ -288,6 +288,12 @@ export const appRoutes: Routes = [
         data: { permissions: ['ipd.view'], tabLabel: 'IPD Admission List' },
       },
       {
+        path: 'ipd/admissions/:admissionId',
+        component: IPDOverviewComponent,
+        canActivate: [permissionGuard],
+        data: { permissions: ['ipd.view'], tabLabel: 'IPD Patient' },
+      },
+      {
         path: 'ipd/admit',
         component: IPDAdmitComponent,
         canActivate: [permissionGuard],

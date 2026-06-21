@@ -295,6 +295,15 @@
       }
 
       <div class="invoice-table-shell" formArrayName="items">
+        @if (draft?.billing_stage === 'ipd_final') {
+          <div class="billing-prefill-banner reconciliation-banner">
+            <strong>Final reconciliation is ready</strong>
+            <div class="page-subtitle">
+              {{ draft?.prior_invoice_count || 0 }} interim invoice(s) · Previously billed {{ formatCurrency(draft?.prior_billed_amount || 0) }} · Payments carried {{ formatCurrency(draft?.prior_paid_amount || 0) }} · Prior due {{ formatCurrency(draft?.prior_due_amount || 0) }}
+            </div>
+            <div class="page-subtitle">All interim items and current unbilled charges are selected below. Posting consolidates the interim invoices into this final bill.</div>
+          </div>
+        }
         <div class="invoice-table-head">
           <span>Service</span>
           <span>Code</span>

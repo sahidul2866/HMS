@@ -73,6 +73,8 @@ def get_current_patient_account_or_superadmin_demo(
         user = AuthService(db).get_user_from_access_payload(payload)
         if not user:
             raise AppException(status.HTTP_401_UNAUTHORIZED, "user_not_found", "Authenticated user does not exist")
+        if user.patient_id and any(role.code == "PATIENT" for role in user.roles):
+            return user
         is_super_admin = any(role.code == "SUPER_ADMIN" for role in user.roles)
         if not is_super_admin:
             raise AppException(status.HTTP_403_FORBIDDEN, "patient_account_required", "Patient portal access requires a patient account")

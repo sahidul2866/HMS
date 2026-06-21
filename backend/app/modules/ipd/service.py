@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.configuration import ConfigurationProfile
+from app.models.billing import BillingInvoice
 from app.models.encounter import (
     IPDAdmission,
     IPDAdmissionMovement,
@@ -50,6 +51,7 @@ from app.schemas.encounter import (
     IPDPatientWorkspace,
     IPDReportSummary,
     IPDDischargeReadiness,
+    IPDBillingSummary,
     IPDSettingsRead,
     IPDSettingsUpdate,
     IPDShiftCoverageRead,
@@ -721,10 +723,34 @@ class IPDService:
             "discharge_condition": admission.discharge_condition,
         }
         summary_missing = [field for field in settings.required_discharge_summary_fields if payload_values.get(field) in (None, "", [])]
+        invoices = list(
+            self.db.scalars(
+                select(BillingInvoice)
+                .options(selectinload(BillingInvoice.items))
+                .where(
+                    BillingInvoice.source_ipd_admission_id == admission.id,
+                    BillingInvoice.is_active.is_(True),
+                    BillingInvoice.status.notin_({"void", "consolidated"}),
+                )
+            ).unique()
+        )
+        total_bed_days = max((datetime.now(UTC).date() - admission.admitted_at.date()).days + 1, 1)
+        billed_bed_days = sum(
+            Decimal(item.quantity or 0)
+            for invoice in invoices
+            for item in invoice.items
+            if item.source_module == "ipd_bed_charge" or (item.source_module == "ipd" and "bed charge" in (item.source_label or "").lower())
+        )
+        unbilled_orders = [
+            order for order in admission.orders
+            if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"
+        ]
+        final_invoice_exists = any(invoice.billing_stage == "ipd_final" for invoice in invoices)
+        billing_done = bool(invoices) and (final_invoice_exists or billed_bed_days >= Decimal(total_bed_days)) and not unbilled_orders and all(Decimal(invoice.due_amount or 0) <= 0 for invoice in invoices)
         checks = [
             {"key": "doctor_approval", "label": "Doctor approval", "done": admission.discharge_status in {"approved", "ready", "completed"} or bool(summary_text)},
             {"key": "summary", "label": "Discharge summary", "done": not summary_missing},
-            {"key": "billing", "label": "Billing clearance", "done": not settings.clearance_requirements.get("billing") or admission.billing_status == "cleared"},
+            {"key": "billing", "label": "Billing clearance", "done": billing_done},
             {"key": "pharmacy", "label": "Pharmacy clearance", "done": not settings.clearance_requirements.get("pharmacy") or admission.pharmacy_clearance_status == "cleared"},
             {"key": "lab", "label": "Lab clearance", "done": (not settings.clearance_requirements.get("lab") or admission.lab_clearance_status == "cleared") and pending_lab == 0},
             {"key": "radiology", "label": "Radiology clearance", "done": (not settings.clearance_requirements.get("radiology") or admission.radiology_clearance_status == "cleared") and pending_radiology == 0},
@@ -739,6 +765,67 @@ class IPDService:
             blockers=blockers,
             discharge_summary_ready=not summary_missing,
             final_bill_url=f"/billing/create?patientId={admission.patient_id}&ipdAdmissionId={admission.id}&billingStage=final",
+        )
+
+    def billing_summary(self, admission_id, actor: User) -> IPDBillingSummary:
+        admission = self.get_admission(admission_id, actor)
+        invoices = list(
+            self.db.scalars(
+                select(BillingInvoice)
+                .options(selectinload(BillingInvoice.items))
+                .where(
+                    BillingInvoice.source_ipd_admission_id == admission.id,
+                    BillingInvoice.is_active.is_(True),
+                    BillingInvoice.status.notin_({"void", "consolidated"}),
+                )
+                .order_by(BillingInvoice.created_at.asc())
+            ).unique()
+        )
+        end_at = admission.discharged_at or datetime.now(UTC)
+        total_bed_days = Decimal(max((end_at.date() - admission.admitted_at.date()).days + 1, 1))
+        billed_bed_days = sum(
+            (
+                Decimal(item.quantity or 0)
+                for invoice in invoices
+                for item in invoice.items
+                if item.source_module == "ipd_bed_charge" or (item.source_module == "ipd" and "bed charge" in (item.source_label or "").lower())
+            ),
+            Decimal("0"),
+        )
+        unbilled_orders = [
+            order for order in admission.orders
+            if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"
+        ]
+        all_invoices_paid = bool(invoices) and all(Decimal(invoice.due_amount or 0) <= 0 for invoice in invoices)
+        final_invoice_exists = any(invoice.billing_stage == "ipd_final" for invoice in invoices)
+        reconciled = all_invoices_paid and final_invoice_exists and not unbilled_orders
+        return IPDBillingSummary(
+            admission_id=admission.id,
+            billing_status="cleared" if reconciled else admission.billing_status,
+            total_bed_days=total_bed_days,
+            billed_bed_days=billed_bed_days,
+            unbilled_bed_days=Decimal("0") if final_invoice_exists else max(total_bed_days - billed_bed_days, Decimal("0")),
+            unbilled_order_count=len(unbilled_orders),
+            invoice_count=len(invoices),
+            interim_invoice_count=sum(1 for invoice in invoices if invoice.billing_stage == "ipd_interim"),
+            final_invoice_exists=final_invoice_exists,
+            total_invoiced=sum((Decimal(invoice.total_amount or 0) for invoice in invoices), Decimal("0")),
+            total_paid=sum((Decimal(invoice.paid_amount or 0) for invoice in invoices), Decimal("0")),
+            total_due=sum((Decimal(invoice.due_amount or 0) for invoice in invoices), Decimal("0")),
+            invoices=[
+                {
+                    "id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "billing_stage": invoice.billing_stage,
+                    "status": invoice.status,
+                    "payment_status": invoice.payment_status,
+                    "total_amount": invoice.total_amount,
+                    "paid_amount": invoice.paid_amount,
+                    "due_amount": invoice.due_amount,
+                    "created_at": invoice.created_at,
+                }
+                for invoice in invoices
+            ],
         )
 
     def report_summary(self, actor: User) -> IPDReportSummary:

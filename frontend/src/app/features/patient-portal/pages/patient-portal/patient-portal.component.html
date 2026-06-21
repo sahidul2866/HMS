@@ -296,7 +296,7 @@
           <div class="booking-steps">
             <span [class.done]="!!doctorDepartmentFilter || !!form.value.doctor_user_id">1 Department</span>
             <span [class.done]="!!form.value.doctor_user_id">2 Doctor</span>
-            <span [class.done]="!!form.value.appointment_at">3 Time</span>
+            <span [class.done]="!!selectedSlot">3 Time</span>
             <span [class.done]="!!form.value.reason">4 Reason</span>
           </div>
           @if (selectedDoctor) {
@@ -333,9 +333,31 @@
               </select>
             </label>
             <label>
-              <span>Date & time</span>
-              <input type="datetime-local" formControlName="appointment_at" />
+              <span>Appointment date</span>
+              <input type="date" formControlName="slot_date" />
             </label>
+            <div class="slot-grid-wrap">
+              <div class="slot-grid-head">
+                <strong>Available slots</strong>
+                <span>{{ loadingSlots ? 'Loading...' : availableSlots.length + ' slots' }}</span>
+              </div>
+              <div class="slot-grid">
+                @for (slot of availableSlots; track slot.slot_start_at) {
+                  <button
+                    type="button"
+                    class="slot-chip"
+                    [class.slot-chip--selected]="selectedSlot?.slot_start_at === slot.slot_start_at"
+                    [class.slot-chip--booked]="slot.status !== 'available'"
+                    [disabled]="slot.status !== 'available'"
+                    (click)="selectSlot(slot)"
+                  >
+                    {{ formatSlotTime(slot.slot_start_at) }}
+                  </button>
+                } @empty {
+                  <span class="subtle-text">Select a doctor and date to view configured slots.</span>
+                }
+              </div>
+            </div>
             <label>
               <span>Reason</span>
               <textarea rows="3" formControlName="reason"></textarea>

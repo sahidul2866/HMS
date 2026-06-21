@@ -64,13 +64,13 @@ export class PatientService extends ApiBaseService {
       tap((patient) => {
         this.clearCache();
         this.dataSync.publish({
-          name: 'patient.updated',
+          name: 'patient.created',
           entityType: 'patient',
           entityId: patient.id,
           patientId: patient.id,
           modules: ['patients', 'appointments', 'opd', 'ipd', 'er', 'billing', 'pharmacy', 'laboratory', 'radiology', 'dashboard'],
           cachePrefixes: ['patients:', 'appointments:', 'opd:', 'ipd:', 'er:', 'billing:', 'pharmacy:', 'laboratory:', 'radiology:', 'dashboard:'],
-          message: 'Patient information updated.',
+          message: 'A new patient was created.',
         });
       })
     );

@@ -452,6 +452,47 @@ textarea {
   font-weight: 700;
 }
 
+.slot-grid-wrap {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.slot-grid-head,
+.slot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.slot-grid {
+  justify-content: flex-start;
+}
+
+.slot-chip {
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 0.42rem 0.7rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.slot-chip--selected {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.slot-chip--booked {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
 .sticky-booking {
   position: sticky;
   top: 1rem;

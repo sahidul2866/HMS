@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
-from app.models.encounter import Appointment
 from app.models.patient_bot import (
     GeminiAPILog,
     PatientBotAuditLog,
@@ -26,6 +25,7 @@ from app.models.patient_bot import (
 )
 from app.models.user import User
 from app.modules.patient_portal.service import PatientPortalService
+from app.schemas.portal import PatientAppointmentCreate
 from app.modules.users.repository import UsersRepository
 from app.schemas.patient_bot import (
     PatientBotBookAppointmentRequest,
@@ -170,28 +170,19 @@ class PatientBotService:
         return self._doctor_cards(department, actor)
 
     def book_appointment(self, payload: PatientBotBookAppointmentRequest, actor: User):
-        patient_id = self._require_patient_account(actor)
-        doctor = self.users.get_user(payload.doctor_user_id)
-        if not doctor or not any(role.is_doctor_role for role in doctor.roles):
-            raise AppException(404, "doctor_not_found", "Doctor not found")
-        appointment = Appointment(
-            branch_id=actor.branch_id or doctor.branch_id,
-            patient_id=patient_id,
-            doctor_user_id=doctor.id,
-            appointment_number=f"APT-BOT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
-            appointment_at=payload.appointment_at,
-            status="scheduled",
-            reason=payload.reason,
-            note="Booked from Patient Health Assistant",
-            booked_by_user_id=actor.id if actor.__class__.__name__ == "User" else None,
-            booked_by_patient_account_id=actor.id if actor.__class__.__name__ == "PatientPortalAccount" else None,
-            created_by=actor.id,
-            updated_by=actor.id,
+        self._require_patient_account(actor)
+        appointment = PatientPortalService(self.db).create_appointment(
+            PatientAppointmentCreate(
+                doctor_user_id=payload.doctor_user_id,
+                appointment_at=payload.appointment_at,
+                reason=payload.reason,
+                note="Booked from Patient Health Assistant",
+            ),
+            actor,
         )
-        self.db.add(appointment)
-        self._audit(actor, "bot_appointment_request", {"conversation_id": str(payload.conversation_id), "doctor_id": str(doctor.id)})
+        self._audit(actor, "bot_appointment_request", {"conversation_id": str(payload.conversation_id), "doctor_id": str(payload.doctor_user_id)})
         self.db.commit()
-        return PatientPortalService(self.db).list_appointments(actor)[0]
+        return appointment
 
     def bot_settings(self) -> PatientBotSettingsRead:
         return PatientBotSettingsRead(

@@ -119,6 +119,8 @@ export interface ConvertOPDToIPDPayload {
   bed_id?: string | null;
   admitted_at: string;
   admission_type: string;
+  department_name?: string | null;
+  patient_condition?: string | null;
   ward_name: string;
   bed_number: string;
   doctor_user_id?: string | null;

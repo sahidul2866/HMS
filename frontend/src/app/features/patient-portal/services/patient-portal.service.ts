@@ -9,6 +9,7 @@ import {
   PatientAppointmentStatusPayload,
   PatientPortalOverview,
 } from '../models/patient-portal.models';
+import { DoctorSlotsResponse } from '../../appointments/models/appointment.models';
 
 @Injectable({ providedIn: 'root' })
 export class PatientPortalService extends ApiBaseService {
@@ -24,6 +25,11 @@ export class PatientPortalService extends ApiBaseService {
 
   bookAppointment(payload: PatientAppointmentPayload): Observable<PatientAppointment> {
     return this.http.post<PatientAppointment>(this.url('/portal/appointments'), payload).pipe(tap(() => this.clearCache()));
+  }
+
+  getDoctorSlots(doctorUserId: string, slotDate: string): Observable<DoctorSlotsResponse> {
+    const params = `doctor_user_id=${encodeURIComponent(doctorUserId)}&slot_date=${encodeURIComponent(slotDate)}`;
+    return this.http.get<DoctorSlotsResponse>(this.url(`/portal/doctor-slots?${params}`));
   }
 
   updateAppointmentStatus(appointmentId: string, payload: PatientAppointmentStatusPayload): Observable<PatientAppointment> {

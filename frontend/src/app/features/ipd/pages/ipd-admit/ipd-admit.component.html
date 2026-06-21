@@ -29,6 +29,11 @@
       </div>
 
       <form [formGroup]="form" (ngSubmit)="submit()">
+        @if (sourceOpdVisitId) {
+          <div class="lookup-feedback">
+            Creating a new IPD admission from OPD {{ sourceOpdVisitNumber || sourceOpdVisitId }}. Patient and clinical context are prefilled below.
+          </div>
+        }
         <div class="lookup-banner">
           @if (selectedPatient && !showPatientLookup) {
             <div class="selected-context-row">
@@ -92,14 +97,17 @@
               <span>Reference Name</span>
               <input type="text" formControlName="reference_name" placeholder="Referral or reference source" />
             </label>
-            <label class="field">
-              <span>Doctor Directory</span>
+            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.doctor_user_id, submitted)">
+              <span>Attending Doctor</span>
               <select formControlName="doctor_user_id" (change)="onDoctorChanged()">
-                <option value="">Select from doctor directory</option>
+                <option value="">Select attending doctor</option>
                 @for (doctor of doctors; track doctor.id) {
                   <option [value]="doctor.id">{{ doctor.full_name }}</option>
                 }
               </select>
+              @if (validation.isInvalid(form.controls.doctor_user_id, submitted)) {
+                <div class="field-error">Select an attending doctor.</div>
+              }
             </label>
           </div>
         </div>
@@ -258,13 +266,6 @@
             <label class="field">
               <span>Package Name</span>
               <input type="text" formControlName="package_name" placeholder="Optional package or room plan" />
-            </label>
-            <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.attending_doctor_name, submitted)">
-              <span>Attending Doctor</span>
-              <input type="text" formControlName="attending_doctor_name" />
-              @if (validation.isInvalid(form.controls.attending_doctor_name, submitted)) {
-                <div class="field-error">{{ validation.errorMessage(form.controls.attending_doctor_name, 'Attending doctor') }}</div>
-              }
             </label>
             <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.daily_charge, submitted)">
               <span>Daily Charge</span>

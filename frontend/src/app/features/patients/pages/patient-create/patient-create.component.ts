@@ -33,10 +33,10 @@ export class PatientCreateComponent {
   mobileLookupMessage = '';
 
   readonly form = this.fb.group({
-    first_name: ['', Validators.required],
-    last_name: ['', Validators.required],
-    phone: [''],
-    email: [''],
+    first_name: ['', [Validators.required, Validators.minLength(2)]],
+    last_name: ['', [Validators.required, Validators.minLength(2)]],
+    phone: ['', [Validators.required, Validators.minLength(6)]],
+    email: ['', Validators.email],
     gender: [''],
     date_of_birth: [''],
     address: [''],
@@ -130,15 +130,15 @@ export class PatientCreateComponent {
 
     this.saving = true;
     const payload: CreatePatientPayload = {
-      first_name: this.form.getRawValue().first_name ?? '',
-      last_name: this.form.getRawValue().last_name ?? '',
-      phone: this.form.getRawValue().phone ?? null,
-      email: this.form.getRawValue().email ?? null,
-      gender: this.form.getRawValue().gender ?? null,
-      date_of_birth: this.form.getRawValue().date_of_birth ?? null,
-      address: this.form.getRawValue().address ?? null,
-      emergency_contact_name: this.form.getRawValue().emergency_contact_name ?? null,
-      emergency_contact_phone: this.form.getRawValue().emergency_contact_phone ?? null,
+      first_name: this.form.getRawValue().first_name?.trim() || '',
+      last_name: this.form.getRawValue().last_name?.trim() || '',
+      phone: this.form.getRawValue().phone?.trim() || '',
+      email: this.form.getRawValue().email?.trim() || null,
+      gender: this.form.getRawValue().gender || null,
+      date_of_birth: this.form.getRawValue().date_of_birth || null,
+      address: this.form.getRawValue().address?.trim() || null,
+      emergency_contact_name: this.form.getRawValue().emergency_contact_name?.trim() || null,
+      emergency_contact_phone: this.form.getRawValue().emergency_contact_phone?.trim() || null,
     };
     this.patientService.create(payload).subscribe({
       next: (patient) => {
@@ -152,7 +152,7 @@ export class PatientCreateComponent {
           void this.router.navigateByUrl(`${returnTo}?patientId=${patient.id}`);
           return;
         }
-        void this.router.navigate(['/patients']);
+        void this.router.navigate(['/patients'], { queryParams: { createdPatientId: patient.id } });
       },
       error: () => {
         this.saving = false;

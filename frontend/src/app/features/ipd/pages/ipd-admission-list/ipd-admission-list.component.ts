@@ -22,7 +22,6 @@ export class IPDAdmissionListComponent {
   readonly permissions = PERMISSIONS;
 
   admissions: IPDAdmission[] = [];
-  selectedAdmission: IPDAdmission | null = null;
   searchText = '';
   page = 1;
   pageSize = 12;
@@ -38,11 +37,7 @@ export class IPDAdmissionListComponent {
   }
 
   openAdmission(admission: IPDAdmission): void {
-    this.selectedAdmission = admission;
-  }
-
-  closeAdmission(): void {
-    this.selectedAdmission = null;
+    void this.router.navigate(['/ipd/admissions', admission.id]);
   }
 
   navigateToAdmission(): void {

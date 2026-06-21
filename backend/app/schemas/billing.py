@@ -63,6 +63,8 @@ class BillingInvoiceItemCreate(BaseModel):
     source_module: str | None = Field(default=None, max_length=40)
     source_item_type: str | None = Field(default=None, pattern="^(billing_service|medicine|investigation_setting)$")
     source_item_id: UUID | None = None
+    source_record_type: str | None = Field(default=None, max_length=80)
+    source_record_id: UUID | None = None
 
 
 class BillingInvoiceCreate(BaseModel):
@@ -296,6 +298,8 @@ class BillingDraftItemRead(BaseModel):
     quantity: Decimal
     discount_percentage: Decimal = Decimal("0")
     source_opd_visit_order_id: UUID | None = None
+    source_record_type: str | None = None
+    source_record_id: UUID | None = None
     warning: str | None = None
 
 
@@ -309,6 +313,10 @@ class BillingDraftRead(BaseModel):
     internal_referral_user_id: UUID | None = None
     note: str | None = None
     message: str | None = None
+    prior_invoice_count: int = 0
+    prior_billed_amount: Decimal = Decimal("0")
+    prior_paid_amount: Decimal = Decimal("0")
+    prior_due_amount: Decimal = Decimal("0")
     items: list[BillingDraftItemRead]
 
 

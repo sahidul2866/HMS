@@ -1,6 +1,6 @@
 .notification-shell {
   position: relative;
-  z-index: 1840;
+  z-index: 6200;
 }
 
 .notification-trigger {
@@ -93,6 +93,7 @@
   background: var(--surface);
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
   overflow: hidden;
+  z-index: 6201;
 }
 
 .notification-panel header,

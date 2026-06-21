@@ -313,7 +313,7 @@
 	                        </select>
 	                        <input type="number" min="1" [(ngModel)]="medicineDraft.quantity" [ngModelOptions]="{ standalone: true }" placeholder="Qty" />
 	                      </div>
-	                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="addPrescriptionMedicine()" placeholder="Extra instructions" />
+	                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="$event.preventDefault(); addPrescriptionMedicine()" placeholder="Extra instructions" />
 	                      <div class="suggestion-list">
 	                        @if (medicineSuggestionsLoading) {
 	                          <div class="suggestion-loading">Searching medicines...</div>
@@ -355,7 +355,7 @@
 	                        <button class="secondary-btn" type="button" (click)="addInvestigation()" [disabled]="savingOrder">Add Investigation</button>
 	                      </div>
 	                      <div class="investigation-entry-row">
-		                        <input [(ngModel)]="investigationDraft.item_name" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onInvestigationQueryChanged($event)" (keydown.enter)="addBestInvestigationFromKeyboard()" placeholder="Search lab or radiology test" />
+		                        <input [(ngModel)]="investigationDraft.item_name" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onInvestigationQueryChanged($event)" (keydown.enter)="$event.preventDefault(); addBestInvestigationFromKeyboard()" placeholder="Search lab or radiology test" />
 	                        <select [(ngModel)]="investigationDraft.service_area" [ngModelOptions]="{ standalone: true }">
 	                          <option value="laboratory">Lab</option>
 	                          <option value="radiology">Radiology</option>

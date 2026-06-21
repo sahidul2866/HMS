@@ -193,7 +193,8 @@ export class BillingCreateComponent {
   }
 
   get paymentDuePreview(): number {
-    return Number(this.preview?.total_amount ?? 0);
+    const carriedPayment = this.draft?.billing_stage === 'ipd_final' ? Number(this.draft.prior_paid_amount || 0) : 0;
+    return Math.max(0, Number(this.preview?.total_amount ?? 0) - carriedPayment);
   }
 
   get stickerItemCount(): number {
@@ -290,6 +291,8 @@ export class BillingCreateComponent {
         source_opd_visit_order_id: [''],
         source_label: [''],
         source_module: [''],
+        source_record_type: [''],
+        source_record_id: [''],
       })
     );
     this.persistState();
@@ -799,6 +802,10 @@ export class BillingCreateComponent {
             this.printInvestigationStickers(postedInvoice);
             this.notificationService.success(`Invoice ${postedInvoice.invoice_number} created successfully.`);
             const hasDue = Number(postedInvoice.due_amount || 0) > 0;
+            if (!hasDue && this.draft?.billing_stage === 'ipd_final' && this.sourceAdmission) {
+              void this.router.navigate(['/ipd/admissions', this.sourceAdmission.id]);
+              return;
+            }
             void this.router.navigate([hasDue ? '/billing/due-payments' : '/billing/list'], {
               queryParams: { invoiceId: postedInvoice.id, printInvoice: '1' },
             });
@@ -850,10 +857,16 @@ export class BillingCreateComponent {
       return;
     }
 
+    if (!value.phone?.trim() || value.phone.trim().replace(/\D/g, '').length < 6) {
+      this.saving = false;
+      this.notificationService.warning('A valid mobile number is required for a new patient.');
+      return;
+    }
+
     const patientPayload: CreatePatientPayload = {
       first_name: value.first_name ?? '',
       last_name: value.last_name ?? '',
-      phone: value.phone || null,
+      phone: value.phone.trim(),
       email: value.email || null,
       gender: value.gender || null,
       date_of_birth: value.date_of_birth || null,
@@ -973,6 +986,8 @@ export class BillingCreateComponent {
       source_opd_visit_order_id?: string;
       source_label?: string;
       source_module?: string;
+      source_record_type?: string;
+      source_record_id?: string;
     }[];
     return rawItems
       .filter((item) => (item.billing_service_id || item.source_item_id) && Number(item.quantity) > 0)
@@ -985,6 +1000,8 @@ export class BillingCreateComponent {
         source_module: item.source_module || null,
         source_item_type: item.source_item_type || (item.billing_service_id ? 'billing_service' : null),
         source_item_id: item.source_item_id || item.billing_service_id || null,
+        source_record_type: item.source_record_type || null,
+        source_record_id: item.source_record_id || null,
       }));
   }
 
@@ -1130,6 +1147,8 @@ export class BillingCreateComponent {
             source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
             source_label: [item.source_label || ''],
             source_module: [item.source_module || ''],
+            source_record_type: [item.source_record_type || ''],
+            source_record_id: [item.source_record_id || ''],
           })
         );
     }
@@ -1352,6 +1371,8 @@ export class BillingCreateComponent {
           source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
           source_label: [item.source_label || ''],
           source_module: [item.source_module || ''],
+          source_record_type: [item.source_record_type || ''],
+          source_record_id: [item.source_record_id || ''],
         })
       );
     }
@@ -1365,6 +1386,9 @@ export class BillingCreateComponent {
     });
     this.prefillMessage = draft.message || 'Draft applied.';
     this.recalculatePreview();
+    if (draft.billing_stage === 'ipd_final') {
+      this.form.patchValue({ payment_amount: this.paymentDuePreview });
+    }
     this.persistState();
   }
 }

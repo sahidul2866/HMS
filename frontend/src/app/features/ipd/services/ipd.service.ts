@@ -11,6 +11,7 @@ import {
   IPDAdmission,
   IPDBedBoardRow,
   IPDBed,
+  IPDBillingSummary,
   IPDDischargeReadiness,
   IPDHandoverBoard,
   IPDMedicationAdministration,
@@ -120,6 +121,10 @@ export class IPDService extends ApiBaseService {
 
   dischargeReadiness(admissionId: string): Observable<IPDDischargeReadiness> {
     return this.http.get<IPDDischargeReadiness>(this.url(`/ipd/admissions/${admissionId}/discharge-readiness`));
+  }
+
+  billingSummary(admissionId: string): Observable<IPDBillingSummary> {
+    return this.http.get<IPDBillingSummary>(this.url(`/ipd/admissions/${admissionId}/billing-summary`));
   }
 
   transfer(admissionId: string, payload: TransferIPDAdmissionPayload): Observable<IPDAdmission> {

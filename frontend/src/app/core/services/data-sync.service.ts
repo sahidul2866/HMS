@@ -1,11 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
 
 import { ApiCacheService } from './api-cache.service';
 import { AppContextService } from './app-context.service';
 import { NotificationService } from './notification.service';
+import { TabRouteReuseStrategy } from './tab-route-reuse.strategy';
 
 export type AppDataEventName =
+  | 'patient.created'
   | 'patient.updated'
   | 'appointment.created'
   | 'appointment.updated'
@@ -48,13 +49,15 @@ export class DataSyncService {
   private readonly apiCache = inject(ApiCacheService);
   private readonly notificationService = inject(NotificationService);
   private readonly appContext = inject(AppContextService);
-  private readonly router = inject(Router);
+  private readonly routeReuseStrategy = inject(TabRouteReuseStrategy);
 
   private readonly sourceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   private readonly pendingEventsSignal = signal<AppDataEvent[]>([]);
   private channel: BroadcastChannel | null = null;
   private started = false;
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly receivedEventIds = new Set<string>();
+  private readonly recentDetailedPublish = new Map<string, number>();
 
   readonly pendingEvents = this.pendingEventsSignal.asReadonly();
   readonly hasPendingUpdates = computed(() => this.pendingEventsSignal().length > 0);
@@ -84,6 +87,9 @@ export class DataSyncService {
 
   publish(event: Omit<AppDataEvent, 'timestamp' | 'sourceId'>): void {
     const payload: AppDataEvent = { ...event, timestamp: Date.now(), sourceId: this.sourceId };
+    if (event.name !== 'data.updated') {
+      for (const module of event.modules) this.recentDetailedPublish.set(module, payload.timestamp);
+    }
     this.applyLocalCacheInvalidation(payload);
     window.dispatchEvent(new CustomEvent('hms:data-event', { detail: payload }));
     this.channel?.postMessage(payload);
@@ -92,6 +98,29 @@ export class DataSyncService {
     } catch {
       // BroadcastChannel still covers modern browsers; storage can be unavailable.
     }
+  }
+
+  publishApiMutation(url: string): void {
+    const module = this.moduleFromApiUrl(url);
+    if (!module || ['auth', 'patient-auth'].includes(module)) return;
+    const now = Date.now();
+    if (now - (this.recentDetailedPublish.get(module) ?? 0) < 250) return;
+
+    this.publish({
+      name: 'data.updated',
+      entityType: module,
+      modules: [module, 'dashboard'],
+      cachePrefixes: [`${module}:`, 'dashboard:'],
+      message: `${module.replace(/-/g, ' ')} data was updated.`,
+    });
+  }
+
+  prepareApiMutation(url: string): void {
+    const module = this.moduleFromApiUrl(url);
+    if (!module || ['auth', 'patient-auth'].includes(module)) return;
+    this.apiCache.clearPrefix(`${module}:`);
+    this.apiCache.clearPrefix('dashboard:');
+    this.routeReuseStrategy.invalidateModules([module, 'dashboard']);
   }
 
   dismiss(event: AppDataEvent): void {
@@ -110,8 +139,15 @@ export class DataSyncService {
 
   private receive(event: AppDataEvent): void {
     if (!event || event.sourceId === this.sourceId) return;
+    const eventId = `${event.sourceId}:${event.timestamp}`;
+    if (this.receivedEventIds.has(eventId)) return;
+    this.receivedEventIds.add(eventId);
+    if (this.receivedEventIds.size > 100) {
+      this.receivedEventIds.delete(this.receivedEventIds.values().next().value!);
+    }
     this.applyLocalCacheInvalidation(event);
     window.dispatchEvent(new CustomEvent('hms:data-event', { detail: event }));
+    this.requestSoftRefresh(event);
     if (!this.isRelevant(event)) return;
     this.pendingEventsSignal.update((events) => [event, ...events].slice(0, 8));
     this.debouncedNotify();
@@ -121,6 +157,11 @@ export class DataSyncService {
     for (const prefix of event.cachePrefixes || []) {
       this.apiCache.clearPrefix(prefix);
     }
+    this.routeReuseStrategy.invalidateModules(event.modules || []);
+  }
+
+  private requestSoftRefresh(event: AppDataEvent): void {
+    window.dispatchEvent(new CustomEvent('hms:data-refresh-request', { detail: event }));
   }
 
   private isRelevant(event: AppDataEvent): boolean {
@@ -139,5 +180,12 @@ export class DataSyncService {
       const message = hasDirtyForm ? 'This page has newer data. Your draft was not overwritten.' : this.pendingMessage();
       this.notificationService.info(message || 'Updated data is available.');
     }, 350);
+  }
+
+  private moduleFromApiUrl(url: string): string | null {
+    const path = new URL(url, window.location.origin).pathname;
+    const segments = path.split('/').filter(Boolean);
+    const apiIndex = segments.findIndex((segment) => segment === 'v1');
+    return segments[apiIndex >= 0 ? apiIndex + 1 : 0] ?? null;
   }
 }

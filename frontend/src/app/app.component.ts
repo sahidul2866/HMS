@@ -32,10 +32,19 @@ export class AppComponent {
         this.closeRowActionMenus(menu);
       }, true);
 
-      this.document.addEventListener('click', (event) => {
+      this.document.addEventListener('pointerdown', (event) => {
         const target = event.target as Element | null;
         if (target?.closest('.row-action-menu')) return;
         this.closeRowActionMenus();
+      }, true);
+
+      this.document.addEventListener('click', (event) => {
+        const target = event.target as Element | null;
+        const menu = target?.closest<HTMLDetailsElement>('details.row-action-menu');
+        if (!menu || target?.closest('summary')) return;
+        if (target?.closest('button, a')) {
+          menu.open = false;
+        }
       }, true);
 
       this.document.addEventListener('keydown', (event) => {

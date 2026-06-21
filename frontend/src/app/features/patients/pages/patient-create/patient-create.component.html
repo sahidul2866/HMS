@@ -30,13 +30,16 @@
         <div class="lookup-banner">
           <div class="lookup-title">Mobile Lookup</div>
           <div class="lookup-controls">
-            <input type="text" formControlName="phone" placeholder="Enter mobile number" />
+            <input type="text" formControlName="phone" placeholder="Enter required mobile number" />
             @if (mobileSearchResults.length) {
               <button class="ghost-btn" type="button" (click)="openLookupModal()">View Matches</button>
             }
           </div>
           @if (mobileLookupMessage) {
             <div class="lookup-feedback">{{ mobileLookupMessage }}</div>
+          }
+          @if (validation.isInvalid(form.controls.phone, submitted)) {
+            <div class="field-error">{{ validation.errorMessage(form.controls.phone, 'Mobile number') }}</div>
           }
         </div>
 

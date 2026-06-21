@@ -411,43 +411,86 @@ class BillingServiceManager:
             raise AppException(400, "invalid_billing_stage", "IPD billing stage must be interim or final")
         normalized_stage = "ipd_final" if stage == "final" else "ipd_interim"
         existing = self.repository.get_invoice_by_source(source_ipd_admission_id=admission.id, billing_stage=normalized_stage)
-        if existing:
+        if existing and stage == "final":
             raise AppException(409, "billing_draft_already_posted", f"{normalized_stage.replace('_', ' ').title()} bill already exists for {admission.admission_number}")
 
-        billable_days = self._calculate_ipd_billable_days(admission, final=stage == "final")
+        invoices = self.repository.list_invoices_for_ipd_admission(admission.id)
+        total_billable_days = self._calculate_ipd_billable_days(admission, final=stage == "final")
+        previously_billed_days = sum(
+            Decimal(item.quantity or 0)
+            for invoice in invoices
+            for item in invoice.items
+            if item.source_module == "ipd_bed_charge" or (item.source_module == "ipd" and "bed charge" in (item.source_label or "").lower())
+        )
+        billable_days = max(Decimal(total_billable_days) - previously_billed_days, Decimal("0"))
         service = self._match_billing_service(
             branch_id=actor.branch_id,
             keywords=[admission.ward_name, "ipd", "bed", stage, "admission"],
             exact_amount=Decimal(admission.daily_charge or Decimal("0")),
         )
         warning = None if service else f"No IPD billing service matched {admission.ward_name} / {stage}."
-        items = [
-            BillingDraftItemRead(
+        items: list[BillingDraftItemRead] = []
+        if stage == "final":
+            for prior_invoice in invoices:
+                if prior_invoice.billing_stage != "ipd_interim":
+                    continue
+                for prior_item in prior_invoice.items:
+                    prior_config = self.repository.find_item_config_by_source(
+                        self._normalize_module(prior_item.source_module or "billing"),
+                        prior_item.source_entity_id,
+                        actor.branch_id,
+                    ) if prior_item.source_entity_id else None
+                    if not prior_config:
+                        prior_config = self._match_billing_service(
+                            branch_id=actor.branch_id,
+                            keywords=[prior_item.service_name, prior_item.source_label or "", prior_item.source_module or ""],
+                            exact_amount=Decimal(prior_item.unit_price or 0),
+                        )
+                    source_link = next((link for link in prior_item.item_links if link.source_entity_type in {"ipd_order", "ipd_bed_charge"}), None)
+                    items.append(
+                        BillingDraftItemRead(
+                            source_label=f"Interim carry-forward · {prior_item.source_label or prior_item.service_name}",
+                            source_module=prior_item.source_module or "ipd",
+                            billing_service_id=prior_config.id if prior_config else None,
+                            billing_service_name=prior_config.service_name if prior_config else prior_item.service_name,
+                            quantity=prior_item.quantity,
+                            discount_percentage=prior_item.discount_percentage,
+                            source_record_type=source_link.source_entity_type if source_link else None,
+                            source_record_id=source_link.source_entity_id if source_link else None,
+                            warning=None if prior_config else f"Select a billing service for prior item {prior_item.service_name}.",
+                        )
+                    )
+        if billable_days > 0:
+            items.append(BillingDraftItemRead(
                 source_label=f"{stage.title()} Bed Charge · {admission.ward_name} / {admission.bed_number}",
                 source_module="ipd_bed_charge",
                 billing_service_id=service.id if service else None,
                 billing_service_name=service.service_name if service else None,
-                quantity=Decimal(str(billable_days)),
+                quantity=billable_days,
+                source_record_type="ipd_bed_charge",
+                source_record_id=admission.id,
                 warning=warning,
-            )
-        ]
+            ))
         active_orders = [order for order in admission.orders if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"]
         for order in active_orders:
             order_service = self._match_billing_service(
                 branch_id=actor.branch_id,
                 keywords=[order.item_name, order.order_type, order.service_area or "", "ipd"],
             )
-            if order_service:
-                items.append(
-                    BillingDraftItemRead(
-                        source_label=f"IPD {order.order_type.title()} · {order.item_name}",
-                        source_module="ipd_order",
-                        billing_service_id=order_service.id,
-                        billing_service_name=order_service.service_name,
-                        quantity=order.quantity,
-                        warning=None,
-                    )
+            items.append(
+                BillingDraftItemRead(
+                    source_label=f"IPD {order.order_type.title()} · {order.item_name}",
+                    source_module="ipd_order",
+                    billing_service_id=order_service.id if order_service else None,
+                    billing_service_name=order_service.service_name if order_service else None,
+                    quantity=order.quantity,
+                    source_record_type="ipd_order",
+                    source_record_id=order.id,
+                    warning=None if order_service else f"Select a billing service for {order.item_name}.",
                 )
+            )
+        if not items:
+            raise AppException(409, "billing_draft_empty", "No unbilled IPD bed-days or orders remain for this admission")
         return BillingDraftRead(
             patient_id=admission.patient_id,
             patient_name=f"{admission.patient.first_name} {admission.patient.last_name}",
@@ -456,7 +499,15 @@ class BillingServiceManager:
             source_ipd_admission_id=admission.id,
             internal_referral_user_id=admission.attending_doctor_user_id,
             note=self._build_ipd_note(admission, stage=stage, billable_days=billable_days),
-            message=f"{stage.title()} billing draft prepared for {billable_days} bed-day(s) and {len(items) - 1} active IPD order(s).",
+            message=(
+                f"Final reconciliation loaded {len(invoices)} interim bill(s), all prior items and payments, plus {billable_days} new bed-day(s). Post once to consolidate the admission ledger."
+                if stage == "final"
+                else f"Interim billing draft prepared for {billable_days} new bed-day(s); {previously_billed_days} bed-day(s) were already billed."
+            ),
+            prior_invoice_count=len(invoices) if stage == "final" else 0,
+            prior_billed_amount=sum((Decimal(invoice.total_amount or 0) for invoice in invoices), Decimal("0")) if stage == "final" else Decimal("0"),
+            prior_paid_amount=sum((Decimal(invoice.paid_amount or 0) for invoice in invoices), Decimal("0")) if stage == "final" else Decimal("0"),
+            prior_due_amount=sum((Decimal(invoice.due_amount or 0) for invoice in invoices), Decimal("0")) if stage == "final" else Decimal("0"),
             items=items,
         )
 
@@ -468,8 +519,9 @@ class BillingServiceManager:
             raise AppException(409, "billing_order_duplicate", "One or more OPD orders have already been billed")
         if payload.source_opd_visit_id and payload.billing_stage != "opd_orders" and self.repository.get_invoice_by_source(source_opd_visit_id=payload.source_opd_visit_id, billing_stage=payload.billing_stage):
             raise AppException(409, "billing_invoice_duplicate_source", "Billing invoice already exists for this OPD visit and stage")
-        if payload.source_ipd_admission_id and self.repository.get_invoice_by_source(source_ipd_admission_id=payload.source_ipd_admission_id, billing_stage=payload.billing_stage):
+        if payload.source_ipd_admission_id and payload.billing_stage == "ipd_final" and self.repository.get_invoice_by_source(source_ipd_admission_id=payload.source_ipd_admission_id, billing_stage=payload.billing_stage):
             raise AppException(409, "billing_invoice_duplicate_source", "Billing invoice already exists for this IPD admission and stage")
+        prior_ipd_invoices = self.repository.list_invoices_for_ipd_admission(payload.source_ipd_admission_id) if payload.source_ipd_admission_id and payload.billing_stage == "ipd_final" else []
         resolved_items = self._resolve_invoice_items(payload.items, actor)
         preview = self._build_preview(payload.discount_percentage, resolved_items, actor.branch_id)
         invoice = BillingInvoice(
@@ -558,6 +610,30 @@ class BillingServiceManager:
             )
         invoice.items = invoice_items
         self.repository.create_invoice(invoice)
+        if payload.billing_stage == "ipd_final":
+            carried_payment = Decimal("0")
+            consolidated_numbers: list[str] = []
+            for prior_invoice in prior_ipd_invoices:
+                if prior_invoice.billing_stage != "ipd_interim":
+                    continue
+                consolidated_numbers.append(prior_invoice.invoice_number)
+                for payment in prior_invoice.payments:
+                    carried_payment += Decimal(payment.amount or 0)
+                    payment.invoice_id = invoice.id
+                    payment.updated_by = actor.id
+                prior_invoice.status = "consolidated"
+                prior_invoice.is_active = False
+                prior_invoice.payment_status = "consolidated"
+                prior_invoice.paid_amount = Decimal("0")
+                prior_invoice.due_amount = Decimal("0")
+                prior_invoice.void_reason = f"Consolidated into final invoice {invoice.invoice_number}"
+                prior_invoice.updated_by = actor.id
+            if carried_payment:
+                invoice.paid_amount = min(self._money(carried_payment), invoice.total_amount)
+                self._recalculate_invoice_balance(invoice)
+            if consolidated_numbers:
+                consolidation_note = f"Consolidated interim invoices: {', '.join(consolidated_numbers)}"
+                invoice.note = f"{invoice.note} · {consolidation_note}" if invoice.note else consolidation_note
         self._sync_invoice_items_to_worklists(invoice, resolved_items, patient, actor)
         self._ensure_module_records_for_invoice_items(invoice, actor)
         # Create billing_item_links for domain records
@@ -607,6 +683,30 @@ class BillingServiceManager:
                             updated_by=actor.id,
                         )
                         self.billing_links_repository.create_link(link)
+            resolved_item = resolved_items[index] if index < len(resolved_items) else None
+            if resolved_item and resolved_item.source_record_id and resolved_item.source_record_type:
+                self.billing_links_repository.create_link(
+                    BillingItemLink(
+                        invoice_item_id=item.id,
+                        branch_id=invoice.branch_id,
+                        source_module="ipd" if resolved_item.source_record_type.startswith("ipd_") else (item.source_module or "billing"),
+                        source_entity_type=resolved_item.source_record_type,
+                        source_entity_id=resolved_item.source_record_id,
+                        meta={"invoice_number": invoice.invoice_number, "billing_stage": invoice.billing_stage, "source_label": item.source_label},
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                )
+                if resolved_item.source_record_type == "ipd_order":
+                    ipd_order = self.db.get(IPDOrder, resolved_item.source_record_id)
+                    if ipd_order:
+                        ipd_order.billing_status = "billed"
+                        ipd_order.updated_by = actor.id
+        if invoice.source_ipd_admission_id:
+            admission = self.db.get(IPDAdmission, invoice.source_ipd_admission_id)
+            if admission:
+                admission.billing_status = "cleared" if invoice.billing_stage == "ipd_final" and invoice.due_amount <= 0 else ("final_billed" if invoice.billing_stage == "ipd_final" else "interim_billed")
+                admission.updated_by = actor.id
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.BILLING_INVOICE_CREATE,
@@ -648,6 +748,11 @@ class BillingServiceManager:
             raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
         entity.paid_amount = self._money(entity.paid_amount + payment.amount)
         self._recalculate_invoice_balance(entity)
+        if entity.source_ipd_admission_id and entity.billing_stage == "ipd_final" and entity.due_amount <= Decimal("0.00"):
+            admission = self.db.get(IPDAdmission, entity.source_ipd_admission_id)
+            if admission:
+                admission.billing_status = "cleared"
+                admission.updated_by = actor.id
         entity.updated_by = actor.id
         self.db.flush()
         AuditService(self.db).log(
@@ -941,6 +1046,7 @@ class BillingServiceManager:
         self._sync_services_from_modules(actor)
         for item in items:
             self._ensure_item_permission(item, actor)
+            original_source_module = item.source_module
             config: BillingItemConfig | None = None
             if item.source_item_id and item.source_module:
                 config = self.repository.find_item_config_by_source(self._normalize_module(item.source_module), item.source_item_id, actor.branch_id)
@@ -949,7 +1055,7 @@ class BillingServiceManager:
             if not config:
                 raise AppException(400, "billing_item_source_required", "Select a valid billable item from module catalog")
             item.billing_service_id = config.id
-            item.source_module = config.source_module
+            item.source_module = "ipd_bed_charge" if original_source_module == "ipd_bed_charge" else config.source_module
             room_suffix = f" · Room {config.room_number}" if config.room_number else ""
             item.source_label = item.source_label or f"{config.service_name}{room_suffix}"
             item.source_item_id = config.source_entity_id
@@ -989,7 +1095,9 @@ class BillingServiceManager:
         handoff_items = [
             (index, item)
             for index, item in enumerate(items)
-            if not item.source_opd_visit_order_id and self._normalize_module(item.source_module) in {"laboratory", "radiology", "pharmacy"}
+            if not item.source_opd_visit_order_id
+            and not (item.source_label or "").startswith("Interim carry-forward")
+            and self._normalize_module(item.source_module) in {"laboratory", "radiology", "pharmacy"}
         ]
         if not handoff_items:
             return
@@ -1155,6 +1263,8 @@ class BillingServiceManager:
             return "laboratory"
         if normalized in {"medicine", "medicines"}:
             return "pharmacy"
+        if normalized == "ipd_bed_charge":
+            return "ipd"
         return normalized
 
 

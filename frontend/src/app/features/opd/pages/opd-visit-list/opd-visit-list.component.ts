@@ -176,31 +176,22 @@ export class OPDVisitListComponent {
 
   convertToIpd(visit: OPDVisit): void {
     if (!this.session.hasPermission(PERMISSIONS.ipdAdmissionManage)) return;
-    const wardName = window.prompt('Ward name for IPD admission', 'General Ward');
-    if (!wardName) return;
-    const bedNumber = window.prompt('Bed number for IPD admission');
-    if (!bedNumber) return;
-    const dailyCharge = Number(window.prompt('Daily bed charge', '0') || 0);
-    const advanceAmount = Number(window.prompt('Advance amount', '0') || 0);
-    const attendingDoctor = visit.consulting_doctor_name || window.prompt('Attending doctor name', '') || 'Attending Doctor';
-    this.opdService.convertToIPD(visit.id, {
-      admitted_at: new Date().toISOString(),
-      admission_type: 'opd_conversion',
-      ward_name: wardName,
-      bed_number: bedNumber,
-      doctor_user_id: visit.consulting_doctor_user_id || null,
-      attending_doctor_name: attendingDoctor,
-      diagnosis: visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || null,
-      daily_charge: Number.isFinite(dailyCharge) ? dailyCharge : 0,
-      advance_amount: Number.isFinite(advanceAmount) ? advanceAmount : 0,
-    }).subscribe({
-      next: (admission) => {
-        this.notificationService.success('OPD visit converted to IPD.');
-        this.loadVisits();
-        void this.router.navigate(['/ipd/admissions'], { queryParams: { openAdmission: admission.id } });
-      },
-      error: (error) => {
-        this.notificationService.error(error?.error?.message || error?.message || 'Could not convert OPD visit to IPD.');
+    const clinicalContext = [
+      visit.chief_complaint ? `Chief complaint: ${visit.chief_complaint}` : '',
+      visit.history_of_present_illness ? `History: ${visit.history_of_present_illness}` : '',
+      visit.vital_signs ? `Vitals: ${visit.vital_signs}` : '',
+      visit.examination_note ? `Examination: ${visit.examination_note}` : '',
+    ].filter(Boolean).join('\n');
+    void this.router.navigate(['/ipd/admit'], {
+      queryParams: {
+        patientId: visit.patient.id,
+        sourceOpdVisitId: visit.id,
+        sourceOpdVisitNumber: visit.visit_number,
+        departmentName: visit.department_name,
+        doctorUserId: visit.consulting_doctor_user_id || visit.doctor_user_id || null,
+        attendingDoctorName: visit.consulting_doctor_name,
+        diagnosis: visit.final_diagnosis || visit.provisional_diagnosis || visit.chief_complaint || '',
+        clinicalContext,
       },
     });
   }
@@ -562,6 +553,7 @@ export class OPDVisitListComponent {
   }
 
   addPrescriptionMedicine(showMessage = true): void {
+    if (this.savingOrder) return;
     if (!this.selectedVisit || !this.medicineDraft.item_name.trim()) {
       this.notificationService.error('Enter a medicine before adding it to the prescription.');
       return;
@@ -584,6 +576,7 @@ export class OPDVisitListComponent {
   }
 
   addInvestigation(showMessage = true): void {
+    if (this.savingOrder) return;
     if (!this.selectedVisit || !this.investigationDraft.item_name.trim()) {
       this.notificationService.error('Enter an investigation before adding it.');
       return;
@@ -593,8 +586,8 @@ export class OPDVisitListComponent {
       .createOrder(this.selectedVisit.id, {
         order_type: 'investigation',
         service_area: this.investigationDraft.service_area || 'laboratory',
-        item_name: this.investigationDraft.item_name,
-        instructions: this.investigationDraft.instructions || null,
+        item_name: this.investigationDraft.item_name.trim(),
+        instructions: this.investigationDraft.instructions.trim() || null,
         quantity: 1,
       })
       .subscribe((visit) => {

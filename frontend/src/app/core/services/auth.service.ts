@@ -93,7 +93,6 @@ export class AuthService {
   }
 
   registerPatient(payload: {
-    patient_id?: string | null;
     username: string;
     email: string;
     full_name: string;
@@ -120,15 +119,6 @@ export class AuthService {
         }),
         map((response) => response.user)
       );
-  }
-
-  searchPatientsForRegistration(query: string): Observable<PatientRegistrationSearchResult[]> {
-    const params = new URLSearchParams({ q: query, limit: '10' });
-    return this.http.get<PatientRegistrationSearchResult[]>(`${runtimeConfig.apiBaseUrl}/patient-auth/patients/search?${params.toString()}`, {
-      headers: {
-        [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
-      },
-    });
   }
 
   resetPassword(payload: { current_password: string; new_password: string }): Observable<void> {
@@ -227,31 +217,21 @@ export class AuthService {
 
   logout(): Observable<void> {
     const refreshToken = this.tokenStorage.getRefreshToken();
+    const principalType = this.sessionService.snapshot.user?.principal_type;
+    this.clearSession(true);
     if (!refreshToken) {
-      this.clearSession(true);
       return of(void 0);
     }
 
     return this.http.post<void>(
-      `${runtimeConfig.apiBaseUrl}/auth/logout`,
+      `${runtimeConfig.apiBaseUrl}/${principalType === 'patient' ? 'patient-auth' : 'auth'}/logout`,
       { refresh_token: refreshToken },
       {
         headers: {
           [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
         },
       }
-    ).pipe(
-      catchError(() => this.http.post<void>(
-        `${runtimeConfig.apiBaseUrl}/patient-auth/logout`,
-        { refresh_token: refreshToken },
-        {
-          headers: {
-            [AuthService.SKIP_AUTH_REFRESH_HEADER]: '1',
-          },
-        }
-      ).pipe(catchError(() => of(void 0)))),
-      tap(() => this.clearSession(true))
-    );
+    ).pipe(catchError(() => of(void 0)));
   }
 
   clearSession(navigate = false): void {
@@ -284,15 +264,4 @@ export class AuthService {
     this.sessionService.setUser(user);
     return this.sessionService.getLandingRoute();
   }
-}
-
-export interface PatientRegistrationSearchResult {
-  id: string;
-  patient_number: string;
-  full_name: string;
-  phone?: string | null;
-  email?: string | null;
-  gender?: string | null;
-  date_of_birth?: string | null;
-  has_portal_account: boolean;
 }

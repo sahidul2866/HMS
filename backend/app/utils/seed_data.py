@@ -601,8 +601,6 @@ ROLE_CATALOG = {
     ],
     "PATIENT": [
         "patient.portal.view",
-        "appointment.view",
-        "appointment.book",
     ],
     "PHARMACIST": [
         "dashboard.view",

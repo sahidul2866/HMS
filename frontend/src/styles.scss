@@ -132,6 +132,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body.notification-center-open .topbar {
+  z-index: 6100 !important;
+}
+
 body {
   min-height: 100vh;
   min-height: 100dvh;

@@ -9,7 +9,7 @@ import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
-import { IPDAdmission, IPDBed, IPDBedBoardRow, IPDDischargeReadiness, IPDHandoverBoard, IPDPatientWorkspace, IPDReportSummary, IPDSettings, IPDShiftCoverage, IPDStaffAvailability, IPDSummary } from '../../models/ipd.models';
+import { IPDAdmission, IPDBed, IPDBedBoardRow, IPDBillingSummary, IPDDischargeReadiness, IPDHandoverBoard, IPDPatientWorkspace, IPDReportSummary, IPDSettings, IPDShiftCoverage, IPDStaffAvailability, IPDSummary } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
 
 @Component({
@@ -39,11 +39,14 @@ export class IPDOverviewComponent {
   selectedAdmission: IPDAdmission | null = null;
   workspace: IPDPatientWorkspace | null = null;
   dischargeReadiness: IPDDischargeReadiness | null = null;
+  billingSummary: IPDBillingSummary | null = null;
   settings: IPDSettings | null = null;
   staffAvailability: IPDStaffAvailability[] = [];
   shiftCoverage: IPDShiftCoverage | null = null;
   handoverBoard: IPDHandoverBoard[] = [];
   activeWorkflow: 'notes' | 'orders' | 'meds' | 'handover' = 'notes';
+  isPatientWorkspace = false;
+  patientPanel: 'billing' | 'team' | 'workflow' | 'transfer' | 'discharge' | null = null;
   readonly transferForm = this.fb.group({
     bed_id: [''],
     ward_name: ['', Validators.required],
@@ -55,9 +58,9 @@ export class IPDOverviewComponent {
   });
 
   readonly dischargeForm = this.fb.group({
-    discharge_condition: ['Stable'],
-    discharge_diagnosis: [''],
-    discharge_summary: [''],
+    discharge_condition: ['Stable', Validators.required],
+    discharge_diagnosis: ['', Validators.required],
+    discharge_summary: ['', Validators.required],
     discharge_note: [''],
     allow_override: [false],
     override_reason: [''],
@@ -162,7 +165,14 @@ export class IPDOverviewComponent {
     this.route.queryParamMap.subscribe((params) => {
       const openAdmissionId = params.get('openAdmission');
       if (openAdmissionId) {
-        this.ipdService.getAdmission(openAdmissionId).subscribe((admission) => this.selectAdmission(admission));
+        void this.router.navigate(['/ipd/admissions', openAdmissionId], { replaceUrl: true });
+      }
+    });
+    this.route.paramMap.subscribe((params) => {
+      const admissionId = params.get('admissionId');
+      this.isPatientWorkspace = !!admissionId;
+      if (admissionId) {
+        this.ipdService.getAdmission(admissionId).subscribe((admission) => this.selectAdmission(admission));
       }
     });
   }
@@ -199,12 +209,12 @@ export class IPDOverviewComponent {
     if (!row.admission_id) {
       return;
     }
-    const admission = this.admissions.find((item) => item.id === row.admission_id);
-    if (admission) {
-      this.selectAdmission(admission);
-      return;
-    }
-    this.ipdService.getAdmission(row.admission_id).subscribe((item) => this.selectAdmission(item));
+    this.openAdmissionPage(row.admission_id);
+  }
+
+  openAdmissionPage(admission: IPDAdmission | string): void {
+    const admissionId = typeof admission === 'string' ? admission : admission.id;
+    void this.router.navigate(['/ipd/admissions', admissionId]);
   }
 
   navigateToNewPatient(): void {
@@ -219,18 +229,30 @@ export class IPDOverviewComponent {
     void this.router.navigate(['/ipd/admissions']);
   }
 
+  navigateToOverview(): void {
+    void this.router.navigate(['/ipd']);
+  }
+
   navigateToSettings(): void {
     void this.router.navigate(['/ipd/settings']);
   }
 
   discharge(admission: IPDAdmission): void {
+    if (this.dischargeForm.invalid) {
+      this.dischargeForm.markAllAsTouched();
+      this.notificationService.warning('Discharge condition, diagnosis, and summary are required.');
+      return;
+    }
     if (!this.confirmationService.confirmImportant(`Finalize discharge for ${admission.admission_number}?\n\nConfirm only after clinical and billing readiness has been reviewed.`)) {
       return;
     }
-    this.ipdService.discharge(admission.id, this.dischargeForm.getRawValue() as never).subscribe((updated) => {
-      this.selectedAdmission = updated;
-      this.loadAll();
-      this.notificationService.success(`Admission ${admission.admission_number} discharged. Final billing can now be reviewed.`);
+    this.ipdService.discharge(admission.id, this.dischargeForm.getRawValue() as never).subscribe({
+      next: (updated) => {
+        this.selectedAdmission = updated;
+        this.loadAll();
+        this.notificationService.success(`Admission ${admission.admission_number} discharged.`);
+      },
+      error: (error) => this.notificationService.error(error?.error?.message || error?.error?.error?.message || 'Unable to finalize discharge.'),
     });
   }
 
@@ -258,6 +280,7 @@ export class IPDOverviewComponent {
   }
 
   loadWorkspace(admissionId: string): void {
+    this.loadBillingSummary(admissionId);
     this.ipdService.getWorkspace(admissionId).subscribe((workspace) => {
       this.workspace = workspace;
       this.selectedAdmission = workspace.admission;
@@ -275,6 +298,34 @@ export class IPDOverviewComponent {
 
   loadDischargeReadiness(admissionId: string): void {
     this.ipdService.dischargeReadiness(admissionId).subscribe((readiness) => (this.dischargeReadiness = readiness));
+  }
+
+  loadBillingSummary(admissionId: string): void {
+    this.ipdService.billingSummary(admissionId).subscribe((summary) => (this.billingSummary = summary));
+  }
+
+  get effectiveDischargeBlockers(): string[] {
+    if (!this.dischargeReadiness) return [];
+    const value = this.dischargeForm.getRawValue();
+    return this.dischargeReadiness.checks
+      .filter((check) => !(check.done || (check.key === 'doctor_approval' && !!value.discharge_summary?.trim()) || (check.key === 'summary' && !!value.discharge_summary?.trim() && !!value.discharge_diagnosis?.trim() && !!value.discharge_condition?.trim())))
+      .map((check) => check.label);
+  }
+
+  get effectiveDischargeReady(): boolean {
+    return !!this.dischargeReadiness && this.effectiveDischargeBlockers.length === 0;
+  }
+
+  get billingIsCleared(): boolean {
+    return !!this.billingSummary && Number(this.billingSummary.total_due) <= 0 && Number(this.billingSummary.unbilled_bed_days) <= 0 && this.billingSummary.unbilled_order_count === 0;
+  }
+
+  openPatientPanel(panel: NonNullable<IPDOverviewComponent['patientPanel']>): void {
+    this.patientPanel = panel;
+  }
+
+  closePatientPanel(): void {
+    this.patientPanel = null;
   }
 
   loadStaffAvailability(): void {

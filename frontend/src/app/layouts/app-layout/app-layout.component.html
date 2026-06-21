@@ -36,7 +36,6 @@
           </button>
         </div>
         <div class="topbar-actions">
-          <app-notification-center></app-notification-center>
           <app-global-scanner module="global" action="lookup"></app-global-scanner>
           <div class="chrome-density" role="group" aria-label="Page space">
             @for (option of chromeDensityOptions; track option.value) {
@@ -62,6 +61,7 @@
               }
             </select>
           </label>
+          <app-notification-center></app-notification-center>
           <div class="account-menu" [class.open]="accountMenuOpen">
             <button class="account-menu-trigger" type="button" (click)="toggleAccountMenu()" aria-label="Open account menu">
               <span class="account-avatar compact">{{ userInitials() || 'U' }}</span>

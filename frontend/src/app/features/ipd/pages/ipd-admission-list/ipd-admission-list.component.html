@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker">IPD Operations</div>
         <h1 class="page-title">Admission List</h1>
-        <div class="page-subtitle">List-only page. Admission details open in modal.</div>
+        <div class="page-subtitle">Search admissions and open each patient in a dedicated IPD workspace.</div>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
@@ -17,7 +17,7 @@
     <div class="section-header">
       <div>
         <h2 class="section-title">Admissions</h2>
-        <div class="section-copy">Click a row to open admission details.</div>
+        <div class="section-copy">Click a row to open the patient workspace.</div>
       </div>
       <div class="table-toolbar">
         <div class="table-toolbar__main">
@@ -57,7 +57,7 @@
               <details class="row-action-menu" (click)="$event.stopPropagation()">
                 <summary>Actions</summary>
                 <div class="row-action-menu__panel">
-                  <button type="button" (click)="openAdmission(admission)">Open</button>
+                  <button type="button" (click)="openAdmission(admission)">Open Patient</button>
                   @if (session.hasPermission(permissions.billingInvoiceCreate)) {
                     <button type="button" (click)="openBillingForAdmission(admission, 'interim')">Create Bill</button>
                   }
@@ -77,34 +77,4 @@
       <div class="table-empty">No admissions match the current search.</div>
     }
   </section>
-
-  @if (selectedAdmission) {
-    <div class="modal-backdrop" (click)="closeAdmission()">
-      <section class="page-card modal-card" (click)="$event.stopPropagation()">
-        <div class="section-header">
-          <div>
-            <h2 class="section-title">{{ selectedAdmission.admission_number }}</h2>
-            <div class="section-copy">{{ selectedAdmission.patient.first_name }} {{ selectedAdmission.patient.last_name }}</div>
-          </div>
-          <div class="toolbar-row">
-            <button class="secondary-btn" type="button" (click)="closeAdmission()">Close</button>
-            @if (session.hasPermission(permissions.billingInvoiceCreate)) {
-              <button class="primary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Final Bill</button>
-            }
-          </div>
-        </div>
-
-        <div class="detail-grid">
-          <div><strong>Doctor:</strong> {{ selectedAdmission.attending_doctor_name }}</div>
-          <div><strong>Status:</strong> {{ selectedAdmission.status }}</div>
-          <div><strong>Ward / Bed:</strong> {{ selectedAdmission.ward_name }} / {{ selectedAdmission.bed_number }}</div>
-          <div><strong>Admission Type:</strong> {{ selectedAdmission.admission_type }}</div>
-          <div><strong>Daily Charge:</strong> {{ selectedAdmission.daily_charge }}</div>
-          <div><strong>Advance:</strong> {{ selectedAdmission.advance_amount }}</div>
-          <div><strong>Expected Discharge:</strong> {{ selectedAdmission.expected_discharge_date || '-' }}</div>
-          <div><strong>Diagnosis:</strong> {{ selectedAdmission.diagnosis || '-' }}</div>
-        </div>
-      </section>
-    </div>
-  }
 </section>

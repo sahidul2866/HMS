@@ -80,6 +80,50 @@ def ensure_bed(session, *, branch_id, actor_id, ward_name: str, bed_number: str,
     return bed
 
 
+def seed_ipd_ward_bed_inventory() -> str:
+    session = SessionLocal()
+    try:
+        ctx = get_demo_context(session)
+        branch: Branch = ctx["branch"]  # type: ignore[assignment]
+        doctor: User = ctx["doctor"]  # type: ignore[assignment]
+        ward_inventory = [
+            ("General Ward A", "A", "General", Decimal("40.00"), 8),
+            ("General Ward B", "B", "General", Decimal("40.00"), 8),
+            ("Female Ward", "F", "General", Decimal("45.00"), 6),
+            ("Pediatric Ward", "P", "Pediatric", Decimal("50.00"), 6),
+            ("Maternity Ward", "M", "Maternity", Decimal("60.00"), 5),
+            ("Intensive Care Unit", "ICU", "ICU", Decimal("150.00"), 4),
+            ("Coronary Care Unit", "CCU", "CCU", Decimal("175.00"), 4),
+        ]
+        created = 0
+        for ward_name, prefix, bed_type, daily_rate, bed_count in ward_inventory:
+            for bed_index in range(1, bed_count + 1):
+                bed_number = f"{prefix}-{bed_index:02d}"
+                existing = session.scalar(
+                    select(IPDBed.id).where(
+                        IPDBed.branch_id == branch.id,
+                        IPDBed.ward_name == ward_name,
+                        IPDBed.bed_number == bed_number,
+                    )
+                )
+                if existing:
+                    continue
+                ensure_bed(
+                    session,
+                    branch_id=branch.id,
+                    actor_id=doctor.id,
+                    ward_name=ward_name,
+                    bed_number=bed_number,
+                    bed_type=bed_type,
+                    daily_rate=daily_rate,
+                )
+                created += 1
+        session.commit()
+        return f"IPD ward inventory ready: {len(ward_inventory)} wards, {created} beds created"
+    finally:
+        session.close()
+
+
 def build_invoice(
     *,
     branch_id,
@@ -902,6 +946,7 @@ def seed_pharmacy_inventory_demo() -> str:
 
 def main() -> None:
     workflows: list[tuple[str, Callable[[], str]]] = [
+        ("ipd_ward_bed_inventory_v1", seed_ipd_ward_bed_inventory),
         ("fatema_complete_journey", seed_fatema_complete_journey),
         ("rakib_pending_diagnostics", seed_rakib_pending_diagnostics),
         ("sumaiya_ipd_journey", seed_sumaiya_ipd_journey),

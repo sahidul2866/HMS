@@ -11,8 +11,9 @@ import { PatientContextPanelComponent } from '../../../../shared/components/pati
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { Patient, PatientLookupResult } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
-import { IPDBed, IPDSettings } from '../../models/ipd.models';
+import { CreateIPDAdmissionPayload, IPDBed, IPDSettings } from '../../models/ipd.models';
 import { IPDService } from '../../services/ipd.service';
+import { OPDService } from '../../../opd/services/opd.service';
 
 @Component({
   selector: 'app-ipd-admit',
@@ -24,6 +25,7 @@ import { IPDService } from '../../services/ipd.service';
 export class IPDAdmitComponent {
   private readonly fb = inject(FormBuilder);
   private readonly ipdService = inject(IPDService);
+  private readonly opdService = inject(OPDService);
   private readonly patientService = inject(PatientService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly notificationService = inject(NotificationService);
@@ -42,6 +44,8 @@ export class IPDAdmitComponent {
   submitted = false;
   saving = false;
   private completed = false;
+  sourceOpdVisitId = '';
+  sourceOpdVisitNumber = '';
 
   readonly form = this.fb.group({
     patient_id: ['', Validators.required],
@@ -55,7 +59,7 @@ export class IPDAdmitComponent {
     admission_type: ['General', Validators.required],
     ward_name: ['Ward A', Validators.required],
     bed_number: ['', Validators.required],
-    doctor_user_id: [''],
+    doctor_user_id: ['', Validators.required],
     attending_doctor_name: ['', Validators.required],
     diagnosis: [''],
     package_name: [''],
@@ -78,8 +82,20 @@ export class IPDAdmitComponent {
     });
     this.route.queryParamMap.subscribe((params) => {
       const patientId = params.get('patientId');
+      this.sourceOpdVisitId = params.get('sourceOpdVisitId') || '';
+      this.sourceOpdVisitNumber = params.get('sourceOpdVisitNumber') || '';
       if (patientId) {
         this.loadPatientContext(patientId);
+      }
+      if (this.sourceOpdVisitId) {
+        this.form.patchValue({
+          department_name: params.get('departmentName') || 'General Medicine',
+          reference_name: this.sourceOpdVisitNumber ? `OPD ${this.sourceOpdVisitNumber}` : 'OPD conversion',
+          doctor_user_id: params.get('doctorUserId') || '',
+          attending_doctor_name: params.get('attendingDoctorName') || '',
+          diagnosis: params.get('diagnosis') || '',
+          intake_note: params.get('clinicalContext') || '',
+        });
       }
     });
   }
@@ -304,6 +320,7 @@ export class IPDAdmitComponent {
     const doctorId = this.form.getRawValue().doctor_user_id;
     const doctor = this.doctors.find((item) => item.id === doctorId);
     if (!doctor) {
+      this.form.patchValue({ attending_doctor_name: '' });
       return;
     }
     this.form.patchValue({ attending_doctor_name: doctor.full_name });
@@ -343,31 +360,63 @@ export class IPDAdmitComponent {
     }
     this.saving = true;
     const value = this.form.getRawValue();
-    this.ipdService.createAdmission({ ...value, expected_discharge_date: value.expected_discharge_date || null } as never).subscribe((admission) => {
-      this.saving = false;
-      this.submitted = false;
-      this.completed = true;
-      this.form.markAsPristine();
-      this.patientLookupControl.markAsPristine();
-      this.notificationService.success(`Admission ${admission.admission_number} created.`);
-      this.form.reset({
-        patient_id: '',
-        bed_id: '',
-        admitted_at: new Date().toISOString().slice(0, 16),
-        admission_type: 'General',
-        ward_name: 'Ward A',
-        bed_number: '',
-        doctor_user_id: '',
-        attending_doctor_name: '',
-        diagnosis: '',
-        daily_charge: 0,
-        advance_amount: 0,
-        expected_discharge_date: '',
-      });
-      this.clearPatientSelection();
-      void this.router.navigate(['/ipd'], { queryParams: { openAdmission: admission.id } });
-    }, () => {
-      this.saving = false;
+    const selectedDoctor = this.doctors.find((doctor) => doctor.id === value.doctor_user_id);
+    const admissionPayload: CreateIPDAdmissionPayload = {
+      patient_id: value.patient_id || '',
+      bed_id: value.bed_id || null,
+      admitted_at: value.admitted_at || new Date().toISOString(),
+      admission_type: value.admission_type || 'General',
+      department_name: value.department_name || null,
+      patient_condition: value.intake_note || null,
+      ward_name: value.ward_name || '',
+      bed_number: value.bed_number || '',
+      doctor_user_id: value.doctor_user_id || null,
+      attending_doctor_name: selectedDoctor?.full_name || value.attending_doctor_name || '',
+      diagnosis: value.diagnosis || null,
+      daily_charge: Number(value.daily_charge || 0),
+      advance_amount: Number(value.advance_amount || 0),
+      expected_discharge_date: value.expected_discharge_date || null,
+    };
+    const admissionRequest = this.sourceOpdVisitId
+      ? this.opdService.convertToIPD(this.sourceOpdVisitId, {
+          ...admissionPayload,
+        })
+      : this.ipdService.createAdmission(admissionPayload);
+    admissionRequest.subscribe({
+      next: (admission) => {
+        this.saving = false;
+        this.submitted = false;
+        this.completed = true;
+        this.form.markAsPristine();
+        this.patientLookupControl.markAsPristine();
+        this.notificationService.success(this.sourceOpdVisitId
+          ? `OPD visit converted to admission ${admission.admission_number}.`
+          : `Admission ${admission.admission_number} created.`);
+        this.form.reset({
+          patient_id: '',
+          bed_id: '',
+          admitted_at: new Date().toISOString().slice(0, 16),
+          admission_type: 'General',
+          ward_name: 'Ward A',
+          bed_number: '',
+          doctor_user_id: '',
+          attending_doctor_name: '',
+          diagnosis: '',
+          daily_charge: 0,
+          advance_amount: 0,
+          expected_discharge_date: '',
+        });
+        this.clearPatientSelection();
+        void this.router.navigate(['/ipd/admissions', admission.id]);
+      },
+      error: (error) => {
+        this.saving = false;
+        const apiError = error?.error?.error;
+        const fieldDetail = Array.isArray(apiError?.details)
+          ? apiError.details.map((detail: { loc?: string[]; msg?: string }) => `${detail.loc?.at(-1) || 'Field'}: ${detail.msg || 'invalid'}`).join(' · ')
+          : '';
+        this.notificationService.error(fieldDetail || apiError?.message || 'Unable to create IPD admission.');
+      },
     });
   }
 

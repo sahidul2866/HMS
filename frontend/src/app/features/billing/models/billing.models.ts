@@ -60,6 +60,8 @@ export interface BillingInvoiceItemPayload {
   quantity: number;
   discount_percentage: number;
   source_opd_visit_order_id?: string | null;
+  source_record_type?: string | null;
+  source_record_id?: string | null;
   source_label?: string | null;
   source_module?: string | null;
   source_item_type?: 'billing_service' | 'medicine' | 'investigation_setting' | null;
@@ -277,6 +279,8 @@ export interface BillingDraftItem {
   quantity: string;
   discount_percentage: string;
   source_opd_visit_order_id?: string | null;
+  source_record_type?: string | null;
+  source_record_id?: string | null;
   warning?: string | null;
 }
 
@@ -290,5 +294,9 @@ export interface BillingDraft {
   internal_referral_user_id?: string | null;
   note?: string | null;
   message?: string | null;
+  prior_invoice_count: number;
+  prior_billed_amount: string;
+  prior_paid_amount: string;
+  prior_due_amount: string;
   items: BillingDraftItem[];
 }

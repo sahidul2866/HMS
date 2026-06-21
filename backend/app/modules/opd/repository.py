@@ -23,7 +23,12 @@ class OPDRepository:
         return list(self.db.scalars(stmt).unique())
 
     def get_visit(self, visit_id) -> OPDVisit | None:
-        stmt = select(OPDVisit).options(joinedload(OPDVisit.patient), joinedload(OPDVisit.orders)).where(OPDVisit.id == visit_id)
+        stmt = (
+            select(OPDVisit)
+            .options(joinedload(OPDVisit.patient), joinedload(OPDVisit.orders))
+            .where(OPDVisit.id == visit_id)
+            .execution_options(populate_existing=True)
+        )
         return self.db.scalars(stmt).unique().one_or_none()
 
     def create_visit(self, visit: OPDVisit) -> OPDVisit:

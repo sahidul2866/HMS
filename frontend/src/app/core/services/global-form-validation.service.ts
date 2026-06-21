@@ -17,6 +17,8 @@ export class GlobalFormValidationService {
     this.zone.runOutsideAngular(() => {
       this.document.addEventListener('submit', this.handleSubmit, true);
       this.document.addEventListener('click', this.handleClick, true);
+      this.document.addEventListener('input', this.handleControlChange, true);
+      this.document.addEventListener('change', this.handleControlChange, true);
       this.enhanceSearchableSelects();
       this.observer = new MutationObserver(() => this.enhanceSearchableSelects());
       this.observer.observe(this.document.body, { childList: true, subtree: true });
@@ -36,6 +38,21 @@ export class GlobalFormValidationService {
     const form = button.closest('form');
     if (!form || !this.isInvalidForm(form)) return;
     this.renderValidation(form);
+  };
+
+  private readonly handleControlChange = (event: Event): void => {
+    const target = event.target instanceof Element ? event.target : null;
+    const form = target?.closest('form');
+    if (!form) return;
+    const summary = form.querySelector<HTMLElement>('.app-validation-summary');
+    if (!summary) return;
+    const missingFields = this.invalidFieldLabels(form);
+    if (missingFields.length) {
+      summary.innerHTML = `<strong>Required before saving:</strong><span>${this.escapeHtml(missingFields.join(', '))}</span>`;
+      return;
+    }
+    form.classList.remove('app-form-submitted');
+    summary.remove();
   };
 
   private isInvalidForm(form: HTMLFormElement): boolean {
@@ -78,11 +95,14 @@ export class GlobalFormValidationService {
   private controlLabel(control: HTMLElement): string {
     const id = control.getAttribute('id');
     const explicitLabel = id ? this.document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent : '';
-    const wrappingLabel = control.closest('label')?.textContent;
+    const wrappingLabelElement = control.closest('label');
+    const structuredLabel = wrappingLabelElement?.querySelector<HTMLElement>('.field-label-row > span:first-child, :scope > span:first-child')?.textContent;
+    const wrappingLabel = wrappingLabelElement?.textContent;
     const raw =
       explicitLabel ||
-      wrappingLabel ||
       control.getAttribute('aria-label') ||
+      structuredLabel ||
+      wrappingLabel ||
       control.getAttribute('placeholder') ||
       control.getAttribute('formControlName') ||
       control.getAttribute('name') ||

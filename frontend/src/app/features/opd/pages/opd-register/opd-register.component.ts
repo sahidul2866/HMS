@@ -431,10 +431,16 @@ export class OPDRegisterComponent {
       return;
     }
 
+    if (!value.phone?.trim() || value.phone.trim().replace(/\D/g, '').length < 6) {
+      this.saving = false;
+      this.notificationService.warning('A valid mobile number is required for a new patient.');
+      return;
+    }
+
     const patientPayload: CreatePatientPayload = {
       first_name: value.first_name ?? '',
       last_name: value.last_name ?? '',
-      phone: value.phone || null,
+      phone: value.phone.trim(),
       email: value.email || null,
       gender: value.gender || null,
       date_of_birth: value.date_of_birth || null,

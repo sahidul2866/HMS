@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { printScanLabel } from '../../../../shared/utils/scan-print.utils';
@@ -18,6 +18,7 @@ import { Patient } from '../../models/patient.models';
 export class PatientListComponent {
   private readonly patientService = inject(PatientService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   patients: Patient[] = [];
   loading = true;
@@ -26,11 +27,18 @@ export class PatientListComponent {
   pageSize = 12;
   sortField: 'patient_number' | 'name' | 'phone' | 'email' = 'patient_number';
   sortDirection: 'asc' | 'desc' = 'desc';
+  readonly createdPatientId = this.route.snapshot.queryParamMap.get('createdPatientId');
 
   constructor() {
     this.patientService.list().subscribe({
       next: (patients) => {
         this.patients = patients;
+        if (this.createdPatientId) {
+          const index = this.sortedPatients.findIndex((patient) => patient.id === this.createdPatientId);
+          if (index >= 0) {
+            this.page = Math.floor(index / this.pageSize) + 1;
+          }
+        }
         this.loading = false;
       },
       error: () => {

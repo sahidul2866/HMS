@@ -219,22 +219,23 @@ class PatientsService:
 
     def create_patient(self, payload: PatientCreate, actor: User, context: dict[str, str | None]) -> Patient:
         normalized_phone = normalize_phone(payload.phone)
+        if not normalized_phone or len(normalized_phone) < 6:
+            raise AppException(400, "invalid_mobile", "A valid mobile number is required")
         branch_scope = payload.branch_id or actor.branch_id
-        if normalized_phone:
-            existing_count = self.repository.count_patients_by_phone(normalized_phone, branch_scope)
-            max_allowed = get_settings().max_patients_per_mobile
-            if existing_count >= max_allowed:
-                raise AppException(
-                    400,
-                    "mobile_patient_limit_reached",
-                    f"This mobile number already has the maximum allowed {max_allowed} patient records",
-                )
+        existing_count = self.repository.count_patients_by_phone(normalized_phone, branch_scope)
+        max_allowed = get_settings().max_patients_per_mobile
+        if existing_count >= max_allowed:
+            raise AppException(
+                400,
+                "mobile_patient_limit_reached",
+                f"This mobile number already has the maximum allowed {max_allowed} patient records",
+            )
 
         sequence = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         patient = Patient(
             **payload.model_dump(exclude={"phone", "branch_id"}),
             phone=normalized_phone,
-            patient_number=f"PAT-{sequence}",
+            patient_number=f"PAT-{sequence}-{token_hex(2).upper()}",
             branch_id=branch_scope,
             created_by=actor.id,
             updated_by=actor.id,

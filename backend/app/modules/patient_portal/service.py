@@ -1,12 +1,11 @@
-from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
-from app.models.encounter import Appointment
+from app.models.encounter import Appointment, DoctorSlotBooking
 from app.models.user import User
 from app.modules.patients.service import PatientsService
+from app.modules.appointments.service import AppointmentsService
 from app.modules.users.repository import UsersRepository
 from app.schemas.portal import PatientAppointmentCreate, PatientAppointmentRead, PatientPortalOverviewRead
 from app.schemas.user import UserRead
@@ -50,36 +49,21 @@ class PatientPortalService:
 
     def create_appointment(self, payload: PatientAppointmentCreate, actor: User) -> PatientAppointmentRead:
         patient_id = self._require_patient_account(actor)
-        doctor = self.users.get_user(payload.doctor_user_id)
-        if not doctor or not doctor.is_active or not any(role.is_doctor_role for role in doctor.roles):
-            raise AppException(404, "doctor_not_found", "Doctor not found")
-        appointment = Appointment(
-            branch_id=actor.branch_id or doctor.branch_id,
-            patient_id=patient_id,
-            doctor_user_id=doctor.id,
-            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
-            appointment_at=payload.appointment_at,
-            status="scheduled",
-            reason=payload.reason,
-            note=payload.note,
-            booked_by_user_id=actor.id if actor.__class__.__name__ == "User" else None,
-            booked_by_patient_account_id=actor.id if actor.__class__.__name__ == "PatientPortalAccount" else None,
-            created_by=actor.id,
-            updated_by=actor.id,
-        )
-        self.db.add(appointment)
-        self.db.commit()
-        self.db.refresh(appointment)
+        appointment = AppointmentsService(self.db).create_portal_appointment(patient_id, payload, actor)
         return PatientAppointmentRead(
             id=appointment.id,
             appointment_number=appointment.appointment_number,
             doctor_user_id=appointment.doctor_user_id,
-            doctor_name=doctor.full_name,
+            doctor_name=appointment.doctor_name,
             appointment_at=appointment.appointment_at,
             status=appointment.status,
             reason=appointment.reason,
             note=appointment.note,
         )
+
+    def get_doctor_slots(self, doctor_user_id, slot_date, actor):
+        self._require_patient_account(actor)
+        return AppointmentsService(self.db).get_doctor_slots(doctor_user_id, slot_date, actor)
 
     def update_appointment_status(self, appointment_id, status: str, actor: User) -> PatientAppointmentRead:
         patient_id = self._require_patient_account(actor)
@@ -96,6 +80,9 @@ class PatientPortalService:
 
         appointment.status = status
         appointment.updated_by = actor.id
+        booking = self.db.scalar(select(DoctorSlotBooking).where(DoctorSlotBooking.appointment_id == appointment.id))
+        if booking:
+            self.db.delete(booking)
         self.db.commit()
         self.db.refresh(appointment)
         return PatientAppointmentRead(

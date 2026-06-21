@@ -13,6 +13,7 @@ from app.schemas.encounter import (
     IPDBedBoardRow,
     IPDBedCreate,
     IPDBedRead,
+    IPDBillingSummary,
     IPDClinicalNoteCreate,
     IPDClinicalNoteRead,
     IPDDischarge,
@@ -63,6 +64,11 @@ def get_ipd_admission(admission_id: UUID, user=Depends(get_current_user), db: Se
 @router.get("/admissions/{admission_id}/workspace", response_model=IPDPatientWorkspace, dependencies=[Depends(require_permissions("ipd.view"))])
 def get_ipd_workspace(admission_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> IPDPatientWorkspace:
     return IPDService(db).workspace(admission_id, user)
+
+
+@router.get("/admissions/{admission_id}/billing-summary", response_model=IPDBillingSummary, dependencies=[Depends(require_permissions("ipd.view"))])
+def get_ipd_billing_summary(admission_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> IPDBillingSummary:
+    return IPDService(db).billing_summary(admission_id, user)
 
 
 @router.get("/summary", response_model=IPDSummary, dependencies=[Depends(require_permissions("ipd.view"))])
@@ -157,7 +163,7 @@ def create_ipd_admission(
 @router.put(
     "/admissions/{admission_id}/discharge",
     response_model=IPDAdmissionRead,
-    dependencies=[Depends(require_permissions("ipd.discharge"))],
+    dependencies=[Depends(require_any_permissions("ipd.discharge", "ipd.discharge.finalize"))],
 )
 def discharge_ipd_admission(
     admission_id: UUID,

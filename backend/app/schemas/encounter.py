@@ -398,6 +398,34 @@ class IPDDischargeReadiness(BaseModel):
     final_bill_url: str | None = None
 
 
+class IPDBillingInvoiceSummary(BaseModel):
+    id: UUID
+    invoice_number: str
+    billing_stage: str
+    status: str
+    payment_status: str
+    total_amount: Decimal
+    paid_amount: Decimal
+    due_amount: Decimal
+    created_at: datetime
+
+
+class IPDBillingSummary(BaseModel):
+    admission_id: UUID
+    billing_status: str
+    total_bed_days: Decimal
+    billed_bed_days: Decimal
+    unbilled_bed_days: Decimal
+    unbilled_order_count: int
+    invoice_count: int
+    interim_invoice_count: int
+    final_invoice_exists: bool
+    total_invoiced: Decimal
+    total_paid: Decimal
+    total_due: Decimal
+    invoices: list[IPDBillingInvoiceSummary]
+
+
 class IPDReportSummary(BaseModel):
     bed_occupancy: dict[str, Any]
     ward_census: list[dict[str, Any]]
@@ -740,6 +768,8 @@ class OPDConvertToIPD(BaseModel):
     bed_id: UUID | None = None
     admitted_at: datetime
     admission_type: str = Field(min_length=2, max_length=30)
+    department_name: str | None = Field(default=None, max_length=120)
+    patient_condition: str | None = None
     ward_name: str = Field(min_length=2, max_length=120)
     bed_number: str = Field(min_length=1, max_length=60)
     doctor_user_id: UUID | None = None

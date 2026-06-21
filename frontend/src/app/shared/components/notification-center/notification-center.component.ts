@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, Renderer2, inject } from '@angular/core';
+import { NavigationStart, Router } from '@angular/router';
 import { Subscription, interval, startWith, switchMap } from 'rxjs';
 
 import { HmsNotification, HmsNotificationService, NotificationSummary } from '../../../core/services/hms-notification.service';
@@ -18,6 +18,8 @@ export class NotificationCenterComponent implements OnInit, OnDestroy {
   private readonly notifications = inject(HmsNotificationService);
   private readonly router = inject(Router);
   private readonly toast = inject(NotificationService);
+  private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly renderer = inject(Renderer2);
   readonly session = inject(SessionService);
   private subscription?: Subscription;
 
@@ -41,15 +43,39 @@ export class NotificationCenterComponent implements OnInit, OnDestroy {
           }
         },
       });
+    this.subscription.add(
+      this.router.events.subscribe((event) => {
+        if (event instanceof NavigationStart) this.close();
+      })
+    );
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.renderer.removeClass(document.body, 'notification-center-open');
   }
 
   toggle(): void {
     this.open = !this.open;
+    this.syncOpenLayer();
     if (this.open) this.refresh();
+  }
+
+  close(): void {
+    if (!this.open) return;
+    this.open = false;
+    this.syncOpenLayer();
+  }
+
+  @HostListener('document:pointerdown', ['$event'])
+  onDocumentPointerDown(event: PointerEvent): void {
+    if (!this.open || this.elementRef.nativeElement.contains(event.target as Node)) return;
+    this.close();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.close();
   }
 
   refresh(): void {
@@ -93,6 +119,14 @@ export class NotificationCenterComponent implements OnInit, OnDestroy {
   openFullCenter(): void {
     void this.router.navigateByUrl('/notifications');
     this.open = false;
+  }
+
+  private syncOpenLayer(): void {
+    if (this.open) {
+      this.renderer.addClass(document.body, 'notification-center-open');
+      return;
+    }
+    this.renderer.removeClass(document.body, 'notification-center-open');
   }
 
   priorityClass(item: HmsNotification): string {

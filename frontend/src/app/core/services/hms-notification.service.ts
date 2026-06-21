@@ -1,7 +1,9 @@
+import { HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { ApiBaseService } from './api-base.service';
+import { SKIP_GLOBAL_LOADER } from '../http/http-context.tokens';
 
 export interface HmsNotification {
   id: string;
@@ -50,7 +52,9 @@ export interface NotificationSetting {
 @Injectable({ providedIn: 'root' })
 export class HmsNotificationService extends ApiBaseService {
   summary(): Observable<NotificationSummary> {
-    return this.http.get<NotificationSummary>(this.url('/notifications/summary'));
+    return this.http.get<NotificationSummary>(this.url('/notifications/summary'), {
+      context: new HttpContext().set(SKIP_GLOBAL_LOADER, true),
+    });
   }
 
   list(params: Record<string, string | number | boolean | null | undefined> = {}): Observable<NotificationListResponse> {

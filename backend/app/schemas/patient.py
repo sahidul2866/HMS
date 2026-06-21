@@ -8,7 +8,7 @@ class PatientCreate(BaseModel):
     branch_id: UUID | None = None
     first_name: str = Field(min_length=2, max_length=100)
     last_name: str = Field(min_length=2, max_length=100)
-    phone: str | None = None
+    phone: str = Field(min_length=6, max_length=30)
     email: EmailStr | None = None
     gender: str | None = None
     date_of_birth: date | None = None

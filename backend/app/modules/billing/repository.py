@@ -165,7 +165,7 @@ class BillingRepository:
         return self.db.scalar(stmt)
 
     def get_invoice_by_source(self, *, source_opd_visit_id: UUID | None = None, source_ipd_admission_id: UUID | None = None, billing_stage: str | None = None) -> BillingInvoice | None:
-        stmt = select(BillingInvoice).where(BillingInvoice.is_active.is_(True), BillingInvoice.status != "void")
+        stmt = select(BillingInvoice).where(BillingInvoice.is_active.is_(True), BillingInvoice.status.notin_({"void", "consolidated"}))
         if source_opd_visit_id:
             stmt = stmt.where(BillingInvoice.source_opd_visit_id == source_opd_visit_id)
         if source_ipd_admission_id:
@@ -173,6 +173,19 @@ class BillingRepository:
         if billing_stage:
             stmt = stmt.where(BillingInvoice.billing_stage == billing_stage)
         return self.db.scalar(stmt.order_by(BillingInvoice.created_at.desc()))
+
+    def list_invoices_for_ipd_admission(self, admission_id: UUID) -> list[BillingInvoice]:
+        stmt = (
+            select(BillingInvoice)
+            .options(joinedload(BillingInvoice.items), joinedload(BillingInvoice.payments))
+            .where(
+                BillingInvoice.source_ipd_admission_id == admission_id,
+                BillingInvoice.is_active.is_(True),
+                BillingInvoice.status.notin_({"void", "consolidated"}),
+            )
+            .order_by(BillingInvoice.created_at.asc())
+        )
+        return list(self.db.scalars(stmt).unique())
 
     def has_item_for_opd_order(self, order_id: UUID) -> bool:
         stmt = select(BillingInvoiceItem.id).join(BillingInvoiceItem.invoice).where(

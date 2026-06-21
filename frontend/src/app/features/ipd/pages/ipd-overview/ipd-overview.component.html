@@ -1,19 +1,24 @@
-<section class="workspace-shell ipd-dashboard">
+<section class="workspace-shell ipd-dashboard" [class.patient-workspace-mode]="isPatientWorkspace">
   <div class="page-card module-hero ipd-hero">
     <div class="hero-row">
       <div>
-        <div class="hero-kicker">IPD Module</div>
-        <h1 class="page-title">IPD Control Room</h1>
-        <div class="page-subtitle">Monitor bed occupancy, current admissions, transfers, discharge readiness, and billing handoff from one inpatient operations board.</div>
+        <div class="hero-kicker">{{ isPatientWorkspace ? 'IPD Patient Workspace' : 'IPD Module' }}</div>
+        <h1 class="page-title">{{ isPatientWorkspace && selectedAdmission ? selectedAdmission.patient.first_name + ' ' + selectedAdmission.patient.last_name : 'IPD Control Room' }}</h1>
+        <div class="page-subtitle">{{ isPatientWorkspace && selectedAdmission ? selectedAdmission.admission_number + ' · ' + selectedAdmission.ward_name + ' / ' + selectedAdmission.bed_number : 'Monitor bed occupancy, current admissions, transfers, discharge readiness, and billing handoff from one inpatient operations board.' }}</div>
       </div>
       <div class="toolbar-row">
+        @if (isPatientWorkspace) {
+          <button class="secondary-btn" type="button" (click)="navigateToOverview()">IPD Overview</button>
+        }
         <button class="secondary-btn" type="button" (click)="navigateToAdmissionList()">Admission List</button>
-        <button class="secondary-btn" type="button" (click)="navigateToSettings()">IPD Settings</button>
-        <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
-        <button class="primary-btn" type="button" (click)="navigateToAdmission()">New Admission</button>
+        @if (!isPatientWorkspace) {
+          <button class="secondary-btn" type="button" (click)="navigateToSettings()">IPD Settings</button>
+          <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
+          <button class="primary-btn" type="button" (click)="navigateToAdmission()">New Admission</button>
+        }
       </div>
     </div>
-    @if (summary) {
+    @if (summary && !isPatientWorkspace) {
       <div class="hero-summary">
         <div class="hero-stat"><div class="label">Total Admissions</div><div class="value">{{ summary.total_admissions }}</div></div>
         <div class="hero-stat"><div class="label">Active</div><div class="value">{{ summary.active_admissions }}</div></div>
@@ -171,12 +176,12 @@
                 <div><span>Clearance</span><strong>{{ admission.billing_status || 'unbilled' }}</strong></div>
               </div>
               <div class="admission-card__actions">
-                <button class="secondary-btn" type="button" (click)="selectAdmission(admission)">Open</button>
+                <button class="secondary-btn" type="button" (click)="openAdmissionPage(admission)">Open Patient</button>
                 @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
                   <button class="secondary-btn" type="button" (click)="openBillingForAdmission(admission, 'interim')">Interim Bill</button>
                 }
                 @if (admission.status !== 'discharged') {
-                  <button class="danger-btn" type="button" (click)="selectAdmission(admission)">Discharge</button>
+                  <button class="danger-btn" type="button" (click)="openAdmissionPage(admission)">Discharge</button>
                 }
               </div>
             </article>
@@ -251,6 +256,57 @@
           </div>
 
           @if (selectedAdmission.status !== 'discharged') {
+            <div class="case-stage-strip">
+              <div class="case-stage complete"><span>1</span><strong>Admitted</strong></div>
+              <div class="case-stage complete"><span>2</span><strong>Inpatient care</strong></div>
+              <div class="case-stage" [class.complete]="billingIsCleared"><span>3</span><strong>Billing clearance</strong></div>
+              <div class="case-stage" [class.complete]="effectiveDischargeReady"><span>4</span><strong>Discharge</strong></div>
+            </div>
+
+            @if (isPatientWorkspace) {
+              <div class="patient-action-grid">
+                <button type="button" (click)="openPatientPanel('workflow')"><strong>Clinical Work</strong><span>Notes, orders, medication and handover</span></button>
+                <button type="button" (click)="openPatientPanel('team')"><strong>Care Team</strong><span>Doctors, nurses and shift coverage</span></button>
+                <button type="button" (click)="openPatientPanel('billing')"><strong>Billing</strong><span>{{ billingSummary?.billing_status || 'unbilled' }} · {{ billingSummary?.total_due || 0 | currency }} due</span></button>
+                <button type="button" (click)="openPatientPanel('transfer')"><strong>Transfer</strong><span>Change ward or bed</span></button>
+                <button class="danger-action" type="button" (click)="openPatientPanel('discharge')"><strong>Discharge</strong><span>{{ effectiveDischargeReady ? 'Ready to finalize' : effectiveDischargeBlockers.join(' · ') }}</span></button>
+              </div>
+              @if (patientPanel) {
+                <div class="patient-popup-backdrop" (click)="closePatientPanel()"></div>
+              }
+            }
+
+            @if (billingSummary) {
+              <div class="control-block billing-control patient-popup" [class.patient-popup-open]="patientPanel === 'billing'">
+                <div class="popup-title-row"><div class="control-block__title">Billing & Reconciliation</div><button class="popup-close" type="button" (click)="closePatientPanel()">Close</button></div>
+                <div class="billing-summary-grid">
+                  <div><span>Total invoiced</span><strong>{{ billingSummary.total_invoiced | currency }}</strong></div>
+                  <div><span>Paid</span><strong>{{ billingSummary.total_paid | currency }}</strong></div>
+                  <div [class.has-due]="billingSummary.total_due > 0"><span>Outstanding</span><strong>{{ billingSummary.total_due | currency }}</strong></div>
+                  <div [class.has-due]="billingSummary.unbilled_bed_days > 0"><span>Bed-days</span><strong>{{ billingSummary.billed_bed_days }} / {{ billingSummary.total_bed_days }} billed</strong></div>
+                  <div [class.has-due]="billingSummary.unbilled_order_count > 0"><span>Unbilled orders</span><strong>{{ billingSummary.unbilled_order_count }}</strong></div>
+                  <div><span>Interim bills</span><strong>{{ billingSummary.interim_invoice_count }}</strong></div>
+                </div>
+                @if (billingSummary.invoices.length) {
+                  <div class="invoice-track">
+                    @for (invoice of billingSummary.invoices; track invoice.id) {
+                      <div class="invoice-track__row">
+                        <div><strong>{{ invoice.invoice_number }}</strong><small>{{ invoice.billing_stage.replace('_', ' ') }} · {{ invoice.created_at | date:'mediumDate' }}</small></div>
+                        <div><strong>{{ invoice.total_amount | currency }}</strong><small>Due {{ invoice.due_amount | currency }} · {{ invoice.payment_status }}</small></div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="empty-state compact-empty">No IPD invoice posted yet. Create an interim bill to track current charges.</div>
+                }
+                @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
+                  <div class="control-actions">
+                    <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'interim')">Create Interim Bill</button>
+                    <button class="primary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Reconcile Final Bill</button>
+                  </div>
+                }
+              </div>
+            }
             <div class="clearance-grid">
               @for (item of dischargeChecklist(selectedAdmission); track item.label) {
                 <div [class]="item.done ? 'clearance done' : 'clearance pending'">
@@ -259,8 +315,8 @@
                 </div>
               }
             </div>
-            <div class="control-block">
-              <div class="control-block__title">Care Team</div>
+            <div class="control-block patient-popup" [class.patient-popup-open]="patientPanel === 'team'">
+              <div class="popup-title-row"><div class="control-block__title">Care Team</div><button class="popup-close" type="button" (click)="closePatientPanel()">Close</button></div>
               <div class="care-team-grid">
                 <div class="care-team-column">
                   <span>Doctors</span>
@@ -320,8 +376,8 @@
               </form>
             </div>
 
-            <div class="control-block">
-              <div class="control-block__title">Inpatient Workflow</div>
+            <div class="control-block patient-popup" [class.patient-popup-open]="patientPanel === 'workflow'">
+              <div class="popup-title-row"><div class="control-block__title">Inpatient Workflow</div><button class="popup-close" type="button" (click)="closePatientPanel()">Close</button></div>
               <div class="toolbar-row compact-toolbar">
                 <button type="button" [class.primary-btn]="activeWorkflow === 'notes'" [class.secondary-btn]="activeWorkflow !== 'notes'" (click)="activeWorkflow = 'notes'">Notes</button>
                 <button type="button" [class.primary-btn]="activeWorkflow === 'orders'" [class.secondary-btn]="activeWorkflow !== 'orders'" (click)="activeWorkflow = 'orders'">Orders</button>
@@ -463,8 +519,8 @@
               }
             </div>
 
-            <div class="control-block">
-              <div class="control-block__title">Transfer Admission</div>
+            <div class="control-block patient-popup" [class.patient-popup-open]="patientPanel === 'transfer'">
+              <div class="popup-title-row"><div class="control-block__title">Transfer Admission</div><button class="popup-close" type="button" (click)="closePatientPanel()">Close</button></div>
               <form class="form-grid" [formGroup]="transferForm" (ngSubmit)="transferAdmission()">
                 <label class="field">
                   <span>Transfer Bed</span>
@@ -485,13 +541,15 @@
               </form>
             </div>
 
-            <div class="control-block">
-              <div class="control-block__title">Finalize Discharge</div>
-              <button class="secondary-btn" type="button" (click)="requestDischarge()">Request Discharge</button>
+            <div class="control-block patient-popup" [class.patient-popup-open]="patientPanel === 'discharge'">
+              <div class="popup-title-row"><div class="control-block__title">Finalize Discharge</div><button class="popup-close" type="button" (click)="closePatientPanel()">Close</button></div>
+              @if (sessionService.hasPermission(permissions.ipdDischargeRequest)) {
+                <button class="secondary-btn" type="button" (click)="requestDischarge()">Request Discharge</button>
+              }
               @if (dischargeReadiness) {
-                <div [class]="dischargeReadiness.ready ? 'readiness-banner ready' : 'readiness-banner blocked'">
-                  <strong>{{ dischargeReadiness.ready ? 'Ready for final discharge' : 'Discharge blocked' }}</strong>
-                  <span>{{ dischargeReadiness.ready ? 'All configured clearance checks are complete.' : dischargeReadiness.blockers.join(' · ') }}</span>
+                <div [class]="effectiveDischargeReady ? 'readiness-banner ready' : 'readiness-banner blocked'">
+                  <strong>{{ effectiveDischargeReady ? 'Ready for final discharge' : 'Discharge blocked' }}</strong>
+                  <span>{{ effectiveDischargeReady ? 'Clinical summary and all clearance checks are complete.' : effectiveDischargeBlockers.join(' · ') }}</span>
                 </div>
               }
               <form class="form-grid" [formGroup]="dischargeForm" (ngSubmit)="discharge(selectedAdmission)">
@@ -504,7 +562,9 @@
                   <label class="field" style="grid-column:1/-1;"><span>Override Reason</span><input type="text" formControlName="override_reason" /></label>
                 }
                 <div class="control-actions" style="grid-column:1/-1;">
-                  <button class="danger-btn is-destructive" type="submit">Finalize Discharge</button>
+                  @if (sessionService.hasPermission(permissions.ipdDischarge) || sessionService.hasPermission(permissions.ipdDischargeFinalize)) {
+                    <button class="danger-btn is-destructive" type="submit" [disabled]="dischargeForm.invalid || !effectiveDischargeReady">Finalize Discharge</button>
+                  }
                   @if (sessionService.hasPermission(permissions.billingInvoiceCreate)) {
                     <button class="secondary-btn" type="button" (click)="openBillingForAdmission(selectedAdmission, 'final')">Final Bill</button>
                   }

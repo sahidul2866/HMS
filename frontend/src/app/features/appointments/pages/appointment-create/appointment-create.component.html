@@ -76,7 +76,7 @@
                   <span class="field-tooltip" title="Only active referral-ready doctors appear here.">i</span>
                 </span>
               </div>
-              <select formControlName="doctor_user_id">
+              <select formControlName="doctor_user_id" aria-label="Doctor">
                 <option value="">Select doctor</option>
                 @for (doctor of doctors; track doctor.id) {
                   <option [value]="doctor.id">{{ doctor.full_name }}</option>
@@ -132,7 +132,7 @@
                 <input type="text" formControlName="last_name" placeholder="Family name" />
               </label>
               <label class="field">
-                <div class="field-label-row"><span>Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--optional">Optional</span></span></div>
+                <div class="field-label-row"><span>Mobile</span><span class="field-label-meta"><span class="field-badge field-badge--required">Required</span></span></div>
                 <input type="text" formControlName="phone" placeholder="Mobile number" />
               </label>
               <label class="field">
