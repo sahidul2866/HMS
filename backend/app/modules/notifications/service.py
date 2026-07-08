@@ -16,6 +16,8 @@ from app.models.laboratory import LabOrder
 from app.models.notification import Notification, NotificationAuditLog, NotificationSetting
 from app.models.pharmacy import PharmacyMedicine
 from app.models.radiology import RadiologyOrder
+from app.models.transport import TransportMaintenance, TransportRequest, TransportTrip, TransportVehicle
+from app.models.telemedicine import TelemedicineAppointment, TelemedicineConsultation
 from app.models.user import User
 from app.modules.access_scope.service import AccessScopeService
 from app.modules.auth.service import AuthService
@@ -189,6 +191,10 @@ class NotificationsService:
             self._sync_billing(actor)
         if has("blood_bank.view", "blood_bank.stock.view"):
             self._sync_blood_bank(actor)
+        if has("transport.view", "transport.dispatch", "transport.maintenance.manage", "transport.fuel.manage"):
+            self._sync_transport(actor, permissions)
+        if has("telemedicine.view", "telemedicine.queue.view", "telemedicine.consultation.start", "telemedicine.payment.view"):
+            self._sync_telemedicine(actor, permissions)
         if has("hr.view", "payroll.view"):
             self._sync_hr_payroll(actor, permissions)
         if has("accounting.view", "accounting.manage"):
@@ -408,6 +414,44 @@ class NotificationsService:
 
     def _sync_accounting(self, actor: User) -> None:
         self._ensure(actor, source_key="accounting:approvals", title="Accounting approvals", message="Review vouchers, expenses, supplier payments, and cash handover queues.", category="accounting", module="accounting", priority="informational", notification_type="approval_request", route="/accounting", action_label="Open Accounting", action_permission="accounting.view")
+
+    def _sync_transport(self, actor: User, permissions: set[str]) -> None:
+        if "transport.dispatch" in permissions:
+            pending = self._count_branch(TransportRequest, TransportRequest.status.in_(["requested", "pending_assignment"]), actor.branch_id)
+            emergency = self._count_branch(TransportRequest, TransportRequest.status.in_(["requested", "pending_assignment"]) & TransportRequest.priority.in_(["emergency", "critical"]), actor.branch_id)
+            if pending:
+                self._ensure(actor, source_key="transport:pending-requests", title="Transport requests pending", message=f"{pending} transport request(s) need vehicle and driver assignment.", category="transport", module="transport", priority="critical" if emergency else "high", status="action_required", notification_type="task_assignment", route="/transport/dispatch", action_label="Open Dispatch", action_permission="transport.dispatch")
+        if "transport.view" in permissions:
+            delayed = self._count_branch(TransportTrip, TransportTrip.status == "delayed", actor.branch_id)
+            if delayed:
+                self._ensure(actor, source_key="transport:delayed-trips", title="Delayed transport trips", message=f"{delayed} active trip(s) are marked delayed.", category="transport", module="transport", priority="high", status="action_required", notification_type="system_alert", route="/transport/trips", action_label="Review Trips", action_permission="transport.view")
+            readiness = self._count_branch(TransportVehicle, TransportVehicle.readiness_status == "not_ready", actor.branch_id)
+            if readiness:
+                self._ensure(actor, source_key="transport:readiness-alerts", title="Ambulance readiness alerts", message=f"{readiness} vehicle(s) have missing equipment or expiring documents.", category="transport", module="transport", priority="high", status="action_required", notification_type="system_alert", route="/transport/vehicles", action_label="Review Vehicles", action_permission="transport.view")
+        if "transport.maintenance.manage" in permissions:
+            due = self._count_branch(TransportMaintenance, TransportMaintenance.next_service_date <= date.today() + timedelta(days=7), actor.branch_id)
+            if due:
+                self._ensure(actor, source_key="transport:maintenance-due", title="Vehicle service due", message=f"{due} maintenance record(s) have service due within 7 days.", category="transport", module="transport", priority="medium", notification_type="reminder", route="/transport/maintenance", action_label="Open Maintenance", action_permission="transport.maintenance.manage")
+
+    def _sync_telemedicine(self, actor: User, permissions: set[str]) -> None:
+        if "telemedicine.queue.view" in permissions or "telemedicine.consultation.start" in permissions:
+            waiting = self._count_branch(TelemedicineAppointment, TelemedicineAppointment.status.in_(["waiting", "ready_to_join"]), actor.branch_id)
+            if waiting:
+                self._ensure(actor, source_key="telemedicine:waiting-room", title="Telemedicine patients waiting", message=f"{waiting} online patient(s) are waiting or ready to join.", category="telemedicine", module="telemedicine", priority="high", status="action_required", notification_type="task_assignment", route="/telemedicine/waiting-room", action_label="Open Waiting Room", action_permission="telemedicine.queue.view")
+        if "telemedicine.payment.view" in permissions:
+            pending = self._count_branch(TelemedicineAppointment, TelemedicineAppointment.payment_status.in_(["pending", "unpaid", "partial"]), actor.branch_id)
+            if pending:
+                self._ensure(actor, source_key="telemedicine:payment-pending", title="Telemedicine payments pending", message=f"{pending} online consultation payment(s) need review.", category="billing", module="telemedicine", priority="medium", status="action_required", notification_type="payment_due", route="/telemedicine/payments", action_label="Review Payments", action_permission="telemedicine.payment.view")
+        if "telemedicine.view" in permissions:
+            no_show = self._count_branch(TelemedicineAppointment, TelemedicineAppointment.status == "no_show", actor.branch_id)
+            if no_show:
+                self._ensure(actor, source_key="telemedicine:no-show", title="Telemedicine no-shows", message=f"{no_show} online consultation(s) are marked no-show.", category="telemedicine", module="telemedicine", priority="medium", notification_type="system_alert", route="/telemedicine/appointments", action_label="Review Appointments", action_permission="telemedicine.view")
+            pending_rx = self._count_branch(TelemedicineConsultation, TelemedicineConsultation.prescription_status == "pending", actor.branch_id)
+            if pending_rx:
+                self._ensure(actor, source_key="telemedicine:prescription-pending", title="Telemedicine prescriptions pending", message=f"{pending_rx} consultation(s) still need prescription finalization.", category="clinical", module="telemedicine", priority="high", status="action_required", notification_type="task_assignment", route="/telemedicine/consultation", action_label="Open Consultations", action_permission="telemedicine.view")
+            followups = self._count_branch(TelemedicineConsultation, TelemedicineConsultation.follow_up_date == date.today(), actor.branch_id)
+            if followups:
+                self._ensure(actor, source_key="telemedicine:followups-today", title="Telemedicine follow-ups today", message=f"{followups} telemedicine follow-up(s) are due today.", category="clinical", module="telemedicine", priority="medium", notification_type="reminder", route="/telemedicine/reports", action_label="Open Reports", action_permission="telemedicine.view")
 
     def _status_counts(self, model: Any, statuses: list[str]) -> dict[str, int]:
         stmt = select(model.status, func.count(model.id)).where(model.status.in_(statuses)).group_by(model.status)

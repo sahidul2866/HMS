@@ -1,0 +1,330 @@
+<section class="workspace-shell transport-workspace">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Hospital Transport</div>
+        <h1 class="page-title">Vehicle, Transport & Ambulance</h1>
+        <div class="page-subtitle">Dispatch ambulances, manage vehicles and drivers, track trips, fuel, maintenance, billing, and reports from one workspace.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="danger-btn" type="button" *ngIf="session.hasPermission(permissions.transportRequestCreate)" (click)="openModal('request'); requestForm['priority']='emergency'; requestForm['urgency']='emergency'">Emergency Request</button>
+        <button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportRequestCreate)" (click)="openModal('request')">New Request</button>
+        <button class="secondary-btn" type="button" (click)="loadCurrentTab()">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <nav class="page-card module-tabs">
+    <button *ngFor="let item of tabs" class="secondary-btn compact-btn" type="button" [class.active]="tab() === item" (click)="tab.set(item); loadCurrentTab()">{{ item.replace('-', ' ') }}</button>
+  </nav>
+
+  <form class="page-card table-toolbar" (ngSubmit)="loadCurrentTab()">
+    <div class="table-toolbar__main">
+      <div class="table-toolbar__filters">
+        <label class="field">
+          <span>Vehicle Type</span>
+          <select name="vehicleType" [(ngModel)]="filters.vehicle_type">
+            <option value="">All vehicle types</option>
+            <option *ngFor="let type of vehicleTypes" [value]="type">{{ type.replaceAll('_', ' ') }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select name="status" [(ngModel)]="filters.status">
+            <option value="">All statuses</option>
+            <option *ngFor="let status of statuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option>
+            <option value="available">Available</option>
+            <option value="under_maintenance">Under maintenance</option>
+            <option value="out_of_service">Out of service</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Driver</span>
+          <select name="driver" [(ngModel)]="filters.driver_id">
+            <option value="">All drivers</option>
+            <option *ngFor="let driver of drivers" [value]="driver.id">{{ driver.driver_name }}</option>
+          </select>
+        </label>
+        <label class="field"><span>Department</span><input name="department" [(ngModel)]="filters.department" placeholder="Department" /></label>
+        <label class="field"><span>Trip Type</span><input name="tripType" [(ngModel)]="filters.trip_type" placeholder="Trip type" /></label>
+        <label class="field">
+          <span>Priority</span>
+          <select name="priority" [(ngModel)]="filters.priority">
+            <option value="">All priorities</option>
+            <option value="normal">Normal</option>
+            <option value="urgent">Urgent</option>
+            <option value="emergency">Emergency</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
+      </div>
+      <button class="secondary-btn" type="submit">Apply</button>
+    </div>
+  </form>
+
+  <p *ngIf="error" class="inline-alert inline-alert--error">{{ error }}</p>
+  <p *ngIf="success" class="inline-alert inline-alert--success">{{ success }}</p>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="metric-grid">
+    <button class="metric-card metric-action" type="button" (click)="tab.set('vehicles'); loadCurrentTab()"><span class="label">Total vehicles</span><strong class="value">{{ dashboard.total_vehicles }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="filters.vehicle_type='ambulance'; tab.set('vehicles'); loadCurrentTab()"><span class="label">Available ambulances</span><strong class="value">{{ dashboard.available_ambulances }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('drivers'); loadCurrentTab()"><span class="label">Available drivers</span><strong class="value">{{ dashboard.available_drivers }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('trips'); loadCurrentTab()"><span class="label">Active trips</span><strong class="value">{{ dashboard.active_trips }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="filters.priority='emergency'; tab.set('dispatch'); loadCurrentTab()"><span class="label">Emergency requests</span><strong class="value">{{ dashboard.emergency_requests }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('requests'); loadCurrentTab()"><span class="label">Pending requests</span><strong class="value">{{ dashboard.pending_requests }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('trips'); loadCurrentTab()"><span class="label">Completed today</span><strong class="value">{{ dashboard.completed_trips_today }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('maintenance'); loadCurrentTab()"><span class="label">Maintenance</span><strong class="value">{{ dashboard.vehicles_under_maintenance }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('fuel'); loadCurrentTab()"><span class="label">Fuel/expense today</span><strong class="value">{{ formatMoney(dashboard.fuel_expense_today) }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="filters.status='delayed'; tab.set('trips'); loadCurrentTab()"><span class="label">Delayed trips</span><strong class="value">{{ dashboard.delayed_trips }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('schedule'); loadCurrentTab()"><span class="label">Upcoming scheduled</span><strong class="value">{{ dashboard.upcoming_scheduled_trips }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="tab.set('vehicles'); loadCurrentTab()"><span class="label">Readiness alerts</span><strong class="value">{{ dashboard.readiness_alerts }}</strong></button>
+  </section>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="dashboard-summary-grid">
+    <div class="page-card summary-panel">
+      <h2 class="section-title">Vehicle Mix</h2>
+      <p *ngFor="let item of dashboard.by_vehicle_type | keyvalue: sortKeyValue"><span>{{ item.key.replaceAll('_', ' ') }}</span><strong>{{ item.value }}</strong></p>
+    </div>
+    <div class="page-card summary-panel">
+      <h2 class="section-title">Trip Status</h2>
+      <p *ngFor="let item of dashboard.by_trip_status | keyvalue: sortKeyValue"><span>{{ item.key.replaceAll('_', ' ') }}</span><strong>{{ item.value }}</strong></p>
+    </div>
+    <div class="page-card summary-panel">
+      <h2 class="section-title">Priority</h2>
+      <p *ngFor="let item of dashboard.by_priority | keyvalue: sortKeyValue"><span>{{ item.key }}</span><strong>{{ item.value }}</strong></p>
+    </div>
+  </section>
+
+  <section *ngIf="tab() === 'requests' || tab() === 'dispatch'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Transport Requests</h2><div class="section-copy">Emergency requests stay visible with dispatch actions in the same queue.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportRequestCreate)" (click)="openModal('request')">New Request</button></div>
+    <table class="table">
+      <thead><tr><th>Request</th><th>Patient/Staff</th><th>Route</th><th>Need</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let request of requests" [class.emergency]="request.priority === 'emergency' || request.priority === 'critical'">
+          <td><strong>{{ request.request_number }}</strong><small>{{ request.request_type }} · {{ request.priority }}</small></td>
+          <td>{{ request.patient_name || request.staff_name || request.unknown_patient_name || '-' }}<small>{{ request.source_department || '-' }}</small></td>
+          <td>{{ request.pickup_location }}<small>{{ request.dropoff_location }}</small></td>
+          <td>{{ request.required_vehicle_type || '-' }}<small>{{ request.required_at | date:'short' }}</small></td>
+          <td><span [class]="statusClass(request.status)">{{ request.status.replaceAll('_', ' ') }}</span></td>
+          <td class="action-cell">
+            <details class="row-action-menu">
+              <summary>Actions</summary>
+              <div class="row-action-menu__panel">
+                <button type="button" *ngIf="session.hasPermission(permissions.transportDispatch)" (click)="openModal('dispatch', request)" [disabled]="request.status === 'completed' || request.status === 'cancelled'">Dispatch</button>
+              </div>
+            </details>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="!requests.length" class="table-empty">No transport requests match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'trips' || tab() === 'dispatch'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Active & Recent Trips</h2><div class="section-copy">Use compact row actions for pickup, transit, and completion updates.</div></div></div>
+    <table class="table">
+      <thead><tr><th>Trip</th><th>Vehicle/Driver</th><th>Route</th><th>Timing</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let trip of trips">
+          <td><strong>{{ trip.trip_number }}</strong><small>{{ trip.request_number || '-' }}</small></td>
+          <td>{{ trip.vehicle_number }}<small>{{ trip.driver_name }}</small></td>
+          <td>{{ trip.pickup_location }}<small>{{ trip.dropoff_location }}</small></td>
+          <td>{{ trip.start_time || trip.scheduled_at | date:'short' }}<small>{{ trip.distance_km }} km · {{ trip.waiting_minutes }} min</small></td>
+          <td><span [class]="statusClass(trip.status)">{{ trip.status.replaceAll('_', ' ') }}</span></td>
+          <td class="action-cell">
+            <details class="row-action-menu">
+              <summary>Actions</summary>
+              <div class="row-action-menu__panel">
+                <button type="button" *ngIf="session.hasPermission(permissions.transportTripUpdate)" (click)="setTripStatus(trip, 'arrived_at_pickup')">Arrived at pickup</button>
+                <button type="button" *ngIf="session.hasPermission(permissions.transportTripUpdate)" (click)="setTripStatus(trip, 'in_transit')">In transit</button>
+                <button type="button" *ngIf="session.hasPermission(permissions.transportTripComplete)" (click)="setTripStatus(trip, 'completed')">Complete</button>
+              </div>
+            </details>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="!trips.length" class="table-empty">No trips match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'vehicles'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Vehicles & Ambulance Readiness</h2><div class="section-copy">Vehicle profile, QR status, readiness, document, and equipment checks.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportVehicleCreate)" (click)="openModal('vehicle')">Add Vehicle</button></div>
+    <table class="table">
+      <thead><tr><th>Vehicle</th><th>Type</th><th>Status</th><th>Readiness</th><th>Driver</th><th>QR</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let vehicle of vehicles">
+          <td><strong>{{ vehicle.vehicle_number }}</strong><small>{{ vehicle.registration_number || '-' }}</small></td>
+          <td>{{ vehicle.vehicle_type.replaceAll('_', ' ') }}</td>
+          <td><span [class]="statusClass(vehicle.current_status)">{{ vehicle.current_status.replaceAll('_', ' ') }}</span></td>
+          <td><span [class]="statusClass(vehicle.readiness_status)">{{ vehicle.readiness_status }}</span><small>{{ vehicle.readiness_alerts.join(', ') || 'Ready' }}</small></td>
+          <td>{{ vehicle.assigned_driver_name || '-' }}</td>
+          <td>{{ vehicle.qr_code || '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="!vehicles.length" class="table-empty">No vehicles match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'drivers'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Drivers</h2><div class="section-copy">Driver availability, HR linkage, assigned vehicles, and license alerts.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportDriverManage)" (click)="openModal('driver')">Add Driver</button></div>
+    <table class="table">
+      <thead><tr><th>Driver</th><th>Contact</th><th>License</th><th>Shift</th><th>Status</th><th>Vehicle</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let driver of drivers">
+          <td><strong>{{ driver.driver_name }}</strong><small>{{ driver.employee_code || '-' }}</small></td>
+          <td>{{ driver.contact_number || '-' }}</td>
+          <td>{{ driver.license_number }}<small>{{ driver.license_expiry_date || '-' }}</small></td>
+          <td>{{ driver.shift || '-' }}</td>
+          <td><span [class]="statusClass(driver.availability_status)">{{ driver.availability_status.replaceAll('_', ' ') }}</span></td>
+          <td>{{ driver.assigned_vehicle_number || '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="!drivers.length" class="table-empty">No drivers match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'schedule'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Schedule & Availability</h2><div class="section-copy">Advance bookings and driver/vehicle availability windows.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportDispatch)" (click)="openModal('schedule')">Add Booking</button></div>
+    <table class="table">
+      <thead><tr><th>Window</th><th>Vehicle</th><th>Driver</th><th>Type</th><th>Status</th><th>Purpose</th></tr></thead>
+      <tbody><tr *ngFor="let item of schedules"><td>{{ item.start_at | date:'short' }}<small>{{ item.end_at | date:'short' }}</small></td><td>{{ item.vehicle_number || '-' }}</td><td>{{ item.driver_name || '-' }}</td><td>{{ item.schedule_type }}</td><td><span [class]="statusClass(item.status)">{{ item.status }}</span></td><td>{{ item.purpose || '-' }}</td></tr></tbody>
+    </table>
+    <div *ngIf="!schedules.length" class="table-empty">No schedules match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'maintenance'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Maintenance</h2><div class="section-copy">Service records, next service dates, odometer, workshop, and costs.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportMaintenanceManage)" (click)="openModal('maintenance')">Add Maintenance</button></div>
+    <table class="table">
+      <thead><tr><th>Vehicle</th><th>Type</th><th>Service</th><th>Next</th><th>Cost</th><th>Status</th></tr></thead>
+      <tbody><tr *ngFor="let item of maintenance"><td>{{ item.vehicle_number }}</td><td>{{ item.maintenance_type }}</td><td>{{ item.service_date }}</td><td>{{ item.next_service_date || '-' }}</td><td>{{ formatMoney(item.cost) }}</td><td><span [class]="statusClass(item.status)">{{ item.status }}</span></td></tr></tbody>
+    </table>
+    <div *ngIf="!maintenance.length" class="table-empty">No maintenance records match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'fuel'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Fuel & Expenses</h2><div class="section-copy">Fuel, repair, toll, parking, cleaning, and other vehicle costs.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportFuelManage)" (click)="openModal('fuel')">Add Expense</button></div>
+    <table class="table">
+      <thead><tr><th>Vehicle</th><th>Date</th><th>Category</th><th>Quantity</th><th>Cost</th><th>Odometer</th></tr></thead>
+      <tbody><tr *ngFor="let item of fuelLogs"><td>{{ item.vehicle_number }}</td><td>{{ item.fuel_date }}</td><td>{{ item.expense_category }}</td><td>{{ item.quantity }}</td><td>{{ formatMoney(item.fuel_cost) }}</td><td>{{ item.odometer_reading || '-' }}</td></tr></tbody>
+    </table>
+    <div *ngIf="!fuelLogs.length" class="table-empty">No fuel or expense records match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'reports'" class="page-card">
+    <div class="section-header">
+      <div><h2 class="section-title">Reports</h2><div class="section-copy">Filterable operational, fuel, maintenance, billing, and utilization reports.</div></div>
+      <div class="toolbar-row">
+        <select [(ngModel)]="reportFilters.report_type" name="reportType">
+          <option value="trip_history">Trip history</option>
+          <option value="emergency_dispatch">Emergency dispatch</option>
+          <option value="patient_transport">Patient transport</option>
+          <option value="vehicle_list">Vehicle list</option>
+          <option value="ambulance_availability">Ambulance availability</option>
+          <option value="driver_availability">Driver availability</option>
+          <option value="fuel_consumption">Fuel consumption</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="vehicle_expense">Vehicle expense</option>
+        </select>
+        <button class="secondary-btn" type="button" (click)="loadReport()">Run</button>
+      </div>
+    </div>
+    <div class="report-totals"><span *ngFor="let item of report?.totals | keyvalue">{{ item.key }}: <strong>{{ item.value }}</strong></span></div>
+    <table class="table" *ngIf="report?.rows?.length">
+      <thead><tr><th *ngFor="let col of (report?.rows?.[0] || {}) | keyvalue">{{ col.key }}</th></tr></thead>
+      <tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let col of row | keyvalue">{{ rowValue(row, col.key) }}</td></tr></tbody>
+    </table>
+  </section>
+
+  <section *ngIf="tab() === 'settings'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Configuration Settings</h2><div class="section-copy">Hospital-wise transport types, dispatch rules, billing rules, and alert settings.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.transportSettingsManage)" (click)="openModal('setting')">Add Setting</button></div>
+    <table class="table">
+      <thead><tr><th>Key</th><th>Value</th><th>Description</th></tr></thead>
+      <tbody><tr *ngFor="let item of settings"><td>{{ item.setting_key }}</td><td>{{ item.setting_value }}</td><td>{{ item.description || '-' }}</td></tr></tbody>
+    </table>
+  </section>
+</section>
+
+<div class="modal-backdrop" *ngIf="modal">
+  <form class="modal-card module-modal" (ngSubmit)="modal === 'request' ? saveRequest(requestForm['priority'] === 'emergency') : modal === 'vehicle' ? saveVehicle() : modal === 'driver' ? saveDriver() : modal === 'dispatch' ? dispatch() : modal === 'schedule' ? saveSchedule() : modal === 'maintenance' ? saveMaintenance() : modal === 'fuel' ? saveFuel() : saveSetting()">
+    <header class="modal-header"><div><h2 class="section-title">{{ modal.replace('-', ' ') }}</h2><div class="section-copy">Complete the required transport details and save.</div></div><button class="secondary-btn" type="button" (click)="closeModal()">Close</button></header>
+
+    <ng-container *ngIf="modal === 'request'">
+      <select name="patient" [(ngModel)]="requestForm['patient_id']"><option value="">Patient/unknown</option><option *ngFor="let patient of patients" [value]="patient.id">{{ patient.first_name }} {{ patient.last_name }} · {{ patient.patient_number }}</option></select>
+      <input name="unknown" [(ngModel)]="requestForm['unknown_patient_name']" placeholder="Unknown/outside patient" />
+      <input name="pickup" [(ngModel)]="requestForm['pickup_location']" placeholder="Pickup location" required />
+      <input name="dropoff" [(ngModel)]="requestForm['dropoff_location']" placeholder="Drop-off location" required />
+      <input name="requiredAt" type="datetime-local" [(ngModel)]="requestForm['required_at']" />
+      <select name="reqType" [(ngModel)]="requestForm['request_type']"><option>Emergency</option><option>OPD</option><option>IPD</option><option>ICU/NICU</option><option>Discharge</option><option>Referral/transfer</option><option>Admin/Staff Transport</option></select>
+      <select name="priorityModal" [(ngModel)]="requestForm['priority']"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="emergency">Emergency</option><option value="critical">Critical</option></select>
+      <select name="vehicleNeed" [(ngModel)]="requestForm['required_vehicle_type']"><option *ngFor="let type of vehicleTypes" [value]="type">{{ type.replaceAll('_', ' ') }}</option></select>
+      <textarea name="reason" [(ngModel)]="requestForm['reason']" placeholder="Reason, patient condition, transfer notes"></textarea>
+      <label><input type="checkbox" name="attendant" [(ngModel)]="requestForm['attendant_required']" /> Attendant/medical staff needed</label>
+      <label><input type="checkbox" name="billable" [(ngModel)]="requestForm['billing_required']" /> Billable transport</label>
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'vehicle'">
+      <input name="vehicleNo" [(ngModel)]="vehicleForm['vehicle_number']" placeholder="Vehicle number" required />
+      <input name="regNo" [(ngModel)]="vehicleForm['registration_number']" placeholder="Registration number" />
+      <select name="vehicleTypeModal" [(ngModel)]="vehicleForm['vehicle_type']"><option *ngFor="let type of vehicleTypes" [value]="type">{{ type.replaceAll('_', ' ') }}</option></select>
+      <input name="capacity" type="number" [(ngModel)]="vehicleForm['capacity']" placeholder="Capacity" />
+      <select name="driverAssign" [(ngModel)]="vehicleForm['assigned_driver_id']"><option value="">Assigned driver</option><option *ngFor="let driver of drivers" [value]="driver.id">{{ driver.driver_name }}</option></select>
+      <input name="fuelType" [(ngModel)]="vehicleForm['fuel_type']" placeholder="Fuel type" />
+      <select name="vehicleStatus" [(ngModel)]="vehicleForm['current_status']"><option value="available">Available</option><option value="reserved">Reserved</option><option value="under_maintenance">Under maintenance</option><option value="out_of_service">Out of service</option><option value="cleaning">Cleaning</option></select>
+      <div class="checks"><label *ngFor="let item of equipment"><input type="checkbox" [checked]="hasVehicleEquipment(item)" (change)="toggleVehicleEquipment(item, $any($event.target).checked)" /> {{ item.replaceAll('_', ' ') }}</label></div>
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'driver'">
+      <select name="employee" [(ngModel)]="driverForm['employee_id']"><option value="">HR employee</option><option *ngFor="let employee of employees" [value]="employee.id">{{ employee.full_name }} · {{ employee.staff_code }}</option></select>
+      <input name="driverName" [(ngModel)]="driverForm['driver_name']" placeholder="Driver name" />
+      <input name="driverPhone" [(ngModel)]="driverForm['contact_number']" placeholder="Contact number" />
+      <input name="license" [(ngModel)]="driverForm['license_number']" placeholder="License number" required />
+      <input name="licenseExpiry" type="date" [(ngModel)]="driverForm['license_expiry_date']" />
+      <select name="driverVehicle" [(ngModel)]="driverForm['assigned_vehicle_id']"><option value="">Assigned vehicle</option><option *ngFor="let vehicle of vehicles" [value]="vehicle.id">{{ vehicle.vehicle_number }}</option></select>
+      <input name="shift" [(ngModel)]="driverForm['shift']" placeholder="Shift" />
+      <select name="driverStatus" [(ngModel)]="driverForm['availability_status']"><option value="available">Available</option><option value="assigned">Assigned</option><option value="on_trip">On trip</option><option value="off_duty">Off duty</option><option value="unavailable">Unavailable</option></select>
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'dispatch'">
+      <p class="dispatch-target">{{ selectedRequest?.request_number }} · {{ selectedRequest?.pickup_location }} to {{ selectedRequest?.dropoff_location }}</p>
+      <select name="dispatchVehicle" [(ngModel)]="dispatchForm['vehicle_id']" required><option *ngFor="let vehicle of availableVehicles()" [value]="vehicle.id">{{ vehicle.vehicle_number }} · {{ vehicle.vehicle_type.replaceAll('_', ' ') }}</option></select>
+      <select name="dispatchDriver" [(ngModel)]="dispatchForm['driver_id']" required><option *ngFor="let driver of availableDrivers()" [value]="driver.id">{{ driver.driver_name }}</option></select>
+      <input name="dispatchAt" type="datetime-local" [(ngModel)]="dispatchForm['scheduled_at']" />
+      <label><input type="checkbox" name="override" [(ngModel)]="dispatchForm['override']" /> Authorized override</label>
+      <textarea name="overrideReason" [(ngModel)]="dispatchForm['override_reason']" placeholder="Override reason"></textarea>
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'schedule'">
+      <select name="scheduleVehicle" [(ngModel)]="scheduleForm['vehicle_id']"><option value="">Vehicle</option><option *ngFor="let vehicle of vehicles" [value]="vehicle.id">{{ vehicle.vehicle_number }}</option></select>
+      <select name="scheduleDriver" [(ngModel)]="scheduleForm['driver_id']"><option value="">Driver</option><option *ngFor="let driver of drivers" [value]="driver.id">{{ driver.driver_name }}</option></select>
+      <input name="startAt" type="datetime-local" [(ngModel)]="scheduleForm['start_at']" />
+      <input name="endAt" type="datetime-local" [(ngModel)]="scheduleForm['end_at']" />
+      <input name="purpose" [(ngModel)]="scheduleForm['purpose']" placeholder="Purpose" />
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'maintenance'">
+      <select name="maintenanceVehicle" [(ngModel)]="maintenanceForm['vehicle_id']"><option value="">Vehicle</option><option *ngFor="let vehicle of vehicles" [value]="vehicle.id">{{ vehicle.vehicle_number }}</option></select>
+      <input name="serviceDate" type="date" [(ngModel)]="maintenanceForm['service_date']" />
+      <input name="maintenanceType" [(ngModel)]="maintenanceForm['maintenance_type']" placeholder="Maintenance type" />
+      <input name="nextService" type="date" [(ngModel)]="maintenanceForm['next_service_date']" />
+      <input name="maintenanceCost" type="number" [(ngModel)]="maintenanceForm['cost']" placeholder="Cost" />
+      <input name="maintenanceOdometer" type="number" [(ngModel)]="maintenanceForm['odometer_reading']" placeholder="Odometer" />
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'fuel'">
+      <select name="fuelVehicle" [(ngModel)]="fuelForm['vehicle_id']"><option value="">Vehicle</option><option *ngFor="let vehicle of vehicles" [value]="vehicle.id">{{ vehicle.vehicle_number }}</option></select>
+      <input name="fuelDate" type="date" [(ngModel)]="fuelForm['fuel_date']" />
+      <input name="quantity" type="number" [(ngModel)]="fuelForm['quantity']" placeholder="Quantity" />
+      <input name="expenseCategory" [(ngModel)]="fuelForm['expense_category']" placeholder="Expense category" />
+      <input name="fuelCost" type="number" [(ngModel)]="fuelForm['fuel_cost']" placeholder="Cost" />
+      <input name="fuelOdometer" type="number" [(ngModel)]="fuelForm['odometer_reading']" placeholder="Odometer" />
+    </ng-container>
+
+    <ng-container *ngIf="modal === 'setting'">
+      <input name="settingKey" [(ngModel)]="settingForm['setting_key']" placeholder="Setting key" required />
+      <textarea name="settingValue" [(ngModel)]="settingForm['setting_value']" placeholder="Setting value" required></textarea>
+      <textarea name="settingDescription" [(ngModel)]="settingForm['description']" placeholder="Description"></textarea>
+    </ng-container>
+
+    <footer class="modal-actions"><button class="secondary-btn" type="button" (click)="closeModal()">Cancel</button><button class="primary-btn" type="submit">Save</button></footer>
+  </form>
+</div>

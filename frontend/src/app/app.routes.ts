@@ -64,6 +64,9 @@ import { UserManagementComponent } from './features/admin/pages/user-management/
 import { RoleManagementComponent } from './features/admin/pages/role-management/role-management.component';
 import { ConfigurationWorkspaceComponent } from './features/configuration/pages/configuration-workspace/configuration-workspace.component';
 import { AccountProfileComponent } from './features/profile/pages/account-profile/account-profile.component';
+import { TransportWorkspaceComponent } from './features/transport/pages/transport-workspace/transport-workspace.component';
+import { TelemedicineWorkspaceComponent } from './features/telemedicine/pages/telemedicine-workspace/telemedicine-workspace.component';
+import { OutpatientWorkspaceComponent } from './features/outpatient/pages/outpatient-workspace/outpatient-workspace.component';
 
 const bloodBankRoutes: Routes = [
   { path: 'blood-bank', redirectTo: 'blood-bank/dashboard', pathMatch: 'full' },
@@ -96,6 +99,41 @@ const cateringRoutes: Routes = [
   { path: 'catering/inventory', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.kitchen_queue.view'], tabLabel: 'Kitchen Inventory', cateringTab: 'inventory' } },
   { path: 'catering/reports', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.report.view'], tabLabel: 'Catering Reports', cateringTab: 'reports' } },
   { path: 'catering/settings', component: CateringWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['catering.settings.manage'], tabLabel: 'Catering Settings', cateringTab: 'settings' } },
+];
+
+const transportRoutes: Routes = [
+  { path: 'transport', redirectTo: 'transport/dashboard', pathMatch: 'full' },
+  { path: 'transport/dashboard', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.dashboard.view'], tabLabel: 'Transport Dashboard', transportTab: 'dashboard' } },
+  { path: 'transport/requests', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.view'], tabLabel: 'Transport Requests', transportTab: 'requests' } },
+  { path: 'transport/dispatch', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.dispatch'], tabLabel: 'Ambulance Dispatch', transportTab: 'dispatch' } },
+  { path: 'transport/trips', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.view'], tabLabel: 'Active Trips', transportTab: 'trips' } },
+  { path: 'transport/vehicles', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.view'], tabLabel: 'Vehicles', transportTab: 'vehicles' } },
+  { path: 'transport/drivers', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.view'], tabLabel: 'Drivers', transportTab: 'drivers' } },
+  { path: 'transport/schedule', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.dispatch'], tabLabel: 'Transport Schedule', transportTab: 'schedule' } },
+  { path: 'transport/maintenance', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.maintenance.manage'], tabLabel: 'Vehicle Maintenance', transportTab: 'maintenance' } },
+  { path: 'transport/fuel', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.fuel.manage'], tabLabel: 'Fuel & Expenses', transportTab: 'fuel' } },
+  { path: 'transport/reports', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.report.view'], tabLabel: 'Transport Reports', transportTab: 'reports' } },
+  { path: 'transport/settings', component: TransportWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['transport.settings.manage'], tabLabel: 'Transport Settings', transportTab: 'settings' } },
+];
+
+const telemedicineRoutes: Routes = [
+  { path: 'telemedicine', redirectTo: 'telemedicine/dashboard', pathMatch: 'full' },
+  { path: 'telemedicine/dashboard', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.view'], tabLabel: 'Telemedicine Dashboard', telemedicineTab: 'dashboard' } },
+  { path: 'telemedicine/appointments', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.view'], tabLabel: 'Online Appointments', telemedicineTab: 'appointments' } },
+  { path: 'telemedicine/waiting-room', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.queue.view'], tabLabel: 'Virtual Waiting Room', telemedicineTab: 'waiting-room' } },
+  { path: 'telemedicine/consultation', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.consultation.start'], tabLabel: 'Telemedicine Consultation', telemedicineTab: 'consultation' } },
+  { path: 'telemedicine/completed', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.view'], tabLabel: 'Completed Telemedicine Visits', telemedicineTab: 'completed' } },
+  { path: 'telemedicine/payments', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.payment.view'], tabLabel: 'Telemedicine Payments', telemedicineTab: 'payments' } },
+  { path: 'telemedicine/reports', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.report.view'], tabLabel: 'Telemedicine Reports', telemedicineTab: 'reports' } },
+  { path: 'telemedicine/settings', component: TelemedicineWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['telemedicine.settings.manage'], tabLabel: 'Telemedicine Settings', telemedicineTab: 'settings' } },
+];
+
+const outpatientRoutes: Routes = [
+  { path: 'outpatient', redirectTo: 'outpatient/dashboard', pathMatch: 'full' },
+  { path: 'outpatient/dashboard', component: OutpatientWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['outpatient.report.view'], tabLabel: 'Outpatient Dashboard', outpatientTab: 'dashboard' } },
+  { path: 'outpatient/queue', component: OutpatientWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['opd.queue.manage'], tabLabel: 'Unified Outpatient Queue', outpatientTab: 'queue' } },
+  { path: 'outpatient/consultation', component: OutpatientWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['opd.consultation.start'], tabLabel: 'Outpatient Consultation', outpatientTab: 'consultation' } },
+  { path: 'outpatient/reports', component: OutpatientWorkspaceComponent, canActivate: [permissionGuard], data: { permissions: ['outpatient.report.view'], tabLabel: 'Outpatient Reports', outpatientTab: 'reports' } },
 ];
 
 export const appRoutes: Routes = [
@@ -207,6 +245,9 @@ export const appRoutes: Routes = [
       },
       ...bloodBankRoutes,
       ...cateringRoutes,
+      ...transportRoutes,
+      ...telemedicineRoutes,
+      ...outpatientRoutes,
       {
         path: 'scanner/settings',
         component: ScannerSettingsComponent,

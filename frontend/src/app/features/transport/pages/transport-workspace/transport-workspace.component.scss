@@ -1,0 +1,149 @@
+:host {
+  display: block;
+}
+
+.transport-workspace {
+  min-width: 0;
+}
+
+.module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.65rem;
+}
+
+.module-tabs .active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.metric-action {
+  align-items: flex-start;
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.metric-action:hover {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  transform: translateY(-1px);
+}
+
+.danger-text .label,
+.danger-text .value {
+  color: var(--danger);
+}
+
+.summary-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.summary-panel p {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.5rem 0;
+  text-transform: capitalize;
+}
+
+.summary-panel p:last-child {
+  border-bottom: 0;
+}
+
+tr.emergency {
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.report-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.65rem 0;
+}
+
+.report-totals span,
+.dispatch-target {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  padding: 0.42rem 0.62rem;
+}
+
+.module-modal {
+  display: grid;
+  gap: 0.65rem;
+  width: min(780px, 100%);
+}
+
+.module-modal > ng-container,
+.module-modal {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+.module-modal input:not([type='checkbox']),
+.module-modal select,
+.module-modal textarea {
+  min-width: 0;
+}
+
+.module-modal textarea,
+.module-modal .checks,
+.module-modal .dispatch-target,
+.module-modal .modal-header,
+.module-modal .modal-actions {
+  grid-column: 1 / -1;
+}
+
+.module-modal label {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.45rem;
+  font-weight: 650;
+}
+
+.checks {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.status-chip.available,
+.status-chip.ready,
+.status-chip.completed {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+}
+
+.status-chip.dispatched,
+.status-chip.in_transit,
+.status-chip.on_trip,
+.status-chip.assigned {
+  background: var(--badge-info-bg);
+  color: var(--badge-info-text);
+}
+
+.status-chip.emergency,
+.status-chip.critical,
+.status-chip.delayed,
+.status-chip.not_ready,
+.status-chip.cancelled,
+.status-chip.under_maintenance,
+.status-chip.out_of_service {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 80%, black 20%);
+}
+
+@media (max-width: 768px) {
+  .module-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+}

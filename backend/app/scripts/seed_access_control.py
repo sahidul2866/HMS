@@ -26,6 +26,8 @@ DEPARTMENTS = [
     ("HR", "Human Resources", "HR and payroll operations"),
     ("OT", "Operation Theatre", "Surgery and operation theatre services"),
     ("BBK", "Blood Bank", "Blood donor, stock, and transfusion services"),
+    ("TRN", "Transport", "Ambulance, hospital vehicle, driver, dispatch, maintenance, and fuel operations"),
+    ("TMD", "Telemedicine", "Online appointments, virtual waiting room, video consultation, chat, remote prescriptions, and follow-up"),
 ]
 
 

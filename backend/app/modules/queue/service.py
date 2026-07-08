@@ -14,6 +14,7 @@ from app.models.notification import Notification
 from app.models.patient import Patient
 from app.models.queue import QueueAuditLog, QueueCounter, QueueSetting, QueueToken
 from app.models.scanner import ScanCode
+from app.models.telemedicine import TelemedicineAppointment
 from app.models.user import User
 from app.modules.access_scope.service import AccessScopeService
 from app.modules.auth.service import AuthService
@@ -48,6 +49,7 @@ SCOPE_VIEW_PERMISSIONS = {
     "radiology": ("radiology.queue.manage", "radiology.view"),
     "blood_bank": ("blood_bank.queue.manage", "blood_bank.view"),
     "er": ("er.view", "emergency.view"),
+    "telemedicine": ("telemedicine.waiting_room.view", "telemedicine.queue.view", "telemedicine.view"),
 }
 
 SCOPE_ACTION_PERMISSIONS = {
@@ -58,6 +60,7 @@ SCOPE_ACTION_PERMISSIONS = {
     "radiology": ("radiology.queue.manage",),
     "blood_bank": ("blood_bank.queue.manage",),
     "er": ("er.view", "emergency.view"),
+    "telemedicine": ("telemedicine.consultation.start", "telemedicine.queue.view", "telemedicine.waiting_room.view"),
 }
 
 
@@ -527,6 +530,22 @@ class QueueService:
             if request:
                 request.status = self._blood_request_status(item.status)
                 request.updated_by = actor.id
+        if item.queue_scope == "telemedicine" and item.source_type == "telemedicine_appointment":
+            appointment = self.db.get(TelemedicineAppointment, item.source_id)
+            if appointment:
+                appointment.queue_number = item.token_number
+                appointment.estimated_wait_minutes = self._waiting_minutes(item)
+                appointment.status = {
+                    "waiting": "waiting",
+                    "called": "ready_to_join",
+                    "recalled": "ready_to_join",
+                    "in_progress": "in_consultation",
+                    "completed": "completed",
+                    "skipped": "waiting",
+                    "no_show": "no_show",
+                    "cancelled": "cancelled",
+                }.get(item.status, appointment.status)
+                appointment.updated_by = actor.id
 
     def _blood_request_status(self, status: str) -> str:
         if status in {"waiting", "called", "in_progress", "completed", "skipped", "recalled"}:

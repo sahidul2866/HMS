@@ -1,0 +1,81 @@
+<section class="outpatient-shell">
+  <header class="module-header">
+    <div><p class="eyebrow">Unified Outpatient</p><h1>OPD + Telemedicine Queue</h1></div>
+    <button type="button" (click)="loadCurrentTab()">Refresh</button>
+  </header>
+
+  <nav class="tabs"><button *ngFor="let item of tabs" type="button" [class.active]="tab() === item" (click)="tab.set(item); loadCurrentTab()">{{ item }}</button></nav>
+
+  <form class="filters" (ngSubmit)="loadCurrentTab()">
+    <select name="mode" [(ngModel)]="filters.visit_mode"><option value="">All visit types</option><option value="opd">Physical OPD</option><option value="telemedicine">Telemedicine</option></select>
+    <select name="doctor" [(ngModel)]="filters.doctor_id"><option value="">Doctor</option><option *ngFor="let doctor of doctors" [value]="doctor.id">{{ doctor.full_name }}</option></select>
+    <select name="status" [(ngModel)]="filters.status"><option value="">Status</option><option value="waiting">Waiting</option><option value="ready_to_join">Ready to join</option><option value="in_consultation">In consultation</option><option value="completed">Completed</option><option value="no_show">No show</option></select>
+    <button type="submit">Apply</button>
+  </form>
+
+  <p *ngIf="error" class="alert error">{{ error }}</p>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="dashboard-grid">
+    <button class="metric" type="button" (click)="filters.visit_mode='opd'; tab.set('queue'); loadCurrentTab()"><span>OPD waiting</span><strong>{{ dashboard.opd_waiting }}</strong></button>
+    <button class="metric" type="button" (click)="filters.visit_mode='telemedicine'; tab.set('queue'); loadCurrentTab()"><span>Telemedicine waiting</span><strong>{{ dashboard.telemedicine_waiting }}</strong></button>
+    <button class="metric" type="button"><span>Called</span><strong>{{ dashboard.called }}</strong></button>
+    <button class="metric" type="button"><span>In consultation</span><strong>{{ dashboard.in_consultation }}</strong></button>
+    <button class="metric" type="button"><span>Completed today</span><strong>{{ dashboard.completed_today }}</strong></button>
+    <button class="metric danger-text" type="button"><span>No show</span><strong>{{ dashboard.no_show }}</strong></button>
+    <button class="metric danger-text" type="button"><span>Pending payments</span><strong>{{ dashboard.pending_payments }}</strong></button>
+    <button class="metric danger-text" type="button"><span>Pending prescriptions</span><strong>{{ dashboard.pending_prescriptions }}</strong></button>
+  </section>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="summary-grid">
+    <div><h2>Visit Type</h2><p *ngFor="let item of dashboard.by_visit_type | keyvalue: sortKeyValue"><span>{{ item.key }}</span><strong>{{ item.value }}</strong></p></div>
+    <div><h2>Status</h2><p *ngFor="let item of dashboard.by_status | keyvalue: sortKeyValue"><span>{{ item.key.replaceAll('_', ' ') }}</span><strong>{{ item.value }}</strong></p></div>
+  </section>
+
+  <section *ngIf="tab() === 'queue' || tab() === 'consultation'" class="queue-layout">
+    <section class="table-section">
+      <h2>Doctor Queue</h2>
+      <table>
+        <thead><tr><th>Token</th><th>Patient</th><th>Mode</th><th>Status</th><th>Wait</th><th></th></tr></thead>
+        <tbody>
+          <tr *ngFor="let item of queue" [class.active-row]="selected?.token_id === item.token_id">
+            <td><strong>{{ item.queue_number || '-' }}</strong><small>{{ item.number }}</small></td>
+            <td>{{ item.patient_name || '-' }}<small>{{ item.current_complaint || '-' }}</small></td>
+            <td>{{ item.visit_mode }}<small>{{ item.visit_type || '-' }}</small></td>
+            <td><span [class]="statusClass(item.status)">{{ item.status.replaceAll('_', ' ') }}</span><small>{{ item.queue_status || '-' }}</small></td>
+            <td>{{ item.waiting_minutes }}m</td>
+            <td><button type="button" (click)="selected = item">Open</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="table-section consult-panel" *ngIf="selected">
+      <div class="section-title"><h2>{{ selected.patient_name }} · {{ selected.visit_mode }}</h2><span [class]="statusClass(selected.status)">{{ selected.status.replaceAll('_', ' ') }}</span></div>
+      <div class="context-grid">
+        <p><span>Doctor</span><strong>{{ selected.doctor_name || '-' }}</strong></p>
+        <p><span>Department</span><strong>{{ selected.department_name || '-' }}</strong></p>
+        <p><span>Payment</span><strong>{{ selected.payment_status || '-' }}</strong></p>
+        <p><span>Queue</span><strong>{{ selected.queue_number || '-' }}</strong></p>
+      </div>
+      <div class="video-panel" *ngIf="selected.has_video_panel"><strong>Telemedicine video/audio/chat panel</strong><span>{{ selected.join_url || 'Provider integration pending' }}</span></div>
+      <div class="room-panel" *ngIf="!selected.has_video_panel"><strong>Physical OPD room/counter workflow</strong><span>Use call, start, complete, skip, or recall from the same doctor queue.</span></div>
+      <div class="actions">
+        <button type="button" (click)="runAction(selected, 'call')">Call</button>
+        <button type="button" (click)="runAction(selected, 'start')">Start</button>
+        <button type="button" (click)="runAction(selected, 'complete')">Complete</button>
+        <button type="button" (click)="runAction(selected, 'skip')">Skip</button>
+        <button type="button" (click)="runAction(selected, 'recall')">Recall</button>
+        <button type="button" (click)="runAction(selected, 'no_show')">No-show</button>
+      </div>
+    </section>
+  </section>
+
+  <section *ngIf="tab() === 'reports'" class="table-section">
+    <div class="section-title">
+      <h2>Unified Reports</h2>
+      <div class="actions"><select [(ngModel)]="reportFilters.report_type" name="reportType"><option value="queue_waiting_time">Queue waiting time</option><option value="opd_visit">OPD visit</option><option value="telemedicine_visit">Telemedicine visit</option><option value="doctor_wise">Doctor-wise</option><option value="no_show">No-show</option><option value="follow_up">Follow-up</option><option value="revenue">Revenue</option></select><button type="button" (click)="loadReport()">Run</button></div>
+    </div>
+    <div class="report-totals"><span *ngFor="let item of report?.totals | keyvalue">{{ item.key }}: <strong>{{ item.value }}</strong></span></div>
+    <table *ngIf="report?.rows?.length"><thead><tr><th *ngFor="let col of (report?.rows?.[0] || {}) | keyvalue">{{ col.key }}</th></tr></thead><tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let col of row | keyvalue">{{ rowValue(row, col.key) }}</td></tr></tbody></table>
+  </section>
+</section>

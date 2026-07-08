@@ -148,6 +148,24 @@ from app.models.scanner import ScanCode, ScanEvent, ScanSetting
 from app.models.scope import RoleScope, UserScope
 from app.models.user import User, role_permissions, user_permissions, user_roles
 from app.models.staff_bot import StaffBotAuditLog, StaffBotConversation, StaffBotMessage, StaffBotSetting
+from app.models.transport import (
+    TransportDriver,
+    TransportFuelLog,
+    TransportMaintenance,
+    TransportRequest,
+    TransportSchedule,
+    TransportSetting,
+    TransportTrip,
+    TransportVehicle,
+)
+from app.models.telemedicine import (
+    TelemedicineAppointment,
+    TelemedicineChatMessage,
+    TelemedicineConsultation,
+    TelemedicineFile,
+    TelemedicineInvestigationOrder,
+    TelemedicineSetting,
+)
 
 __all__ = [
     "AccountingJournal",
@@ -306,6 +324,20 @@ __all__ = [
     "StaffBotConversation",
     "StaffBotMessage",
     "StaffBotSetting",
+    "TransportDriver",
+    "TransportFuelLog",
+    "TransportMaintenance",
+    "TransportRequest",
+    "TransportSchedule",
+    "TransportSetting",
+    "TransportTrip",
+    "TransportVehicle",
+    "TelemedicineAppointment",
+    "TelemedicineChatMessage",
+    "TelemedicineConsultation",
+    "TelemedicineFile",
+    "TelemedicineInvestigationOrder",
+    "TelemedicineSetting",
     "User",
     "role_permissions",
     "user_permissions",

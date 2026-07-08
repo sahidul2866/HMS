@@ -19,6 +19,7 @@ from app.modules.lis.router import router as lis_router
 from app.modules.opd.router import router as opd_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.ot.router import router as ot_router
+from app.modules.outpatient.router import router as outpatient_router
 from app.modules.er.router import router as er_router
 from app.modules.patients.router import router as patients_router
 from app.modules.permissions.router import router as permissions_router
@@ -33,6 +34,8 @@ from app.modules.queue.router import router as queue_router
 from app.modules.reporting.router import router as reporting_router
 from app.modules.roles.router import router as roles_router
 from app.modules.scanner.router import router as scanner_router
+from app.modules.telemedicine.router import router as telemedicine_router
+from app.modules.transport.router import router as transport_router
 from app.modules.users.router import router as users_router
 
 api_router = APIRouter()
@@ -41,6 +44,8 @@ api_router.include_router(appointments_router)
 api_router.include_router(users_router)
 api_router.include_router(roles_router)
 api_router.include_router(scanner_router)
+api_router.include_router(telemedicine_router)
+api_router.include_router(transport_router)
 api_router.include_router(permissions_router)
 api_router.include_router(patient_portal_router)
 api_router.include_router(patient_bot_router)
@@ -56,6 +61,7 @@ api_router.include_router(catering_router)
 api_router.include_router(configuration_router)
 api_router.include_router(opd_router)
 api_router.include_router(ot_router)
+api_router.include_router(outpatient_router)
 api_router.include_router(er_router)
 api_router.include_router(hr_router)
 api_router.include_router(ipd_router)

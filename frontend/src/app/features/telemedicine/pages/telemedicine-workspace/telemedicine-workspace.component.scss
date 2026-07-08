@@ -1,0 +1,206 @@
+:host {
+  display: block;
+}
+
+.telemedicine-workspace {
+  min-width: 0;
+}
+
+.module-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.65rem;
+}
+
+.module-tabs .active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.metric-action {
+  align-items: flex-start;
+  cursor: pointer;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.metric-action:hover {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  transform: translateY(-1px);
+}
+
+.danger-text .label,
+.danger-text .value {
+  color: var(--danger);
+}
+
+.summary-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.summary-panel p {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0.5rem 0;
+  text-transform: capitalize;
+}
+
+.summary-panel p:last-child {
+  border-bottom: 0;
+}
+
+.consult-layout {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+}
+
+.list-row {
+  width: 100%;
+  margin-top: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  gap: 0.16rem;
+  min-height: 3.35rem;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+}
+
+.list-row span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.list-row.active {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.consult-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.video-placeholder,
+.chat-box,
+.file-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+}
+
+.video-placeholder {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 82%, #0f172a 18%), color-mix(in srgb, var(--ink-deep) 94%, var(--primary) 6%));
+  color: #fff;
+}
+
+.video-placeholder span {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.chat-input {
+  align-items: center;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.chat-input input {
+  min-width: 0;
+}
+
+.report-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.65rem 0;
+}
+
+.report-totals span {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  padding: 0.42rem 0.62rem;
+}
+
+.module-modal {
+  display: grid;
+  gap: 0.65rem;
+  width: min(760px, 100%);
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+.module-modal input:not([type='checkbox']),
+.module-modal select,
+.module-modal textarea {
+  min-width: 0;
+}
+
+.module-modal textarea,
+.module-modal .modal-header,
+.module-modal .modal-actions {
+  grid-column: 1 / -1;
+}
+
+.module-modal label {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.45rem;
+  font-weight: 650;
+}
+
+.status-chip.connected,
+.status-chip.paid,
+.status-chip.completed {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+}
+
+.status-chip.waiting,
+.status-chip.ready_to_join,
+.status-chip.in_consultation {
+  background: var(--badge-info-bg);
+  color: var(--badge-info-text);
+}
+
+.status-chip.payment_pending,
+.status-chip.pending,
+.status-chip.no_show,
+.status-chip.disconnected,
+.status-chip.cancelled {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 80%, black 20%);
+}
+
+@media (max-width: 900px) {
+  .consult-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .module-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+
+  .chat-input {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

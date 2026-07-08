@@ -1,0 +1,156 @@
+<section class="workspace-shell telemedicine-workspace">
+  <section class="page-card module-hero">
+    <div class="hero-row">
+      <div>
+        <div class="hero-kicker">Remote Care</div>
+        <h1 class="page-title">Telemedicine</h1>
+        <div class="page-subtitle">Book online visits, manage the virtual waiting room, consult, prescribe, order investigations, and review reports.</div>
+      </div>
+      <div class="toolbar-row">
+        <button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.telemedicineAppointmentCreate)" (click)="openModal('appointment')">New Online Appointment</button>
+        <button class="secondary-btn" type="button" (click)="loadCurrentTab()">Refresh</button>
+      </div>
+    </div>
+  </section>
+
+  <nav class="page-card module-tabs"><button *ngFor="let item of tabs" class="secondary-btn compact-btn" type="button" [class.active]="tab() === item" (click)="tab.set(item); loadCurrentTab()">{{ item.replace('-', ' ') }}</button></nav>
+
+  <form class="page-card table-toolbar" (ngSubmit)="loadCurrentTab()">
+    <div class="table-toolbar__main">
+      <div class="table-toolbar__filters">
+        <label class="field"><span>Doctor</span><select name="doctor" [(ngModel)]="filters.doctor_id"><option value="">All doctors</option><option *ngFor="let doctor of doctors" [value]="doctor.id">{{ doctor.full_name }}</option></select></label>
+        <label class="field"><span>Department</span><input name="department" [(ngModel)]="filters.department" placeholder="Department" /></label>
+        <label class="field"><span>Date</span><input name="date" type="date" [(ngModel)]="filters.date" /></label>
+        <label class="field"><span>Status</span><select name="status" [(ngModel)]="filters.status"><option value="">All statuses</option><option value="scheduled">Scheduled</option><option value="payment_pending">Payment pending</option><option value="waiting">Waiting</option><option value="ready_to_join">Ready to join</option><option value="in_consultation">In consultation</option><option value="completed">Completed</option><option value="no_show">No show</option><option value="cancelled">Cancelled</option></select></label>
+        <label class="field"><span>Payment</span><select name="payment" [(ngModel)]="filters.payment_status"><option value="">All payments</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="partial">Partial</option><option value="refunded">Refunded</option></select></label>
+      </div>
+      <button class="secondary-btn" type="submit">Apply</button>
+    </div>
+  </form>
+
+  <p *ngIf="error" class="inline-alert inline-alert--error">{{ error }}</p>
+  <p *ngIf="success" class="inline-alert inline-alert--success">{{ success }}</p>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="metric-grid">
+    <button class="metric-card metric-action" type="button" (click)="tab.set('appointments'); loadCurrentTab()"><span class="label">Today online</span><strong class="value">{{ dashboard.todays_online_appointments }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('waiting-room'); loadCurrentTab()"><span class="label">Waiting</span><strong class="value">{{ dashboard.waiting_patients }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('consultation'); loadCurrentTab()"><span class="label">Active consults</span><strong class="value">{{ dashboard.active_consultations }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('completed'); loadCurrentTab()"><span class="label">Completed</span><strong class="value">{{ dashboard.completed_consultations }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="filters.status='no_show'; tab.set('appointments'); loadCurrentTab()"><span class="label">No show</span><strong class="value">{{ dashboard.missed_no_show }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="tab.set('payments'); loadCurrentTab()"><span class="label">Pending payments</span><strong class="value">{{ dashboard.pending_payments }}</strong></button>
+    <button class="metric-card metric-action danger-text" type="button" (click)="tab.set('consultation'); loadCurrentTab()"><span class="label">Pending Rx</span><strong class="value">{{ dashboard.pending_prescriptions }}</strong></button>
+    <button class="metric-card metric-action" type="button" (click)="tab.set('reports'); loadCurrentTab()"><span class="label">Follow-ups</span><strong class="value">{{ dashboard.follow_up_requests }}</strong></button>
+    <button class="metric-card metric-action" type="button"><span class="label">Doctor availability</span><strong class="value">{{ dashboard.doctors_available }}</strong></button>
+  </section>
+
+  <section *ngIf="dashboard && tab() === 'dashboard'" class="dashboard-summary-grid">
+    <div class="page-card summary-panel"><h2 class="section-title">Status</h2><p *ngFor="let item of dashboard.by_status | keyvalue: sortKeyValue"><span>{{ item.key.replaceAll('_', ' ') }}</span><strong>{{ item.value }}</strong></p></div>
+    <div class="page-card summary-panel"><h2 class="section-title">Payment</h2><p *ngFor="let item of dashboard.by_payment_status | keyvalue: sortKeyValue"><span>{{ item.key.replaceAll('_', ' ') }}</span><strong>{{ item.value }}</strong></p></div>
+  </section>
+
+  <section *ngIf="tab() === 'appointments' || tab() === 'waiting-room' || tab() === 'payments'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">{{ tab() === 'waiting-room' ? 'Virtual Waiting Room' : tab() === 'payments' ? 'Telemedicine Payments' : 'Online Appointments' }}</h2><div class="section-copy">Appointments, consent, payment, queue status, and doctor start actions.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.telemedicineAppointmentCreate)" (click)="openModal('appointment')">Book</button></div>
+    <table class="table">
+      <thead><tr><th>Appointment</th><th>Patient</th><th>Doctor</th><th>Payment</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <tr *ngFor="let item of appointments">
+          <td><strong>{{ item.telemedicine_number }}</strong><small>{{ item.appointment_at | date:'short' }} · {{ item.queue_number || '-' }}</small></td>
+          <td>{{ item.patient_name }}<small>{{ item.consultation_reason || '-' }}</small></td>
+          <td>{{ item.doctor_name }}<small>{{ item.department_name || 'Telemedicine' }}</small></td>
+          <td><span [class]="statusClass(item.payment_status)">{{ item.payment_status.replaceAll('_', ' ') }}</span><small>{{ formatMoney(item.consultation_fee) }}</small></td>
+          <td><span [class]="statusClass(item.status)">{{ item.status.replaceAll('_', ' ') }}</span><small>{{ item.consent_accepted ? 'Consent accepted' : 'Consent pending' }}</small></td>
+          <td class="action-cell">
+            <details class="row-action-menu">
+              <summary>Actions</summary>
+              <div class="row-action-menu__panel">
+                <button type="button" (click)="acceptConsent(item)" *ngIf="!item.consent_accepted">Record Consent</button>
+                <button type="button" (click)="markPaid(item)" *ngIf="item.payment_status !== 'paid' && session.hasPermission(permissions.telemedicinePaymentView)">Mark Paid</button>
+                <button type="button" (click)="updateAppointmentStatus(item, 'waiting')">Move to Waiting</button>
+                <button type="button" *ngIf="session.hasPermission(permissions.telemedicineConsultationStart)" (click)="startConsultation(item)">Start Consultation</button>
+                <button class="danger-action" type="button" (click)="updateAppointmentStatus(item, 'no_show')">No-show</button>
+              </div>
+            </details>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div *ngIf="!appointments.length" class="table-empty">No telemedicine appointments match the selected filters.</div>
+  </section>
+
+  <section *ngIf="tab() === 'consultation' || tab() === 'completed'" class="consult-layout">
+    <aside class="page-card">
+      <div class="section-header"><div><h2 class="section-title">Consultations</h2><div class="section-copy">Select a patient to continue documentation.</div></div></div>
+      <button class="list-row" type="button" *ngFor="let item of consultations" [class.active]="selectedConsultation?.id === item.id" (click)="selectConsultation(item)">
+        <strong>{{ item.patient_name }}</strong><span>{{ item.telemedicine_number }} · {{ item.status.replaceAll('_', ' ') }}</span>
+      </button>
+      <div *ngIf="!consultations.length" class="table-empty">No consultations match the selected filters.</div>
+    </aside>
+    <section class="page-card consult-panel" *ngIf="selectedConsultation">
+      <div class="section-header"><div><h2 class="section-title">{{ selectedConsultation.patient_name }} · {{ selectedConsultation.patient_number }}</h2><div class="section-copy">{{ selectedConsultation.telemedicine_number }} · Started {{ selectedConsultation.started_at | date:'short' }}</div></div><span [class]="statusClass(selectedConsultation.connection_status)">{{ selectedConsultation.connection_status }}</span></div>
+      <div class="video-placeholder"><strong>Video/audio panel</strong><span>{{ selectedConsultation.telemedicine_number }} · timer starts at {{ selectedConsultation.started_at | date:'shortTime' }}</span><div class="toolbar-row"><button class="secondary-btn compact-btn" type="button">Mute</button><button class="secondary-btn compact-btn" type="button">Camera</button><button class="secondary-btn compact-btn" type="button">Rejoin</button><button class="danger-btn compact-btn" type="button">End Call</button></div></div>
+      <div class="form-grid">
+        <label class="field field--wide"><span>Current Complaint</span><textarea [(ngModel)]="consultationForm['current_complaint']" name="complaint" placeholder="Current complaint"></textarea></label>
+        <label class="field field--wide"><span>Notes</span><textarea [(ngModel)]="consultationForm['notes']" name="notes" placeholder="Notes"></textarea></label>
+        <label class="field"><span>Diagnosis</span><textarea [(ngModel)]="consultationForm['diagnosis']" name="diagnosis" placeholder="Diagnosis"></textarea></label>
+        <label class="field"><span>Prescription</span><textarea [(ngModel)]="consultationForm['prescription_text']" name="rx" placeholder="Prescription"></textarea></label>
+        <label class="field"><span>Advice</span><textarea [(ngModel)]="consultationForm['advice']" name="advice" placeholder="Advice"></textarea></label>
+        <label class="field"><span>Follow-up Date</span><input type="date" [(ngModel)]="consultationForm['follow_up_date']" name="followup" /></label>
+        <label class="field field--wide"><span>Follow-up Plan</span><textarea [(ngModel)]="consultationForm['follow_up_plan']" name="followupPlan" placeholder="Follow-up plan"></textarea></label>
+      </div>
+      <div class="toolbar-row"><button class="secondary-btn" type="button" (click)="saveConsultation()">Save</button><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.telemedicineConsultationComplete)" (click)="completeConsultation()">Complete</button><button class="secondary-btn" type="button" *ngIf="session.hasPermission(permissions.outpatientInvestigationOrder)" (click)="openModal('investigation')">Order Lab/Radiology</button><button class="secondary-btn" type="button" *ngIf="session.hasPermission(permissions.telemedicineFileUpload)" (click)="openModal('file')">Add File</button></div>
+      <div class="chat-box">
+        <h2>Chat</h2>
+        <p *ngFor="let message of chat"><strong>{{ message.sender_name || message.sender_role }}</strong> {{ message.message }} <small>{{ message.created_at | date:'shortTime' }}</small></p>
+        <div class="chat-input"><input [(ngModel)]="chatForm.message" name="chat" placeholder="Secure message" /><button class="secondary-btn" type="button" (click)="sendChat()">Send</button></div>
+      </div>
+      <div class="file-list"><h2>Files</h2><p *ngFor="let file of files">{{ file.file_name }} <small>{{ file.file_category }} · {{ file.validation_status }}</small></p></div>
+    </section>
+  </section>
+
+  <section *ngIf="tab() === 'reports'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Reports</h2><div class="section-copy">Appointment, consultation, payment, follow-up, and prescription reports.</div></div><div class="toolbar-row"><select [(ngModel)]="reportFilters.report_type" name="reportType"><option value="online_appointments">Online appointments</option><option value="doctor_consultation">Doctor-wise consultations</option><option value="department">Department-wise</option><option value="completed_no_show_cancelled">Completed/no-show/cancelled</option><option value="revenue">Revenue</option><option value="payment_pending">Payment pending</option><option value="follow_up">Follow-up</option><option value="prescription">Prescription</option></select><button class="secondary-btn" type="button" (click)="loadReport()">Run</button></div></div>
+    <div class="report-totals"><span *ngFor="let item of report?.totals | keyvalue">{{ item.key }}: <strong>{{ item.value }}</strong></span></div>
+    <table class="table" *ngIf="report?.rows?.length"><thead><tr><th *ngFor="let col of (report?.rows?.[0] || {}) | keyvalue">{{ col.key }}</th></tr></thead><tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let col of row | keyvalue">{{ rowValue(row, col.key) }}</td></tr></tbody></table>
+  </section>
+
+  <section *ngIf="tab() === 'settings'" class="page-card">
+    <div class="section-header"><div><h2 class="section-title">Settings</h2><div class="section-copy">Provider, consent, billing, follow-up, and notification settings.</div></div><button class="primary-btn" type="button" *ngIf="session.hasPermission(permissions.telemedicineSettingsManage)" (click)="openModal('setting')">Add Setting</button></div>
+    <table class="table"><thead><tr><th>Key</th><th>Value</th><th>Description</th></tr></thead><tbody><tr *ngFor="let item of settings"><td>{{ item.setting_key }}</td><td>{{ item.setting_value }}</td><td>{{ item.description || '-' }}</td></tr></tbody></table>
+  </section>
+</section>
+
+<div class="modal-backdrop" *ngIf="modal">
+  <form class="modal-card module-modal" (ngSubmit)="modal === 'appointment' ? saveAppointment() : modal === 'file' ? saveFile() : modal === 'investigation' ? saveInvestigation() : saveSetting()">
+    <header class="modal-header"><div><h2 class="section-title">{{ modal.replace('-', ' ') }}</h2><div class="section-copy">Complete the required telemedicine details and save.</div></div><button class="secondary-btn" type="button" (click)="closeModal()">Close</button></header>
+    <ng-container *ngIf="modal === 'appointment'">
+      <select name="patient" [(ngModel)]="appointmentForm['patient_id']"><option *ngFor="let patient of patients" [value]="patient.id">{{ patient.first_name }} {{ patient.last_name }} · {{ patient.patient_number }}</option></select>
+      <select name="doctor" [(ngModel)]="appointmentForm['doctor_user_id']"><option *ngFor="let doctor of doctors" [value]="doctor.id">{{ doctor.full_name }}</option></select>
+      <input name="departmentName" [(ngModel)]="appointmentForm['department_name']" placeholder="Department" />
+      <input name="appointmentAt" type="datetime-local" [(ngModel)]="appointmentForm['appointment_at']" />
+      <textarea name="reason" [(ngModel)]="appointmentForm['consultation_reason']" placeholder="Consultation reason"></textarea>
+      <select name="visitType" [(ngModel)]="appointmentForm['visit_type']"><option value="new">New</option><option value="follow_up">Follow-up</option></select>
+      <select name="appointmentType" [(ngModel)]="appointmentForm['appointment_type']"><option value="video">Video</option><option value="audio">Audio</option><option value="chat">Chat</option></select>
+      <input name="fee" type="number" [(ngModel)]="appointmentForm['consultation_fee']" placeholder="Fee" />
+      <select name="paymentStatus" [(ngModel)]="appointmentForm['payment_status']"><option value="pending">Pending</option><option value="paid">Paid</option><option value="not_required">Not required</option></select>
+      <label><input type="checkbox" name="consentRequired" [(ngModel)]="appointmentForm['consent_required']" /> Consent required</label>
+    </ng-container>
+    <ng-container *ngIf="modal === 'file'">
+      <input name="fileName" [(ngModel)]="fileForm['file_name']" placeholder="File name" />
+      <input name="fileUrl" [(ngModel)]="fileForm['file_url']" placeholder="Secure file URL" />
+      <select name="mime" [(ngModel)]="fileForm['mime_type']"><option value="application/pdf">PDF</option><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option></select>
+      <input name="fileSize" type="number" [(ngModel)]="fileForm['file_size_bytes']" placeholder="Size bytes" />
+      <input name="fileCategory" [(ngModel)]="fileForm['file_category']" placeholder="Category" />
+    </ng-container>
+    <ng-container *ngIf="modal === 'investigation'">
+      <select name="serviceArea" [(ngModel)]="investigationForm['service_area']"><option value="laboratory">Laboratory</option><option value="radiology">Radiology</option></select>
+      <input name="itemName" [(ngModel)]="investigationForm['item_name']" placeholder="Investigation name" />
+      <textarea name="instructions" [(ngModel)]="investigationForm['instructions']" placeholder="Instructions"></textarea>
+    </ng-container>
+    <ng-container *ngIf="modal === 'setting'">
+      <input name="settingKey" [(ngModel)]="settingForm['setting_key']" placeholder="Setting key" />
+      <textarea name="settingValue" [(ngModel)]="settingForm['setting_value']" placeholder="Setting value"></textarea>
+      <textarea name="settingDescription" [(ngModel)]="settingForm['description']" placeholder="Description"></textarea>
+    </ng-container>
+    <footer class="modal-actions"><button class="secondary-btn" type="button" (click)="closeModal()">Cancel</button><button class="primary-btn" type="submit">Save</button></footer>
+  </form>
+</div>
