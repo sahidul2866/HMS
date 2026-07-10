@@ -8,6 +8,8 @@ import { DoctorDirectoryService } from '../../../../core/services/doctor-directo
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { User } from '../../../../core/models/auth.models';
+import { DoctorSlotAvailability } from '../../../appointments/models/appointment.models';
+import { AppointmentsService } from '../../../appointments/services/appointments.service';
 import { Patient } from '../../../patients/models/patient.models';
 import { PatientService } from '../../../patients/services/patient.service';
 import { TelemedicineAppointment, TelemedicineChatMessage, TelemedicineConsultation, TelemedicineDashboard, TelemedicineFile, TelemedicineReport, TelemedicineSetting } from '../../models/telemedicine.models';
@@ -24,6 +26,7 @@ type TelemedicineTab = 'dashboard' | 'appointments' | 'waiting-room' | 'consulta
 })
 export class TelemedicineWorkspaceComponent {
   private readonly telemedicine = inject(TelemedicineService);
+  private readonly appointmentsService = inject(AppointmentsService);
   private readonly patientService = inject(PatientService);
   private readonly doctorDirectory = inject(DoctorDirectoryService);
   private readonly route = inject(ActivatedRoute);
@@ -44,6 +47,8 @@ export class TelemedicineWorkspaceComponent {
   doctors: User[] = [];
   settings: TelemedicineSetting[] = [];
   report: TelemedicineReport | null = null;
+  appointmentSlots: DoctorSlotAvailability[] = [];
+  appointmentSlotsLoading = false;
   selectedConsultation: TelemedicineConsultation | null = null;
   chat: TelemedicineChatMessage[] = [];
   files: TelemedicineFile[] = [];
@@ -106,7 +111,10 @@ export class TelemedicineWorkspaceComponent {
     this.modal = name;
     this.error = '';
     this.success = '';
-    if (name === 'appointment') this.appointmentForm = { patient_id: this.patients[0]?.id || '', doctor_user_id: this.doctors[0]?.id || '', department_name: '', appointment_at: this.localDateTime(30), consultation_reason: '', visit_type: 'new', appointment_type: 'video', payment_status: 'pending', consultation_fee: 0, consent_required: true, contact_phone: '', contact_email: '' };
+    if (name === 'appointment') {
+      this.appointmentForm = { patient_id: this.patients[0]?.id || '', doctor_user_id: this.doctors[0]?.id || '', department_name: '', appointment_date: this.today, appointment_at: '', consultation_reason: '', visit_type: 'new', appointment_type: 'video', payment_status: 'pending', consultation_fee: 0, consent_required: true, contact_phone: '', contact_email: '' };
+      this.loadAppointmentSlots();
+    }
     if (name === 'consent') this.appointmentForm = { ...this.appointmentForm, consent_by: '', consent_terms_version: 'v1' };
     if (name === 'file') this.fileForm = { patient_id: this.selectedConsultation?.patient_id || this.patients[0]?.id || '', consultation_id: this.selectedConsultation?.id || '', file_category: 'medical_document', file_name: '', mime_type: 'application/pdf', file_size_bytes: 0, file_url: '' };
     if (name === 'setting') this.settingForm = { setting_key: '', setting_value: '', description: '' };
@@ -118,7 +126,39 @@ export class TelemedicineWorkspaceComponent {
   }
 
   saveAppointment(): void {
-    this.submit(this.telemedicine.createAppointment(this.clean(this.appointmentForm)), 'Online appointment booked');
+    if (!this.appointmentForm['appointment_at']) {
+      this.showError({ message: 'Select an available doctor slot.' });
+      return;
+    }
+    const { appointment_date: _appointmentDate, ...payload } = this.appointmentForm;
+    this.submit(this.telemedicine.createAppointment(this.clean(payload)), 'Online appointment booked');
+  }
+
+  loadAppointmentSlots(): void {
+    const doctorId = String(this.appointmentForm['doctor_user_id'] || '');
+    const slotDate = String(this.appointmentForm['appointment_date'] || '');
+    this.appointmentSlots = [];
+    this.appointmentForm['appointment_at'] = '';
+    if (!doctorId || !slotDate) {
+      return;
+    }
+    this.appointmentSlotsLoading = true;
+    this.appointmentsService.getDoctorSlots(doctorId, slotDate).subscribe({
+      next: (response) => {
+        this.appointmentSlots = response.slots || [];
+        const firstAvailable = this.appointmentSlots.find((slot) => slot.status === 'available');
+        this.appointmentForm['appointment_at'] = firstAvailable?.slot_start_at || '';
+        this.appointmentSlotsLoading = false;
+      },
+      error: (error) => {
+        this.appointmentSlotsLoading = false;
+        this.showError(error);
+      },
+    });
+  }
+
+  availableAppointmentSlots(): DoctorSlotAvailability[] {
+    return this.appointmentSlots.filter((slot) => slot.status === 'available');
   }
 
   updateAppointmentStatus(item: TelemedicineAppointment, status: string): void {

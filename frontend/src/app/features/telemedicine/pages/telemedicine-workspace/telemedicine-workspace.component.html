@@ -124,9 +124,14 @@
     <header class="modal-header"><div><h2 class="section-title">{{ modal.replace('-', ' ') }}</h2><div class="section-copy">Complete the required telemedicine details and save.</div></div><button class="secondary-btn" type="button" (click)="closeModal()">Close</button></header>
     <ng-container *ngIf="modal === 'appointment'">
       <select name="patient" [(ngModel)]="appointmentForm['patient_id']"><option *ngFor="let patient of patients" [value]="patient.id">{{ patient.first_name }} {{ patient.last_name }} · {{ patient.patient_number }}</option></select>
-      <select name="doctor" [(ngModel)]="appointmentForm['doctor_user_id']"><option *ngFor="let doctor of doctors" [value]="doctor.id">{{ doctor.full_name }}</option></select>
+      <select name="doctor" [(ngModel)]="appointmentForm['doctor_user_id']" (ngModelChange)="loadAppointmentSlots()"><option *ngFor="let doctor of doctors" [value]="doctor.id">{{ doctor.full_name }}</option></select>
       <input name="departmentName" [(ngModel)]="appointmentForm['department_name']" placeholder="Department" />
-      <input name="appointmentAt" type="datetime-local" [(ngModel)]="appointmentForm['appointment_at']" />
+      <input name="appointmentDate" type="date" [(ngModel)]="appointmentForm['appointment_date']" (ngModelChange)="loadAppointmentSlots()" />
+      <select name="appointmentAt" [(ngModel)]="appointmentForm['appointment_at']" [disabled]="appointmentSlotsLoading || !availableAppointmentSlots().length">
+        <option value="">{{ appointmentSlotsLoading ? 'Loading slots...' : 'Select available slot' }}</option>
+        <option *ngFor="let slot of availableAppointmentSlots()" [value]="slot.slot_start_at">{{ slot.slot_start_at | date:'shortTime' }}</option>
+      </select>
+      <div class="table-empty compact-empty" *ngIf="!appointmentSlotsLoading && appointmentForm['doctor_user_id'] && appointmentForm['appointment_date'] && !availableAppointmentSlots().length">No available slots for this doctor/date.</div>
       <textarea name="reason" [(ngModel)]="appointmentForm['consultation_reason']" placeholder="Consultation reason"></textarea>
       <select name="visitType" [(ngModel)]="appointmentForm['visit_type']"><option value="new">New</option><option value="follow_up">Follow-up</option></select>
       <select name="appointmentType" [(ngModel)]="appointmentForm['appointment_type']"><option value="video">Video</option><option value="audio">Audio</option><option value="chat">Chat</option></select>

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_permissions
+from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.appointments.service import AppointmentsService
 from app.schemas.appointment import (
     AppointmentCheckInRequest,
@@ -55,7 +55,11 @@ def upsert_doctor_schedule(
     return AppointmentsService(db).upsert_doctor_schedule(payload, user)
 
 
-@router.get("/doctor-slots", response_model=DoctorSlotsResponse, dependencies=[Depends(require_permissions("opd.view"))])
+@router.get(
+    "/doctor-slots",
+    response_model=DoctorSlotsResponse,
+    dependencies=[Depends(require_any_permissions("opd.view", "appointment.book", "telemedicine.view", "telemedicine.appointment.create"))],
+)
 def get_doctor_slots(
     doctor_user_id: UUID,
     slot_date: str,

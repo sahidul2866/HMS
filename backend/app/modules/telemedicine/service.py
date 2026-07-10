@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppException
-from app.models.encounter import OPDVisit
+from app.models.encounter import DoctorOPDSchedule, DoctorSlotBooking, OPDVisit
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.patient import Patient
 from app.models.radiology import RadiologyOrder
@@ -116,20 +117,23 @@ class TelemedicineService:
             raise AppException(404, "patient_not_found", "Patient not found")
         if not doctor:
             raise AppException(404, "doctor_not_found", "Doctor not found")
-        if payload.appointment_at <= datetime.now(UTC):
+        appointment_at = self._normalize_dt(payload.appointment_at)
+        if appointment_at <= datetime.now(UTC):
             raise AppException(400, "appointment_in_past", "Appointment must be in the future")
+        payload_data = payload.model_dump(exclude={"uploaded_files", "appointment_at"})
         item = TelemedicineAppointment(
             branch_id=actor.branch_id or patient.branch_id or doctor.branch_id,
             telemedicine_number=self._next_number("TEL", TelemedicineAppointment.telemedicine_number),
-            queue_number=self._next_queue(payload.appointment_at.date(), payload.doctor_user_id),
+            queue_number=self._next_queue(appointment_at.date(), payload.doctor_user_id),
             estimated_wait_minutes=0,
             status="payment_pending" if payload.payment_status in {"pending", "unpaid"} and payload.consultation_fee > 0 else "scheduled",
             video_provider="placeholder",
-            meeting_id=self._next_number("ROOM", TelemedicineAppointment.telemedicine_number),
+            meeting_id=self._next_number("ROOM", TelemedicineAppointment.meeting_id),
             join_url="",
             doctor_join_url="",
             booked_by_user_id=actor.id,
-            **payload.model_dump(exclude={"uploaded_files"}),
+            **payload_data,
+            appointment_at=appointment_at,
             uploaded_files=payload.uploaded_files or [],
             created_by=actor.id,
             updated_by=actor.id,
@@ -138,6 +142,7 @@ class TelemedicineService:
         item.doctor_join_url = f"/telemedicine/consultation/{item.meeting_id}/doctor"
         self.db.add(item)
         self.db.flush()
+        self._create_slot_booking(item, appointment_at, actor)
         if item.status in {"scheduled", "waiting", "ready_to_join"}:
             QueueService(self.db).ensure_token(
                 QueueTokenCreate(
@@ -157,7 +162,9 @@ class TelemedicineService:
                 actor,
                 commit=False,
             )
-        self._audit(actor, "telemedicine.appointment.create", "telemedicine_appointment", item, payload.model_dump(mode="json"), context)
+        audit_detail = payload.model_dump(mode="json")
+        audit_detail["appointment_at"] = appointment_at.isoformat()
+        self._audit(actor, "telemedicine.appointment.create", "telemedicine_appointment", item, audit_detail, context)
         return item
 
     def update_status(self, appointment_id: UUID, payload, actor: User, context: dict[str, str | None]) -> TelemedicineAppointment:
@@ -166,6 +173,8 @@ class TelemedicineService:
         item.status = payload.status
         item.remarks = payload.remarks or item.remarks
         item.updated_by = actor.id
+        if payload.status == "cancelled":
+            self._release_slot_booking(item)
         if payload.status in {"waiting", "ready_to_join"}:
             QueueService(self.db).ensure_token(
                 QueueTokenCreate(
@@ -409,6 +418,64 @@ class TelemedicineService:
         start = datetime(queue_date.year, queue_date.month, queue_date.day, tzinfo=UTC)
         count = self.db.scalar(select(func.count(TelemedicineAppointment.id)).where(TelemedicineAppointment.doctor_user_id == doctor_id, TelemedicineAppointment.appointment_at >= start, TelemedicineAppointment.appointment_at < start + timedelta(days=1))) or 0
         return f"TQ-{int(count) + 1:03d}"
+
+    def _normalize_dt(self, value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    def _create_slot_booking(self, appointment: TelemedicineAppointment, appointment_at: datetime, actor: User) -> None:
+        schedule = self._schedule_for_slot(appointment.doctor_user_id, appointment_at)
+        slot_end_at = appointment_at + timedelta(minutes=schedule.slot_duration_minutes)
+        booking = DoctorSlotBooking(
+            branch_id=appointment.branch_id,
+            doctor_user_id=appointment.doctor_user_id,
+            patient_id=appointment.patient_id,
+            slot_start_at=appointment_at,
+            slot_end_at=slot_end_at,
+            source_type="telemedicine",
+            created_by=actor.id,
+            updated_by=actor.id,
+        )
+        self.db.add(booking)
+        try:
+            self.db.flush()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise AppException(409, "slot_conflict", "Selected slot is already booked") from exc
+
+    def _release_slot_booking(self, appointment: TelemedicineAppointment) -> None:
+        booking = self.db.scalar(
+            select(DoctorSlotBooking).where(
+                DoctorSlotBooking.doctor_user_id == appointment.doctor_user_id,
+                DoctorSlotBooking.patient_id == appointment.patient_id,
+                DoctorSlotBooking.slot_start_at == appointment.appointment_at,
+                DoctorSlotBooking.source_type == "telemedicine",
+            )
+        )
+        if booking:
+            self.db.delete(booking)
+
+    def _schedule_for_slot(self, doctor_user_id: UUID, slot_start_at: datetime) -> DoctorOPDSchedule:
+        schedule = self.db.scalar(
+            select(DoctorOPDSchedule).where(
+                DoctorOPDSchedule.doctor_user_id == doctor_user_id,
+                DoctorOPDSchedule.weekday == slot_start_at.date().weekday(),
+            )
+        )
+        if not schedule:
+            raise AppException(400, "schedule_not_configured", "Doctor schedule is not configured for this day")
+
+        start_hour, start_minute = [int(part) for part in schedule.start_time.split(":")]
+        end_hour, end_minute = [int(part) for part in schedule.end_time.split(":")]
+        start_dt = datetime.combine(slot_start_at.date(), time(start_hour, start_minute), tzinfo=UTC)
+        end_dt = datetime.combine(slot_start_at.date(), time(end_hour, end_minute), tzinfo=UTC)
+        step = timedelta(minutes=schedule.slot_duration_minutes + schedule.buffer_minutes)
+        slot_size = timedelta(minutes=schedule.slot_duration_minutes)
+        current = start_dt
+        while current + slot_size <= end_dt:
+            if current == slot_start_at:
+                return schedule
+            current += step
+        raise AppException(400, "slot_not_in_schedule", "Selected slot is outside configured schedule")
 
     def _patient_name(self, patient: Patient | None) -> str | None:
         return f"{patient.first_name} {patient.last_name}".strip() if patient else None
