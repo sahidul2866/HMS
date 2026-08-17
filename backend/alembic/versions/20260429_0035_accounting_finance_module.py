@@ -10,6 +10,7 @@ import sqlalchemy as sa
 
 from app.models.base import Base
 import app.models.accounting  # noqa: F401
+import app.models.inventory  # noqa: F401  - required by supplier foreign keys
 
 revision = "20260429_0035"
 down_revision = "20260429_0034"

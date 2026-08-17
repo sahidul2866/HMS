@@ -26,7 +26,7 @@
 }
 
 .topbar {
-  position: relative;
+  position: static;
   z-index: 1800;
   display: flex;
   justify-content: space-between;
@@ -39,6 +39,10 @@
   background: color-mix(in srgb, var(--surface) 94%, white 6%);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(10px);
+}
+
+.topbar.account-menu-open {
+  position: relative;
 }
 
 .page-body {

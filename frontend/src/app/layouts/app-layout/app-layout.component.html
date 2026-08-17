@@ -18,7 +18,7 @@
       [mobileMode]="isMobileViewport"
     ></app-sidebar>
     <main class="content">
-      <header class="topbar">
+      <header class="topbar" [class.account-menu-open]="accountMenuOpen">
         <div class="topbar-leading">
           @if (isMobileViewport) {
             <button class="menu-btn" type="button" (click)="toggleMobileSidebar()" aria-label="Open navigation">
