@@ -8,9 +8,11 @@ __pycache__/
 .ruff_cache/
 backend/.env
 backend/.venv/
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
 coverage/
 *.log
-
+.db_data/
+.vs/
