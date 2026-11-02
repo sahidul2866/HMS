@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +39,7 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
-def root() -> dict[str, str]:
+def root() -> dict[str, Any]:
     return {
         "name": settings.app_name,
         "version": "1.0.0",
