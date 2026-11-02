@@ -115,7 +115,7 @@ export class SidebarComponent {
         if (item.children?.length) {
           return item.children.length > 0;
         }
-        return this.sessionService.hasPermission(item.permissions);
+        return item.permissionMode === 'any' ? this.sessionService.hasAnyPermission(item.permissions) : this.sessionService.hasPermission(item.permissions);
       });
   }
 

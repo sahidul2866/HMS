@@ -5,6 +5,7 @@ import { ApiCacheService } from '../../../core/services/api-cache.service';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
 import {
+  BillingType,
   BillingInvoice,
   BillingInvoiceFilters,
   BillingInvoiceListItem,
@@ -30,8 +31,16 @@ export class BillingServiceApi extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
 
+  listTypes(): Observable<BillingType[]> { return this.http.get<BillingType[]>(this.url('/billing/types')); }
+  createType(payload: {code:string;name:string;department:string}): Observable<BillingType> { return this.http.post<BillingType>(this.url('/billing/types'),payload); }
+  operations<T>(path:string): Observable<T> { return this.http.get<T>(this.url('/billing/'+path)); }
+  postOperation<T>(path:string,payload:unknown): Observable<T> { return this.http.post<T>(this.url('/billing/'+path),payload); }
+  amendInvoice(id:string,payload:unknown): Observable<BillingInvoice> { return this.http.patch<BillingInvoice>(this.url('/billing/invoices/'+id),payload); }
+
+  refreshServices():Observable<BillingService[]> {this.cache.clear('billing:services:v3');return this.listServices();}
+
   listServices(): Observable<BillingService[]> {
-    return this.cache.getPersistent('billing:services:v2', () => this.http.get<BillingService[]>(this.url('/billing/services')));
+    return this.cache.getPersistent('billing:services:v3', () => this.http.get<BillingService[]>(this.url('/billing/services')));
   }
 
   getSettings(): Observable<BillingSettings> {
@@ -169,7 +178,7 @@ export class BillingServiceApi extends ApiBaseService {
 
   clearServicesCache(): void {
     this.cache.clear('billing:services');
-    this.cache.clear('billing:services:v2');
+    this.cache.clear('billing:services:v3');
   }
 
   clearSettingsCache(): void {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, HostListener, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, Output, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -15,7 +15,7 @@ import { printScanLabel } from '../../utils/scan-print.utils';
   templateUrl: './global-scanner.component.html',
   styleUrls: ['./global-scanner.component.scss'],
 })
-export class GlobalScannerComponent {
+export class GlobalScannerComponent implements OnDestroy {
   private readonly scanner = inject(ScannerService);
   private readonly router = inject(Router);
   private readonly notifications = inject(NotificationService);
@@ -31,6 +31,8 @@ export class GlobalScannerComponent {
   message = '';
   records: ScanResolvedRecord[] = [];
   cameraActive = false;
+  cameraStarting = false;
+  private cameraGeneration = 0;
   cameraSupported = typeof navigator.mediaDevices?.getUserMedia === 'function' && !!(window as any).BarcodeDetector;
   private lastCode = '';
   private lastScanAt = 0;
@@ -92,23 +94,32 @@ export class GlobalScannerComponent {
       next: (response) => {
         this.loading = false;
         this.message = response.message;
-        this.records = response.records;
-        if (response.records.length === 1) this.select(response.records[0]);
+        this.records = response.success ? response.records : [];
+        if (this.records.length === 1) this.select(this.records[0]);
       },
       error: (error) => {
         this.loading = false;
         this.records = [];
-        this.message = error?.error?.message || 'Scan failed';
+        this.message = error?.message || 'Unable to resolve this barcode. Check the code and your connection.';
         this.notifications.error(this.message);
       },
     });
   }
 
+  ngOnDestroy(): void {
+    this.stopCamera();
+    window.clearTimeout(this.bufferTimer);
+  }
+
   select(record: ScanResolvedRecord): void {
+    if (record.safety?.['mismatch']) {
+      this.message = 'This barcode does not match the expected patient or record.';
+      return;
+    }
     this.recordSelected.emit(record);
     this.notifications.success(`${record.display} loaded`);
     if (record.route) {
-      void this.router.navigate([record.route], { queryParams: { scan: record.record_id, scanType: record.record_type } });
+      void this.router.navigate([record.route], { queryParams: { scan: record.record_id, scanType: record.record_type, ...record.query_params } });
     }
     this.close();
   }
@@ -128,52 +139,73 @@ export class GlobalScannerComponent {
       this.message = 'Camera scanning is not available in this browser';
       return;
     }
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: 'environment' } })
-      .then((stream) => {
-        this.cameraStream = stream;
-        this.cameraActive = true;
-        const video = document.getElementById('global-scan-video') as HTMLVideoElement | null;
-        if (video) {
-          video.srcObject = stream;
-          void video.play();
-        }
-        this.scanCameraFrame();
-      })
-      .catch(() => (this.message = 'Unable to open camera'));
+    if (this.cameraStarting || this.cameraActive) return;
+    const generation = ++this.cameraGeneration;
+    this.cameraStarting = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+      if (!this.open || generation !== this.cameraGeneration) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      this.cameraStarting = false;
+      this.cameraStream = stream;
+      this.cameraActive = true;
+      // The video element is rendered on the next Angular update.
+      this.cameraTimer = window.setTimeout(() => this.scanCameraFrame(), 0);
+    }).catch(error => {
+      if (generation !== this.cameraGeneration) return;
+      this.cameraStarting = false;
+      this.message = error?.name === 'NotAllowedError'
+        ? 'Camera permission was denied. Allow camera access in browser settings, use a USB scanner, or type the code.'
+        : 'Camera is unavailable. Connect a camera, use a USB scanner, or type the code.';
+    });
   }
 
   stopCamera(): void {
+    this.cameraGeneration++;
     window.clearTimeout(this.cameraTimer);
-    this.cameraStream?.getTracks().forEach((track) => track.stop());
+    this.cameraStream?.getTracks().forEach(track => track.stop());
     this.cameraStream = undefined;
     this.cameraActive = false;
+    this.cameraStarting = false;
   }
 
   private scanCameraFrame(): void {
     if (!this.cameraActive) return;
+    const generation = this.cameraGeneration;
     const video = document.getElementById('global-scan-video') as HTMLVideoElement | null;
     const Detector = (window as any).BarcodeDetector;
+    if (video && this.cameraStream && video.srcObject !== this.cameraStream) {
+      video.srcObject = this.cameraStream;
+      void video.play().catch(() => {
+        this.stopCamera();
+        this.message = 'Camera preview could not start. Use a USB scanner or type the code.';
+      });
+    }
     if (!video || !Detector || video.readyState < 2) {
       this.cameraTimer = window.setTimeout(() => this.scanCameraFrame(), 300);
       return;
     }
-    const detector = new Detector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13'] });
-    detector
-      .detect(video)
-      .then((codes: Array<{ rawValue: string }>) => {
-        if (codes.length && codes[0].rawValue) {
+    try {
+      const detector = new Detector();
+      Promise.resolve(detector.detect(video)).then((codes: Array<{ rawValue: string }>) => {
+        if (!this.cameraActive || generation !== this.cameraGeneration) return;
+        if (codes[0]?.rawValue) {
           this.code = codes[0].rawValue;
           this.stopCamera();
           this.resolve();
-          return;
+        } else {
+          this.cameraTimer = window.setTimeout(() => this.scanCameraFrame(), 300);
         }
-        this.cameraTimer = window.setTimeout(() => this.scanCameraFrame(), 300);
-      })
-      .catch(() => {
+      }).catch(() => {
+        if (generation !== this.cameraGeneration) return;
         this.stopCamera();
-        this.message = 'Camera scan failed';
+        this.message = 'Camera scan failed. Use a USB scanner or type the code.';
       });
+    } catch {
+      this.stopCamera();
+      this.message = 'This browser cannot decode camera barcodes. Use a USB scanner or type the code.';
+    }
   }
 
   private isTypingTarget(target: EventTarget | null): boolean {

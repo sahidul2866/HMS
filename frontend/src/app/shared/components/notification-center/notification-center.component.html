@@ -32,8 +32,8 @@
         </span>
       </article>
 
-      <p class="empty" *ngIf="!loading && !summary.latest.length">No active notifications.</p>
-      <p class="empty" *ngIf="loading">Loading notifications...</p>
+      <p class="empty" *ngIf="!loading && !summary.latest.length">You’re all caught up. New alerts and tasks will appear here.</p>
+      <p class="empty" *ngIf="loading" role="status" aria-busy="true">Loading notifications...<span class="app-inline-skeleton" aria-hidden="true"></span></p>
     </div>
 
     <footer>

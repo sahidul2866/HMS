@@ -1034,7 +1034,9 @@ tbody tr:focus-visible,
 
 .shell.chrome-compact .module-hero .toolbar-row,
 .shell.chrome-focus .module-hero .toolbar-row {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .shell.chrome-focus .module-hero {
@@ -2328,3 +2330,27 @@ textarea.ng-invalid.ng-touched {
 .smart-suggestion-strip button:hover {
   border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
 }
+
+/* Shared state feedback across all feature forms. */
+.app-field-error { display: block; margin-top: .3rem; color: var(--danger, #b91c1c); font-size: .82rem; line-height: 1.4; }
+[aria-invalid="true"] { border-color: var(--danger, #b91c1c) !important; outline-color: var(--danger, #b91c1c); }
+.app-state-guidance { display: block; margin-top: .4rem; font-size: .88em; line-height: 1.5; color: var(--text-muted); }
+
+.app-inline-skeleton { display: block; width: min(100%, 480px); height: 3.5rem; margin: .8rem auto; border-radius: 6px; background: linear-gradient(90deg, var(--border), var(--surface), var(--border)); background-size: 200% 100%; animation: app-state-shimmer 1.5s linear infinite; }
+@keyframes app-state-shimmer { to { background-position: -200% 0; } }
+.light-view .app-inline-skeleton { display: none; }
+@media (prefers-reduced-motion: reduce) { .app-inline-skeleton { animation: none; } }
+
+.light-view *, .light-view *::before, .light-view *::after { animation: none !important; }
+
+/* Hero headings follow each module's chosen foreground, including dark banners. */
+.module-hero .page-title, .module-hero .page-subtitle { color: inherit; }
+
+body:has(.patient-popup-open) app-floating-assistant {visibility:hidden;pointer-events:none;}
+
+/* Native table layout inside a scrolling boundary keeps records aligned. */
+.table.data-table {display:table;width:100%;white-space:normal;overflow:visible;table-layout:auto;}
+.content:has(app-billing-create) .quick-flow {display:none;}
+
+/* Grid children must shrink before their inner tables start scrolling. */
+.page-body,.workspace-shell{min-width:0;grid-template-columns:minmax(0,1fr);}.page-body>*{min-width:0;max-width:100%;}

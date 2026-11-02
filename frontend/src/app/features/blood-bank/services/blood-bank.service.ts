@@ -74,6 +74,8 @@ export class BloodBankService extends ApiBaseService {
     return this.http.post<BloodUnit>(this.url(`/blood-bank/units/${unitId}/move`), { storage_location_id: storageLocationId, remarks }).pipe(tap(() => this.clearCache()));
   }
 
+  listIssues():Observable<Array<{id:string;issue_number:string;unit_number:string;patient_name:string;returned:boolean;transfusion_status:string|null;unit_status:string}>>{return this.http.get<Array<{id:string;issue_number:string;unit_number:string;patient_name:string;returned:boolean;transfusion_status:string|null;unit_status:string}>>(this.url('/blood-bank/issues'));}
+
   listRequests(params: Record<string, string | number | undefined> = {}): Observable<PaginatedResponse<BloodRequest>> {
     const query = this.toQuery(params);
     return this.cache.get(`blood-bank:requests:${query}`, () => this.http.get<PaginatedResponse<BloodRequest>>(this.url(`/blood-bank/requests${query}`)));

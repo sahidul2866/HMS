@@ -132,7 +132,7 @@ td small {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
   gap: 0.5rem;
 }
 
@@ -275,3 +275,8 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+.case-search { display:grid;gap:6px;margin:12px 0;min-width:0; }
+.case-search input { width:100%;min-width:0;box-sizing:border-box; }
+.schedule-list { max-height:32rem;overflow:auto;overscroll-behavior:contain; }
+@media(max-width:720px){.workflow-layout.case-selected>.case-panel{order:-1;}.schedule-list{max-height:24rem;}}

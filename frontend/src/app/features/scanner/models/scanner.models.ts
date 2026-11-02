@@ -4,6 +4,7 @@ export interface ScanResolvedRecord {
   display: string;
   status?: string | null;
   route?: string | null;
+  query_params?: Record<string, string>;
   module: string;
   permission: string;
   safety: Record<string, unknown>;

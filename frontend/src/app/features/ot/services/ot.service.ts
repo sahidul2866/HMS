@@ -9,6 +9,8 @@ import { OTBooking, OTCaseSheet, OTDashboard, OTRoom, OTSchedule } from '../mode
 export class OTService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
 
+  postChargeInvoice(id:string):Observable<{invoice_id:string}>{return this.http.post<{invoice_id:string}>(this.url('/ot/billing-items/'+id+'/invoice'),{}).pipe(tap(()=>this.cache.clearPrefix('ot:')));}
+  updateRoomStatus(id:string,status:string,reason:string):Observable<OTRoom>{return this.http.patch<OTRoom>(this.url('/ot/rooms/'+id+'/status'),{status,reason}).pipe(tap(()=>this.clear()));}
   dashboard(): Observable<OTDashboard> {
     return this.cache.get('ot:dashboard', () => this.http.get<OTDashboard>(this.url('/ot/dashboard')));
   }

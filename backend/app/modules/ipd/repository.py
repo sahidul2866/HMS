@@ -90,7 +90,7 @@ class IPDRepository:
         return self.db.get(IPDBed, bed_id)
 
     def get_bed_by_number(self, branch_id, ward_name: str, bed_number: str) -> IPDBed | None:
-        stmt = select(IPDBed).where(IPDBed.ward_name == ward_name, IPDBed.bed_number == bed_number)
+        stmt = select(IPDBed).where(func.lower(IPDBed.ward_name) == ward_name.strip().lower(), func.lower(IPDBed.bed_number) == bed_number.strip().lower())
         if branch_id:
             stmt = stmt.where(IPDBed.branch_id == branch_id)
         return self.db.scalar(stmt)

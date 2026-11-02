@@ -9,7 +9,8 @@ export const authInterceptor: HttpInterceptorFn = (request: HttpRequest<unknown>
   const tokenStorage = inject(TokenStorageService);
   const authService = inject(AuthService);
   const accessToken = tokenStorage.getAccessToken();
-  const shouldAttachAccessToken = !request.headers.has('X-Skip-Auth-Refresh')
+  const shouldAttachAccessToken = !request.url.endsWith('/auth/login')
+    && !request.url.endsWith('/patient-auth/login')
     && !request.url.endsWith('/auth/refresh')
     && !request.url.endsWith('/patient-auth/refresh')
     && !request.url.endsWith('/patient-auth/register')

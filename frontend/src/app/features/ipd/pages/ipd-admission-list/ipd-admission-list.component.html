@@ -32,7 +32,7 @@
       </div>
     </div>
     @if (displayedAdmissions.length) {
-    <table class="table">
+    <div class="admission-table-wrap"><table class="table">
       <thead>
         <tr>
           <th class="sortable-th" [ngClass]="sortClass('admission_number')" (click)="toggleSort('admission_number')">Admission No</th>
@@ -67,14 +67,14 @@
           </tr>
         }
       </tbody>
-    </table>
+    </table></div>
     <div class="pager-row">
       <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
       <span>Page {{ page }} of {{ totalPages }}</span>
       <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
     </div>
     } @else {
-      <div class="table-empty">No admissions match the current search.</div>
+      <div class="table-empty">No admissions match the current search.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
     }
   </section>
 </section>

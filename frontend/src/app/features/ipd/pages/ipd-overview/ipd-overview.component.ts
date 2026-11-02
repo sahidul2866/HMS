@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Observable, finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
@@ -30,6 +31,8 @@ export class IPDOverviewComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
+  loadingWorkspace=false;workspaceError='';actionError='';saving=false;private workspaceRequest=0;
+  get canEditAdmission():boolean{return !!this.selectedAdmission&&!['discharged','cancelled'].includes(this.selectedAdmission.status);}
   summary: IPDSummary | null = null;
   reportSummary: IPDReportSummary | null = null;
   admissions: IPDAdmission[] = [];
@@ -109,7 +112,7 @@ export class IPDOverviewComponent {
     service_area: ['pharmacy'],
     item_name: ['', Validators.required],
     instructions: [''],
-    quantity: [1],
+    quantity: [1,[Validators.required,Validators.min(0.01)]],
     priority: ['routine'],
     scheduled_at: [''],
     frequency: [''],
@@ -150,6 +153,8 @@ export class IPDOverviewComponent {
   });
 
   constructor() {
+    this.isPatientWorkspace=!!this.route.snapshot.paramMap.get('admissionId');
+    this.orderForm.controls.order_type.valueChanges.subscribe(type=>this.orderForm.patchValue({service_area:({medicine:'pharmacy',lab:'laboratory',radiology:'radiology'} as Record<string,string>)[type||'']||''}));
     this.loadAll();
     this.assignmentForm.get('role_type')?.valueChanges.subscribe((role) => {
       this.assignmentForm.patchValue({
@@ -172,12 +177,14 @@ export class IPDOverviewComponent {
       const admissionId = params.get('admissionId');
       this.isPatientWorkspace = !!admissionId;
       if (admissionId) {
-        this.ipdService.getAdmission(admissionId).subscribe((admission) => this.selectAdmission(admission));
+        this.loadingWorkspace=true;this.workspaceError='';this.workspace=null;this.selectedAdmission=null;
+        this.ipdService.getAdmission(admissionId).subscribe({next:admission=>this.selectAdmission(admission),error:error=>{this.loadingWorkspace=false;this.workspaceError=error?.message||'Unable to load this admission. Check your access and retry.';}});
       }
     });
   }
 
   loadAll(): void {
+    if(!this.isPatientWorkspace){
     this.ipdService.getSummary().subscribe((summary) => (this.summary = summary));
     this.ipdService.reportSummary().subscribe((summary) => (this.reportSummary = summary));
     this.loadBedBoard();
@@ -190,10 +197,11 @@ export class IPDOverviewComponent {
         }
       }
     });
+    this.loadHandoverBoard();
+    }
     this.ipdService.listBeds().subscribe((beds) => (this.beds = beds));
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
     this.ipdService.getSettings().subscribe((settings) => (this.settings = settings));
-    this.loadHandoverBoard();
   }
 
   loadBedBoard(): void {
@@ -246,17 +254,20 @@ export class IPDOverviewComponent {
     if (!this.confirmationService.confirmImportant(`Finalize discharge for ${admission.admission_number}?\n\nConfirm only after clinical and billing readiness has been reviewed.`)) {
       return;
     }
-    this.ipdService.discharge(admission.id, this.dischargeForm.getRawValue() as never).subscribe({
+    if(this.saving)return;this.saving=true;
+    this.ipdService.discharge(admission.id, this.dischargeForm.getRawValue() as never).pipe(finalize(()=>this.saving=false)).subscribe({
       next: (updated) => {
         this.selectedAdmission = updated;
+        this.patientPanel=null;this.loadWorkspace(updated.id);
         this.loadAll();
         this.notificationService.success(`Admission ${admission.admission_number} discharged.`);
       },
-      error: (error) => this.notificationService.error(error?.error?.message || error?.error?.error?.message || 'Unable to finalize discharge.'),
+      error: (error) => {this.actionError=error?.message||error?.error?.error?.message||'Unable to finalize discharge. Review readiness and retry.';},
     });
   }
 
   selectAdmission(admission: IPDAdmission): void {
+    this.workspace=null;this.billingSummary=null;this.dischargeReadiness=null;this.patientPanel=null;
     this.selectedAdmission = admission;
     this.loadWorkspace(admission.id);
     this.transferForm.patchValue({
@@ -280,8 +291,12 @@ export class IPDOverviewComponent {
   }
 
   loadWorkspace(admissionId: string): void {
+    const request=++this.workspaceRequest;
+    this.loadingWorkspace=true;this.workspaceError='';
     this.loadBillingSummary(admissionId);
-    this.ipdService.getWorkspace(admissionId).subscribe((workspace) => {
+    this.ipdService.getWorkspace(admissionId).subscribe({next:(workspace) => {
+      if(request!==this.workspaceRequest||this.selectedAdmission?.id!==admissionId)return;
+      this.loadingWorkspace=false;
       this.workspace = workspace;
       this.selectedAdmission = workspace.admission;
       this.handoverForm.patchValue({
@@ -293,39 +308,58 @@ export class IPDOverviewComponent {
       this.loadStaffAvailability();
       this.loadShiftCoverage();
       this.loadDischargeReadiness(admissionId);
-    });
+    },error:error=>{if(request===this.workspaceRequest){this.loadingWorkspace=false;this.workspaceError=error?.message||'Unable to refresh the admission. Your entered notes are still here; retry loading.';}}});
   }
 
   loadDischargeReadiness(admissionId: string): void {
-    this.ipdService.dischargeReadiness(admissionId).subscribe((readiness) => (this.dischargeReadiness = readiness));
+    this.ipdService.dischargeReadiness(admissionId).subscribe((readiness) => {if(this.selectedAdmission?.id===admissionId)this.dischargeReadiness = readiness;});
   }
 
   loadBillingSummary(admissionId: string): void {
-    this.ipdService.billingSummary(admissionId).subscribe((summary) => (this.billingSummary = summary));
+    this.ipdService.billingSummary(admissionId).subscribe((summary) => {if(this.selectedAdmission?.id===admissionId)this.billingSummary = summary;});
   }
 
   get effectiveDischargeBlockers(): string[] {
     if (!this.dischargeReadiness) return [];
     const value = this.dischargeForm.getRawValue();
     return this.dischargeReadiness.checks
-      .filter((check) => !(check.done || (check.key === 'doctor_approval' && !!value.discharge_summary?.trim()) || (check.key === 'summary' && !!value.discharge_summary?.trim() && !!value.discharge_diagnosis?.trim() && !!value.discharge_condition?.trim())))
+      .filter((check) => !(check.done || (check.key === 'summary' && !!value.discharge_summary?.trim() && !!value.discharge_diagnosis?.trim() && !!value.discharge_condition?.trim())))
       .map((check) => check.label);
   }
 
   get effectiveDischargeReady(): boolean {
-    return !!this.dischargeReadiness && this.effectiveDischargeBlockers.length === 0;
+    const value = this.dischargeForm.getRawValue();
+    const override = value.allow_override && !!value.override_reason?.trim() && this.sessionService.hasAnyPermission(['ipd.discharge.approve', 'scope.override']);
+    return !!this.dischargeReadiness && (this.effectiveDischargeBlockers.length === 0 || !!override);
   }
 
   get billingIsCleared(): boolean {
     return !!this.billingSummary && Number(this.billingSummary.total_due) <= 0 && Number(this.billingSummary.unbilled_bed_days) <= 0 && this.billingSummary.unbilled_order_count === 0;
   }
 
+  private panelTrigger:HTMLElement|null=null;
   openPatientPanel(panel: NonNullable<IPDOverviewComponent['patientPanel']>): void {
+    this.panelTrigger=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    this.actionError='';
     this.patientPanel = panel;
+    requestAnimationFrame(()=>document.querySelector<HTMLElement>('.patient-popup-open .popup-close')?.focus());
   }
 
   closePatientPanel(): void {
     this.patientPanel = null;
+    this.panelTrigger?.focus();
+  }
+
+  @HostListener('document:keydown',['$event'])
+  onPanelKeydown(event:KeyboardEvent):void {
+    if(!this.patientPanel||!this.isPatientWorkspace)return;
+    if(event.key==='Escape'){event.preventDefault();this.closePatientPanel();return;}
+    if(event.key!=='Tab')return;
+    const panel=document.querySelector('.patient-popup-open');
+    const controls=Array.from(panel?.querySelectorAll<HTMLElement>('button,input,select,textarea,summary,a[href]')||[]).filter(el=>el.checkVisibility()&&!el.matches(':disabled'));
+    const first=controls[0],last=controls[controls.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
   }
 
   loadStaffAvailability(): void {
@@ -360,6 +394,8 @@ export class IPDOverviewComponent {
   }
 
   openBillingForAdmission(admission: IPDAdmission, stage: 'interim' | 'final' = 'interim'): void {
+    const posted=this.billingSummary?.admission_id===admission.id?this.billingSummary.invoices.find(i=>i.billing_stage==='ipd_final'&&i.status!=='void'):null;
+    if(stage==='final'&&posted){void this.router.navigate(['/billing/list'],{queryParams:{invoiceId:posted.id}});return;}
     void this.router.navigate(['/billing/create'], {
       queryParams: {
         patientId: admission.patient.id,
@@ -374,12 +410,10 @@ export class IPDOverviewComponent {
       return;
     }
     const value = this.transferForm.getRawValue();
-    this.ipdService
-      .transfer(this.selectedAdmission.id, {
-        ...value,
+    this.saveAction(this.ipdService.transfer(this.selectedAdmission.id, {
+        ...this.clean(value),
         bed_id: value.bed_id || null,
-      } as never)
-      .subscribe((admission) => {
+      } as never), (admission) => {
         this.selectedAdmission = admission;
         this.loadAll();
         this.loadWorkspace(admission.id);
@@ -437,7 +471,7 @@ export class IPDOverviewComponent {
       { label: 'Available Beds', value: this.availableBeds.length, tone: 'good' },
       { label: 'Occupied Beds', value: this.occupiedBeds.length, tone: 'warn' },
       { label: 'Long Stay', value: this.longStayAdmissions.length, tone: this.longStayAdmissions.length ? 'danger' : 'good' },
-      { label: 'Pending Bills', value: this.activeAdmissions.length, tone: 'info' },
+      { label: 'Billing Not Cleared', value: this.activeAdmissions.filter(a=>a.billing_status!=='cleared').length, tone: 'info' },
       { label: 'Today Discharge', value: this.dischargedAdmissions.filter((item) => (item.discharged_at || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length, tone: 'good' },
     ];
   }
@@ -471,7 +505,7 @@ export class IPDOverviewComponent {
   }
 
   get pendingOrdersText(): string {
-    const pending = (this.workspace?.orders || []).filter((order) => !['completed', 'verified', 'cancelled'].includes(order.status));
+    const pending = (this.workspace?.orders || []).filter((order) => !['completed', 'verified', 'cancelled','discontinued'].includes(order.status));
     return pending.map((order) => `${order.item_name} (${order.status})`).join(', ');
   }
 
@@ -480,16 +514,11 @@ export class IPDOverviewComponent {
     return due.map((med) => `${med.medicine_name}${med.scheduled_at ? ' ' + new Date(med.scheduled_at).toLocaleTimeString() : ''}`).join(', ');
   }
 
-  dischargeChecklist(admission: IPDAdmission): Array<{ label: string; done: boolean }> {
+  dischargeChecklist(admission: IPDAdmission): Array<{ key?: string; label: string; done: boolean }> {
     if (this.dischargeReadiness?.admission_id === admission.id) {
-      return this.dischargeReadiness.checks.map((item) => ({ label: item.label, done: item.done }));
+      return this.dischargeReadiness.checks.map((item) => ({ key: item.key, label: item.label, done: item.done }));
     }
-    return [
-      { label: 'Doctor approval', done: !!this.dischargeForm.getRawValue().discharge_diagnosis || admission.status === 'discharged' },
-      { label: 'Nursing clearance', done: (admission.pharmacy_clearance_status || '') === 'cleared' || admission.status === 'discharged' },
-      { label: 'Billing review', done: (admission.billing_status || '') === 'cleared' || admission.status === 'discharged' },
-      { label: 'Summary ready', done: !!this.dischargeForm.getRawValue().discharge_summary || admission.status === 'discharged' },
-    ];
+    return [{label:'Readiness is being checked',done:false}];
   }
 
   onTransferBedChanged(): void {
@@ -506,7 +535,7 @@ export class IPDOverviewComponent {
 
   submitAssignment(): void {
     if (!this.selectedAdmission || this.assignmentForm.invalid) return;
-    this.ipdService.assignStaff(this.selectedAdmission.id, this.clean(this.assignmentForm.getRawValue())).subscribe(() => {
+    this.saveAction(this.ipdService.assignStaff(this.selectedAdmission.id, this.clean(this.assignmentForm.getRawValue())), () => {
       this.notificationService.success('Staff assignment saved.');
       this.loadWorkspace(this.selectedAdmission!.id);
       this.loadAll();
@@ -515,16 +544,21 @@ export class IPDOverviewComponent {
 
   submitClinicalNote(): void {
     if (!this.selectedAdmission || this.clinicalNoteForm.invalid) return;
-    this.ipdService.createClinicalNote(this.selectedAdmission.id, this.clean(this.clinicalNoteForm.getRawValue())).subscribe(() => {
+    this.saveAction(this.ipdService.createClinicalNote(this.selectedAdmission.id, this.clean(this.clinicalNoteForm.getRawValue())), () => {
       this.notificationService.success('Clinical note saved.');
       this.clinicalNoteForm.patchValue({ title: '', note: '', diagnosis: '', treatment_plan: '' });
+      this.clinicalNoteForm.markAsPristine();this.clinicalNoteForm.markAsUntouched();
       this.loadWorkspace(this.selectedAdmission!.id);
     });
   }
 
   submitNursingNote(): void {
     if (!this.selectedAdmission) return;
-    this.ipdService.createNursingNote(this.selectedAdmission.id, this.clean(this.nursingNoteForm.getRawValue())).subscribe(() => {
+    const note=this.nursingNoteForm.getRawValue();
+    if(!note.note?.trim()&&!Object.entries(note).some(([key,value])=>key!=='note_type'&&key!=='note'&&value!==null)){
+      this.notificationService.warning('Enter a nursing note or at least one vital reading.');return;
+    }
+    this.saveAction(this.ipdService.createNursingNote(this.selectedAdmission.id, this.clean(this.nursingNoteForm.getRawValue())), () => {
       this.notificationService.success('Nursing note saved.');
       this.nursingNoteForm.reset({ note_type: 'nursing_note' });
       this.loadWorkspace(this.selectedAdmission!.id);
@@ -533,18 +567,20 @@ export class IPDOverviewComponent {
 
   submitOrder(): void {
     if (!this.selectedAdmission || this.orderForm.invalid) return;
-    this.ipdService.createOrder(this.selectedAdmission.id, this.clean(this.orderForm.getRawValue())).subscribe(() => {
+    this.saveAction(this.ipdService.createOrder(this.selectedAdmission.id, this.clean(this.orderForm.getRawValue())), () => {
       this.notificationService.success('IPD order created.');
       this.orderForm.patchValue({ item_name: '', instructions: '', quantity: 1, scheduled_at: '', frequency: '', duration: '', dose: '', route: '' });
+      this.orderForm.markAsPristine();this.orderForm.markAsUntouched();
       this.loadWorkspace(this.selectedAdmission!.id);
     });
   }
 
   submitMedication(): void {
     if (!this.selectedAdmission || this.medicationForm.invalid) return;
-    this.ipdService.administerMedication(this.selectedAdmission.id, this.clean(this.medicationForm.getRawValue())).subscribe(() => {
+    this.saveAction(this.ipdService.administerMedication(this.selectedAdmission.id, this.clean(this.medicationForm.getRawValue())), () => {
       this.notificationService.success('Medication status recorded.');
-      this.medicationForm.patchValue({ medicine_name: '', dose: '', frequency: '', reason: '', remarks: '', allow_duplicate: false });
+      this.medicationForm.patchValue({ order_id:'',scheduled_at:'',medicine_name: '', dose: '', frequency: '', reason: '', remarks: '', allow_duplicate: false });
+      this.medicationForm.markAsPristine();this.medicationForm.markAsUntouched();
       this.loadWorkspace(this.selectedAdmission!.id);
     });
   }
@@ -552,11 +588,13 @@ export class IPDOverviewComponent {
   recordScheduledMedication(medicineName: string, orderId?: string | null, scheduledAt?: string | null): void {
     if (!this.selectedAdmission) return;
     this.medicationForm.patchValue({ medicine_name: medicineName, order_id: orderId as never, scheduled_at: scheduledAt || '', status: 'administered' });
+    const scheduled=this.workspace?.medications.find(m=>m.order_id===orderId&&m.scheduled_at===scheduledAt);
+    this.medicationForm.patchValue({dose:scheduled?.dose||'',route:scheduled?.route||'oral',frequency:scheduled?.frequency||''});
     this.activeWorkflow = 'meds';
   }
 
   completeTask(taskId: string): void {
-    this.ipdService.updateNursingTask(taskId, { status: 'completed', completion_note: 'Completed from IPD workbench' }).subscribe(() => {
+    this.saveAction(this.ipdService.updateNursingTask(taskId, { status: 'completed', completion_note: 'Completed from IPD workbench' }), () => {
       this.notificationService.success('Nursing task completed.');
       if (this.selectedAdmission) this.loadWorkspace(this.selectedAdmission.id);
     });
@@ -564,41 +602,74 @@ export class IPDOverviewComponent {
 
   discontinueOrder(orderId: string): void {
     if (!this.selectedAdmission) return;
-    this.ipdService.updateOrderStatus(this.selectedAdmission.id, orderId, { status: 'discontinued', reason: 'Discontinued from IPD workbench' }).subscribe(() => {
+    const reason=window.prompt('Reason for stopping this treatment order:')?.trim();if(!reason)return;
+    this.saveAction(this.ipdService.updateOrderStatus(this.selectedAdmission.id, orderId, { status: 'discontinued', reason }), () => {
       this.notificationService.success('Order discontinued.');
       this.loadWorkspace(this.selectedAdmission!.id);
     });
   }
 
+  get handoverRecipients():{id:string;name:string}[]{
+    const people=new Map<string,string>();
+    for(const assignment of [...this.activeDoctors,...this.activeNurses])people.set(assignment.staff_user_id,assignment.staff_name);
+    for(const staff of this.staffAvailability)people.set(staff.staff_user_id,staff.staff_name);
+    return Array.from(people,([id,name])=>({id,name}));
+  }
+
   submitHandover(): void {
     if (!this.selectedAdmission || this.handoverForm.invalid) return;
-    this.ipdService.createHandover(this.selectedAdmission.id, this.clean(this.handoverForm.getRawValue())).subscribe(() => {
+    this.saveAction(this.ipdService.createHandover(this.selectedAdmission.id, this.clean(this.handoverForm.getRawValue())), () => {
       this.notificationService.success('Handover created.');
       this.handoverForm.patchValue({ summary: '', pending_items: '', precautions: '', critical_alerts: '', discharge_tasks: '', special_instructions: '' });
+      this.handoverForm.markAsPristine();this.handoverForm.markAsUntouched();
       this.loadWorkspace(this.selectedAdmission!.id);
       this.loadHandoverBoard();
     });
   }
 
   acknowledgeHandover(handoverId: string): void {
-    this.ipdService.acknowledgeHandover(handoverId).subscribe(() => {
+    this.saveAction(this.ipdService.acknowledgeHandover(handoverId), () => {
       this.notificationService.success('Handover acknowledged.');
       if (this.selectedAdmission) this.loadWorkspace(this.selectedAdmission.id);
       this.loadHandoverBoard();
     });
   }
 
-  requestDischarge(): void {
+  requestDischarge(status = 'requested'): void {
     if (!this.selectedAdmission) return;
-    this.ipdService.planDischarge(this.selectedAdmission.id).subscribe((admission) => {
+    this.saveAction(this.ipdService.planDischarge(this.selectedAdmission.id, status),(admission) => {
       this.selectedAdmission = admission;
       this.loadAll();
       this.loadDischargeReadiness(admission.id);
-      this.notificationService.success('Discharge requested.');
+      this.notificationService.success(`Discharge ${status}.`);
     });
   }
 
+  canClearDepartment(department?: string): boolean {
+    const permission = ({ pharmacy: 'pharmacy.dispense', lab: 'laboratory.manage', radiology: 'radiology.manage' } as Record<string, string>)[department || ''];
+    return !!permission && this.sessionService.hasAnyPermission([permission, 'ipd.discharge.approve']);
+  }
+
+  clearDepartment(department?: string): void {
+    if (!this.selectedAdmission || !this.canClearDepartment(department)) return;
+    const note = window.prompt('Clearance note from the responsible department:')?.trim();
+    if (!note) return;
+    this.ipdService.updateClearance(this.selectedAdmission.id, department as 'pharmacy' | 'lab' | 'radiology', note).subscribe({
+      next: admission => { this.selectedAdmission = admission; this.loadDischargeReadiness(admission.id); this.notificationService.success('Department clearance recorded.'); },
+      error: error => this.notificationService.error(error?.message || 'Unable to record department clearance.'),
+    });
+  }
+
+  retryWorkspace():void {const id=this.route.snapshot.paramMap.get('admissionId')||this.selectedAdmission?.id;if(id)this.ipdService.getAdmission(id).subscribe(a=>this.selectAdmission(a));}
+
+  private saveAction<T>(request:Observable<T>,next:(value:T)=>void):void {
+    if(this.saving)return;
+    if(this.selectedAdmission&&!this.canEditAdmission){this.notificationService.warning('This admission is closed. Review the existing care record.');return;}
+    const id=this.selectedAdmission?.id;this.saving=true;this.actionError='';
+    request.pipe(finalize(()=>this.saving=false)).subscribe({next:value=>{if(id===this.selectedAdmission?.id)next(value);},error:error=>{this.actionError=error?.message||'Unable to save. Your form is preserved; check the connection and retry.';}});
+  }
+
   private clean<T extends Record<string, unknown>>(value: T): T {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, item === '' ? null : item])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, item === '' ? null : ['scheduled_at','transfer_time'].includes(key)&&typeof item==='string' ? new Date(item).toISOString() : item])) as T;
   }
 }

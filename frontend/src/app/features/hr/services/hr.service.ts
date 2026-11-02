@@ -1,3 +1,4 @@
+import { DataSyncService } from '../../../core/services/data-sync.service';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
@@ -5,6 +6,7 @@ import { ApiBaseService } from '../../../core/services/api-base.service';
 import { ApiCacheService } from '../../../core/services/api-cache.service';
 import {
   HRAttendance,
+  HRPayrollAdjustment,
   HRDashboardSummary,
   HRDesignation,
   HREmployee,
@@ -26,6 +28,11 @@ import {
 @Injectable({ providedIn: 'root' })
 export class HRService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
+  private readonly dataSync = inject(DataSyncService);
+
+  accountOptions(): Observable<{id: string; full_name: string; username: string}[]> {
+    return this.http.get<{id: string; full_name: string; username: string}[]>(this.url('/hr/account-options'));
+  }
 
   dashboard(): Observable<HRDashboardSummary> {
     return this.cache.get('hr:dashboard', () => this.http.get<HRDashboardSummary>(this.url('/hr/dashboard')));
@@ -33,7 +40,7 @@ export class HRService extends ApiBaseService {
 
   listEmployees(params: { q?: string; status?: string; page?: number; page_size?: number } = {}): Observable<PaginatedResponse<HREmployee>> {
     const query = this.query(params);
-    return this.cache.getPersistent(`hr:employees:${query}`, () => this.http.get<PaginatedResponse<HREmployee>>(this.url(`/hr/employees${query}`)));
+    return this.http.get<PaginatedResponse<HREmployee>>(this.url(`/hr/employees${query}`));
   }
 
   createEmployee(payload: Partial<HREmployee>): Observable<HREmployee> {
@@ -118,6 +125,10 @@ export class HRService extends ApiBaseService {
     return this.http.post<Record<string, unknown>>(this.url('/hr/overtime'), payload).pipe(tap(() => this.clearHRCache()));
   }
 
+  decideOvertime(id: string, status: string): Observable<HROvertime> {
+    return this.http.post<HROvertime>(this.url(`/hr/overtime/${id}/${status}`), {}).pipe(tap(() => this.clearHRCache()));
+  }
+
   listOvertime(): Observable<HROvertime[]> {
     return this.cache.get('hr:overtime', () => this.http.get<HROvertime[]>(this.url('/hr/overtime')));
   }
@@ -129,6 +140,11 @@ export class HRService extends ApiBaseService {
   listLoans(): Observable<HRLoan[]> {
     return this.cache.get('hr:loans', () => this.http.get<HRLoan[]>(this.url('/hr/loans')));
   }
+
+  listAdjustments(): Observable<HRPayrollAdjustment[]> { return this.http.get<HRPayrollAdjustment[]>(this.url('/hr/payroll/adjustments')); }
+  createAdjustment(payload: Record<string, unknown>): Observable<HRPayrollAdjustment> { return this.http.post<HRPayrollAdjustment>(this.url('/hr/payroll/adjustments'), payload).pipe(tap(() => this.clearHRCache())); }
+  decideAdjustment(id: string, status: string): Observable<HRPayrollAdjustment> { return this.http.post<HRPayrollAdjustment>(this.url(`/hr/payroll/adjustments/${id}/${status}`), {}).pipe(tap(() => this.clearHRCache())); }
+  recalculatePayroll(id: string): Observable<HRPayrollRun> { return this.http.post<HRPayrollRun>(this.url(`/hr/payroll/runs/${id}/recalculate`), {}).pipe(tap(() => this.clearHRCache())); }
 
   payrollDashboard(payrollMonth?: string): Observable<HRPayrollDashboard> {
     const query = this.query({ payroll_month: payrollMonth });
@@ -177,7 +193,8 @@ export class HRService extends ApiBaseService {
   }
 
   clearHRCache(): void {
-    this.cache.clearPrefix('hr:');
+    for(const prefix of ['hr:','catering:','accounting:','dashboard:']) this.cache.clearPrefix(prefix);
+    this.dataSync.publish({name:'data.updated',entityType:'hr',modules:['hr','catering','accounting','dashboard'],cachePrefixes:['hr:','catering:','accounting:','dashboard:'],message:'Workforce and payroll updates are available.'});
   }
 
   private query(params: Record<string, string | number | null | undefined>): string {

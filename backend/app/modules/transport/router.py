@@ -1,4 +1,6 @@
 from datetime import date
+from decimal import Decimal
+from pydantic import BaseModel, Field
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -176,6 +178,28 @@ def dispatch(request_id: UUID, payload: TransportDispatchRequest, context=Depend
     return TransportTripRead.model_validate(trip_payload(item))
 
 
+class FareUpdate(BaseModel):
+    amount: Decimal = Field(gt=0,decimal_places=2)
+    reason: str = Field(min_length=5,max_length=500)
+
+@router.patch('/trips/{trip_id}/fare',response_model=TransportTripRead,dependencies=[Depends(require_permissions('transport.billing.manage'))])
+def set_fare(trip_id: UUID,payload: FareUpdate,context=Depends(get_request_context),user=Depends(get_current_user),db: Session=Depends(get_db)):
+    item=TransportService(db)._get_trip(trip_id,user)
+    if item.billing_invoice_id or item.status in {'completed','cancelled'}:
+        from app.core.exceptions import AppException
+        raise AppException(409,'transport_fare_locked','Fare is fixed after invoicing or completion; use cashier returns for corrections')
+    if not item.request or not item.request.billing_required or not item.patient_id:
+        from app.core.exceptions import AppException
+        raise AppException(422,'transport_billing_patient','Select a registered patient and billable request before setting a fare')
+    item.charges={'total':str(payload.amount),'reason':payload.reason};item.updated_by=user.id
+    TransportService(db)._audit(user,'transport.fare.set','transport_trip',item,payload.model_dump(mode='json'),context)
+    db.commit();return TransportTripRead.model_validate(trip_payload(item))
+
+@router.get('/postings',dependencies=[Depends(require_permissions('transport.report.view'))])
+def transport_postings(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from app.modules.support_posting.service import posting_rows
+    return posting_rows(db,user,['transport','transport_fuel','transport_maintenance'])
+
 @router.get("/trips", response_model=list[TransportTripRead], dependencies=[Depends(require_permissions("transport.view"))])
 def list_trips(status: str | None = None, trip_type: str | None = None, vehicle_id: UUID | None = None, driver_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)):
     filters = {k: v for k, v in locals().items() if k not in {"user", "db"} and v is not None}
@@ -219,6 +243,14 @@ def list_maintenance(user=Depends(get_current_user), db: Session = Depends(get_d
 @router.post("/maintenance", response_model=TransportMaintenanceRead, dependencies=[Depends(require_permissions("transport.maintenance.manage"))])
 def create_maintenance(payload: TransportMaintenanceCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     item = TransportService(db).create_maintenance(payload, user, context)
+    db.commit()
+    db.refresh(item)
+    return TransportMaintenanceRead.model_validate(vehicle_log_payload(item))
+
+
+@router.patch("/maintenance/{maintenance_id}/complete", response_model=TransportMaintenanceRead, dependencies=[Depends(require_permissions("transport.maintenance.manage"))])
+def complete_maintenance(maintenance_id: UUID, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
+    item = TransportService(db).complete_maintenance(maintenance_id, user, context)
     db.commit()
     db.refresh(item)
     return TransportMaintenanceRead.model_validate(vehicle_log_payload(item))

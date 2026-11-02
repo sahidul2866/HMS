@@ -8,6 +8,8 @@ from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.ipd.service import IPDService
 from app.schemas.encounter import (
+    IPDBedStatusUpdate,
+    IPDClearanceUpdate,
     IPDAdmissionCreate,
     IPDAdmissionRead,
     IPDBedBoardRow,
@@ -285,8 +287,19 @@ def acknowledge_ipd_handover(handover_id: UUID, context=Depends(get_request_cont
     return IPDHandoverRead.model_validate(IPDService(db).acknowledge_handover(handover_id, user, context), from_attributes=True)
 
 
-@router.post("/admissions/{admission_id}/discharge-plan", response_model=IPDAdmissionRead, dependencies=[Depends(require_permissions("ipd.discharge.request"))])
+@router.post("/admissions/{admission_id}/discharge-plan", response_model=IPDAdmissionRead, dependencies=[Depends(require_any_permissions("ipd.discharge.request", "ipd.discharge.approve"))])
 def plan_ipd_discharge(admission_id: UUID, status: str = "requested", context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> IPDAdmissionRead:
     service = IPDService(db)
     admission = service.plan_discharge(admission_id, user, context, status=status)
     return IPDAdmissionRead.model_validate(service._admission_payload(admission))
+
+
+@router.patch("/admissions/{admission_id}/clearance", response_model=IPDAdmissionRead, dependencies=[Depends(require_any_permissions("ipd.discharge.approve", "pharmacy.dispense", "laboratory.manage", "radiology.manage"))])
+def update_ipd_clearance(admission_id: UUID, payload: IPDClearanceUpdate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> IPDAdmissionRead:
+    service = IPDService(db)
+    return IPDAdmissionRead.model_validate(service._admission_payload(service.update_clearance(admission_id, payload, user)))
+
+
+@router.patch("/beds/{bed_id}/status",response_model=IPDBedRead,dependencies=[Depends(require_permissions("ipd.bed.manage"))])
+def update_bed_status(bed_id: UUID,payload: IPDBedStatusUpdate,user=Depends(get_current_user),context=Depends(get_request_context),db: Session=Depends(get_db)):
+    return IPDService(db).update_bed_status(bed_id,payload,user,context)

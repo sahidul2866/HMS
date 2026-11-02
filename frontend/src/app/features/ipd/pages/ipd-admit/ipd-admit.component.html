@@ -3,7 +3,7 @@
     <div class="hero-row">
       <div>
         <div class="hero-kicker">IPD Admission</div>
-        <h1 class="page-title">Admit Inpatient Patient</h1>
+        <h1 class="page-title">Admit patient</h1>
         <div class="page-subtitle">Compact admission intake for patient, bed, doctor, and finance setup.</div>
       </div>
       <div class="toolbar-row">
@@ -185,11 +185,11 @@
         <div class="section-block">
           <div class="section-headline">
             <div class="section-eyebrow">Step 4</div>
-            <h3>Grantor And Clinical Notes</h3>
+            <h3>Emergency Contact And Clinical Notes</h3>
           </div>
           <div class="form-grid ipd-grid">
             <label class="field">
-              <span>Grantor Name</span>
+              <span>Emergency Contact Name</span>
               <input type="text" formControlName="emergency_contact_name" placeholder="Emergency or guarantor name" />
             </label>
             <label class="field">
@@ -275,8 +275,8 @@
               }
             </label>
             <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.advance_amount, submitted)">
-              <span>Advance Amount</span>
-              <input type="number" formControlName="advance_amount" />
+              <span>Expected Advance</span>
+              <input type="number" min="0" formControlName="advance_amount" /><small>This records the expected amount only. Collect and receipt payments from Billing after admission.</small>
               @if (validation.isInvalid(form.controls.advance_amount, submitted)) {
                 <div class="field-error">{{ validation.errorMessage(form.controls.advance_amount, 'Advance amount') }}</div>
               }
@@ -329,8 +329,7 @@
         <div class="section-eyebrow">Intake Notes</div>
         <ul class="tip-list">
           <li>Select a managed bed to auto-fill ward, bed number, and daily charge.</li>
-          <li>Grantor fields help front desk staff mirror the legacy admission worksheet.</li>
-          <li>Unsupported legacy-only fields stay in the UI intake layer and do not alter the current IPD API contract.</li>
+          <li>Record an emergency contact and review the attending doctor before creating the admission.</li>
         </ul>
       </section>
     </aside>

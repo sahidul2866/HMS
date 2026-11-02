@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormsModule, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { Permission } from '../../../../core/models/auth.models';
 import { NotificationService } from '../../../../core/services/notification.service';
@@ -16,7 +16,7 @@ interface PermissionGroup {
 @Component({
   selector: 'app-role-management',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './role-management.component.html',
   styleUrls: ['./role-management.component.scss'],
 })
@@ -24,6 +24,9 @@ export class RoleManagementComponent {
   private readonly fb = inject(FormBuilder);
   private readonly roleService = inject(RoleService);
   private readonly notificationService = inject(NotificationService);
+
+  permissionQuery='';
+  get filteredPermissionGroups():PermissionGroup[]{const query=this.permissionQuery.trim().toLowerCase();if(!query)return this.permissionGroups;return this.permissionGroups.map(group=>({...group,permissions:group.label.toLowerCase().includes(query)?group.permissions:group.permissions.filter(p=>`${p.code} ${p.description||''}`.toLowerCase().includes(query))})).filter(group=>group.permissions.length);}
 
   roles: AdminRole[] = [];
   permissions: Permission[] = [];

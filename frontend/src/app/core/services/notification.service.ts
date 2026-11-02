@@ -17,8 +17,8 @@ export class NotificationService {
 
   readonly items = this.itemsSignal.asReadonly();
 
-  success(message: string): void {
-    this.push('success', message);
+  success(message: string, nextStep = ''): void {
+    this.push('success', [message,nextStep].filter(Boolean).join(' '));
   }
 
   error(message: string): void {
@@ -38,9 +38,10 @@ export class NotificationService {
   }
 
   private push(level: NotificationLevel, message: string): void {
+    if (this.itemsSignal().some(item => item.level === level && item.message === message)) return;
     const id = this.nextId++;
-    const durationMs = 4500;
-    this.itemsSignal.update((items) => [...items, { id, level, message, createdAt: Date.now(), durationMs }]);
+    const durationMs = level === 'error' || level === 'warning' ? 12000 : 4500;
+    this.itemsSignal.update((items) => [...items.slice(-2), { id, level, message, createdAt: Date.now(), durationMs }]);
     window.setTimeout(() => this.dismiss(id), durationMs);
   }
 }

@@ -1,4 +1,5 @@
 <div class="workspace-shell patient-app-shell">
+  <h1 class="page-title">Patient portal</h1>
   @if (loading) {
     <section class="page-card patient-skeleton">
       <div></div>
@@ -284,7 +285,7 @@
                   </div>
                 </article>
               } @empty {
-                <div class="empty-state">No doctors match this search.</div>
+                <div class="empty-state">No doctors match this search.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
               }
             </div>
           </section>
@@ -397,7 +398,7 @@
                   </div>
                 </article>
               } @empty {
-                <div class="empty-state">No upcoming appointments.</div>
+                <div class="empty-state">No upcoming appointments.<span class="app-state-guidance">Use Book Appointment to choose a doctor and an available date.</span></div>
               }
             </div>
           </div>
@@ -512,7 +513,7 @@
               </div>
             </article>
           } @empty {
-            <div class="empty-state">No prescriptions available yet.</div>
+            <div class="empty-state">No prescriptions available yet.<span class="app-state-guidance">Prescriptions appear after your doctor records them. Contact your care team if one is missing.</span></div>
           }
         </div>
       </section>
@@ -541,7 +542,7 @@
               <span class="status-pill good">{{ report.status }}</span>
             </article>
           } @empty {
-            <div class="empty-state">Approved lab and radiology reports will appear here.</div>
+            <div class="empty-state">Approved lab and radiology reports will appear here.<span class="app-state-guidance">If you are waiting for a report, contact the hospital to check its approval status.</span></div>
           }
         </div>
       </section>
@@ -573,7 +574,7 @@
                 <span class="status-pill" [class.good]="invoice.payment_status === 'paid'" [class.warn]="invoice.payment_status !== 'paid'">{{ invoice.payment_status }}</span>
               </article>
             } @empty {
-              <div class="empty-state">You have no invoices yet.</div>
+              <div class="empty-state">You have no invoices yet.<span class="app-state-guidance">Invoices appear when the hospital bills a service. Contact billing if you expected an invoice.</span></div>
             }
           </div>
         </section>
@@ -588,7 +589,7 @@
                 <span class="status-pill good">{{ formatCurrency(payment.amount) }}</span>
               </article>
             } @empty {
-              <div class="empty-state">No payment receipt yet.</div>
+              <div class="empty-state">No payment receipt yet.<span class="app-state-guidance">Receipts appear after a payment is recorded. Contact billing if you have already paid.</span></div>
             }
           </div>
         </aside>
@@ -619,7 +620,7 @@
               }
             </article>
           } @empty {
-            <div class="empty-state">No IPD admission record is available.</div>
+            <div class="empty-state">No IPD admission record is available.<span class="app-state-guidance">Admissions appear after registration by the hospital. Contact the admissions desk if a record is missing.</span></div>
           }
         </div>
       </section>
@@ -685,7 +686,7 @@
               </div>
             </article>
           } @empty {
-            <div class="empty-state">No documents match your search.</div>
+            <div class="empty-state">No documents match your search.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
           }
         </div>
       </section>
@@ -755,7 +756,7 @@
                 <span class="status-pill info">{{ request.status }}</span>
               </article>
             } @empty {
-              <div class="empty-state">Submitted requests will appear here.</div>
+              <div class="empty-state">Submitted requests will appear here.<span class="app-state-guidance">Use the Request Center form to submit your first request.</span></div>
             }
           </div>
         </aside>
@@ -918,6 +919,14 @@
         </div>
       </section>
     }
+  }
+
+  @if (!loading && !history) {
+    <section class="page-card" role="status">
+      <h2>{{ portalLoadFailed ? 'Patient records could not be loaded' : 'No patient profile linked' }}</h2>
+      <p>{{ portalLoadFailed ? 'Check your connection and try again. Contact reception if your records remain unavailable.' : 'Sign in with a patient account to view appointments, reports and bills. Reception can help link your patient profile.' }}</p>
+      <button class="secondary-btn" type="button" (click)="retryPortal()">Try again</button>
+    </section>
   }
 
   @if (quickActionsModalOpen) {

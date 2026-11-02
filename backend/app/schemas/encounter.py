@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -72,7 +72,7 @@ class OPDVisitOrderCreate(BaseModel):
     item_name: str = Field(min_length=2, max_length=180)
     room_number: str | None = Field(default=None, max_length=60)
     instructions: str | None = None
-    quantity: Decimal = Field(default=1, ge=0.01)
+    quantity: Decimal = Field(default=Decimal("1"), ge=0.01)
 
     @model_validator(mode="after")
     def validate_service_area(self) -> "OPDVisitOrderCreate":
@@ -737,7 +737,19 @@ class IPDTimelineEventRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class IPDBedStayRead(BaseModel):
+    id: UUID
+    ward_name: str
+    bed_number: str
+    daily_rate: Decimal
+    started_at: datetime
+    ended_at: datetime | None = None
+    estimated: bool = False
+    model_config = {"from_attributes": True}
+
+
 class IPDPatientWorkspace(BaseModel):
+    bed_stays: list[IPDBedStayRead] = []
     admission: IPDAdmissionRead
     assignments: list[IPDStaffAssignmentRead]
     clinical_notes: list[IPDClinicalNoteRead]
@@ -782,7 +794,8 @@ class OPDConvertToIPD(BaseModel):
 
 class ClinicalInvestigationWorkItemRead(BaseModel):
     order_id: UUID
-    visit_id: UUID
+    admission_id: UUID | None = None
+    visit_id: UUID | None = None
     visit_number: str
     visit_date: date
     patient_id: UUID
@@ -812,3 +825,14 @@ class ClinicalInvestigationResultUpdate(BaseModel):
     status: str = Field(pattern="^(collected|in_progress|completed|verified|cancelled)$")
     sample_note: str | None = None
     result_text: str | None = None
+
+
+class IPDClearanceUpdate(BaseModel):
+    department: Literal["pharmacy", "lab", "radiology"]
+    status: Literal["pending", "cleared"] = "cleared"
+    note: str = Field(min_length=3, max_length=500)
+
+
+class IPDBedStatusUpdate(BaseModel):
+    status: str = Field(pattern='^(available|cleaning|maintenance|blocked)$')
+    reason: str = Field(min_length=3, max_length=500)

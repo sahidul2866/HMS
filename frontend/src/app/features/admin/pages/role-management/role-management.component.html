@@ -33,31 +33,8 @@
       <button class="primary-btn" type="button" (click)="openCreateRoleModal()">Add Role</button>
     </div>
 
-    <div class="role-list">
-      @for (role of roles; track role.id) {
-        <button
-          class="role-tile"
-          type="button"
-          [class.role-tile--active]="selectedRoleCode === role.code"
-          (click)="loadRole(role.code)"
-        >
-          <div class="role-tile__top">
-            <strong>{{ role.name || role.code }}</strong>
-            <span>{{ getSelectedPermissionCount(role) }}</span>
-          </div>
-          <div class="role-tile__code">{{ role.code }}</div>
-          <div class="role-badges">
-            @if (role.is_doctor_role) {
-              <span class="pill">Doctor Role</span>
-            }
-            @if (role.is_referral_role) {
-              <span class="pill">Referral Enabled</span>
-            }
-          </div>
-          <p class="muted">{{ role.description || 'No description provided.' }}</p>
-        </button>
-      }
-    </div>
+    <label class="field"><span>Role to edit</span><select [ngModel]="selectedRoleCode" (ngModelChange)="loadRole($event)" [ngModelOptions]="{standalone:true}"><option value="">Select a role</option>@for(role of roles;track role.id){<option [value]="role.code">{{role.name||role.code}} · {{getSelectedPermissionCount(role)}} permissions</option>}</select></label>
+
   </section>
 
   <div class="role-layout">
@@ -70,7 +47,7 @@
             @if (selectedRole) {
               {{ selectedRole.description || 'Use module cards to select permissions for this role.' }}
             } @else {
-              Choose a role from the left to begin editing.
+              Choose a role above to begin editing.
             }
           </p>
         </div>
@@ -90,7 +67,7 @@
         </div>
       </div>
 
-      <section class="scope-editor">
+      <details class="scope-editor"><summary>Access boundaries and role scopes</summary>
         <div class="scope-editor__header">
           <div>
             <p class="editor-label">Role Scopes</p>
@@ -163,11 +140,12 @@
             </article>
           }
         </div>
-      </section>
+      </details>
 
+      <label class="field permission-search"><span>Find permissions</span><input type="search" [(ngModel)]="permissionQuery" [ngModelOptions]="{standalone:true}" placeholder="Search a module, permission or description" /></label>
       <div class="module-grid">
-        @for (group of permissionGroups; track group.module) {
-          <section class="module-panel">
+        @for (group of filteredPermissionGroups; track group.module) {
+          <details class="module-panel" [open]="!!permissionQuery.trim()"><summary><strong>{{group.label}}</strong><span>{{getModuleSelectedCount(group)}} / {{group.permissions.length}} enabled</span></summary>
             <div class="module-panel__header">
               <div>
                 <h4>{{ group.label }}</h4>
@@ -182,7 +160,7 @@
                   [disabled]="!selectedRoleCode"
                   (change)="toggleModule(group, $any($event.target).checked)"
                 />
-                <span>Select All</span>
+                <span>{{ permissionQuery.trim() ? 'Select shown' : 'Select all' }}</span>
               </label>
             </div>
 
@@ -202,7 +180,7 @@
                 </label>
               }
             </div>
-          </section>
+          </details>
         }
       </div>
     </section>

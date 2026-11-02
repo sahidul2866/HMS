@@ -31,6 +31,7 @@ from app.schemas.inventory import (
     ReagentWastageRead,
     StockAdjustmentCreate,
     StockAdjustmentRead,
+    StockBatchRead,
     StockIssueCreate,
     StockIssueRead,
     StockReceivingCreate,
@@ -342,3 +343,8 @@ def list_reagent_wastage(
 @router.post("/reagent-wastage", response_model=ReagentWastageRead, dependencies=[Depends(require_permissions("inventory.manage"))])
 def create_reagent_wastage(payload: ReagentWastageCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     return InventoryService(db).create_reagent_wastage(payload, user, context)
+
+
+@router.get("/batches/{entity_id}", response_model=StockBatchRead, dependencies=[Depends(require_permissions("inventory.view"))])
+def get_batch(entity_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return InventoryService(db).get_batch(entity_id, user)

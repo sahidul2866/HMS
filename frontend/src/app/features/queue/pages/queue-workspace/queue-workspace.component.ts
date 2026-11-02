@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { interval, Subscription } from 'rxjs';
 
+import { Router } from '@angular/router';
+import { QueueAnnouncementService } from '../../../../core/services/queue-announcement.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { User } from '../../../../core/models/auth.models';
@@ -24,6 +26,10 @@ export class QueueWorkspaceComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly doctorDirectory = inject(DoctorDirectoryService);
   readonly session = inject(SessionService);
+  readonly pa = inject(QueueAnnouncementService);
+  private readonly router = inject(Router);
+  actionBusy = false;
+  private requestVersion = 0;
   private polling?: Subscription;
 
   scopes = [
@@ -74,13 +80,30 @@ export class QueueWorkspaceComponent implements OnDestroy {
 
   constructor() {
     if (this.opdMode) this.selectedScope = 'opd';
+    if (this.session.snapshot.user?.roles.some(role => role.is_doctor_role) && !this.session.hasPermission('opd.view.doctor_wise')) this.selectedDoctorId = this.session.snapshot.user.id;
     this.doctorDirectory.listDoctors().subscribe((doctors) => (this.doctors = doctors));
+    if (this.opdMode) {
+      this.start();
+      return;
+    }
+    // Offer only the queues this user may read, so the page never opens on a refused one.
+    this.queueService.viewableScopes().subscribe((allowed) => {
+      if (allowed) {
+        this.scopes = this.scopes.filter((scope) => allowed.includes(scope.value));
+        if (this.scopes.length && !allowed.includes(this.selectedScope)) this.selectedScope = this.scopes[0].value;
+      }
+      if (!allowed || this.scopes.length) this.start();
+    });
+  }
+
+  private start(): void {
     this.loadAll();
-    this.polling = interval(30000).subscribe(() => this.loadTokens());
+    this.polling = interval(5000).subscribe(() => this.loadTokens());
   }
 
   ngOnDestroy(): void {
     this.polling?.unsubscribe();
+    this.pa.disable();
   }
 
   loadAll(): void {
@@ -90,19 +113,26 @@ export class QueueWorkspaceComponent implements OnDestroy {
   }
 
   loadTokens(): void {
+    this.pa.queueScope = this.selectedScope;
+    const version = ++this.requestVersion;
     this.queueService
       .listTokens({
         queue_scope: this.selectedScope,
-        status: this.selectedStatus,
+        status: this.displayMode || this.pa.enabled() ? '' : this.selectedStatus,
         counter_id: this.selectedCounterId,
-        search: this.search,
+        search: this.displayMode || this.pa.enabled() ? '' : this.search,
+        limit: 200,
         doctor_user_id: this.selectedDoctorId,
       })
-      .subscribe((tokens) => (this.tokens = tokens));
+      .subscribe(tokens => {
+        if (version !== this.requestVersion) return;
+        this.tokens = tokens;
+        this.pa.consume(tokens, token => this.announcementDestination(token));
+      });
   }
 
   loadCounters(): void {
-    this.queueService.listCounters(this.opdMode ? 'opd' : undefined).subscribe((counters) => (this.counters = counters));
+    this.queueService.listCounters(this.selectedScope).subscribe((counters) => (this.counters = counters));
   }
 
   loadSummary(): void {
@@ -110,26 +140,34 @@ export class QueueWorkspaceComponent implements OnDestroy {
   }
 
   callNext(): void {
+    if (this.actionBusy) return;
     if (this.selectedScope === 'opd' && !this.selectedDoctorId && !this.selectedCounterId) {
       this.notifications.warning('Select a doctor or doctor counter first.');
       return;
     }
+    this.actionBusy = true;
     this.queueService.callNext({ queue_scope: this.selectedScope, counter_id: this.selectedCounterId || null, doctor_user_id: this.selectedDoctorId || null }).subscribe({
       next: (token) => {
-        this.notifications.success(`Called ${token.token_number}.`);
+        this.actionBusy = false;
+        this.pa.consume([token], item => this.announcementDestination(item));
+        this.notifications.success(`Called serial ${token.token_number}.`, 'The serial is now visible on the queue display.');
         this.loadAll();
       },
-      error: (error) => this.notifications.error(error?.error?.message || 'No waiting patient found.'),
+      error: (error) => { this.actionBusy = false; this.notifications.error(error?.message || 'Unable to call the next patient. Check the current serial.'); },
     });
   }
 
   update(token: QueueToken, status: string): void {
+    if (this.actionBusy) return;
+    this.actionBusy = true;
     this.queueService.updateStatus(token.id, status, this.selectedCounterId || null).subscribe({
-      next: () => {
-        this.notifications.success(status === 'completed' && token.queue_scope === 'opd' ? `${token.token_number} completed. The next patient was called automatically.` : `${token.token_number} updated.`);
+      next: updated => {
+        this.actionBusy = false;
+        this.pa.consume([updated], item => this.announcementDestination(item));
+        this.notifications.success(status === 'completed' && token.queue_scope === 'opd' ? `${token.token_number} completed. Check the queue for the next serial.` : `${token.token_number} updated.`);
         this.loadAll();
       },
-      error: (error) => this.notifications.error(error?.error?.error?.message || error?.error?.message || 'Unable to update queue token.'),
+      error: (error) => { this.actionBusy = false; this.notifications.error(error?.message || 'Unable to update queue token.'); },
     });
   }
 
@@ -152,7 +190,7 @@ export class QueueWorkspaceComponent implements OnDestroy {
   }
 
   createCounter(): void {
-    this.queueService.createCounter(this.counterDraft).subscribe({
+    this.queueService.createCounter({ ...this.counterDraft, doctor_user_id: this.counterDraft.doctor_user_id || null }).subscribe({
       next: () => {
         this.notifications.success('Queue counter created.');
         this.counterDraft.code = '';
@@ -213,11 +251,20 @@ export class QueueWorkspaceComponent implements OnDestroy {
   }
 
   get currentTokens(): QueueToken[] {
-    return this.tokens.filter((token) => ['called', 'in_progress'].includes(token.status));
+    return this.tokens.filter((token) => ['called', 'recalled', 'in_progress'].includes(token.status));
   }
 
   get nextTokens(): QueueToken[] {
-    return this.tokens.filter((token) => ['waiting', 'registered', 'recalled'].includes(token.status)).slice(0, 8);
+    return this.tokens.filter((token) => ['waiting', 'registered'].includes(token.status)).slice(0, 8);
+  }
+
+  openConsultation(token: QueueToken): void {
+    if (token.visit_id) void this.router.navigate(['/opd/visits'], { queryParams: { openVisit: token.visit_id } });
+  }
+
+  announcementDestination(token: QueueToken): string {
+    const counter = this.counters.find(item => item.id === token.counter_id);
+    return [this.doctorName(token.doctor_user_id), counter?.room_number ? `room ${counter.room_number}` : counter?.name].filter(Boolean).join(', ');
   }
 
   doctorName(doctorId?: string | null): string {

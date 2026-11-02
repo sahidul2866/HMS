@@ -1,8 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { ActivatedRouteSnapshot, NavigationEnd, NavigationStart, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 
-import { NotificationService } from './notification.service';
 import { TabRouteReuseStrategy } from './tab-route-reuse.strategy';
 
 export interface AppTab {
@@ -13,25 +12,17 @@ export interface AppTab {
 @Injectable({ providedIn: 'root' })
 export class TabService {
   private static readonly STORAGE_KEY = 'hms.tabs';
-  readonly maxTabs = 8;
 
   private readonly router = inject(Router);
-  private readonly notificationService = inject(NotificationService);
   private readonly routeReuseStrategy = inject(TabRouteReuseStrategy);
   private readonly tabsSignal = signal<AppTab[]>([]);
   private readonly activePathSignal = signal('');
-  private previousPath = '';
-  private restoringBlockedNavigation = false;
 
   readonly tabs = this.tabsSignal.asReadonly();
   readonly activePath = this.activePathSignal.asReadonly();
 
   constructor() {
     this.restoreState();
-
-    this.router.events.pipe(filter((event): event is NavigationStart => event instanceof NavigationStart)).subscribe(() => {
-      this.previousPath = this.activePathSignal();
-    });
 
     this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe((event) => {
       this.syncRoute(event.urlAfterRedirects);
@@ -88,18 +79,6 @@ export class TabService {
     if (existing) {
       this.activePathSignal.set(path);
       this.persistState();
-      return;
-    }
-
-    if (currentTabs.length >= this.maxTabs) {
-      if (!this.restoringBlockedNavigation) {
-        this.restoringBlockedNavigation = true;
-        this.notificationService.warning(`Maximum ${this.maxTabs} tabs reached. Close a tab before opening a new one.`);
-        const fallback = this.previousPath || currentTabs[currentTabs.length - 1]?.path || '/dashboard';
-        void this.router.navigateByUrl(fallback, { replaceUrl: true }).finally(() => {
-          this.restoringBlockedNavigation = false;
-        });
-      }
       return;
     }
 

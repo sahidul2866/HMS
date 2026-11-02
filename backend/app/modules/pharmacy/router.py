@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_permissions
+from app.dependencies.permissions import require_permissions, require_any_permissions
 from app.modules.pharmacy.service import PharmacyService
 from app.schemas.pharmacy import (
     PaginatedResponse,
@@ -79,6 +79,7 @@ def serialize_dispense(item) -> PharmacyDispenseRead:
         prescription_ref=item.prescription_ref,
         note=item.note,
         return_note=item.return_note,
+        return_history=item.return_history or [],
         dispensed_at=item.created_at.isoformat(),
         dispensed_by_name=item.dispensed_by.full_name if item.dispensed_by else None,
     )
@@ -491,7 +492,55 @@ def dispense(payload: PharmacyDispenseCreate, context=Depends(get_request_contex
     return serialize_dispense(dispense_record)
 
 
-@router.post("/dispenses/{dispense_id}/return", response_model=PharmacyDispenseRead, dependencies=[Depends(require_permissions("pharmacy.dispense"))])
+@router.post("/dispenses/{dispense_id}/return", response_model=PharmacyDispenseRead, dependencies=[Depends(require_permissions("pharmacy.dispense", "pharmacy.return"))])
 def return_dispense(dispense_id: UUID, payload: PharmacyDispenseReturnCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)) -> PharmacyDispenseRead:
     item = PharmacyService(db).return_dispense(dispense_id, payload, user, context)
     return serialize_dispense(item)
+
+
+@router.get('/dispenses/{dispense_id}/return-sources', dependencies=[Depends(require_permissions('pharmacy.dispense'))])
+def return_sources(dispense_id: UUID, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    from app.models.pharmacy import PharmacyDispense
+    from app.modules.pharmacy.physical_returns import sources
+    from app.core.exceptions import AppException
+    item=db.get(PharmacyDispense,dispense_id)
+    if not item or not item.is_active: raise AppException(404,'pharmacy_dispense_not_found','Dispense not found')
+    if user.branch_id and item.branch_id and user.branch_id!=item.branch_id: raise AppException(403,'forbidden','Dispense belongs to another branch')
+    return sources(db,item)
+
+
+@router.get('/prescribing-catalog', dependencies=[Depends(require_any_permissions('opd.prescribe','pharmacy.view'))])
+def prescribing_catalog(q: str | None = None, page_size: int = 30, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    result=PharmacyService(db).list_medicines(user,page=1,page_size=min(max(page_size,1),100),q=q,medicine_type_id=None,generic_id=None,company_id=None,low_stock=False)
+    allowed={'id','name','strength','dosage_form','generic_name','medicine_type_name','company_name','sale_price'}
+    return {'items':[{key:value for key,value in (row.model_dump() if hasattr(row,'model_dump') else row).items() if key in allowed} for row in result.items], 'total':result.total,'page':1,'page_size':result.page_size}
+
+
+# Stock review access does not grant prescribing, cashier, or dispensing rights.
+from app.schemas.pharmacy_review import StockCountCreate, LegacyReturnAllocation, DisposalCreate, ReviewDecision
+from app.modules.pharmacy import stock_review
+
+
+@router.get('/stock-reviews/workspace', dependencies=[Depends(require_any_permissions('pharmacy.stock.adjust', 'pharmacy.stock.approve'))])
+def stock_review_workspace(user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return stock_review.workspace(db,user)
+
+
+@router.post('/stock-reviews/count', dependencies=[Depends(require_permissions('pharmacy.stock.adjust'))])
+def submit_stock_count(payload: StockCountCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return stock_review.submit(db,'count',payload,user,context)
+
+
+@router.post('/stock-reviews/legacy-return', dependencies=[Depends(require_permissions('pharmacy.stock.adjust'))])
+def submit_legacy_allocation(payload: LegacyReturnAllocation, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return stock_review.submit(db,'legacy_return',payload,user,context)
+
+
+@router.post('/stock-reviews/disposal', dependencies=[Depends(require_permissions('pharmacy.return'))])
+def submit_disposal_record(payload: DisposalCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return stock_review.submit(db,'disposal',payload,user,context)
+
+
+@router.post('/stock-reviews/{review_id}/decision', dependencies=[Depends(require_permissions('pharmacy.stock.approve'))])
+def decide_stock_review(review_id: UUID, payload: ReviewDecision, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return stock_review.decide(db,review_id,payload,user,context)

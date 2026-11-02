@@ -1,3 +1,4 @@
+import { HREmployee } from '../../hr/models/hr.models';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
@@ -20,6 +21,12 @@ import {
 export class CateringService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
+
+  postingOptions(): Observable<{items: {id: string; name: string; unit: string}[]; stores: {id: string; name: string}[]}> { return this.http.get<{items: {id: string; name: string; unit: string}[]; stores: {id: string; name: string}[]}>(this.url('/catering/posting-options')); }
+  staffOptions(): Observable<HREmployee[]> { return this.http.get<HREmployee[]>(this.url('/catering/staff-options')); }
+  encounters(patientId: string): Observable<{id: string; number: string; ward: string; bed: string}[]> { return this.http.get<{id: string; number: string; ward: string; bed: string}[]>(this.url(`/catering/patient-encounters/${patientId}`)); }
+  updateDietOrder(id: string, payload: Record<string, unknown>): Observable<CateringDietOrder> { return this.http.put<CateringDietOrder>(this.url(`/catering/diet-orders/${id}`),payload).pipe(tap(() => this.clearCache())); }
+  postings(): Observable<{id: string; source_type: string; event: string; amount: string; invoice_id: string | null; journal_id: string | null}[]> { return this.http.get<{id: string; source_type: string; event: string; amount: string; invoice_id: string | null; journal_id: string | null}[]>(this.url('/catering/postings')); }
 
   dashboard(params: Record<string, string | number | null | undefined> = {}): Observable<CateringDashboard> {
     const query = this.query(params);
@@ -103,7 +110,7 @@ export class CateringService extends ApiBaseService {
   }
 
   clearCache(): void {
-    this.cache.clearPrefix('catering:');
+    for(const prefix of ['catering:','inventory:','billing:','hr:','accounting:','dashboard:']) this.cache.clearPrefix(prefix);
   }
 
   private publish(name: AppDataEventName, patientId?: string | null): void {
@@ -112,8 +119,8 @@ export class CateringService extends ApiBaseService {
       name,
       entityType: 'catering',
       patientId,
-      modules: ['catering', 'ipd', 'er', 'billing', 'inventory', 'dashboard', 'notifications'],
-      cachePrefixes: ['catering:', 'ipd:', 'er:', 'billing:', 'inventory:', 'dashboard:', 'notifications:'],
+      modules: ['catering', 'ipd', 'er', 'billing', 'inventory', 'dashboard', 'accounting', 'hr', 'notifications'],
+      cachePrefixes: ['catering:', 'ipd:', 'er:', 'billing:', 'inventory:', 'dashboard:', 'accounting:', 'hr:', 'notifications:'],
       message: 'Catering updates are available.',
     });
   }

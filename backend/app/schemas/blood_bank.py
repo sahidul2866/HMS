@@ -97,6 +97,7 @@ class DonorScreeningRead(DonorScreeningCreate):
 
 
 class BloodCollectionCreate(BaseModel):
+    expiry_date: date | None = None
     donor_id: UUID
     screening_id: UUID | None = None
     unit_number: str | None = None

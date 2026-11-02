@@ -1,10 +1,10 @@
 import { DOCUMENT } from '@angular/common';
-import { inject, Injectable, NgZone } from '@angular/core';
+import { inject, Injectable, NgZone, OnDestroy } from '@angular/core';
 
 import { NotificationService } from './notification.service';
 
 @Injectable({ providedIn: 'root' })
-export class GlobalFormValidationService {
+export class GlobalFormValidationService implements OnDestroy {
   private readonly document = inject(DOCUMENT);
   private readonly zone = inject(NgZone);
   private readonly notificationService = inject(NotificationService);
@@ -24,6 +24,13 @@ export class GlobalFormValidationService {
     });
   }
 
+  ngOnDestroy(): void {
+    this.observer?.disconnect();
+    this.document.removeEventListener('submit', this.handleSubmit, true);
+    this.document.removeEventListener('input', this.handleControlChange, true);
+    this.document.removeEventListener('change', this.handleControlChange, true);
+  }
+
   private readonly handleSubmit = (event: Event): void => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
     if (!form) return;
@@ -33,23 +40,31 @@ export class GlobalFormValidationService {
       form.querySelector('.app-validation-summary')?.remove();
       return;
     }
+    event.preventDefault();
+    event.stopImmediatePropagation();
     this.renderValidation(form);
   };
 
   private readonly handleControlChange = (event: Event): void => {
     const target = event.target instanceof Element ? event.target : null;
     const form = target?.closest('form');
-    if (!form) return;
+    if (!form || !form.classList.contains('app-form-submitted')) return;
+    // Angular updates control validity later in the same input event.
+    queueMicrotask(() => this.updateValidation(form));
+  };
+
+  private updateValidation(form: HTMLFormElement): void {
+    this.renderFieldErrors(form);
     const summary = form.querySelector<HTMLElement>('.app-validation-summary');
     if (!summary) return;
     const missingFields = this.invalidFieldLabels(form);
     if (missingFields.length) {
-      summary.innerHTML = `<strong>Required before saving:</strong><span>${this.escapeHtml(missingFields.join(', '))}</span>`;
+      summary.innerHTML = `<strong>Fix before saving:</strong><span>${this.escapeHtml(missingFields.join(', '))}</span>`;
       return;
     }
     form.classList.remove('app-form-submitted');
     summary.remove();
-  };
+  }
 
   private isInvalidForm(form: HTMLFormElement): boolean {
     return form.classList.contains('ng-invalid') || !form.checkValidity();
@@ -57,6 +72,7 @@ export class GlobalFormValidationService {
 
   private renderValidation(form: HTMLFormElement): void {
     form.classList.add('app-form-submitted');
+    this.renderFieldErrors(form);
     const missingFields = this.invalidFieldLabels(form);
     if (!missingFields.length) return;
 
@@ -67,12 +83,53 @@ export class GlobalFormValidationService {
       summary.setAttribute('role', 'alert');
       form.prepend(summary);
     }
-    summary.innerHTML = `<strong>Required before saving:</strong><span>${this.escapeHtml(missingFields.join(', '))}</span>`;
+    summary.innerHTML = `<strong>Fix before saving:</strong><span>${this.escapeHtml(missingFields.join(', '))}</span>`;
+    const first = form.querySelector<HTMLElement>('[aria-invalid="true"]');
+    let ancestor = first?.parentElement;
+    while (ancestor) {
+      if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    first?.focus();
     summary.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
     this.zone.run(() => {
-      this.notificationService.error(`Required before saving: ${missingFields.join(', ')}`);
+      this.notificationService.error(`Fix before saving: ${missingFields.join(', ')}`);
     });
+  }
+
+  private fieldErrorId = 0;
+
+  private renderFieldErrors(form: HTMLFormElement): void {
+    for (const control of Array.from(form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea'))) {
+      const previousId = control.dataset['appErrorId'];
+      if (previousId) {
+        this.document.getElementById(previousId)?.remove();
+        const descriptions = (control.getAttribute('aria-describedby') || '').split(' ').filter(id => id && id !== previousId);
+        if (descriptions.length) control.setAttribute('aria-describedby', descriptions.join(' '));
+        else control.removeAttribute('aria-describedby');
+        control.removeAttribute('aria-invalid');
+        delete control.dataset['appErrorId'];
+      }
+      if (!this.isInvalidControl(control)) continue;
+      const error = this.document.createElement('span');
+      error.id = `app-field-error-${++this.fieldErrorId}`;
+      error.className = 'app-field-error';
+      const validity = control.validity;
+      const hint = validity.valueMissing ? 'Enter a value for this field.'
+        : validity.typeMismatch ? 'Enter a valid ' + (control instanceof HTMLInputElement && control.type === 'email' ? 'email address.' : 'value.')
+        : validity.rangeUnderflow ? `Enter a value of at least ${control.getAttribute('min')}.`
+        : validity.rangeOverflow ? `Enter a value no greater than ${control.getAttribute('max')}.`
+        : validity.tooShort ? `Use at least ${control.getAttribute('minlength')} characters.`
+        : validity.patternMismatch ? (control.getAttribute('title') || 'Use the requested format.')
+        : validity.stepMismatch ? 'Enter a value matching the allowed increment.'
+        : 'Check this value against the field requirements.';
+      error.textContent = `${this.controlLabel(control)}: ${hint}`;
+      control.dataset['appErrorId'] = error.id;
+      control.setAttribute('aria-invalid', 'true');
+      control.setAttribute('aria-describedby', [control.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+      control.after(error);
+    }
   }
 
   private invalidFieldLabels(form: HTMLFormElement): string[] {
@@ -93,7 +150,9 @@ export class GlobalFormValidationService {
     const explicitLabel = id ? this.document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent : '';
     const wrappingLabelElement = control.closest('label');
     const structuredLabel = wrappingLabelElement?.querySelector<HTMLElement>('.field-label-row > span:first-child, :scope > span:first-child')?.textContent;
-    const wrappingLabel = wrappingLabelElement?.textContent;
+    const labelCopy = wrappingLabelElement?.cloneNode(true) as HTMLElement | undefined;
+    labelCopy?.querySelectorAll('.app-field-error, input, select, textarea').forEach(node => node.remove());
+    const wrappingLabel = labelCopy?.textContent;
     const raw =
       explicitLabel ||
       control.getAttribute('aria-label') ||
@@ -113,8 +172,12 @@ export class GlobalFormValidationService {
   private enhanceSearchableSelects(): void {
     const selects = Array.from(this.document.querySelectorAll<HTMLSelectElement>('select:not([data-app-select-search-bound])'));
     for (const select of selects) {
+      if (select.multiple || select.closest('.no-app-select-search')) {
+        select.dataset['appSelectSearchBound'] = 'true';
+        continue;
+      }
+      if (select.options.length < 20) continue;
       select.dataset['appSelectSearchBound'] = 'true';
-      if (select.multiple || select.options.length < 9 || select.closest('.no-app-select-search')) continue;
       const search = this.document.createElement('input');
       search.type = 'search';
       search.className = 'app-select-search';

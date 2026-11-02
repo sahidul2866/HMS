@@ -27,6 +27,7 @@ export class KeyboardWorkflowService {
   private readonly handleSubmit = (event: Event): void => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
     if (!form) return;
+    if (form.hasAttribute('data-navigation-only')) return;
     if (this.pendingSubmit.has(form)) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -44,6 +45,7 @@ export class KeyboardWorkflowService {
   private readonly handleKeydown = (event: KeyboardEvent): void => {
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target) return;
+    if (event.key === 'Enter' && target.closest('[data-native-enter]')) return;
 
     if (event.key === 'Escape') {
       if (this.closeTransientUi(target)) {
@@ -149,8 +151,9 @@ export class KeyboardWorkflowService {
   }
 
   private closeTransientUi(target: HTMLElement): boolean {
-    const dialogClose = this.document.querySelector<HTMLButtonElement>('[aria-label="Close"], .modal-close, .ghost');
-    if (dialogClose && target.closest('[role="dialog"], .scan-backdrop, .command-backdrop')) {
+    const dialog=target.closest('[role="dialog"], .scan-backdrop, .command-backdrop');
+    const dialogClose = dialog?.querySelector<HTMLButtonElement>('[aria-label="Close"], .modal-close, .popup-close, .ghost');
+    if (dialogClose) {
       dialogClose.click();
       return true;
     }

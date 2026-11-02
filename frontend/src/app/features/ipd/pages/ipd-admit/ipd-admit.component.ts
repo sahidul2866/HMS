@@ -47,14 +47,16 @@ export class IPDAdmitComponent {
   sourceOpdVisitId = '';
   sourceOpdVisitNumber = '';
 
+  private localNow():string {const date=new Date();return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString();}
+
   readonly form = this.fb.group({
     patient_id: ['', Validators.required],
     department_name: ['General Medicine'],
     reference_name: [''],
     bed_id: [''],
     ward_filter: [''],
-    admitted_at: [new Date().toISOString().slice(0, 16), Validators.required],
-    booking_date: [new Date().toISOString().slice(0, 10)],
+    admitted_at: [this.localNow().slice(0, 16), Validators.required],
+    booking_date: [this.localNow().slice(0, 10)],
     booking_time: [new Date().toTimeString().slice(0, 5)],
     admission_type: ['General', Validators.required],
     ward_name: ['Ward A', Validators.required],
@@ -372,7 +374,7 @@ export class IPDAdmitComponent {
     const admissionPayload: CreateIPDAdmissionPayload = {
       patient_id: value.patient_id || '',
       bed_id: value.bed_id || null,
-      admitted_at: value.admitted_at || new Date().toISOString(),
+      admitted_at: value.admitted_at ? new Date(value.admitted_at).toISOString() : new Date().toISOString(),
       admission_type: value.admission_type || 'General',
       department_name: value.department_name || null,
       patient_condition: value.intake_note || null,

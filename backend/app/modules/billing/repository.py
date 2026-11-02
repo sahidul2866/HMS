@@ -161,6 +161,7 @@ class BillingRepository:
                 joinedload(BillingInvoice.refunds),
             )
             .where(BillingInvoice.id == invoice_id)
+            .execution_options(populate_existing=True)
         )
         return self.db.scalar(stmt)
 

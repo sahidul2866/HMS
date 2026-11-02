@@ -1,27 +1,39 @@
-<div class="workspace-shell">
+<div class="workspace-shell no-smart-input">
+  <div class="toolbar-row"><button type="button" class="secondary-btn" (click)="openOperations()">Billing operations and cash handover</button></div>
   @if (latestInvoice) {
     <div class="modal-backdrop" (click)="closeInvoiceDetail()">
-    <section class="soft-panel data-panel modal-card billing-detail-modal" (click)="$event.stopPropagation()">
+    <section role="dialog" aria-modal="true" aria-labelledby="billing-detail-title" class="soft-panel data-panel modal-card billing-detail-modal" (click)="$event.stopPropagation()">
       <div class="panel-head">
         <div>
-          <h2 class="section-title">{{ detailTitle }}</h2>
+          <h2 id="billing-detail-title" class="section-title">{{ detailTitle }}</h2>
           <div class="section-copy">{{ latestInvoice.invoice_number }} for {{ latestInvoice.patient.first_name }} {{ latestInvoice.patient.last_name }}</div>
         </div>
         <div class="toolbar-row">
-          <button class="secondary-btn" type="button" (click)="closeInvoiceDetail()">Close</button>
-          <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.status ">{{ formatStatus(latestInvoice.status) }}</span>
+          <button class="secondary-btn" type="button" aria-label="Close" (click)="closeInvoiceDetail()">Close</button>
+          @if(latestInvoice.status!=='posted'){<span class="status-chip">{{formatStatus(latestInvoice.status)}}</span>}
           <span class="status-chip" [class]=" 'status-chip ' + latestInvoice.payment_status ">{{ formatStatus(latestInvoice.payment_status) }}</span>
           <button class="primary-btn" type="button" (click)="printInvoice()">Print Invoice</button>
-          @if (sessionService.hasPermission('billing.sticker.print')) {
+          <details class="invoice-more-actions"><summary>More actions</summary><div>          @if (sessionService.hasPermission('billing.sticker.print')) {
             <button class="secondary-btn" type="button" (click)="printStickers()">Print Stickers</button>
           }
           @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
             <button class="danger-btn is-destructive" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
-          }
+          }</div></details>
         </div>
       </div>
 
-      <table class="table">
+      @if(hasSurplus(latestInvoice)){<div class="invoice-credit-note" role="status">Refundable surplus: {{formatCurrency(latestInvoice.overpaid_amount||0)}} <button class="secondary-btn" type="button" (click)="invoicePanel='transactions'">Review refund</button></div>}
+      @if(latestInvoice.void_reason){<p class="invoice-credit-note">Void reason: {{latestInvoice.void_reason}}</p>}
+      <nav class="invoice-tabs" aria-label="Invoice sections"><button type="button" [class.active]="invoicePanel==='summary'" (click)="invoicePanel='summary'">Overview</button><button type="button" [class.active]="invoicePanel==='transactions'" (click)="invoicePanel='transactions'">Payments and returns</button><button type="button" [class.active]="invoicePanel==='history'" (click)="invoicePanel='history';loadHistory()">Audit history</button></nav>
+      @if(invoicePanel==='history'){
+
+            <div class="invoice-summary-grid"><div><strong>Created by:</strong> {{latestInvoice.billed_by_name||latestInvoice.billed_by_user_id}}</div><div><strong>Billing type:</strong> {{latestInvoice.billing_type_name||'Item departments'}}</div><div><strong>Department:</strong> {{latestInvoice.billing_department||'Mixed / general'}}</div><div><strong>Discount:</strong> {{formatCurrency(latestInvoice.discount_amount)}} · {{latestInvoice.discount_reason||'See transaction history'}}</div></div>
+      @if(sessionService.hasPermission('billing.service.manage')&&latestInvoice.status==='posted'){
+      <details class="soft-panel"><summary>Correct invoice details or discount</summary><p class="page-subtitle">Original item prices, quantities and creator remain recorded. Corrections require a reason. Refunds and returns preserve their original discount.</p><form class="form-grid" (ngSubmit)="saveAmendment()"><label class="field"><span>Billing type</span><select name="editType" [(ngModel)]="editType"><option value="">Item departments</option>@for(type of billingTypes;track type.id){<option [value]="type.id">{{type.name}} · {{type.department}}</option>}</select></label><label class="field"><span>Invoice discount %</span><input type="number" name="editDiscount" [(ngModel)]="editDiscount" min="0" max="100" step="0.01" required /></label><label class="field"><span>Note</span><textarea name="editNote" [(ngModel)]="editNote"></textarea></label><label class="field"><span>Correction / discount reason</span><textarea name="editReason" [(ngModel)]="editReason" required minlength="3"></textarea></label><button class="primary-btn" [disabled]="editBusy">Save audited correction</button></form></details>}
+      <details open class="soft-panel" (toggle)="loadHistory()"><summary>Discount and transaction history</summary>@for(event of history;track event.id){<article class="page-card"><strong>{{event.kind.replaceAll('_',' ')}}</strong><p>{{event.created_at|date:'medium'}} · {{event.snapshot.actor_name||'Billing staff'}}</p><p>{{event.reason}}</p><p>Discount {{event.snapshot.after['discount_amount']}} · Net {{event.snapshot.after['total_amount']}} · Paid {{event.snapshot.after['paid_amount']}} · Due {{event.snapshot.after['due_amount']}}</p></article>}@empty{<p>No recorded snapshots for this older invoice. Future changes will appear here.</p>}</details>      }
+      @if(invoicePanel==='summary'){
+
+      <div class="table-wrap"><table class="table data-table invoice-line-items">
         <thead>
           <tr>
             <th>Service</th>
@@ -33,27 +45,38 @@
         <tbody>
           @for (item of latestInvoice.items; track item.id) {
             <tr>
-              <td>{{ item.service_name }}</td>
-              <td>{{ item.quantity }}</td>
-              <td>{{ formatCurrency(item.unit_price) }}</td>
-              <td>{{ formatCurrency(item.line_total) }}</td>
+              <td data-label="Service">{{ item.service_name }}</td>
+              <td data-label="Qty">{{ item.quantity }}</td>
+              <td data-label="Unit price">{{ formatCurrency(item.unit_price) }}</td>
+              <td data-label="Total">{{ formatCurrency(item.line_total) }}</td>
             </tr>
           }
         </tbody>
-      </table>
+      </table></div>
 
-      <div class="invoice-summary-grid">
+      <div class="invoice-standing"><div><span>Net payable</span><strong>{{formatCurrency(latestInvoice.net_payable_amount ?? latestInvoice.total_amount)}}</strong></div><div><span>Paid</span><strong>{{formatCurrency(latestInvoice.paid_amount)}}</strong></div><div><span>Due</span><strong>{{formatCurrency(latestInvoice.due_amount)}}</strong></div></div>
+      @if(+(latestInvoice.credited_amount || 0) > 0){<p class="invoice-credit-note">Return credits: {{formatCurrency(latestInvoice.credited_amount || 0)}} · Original invoice: {{formatCurrency(latestInvoice.total_amount)}}</p>}
+      <details class="financial-breakdown"><summary>Discounts, refunds and invoice details</summary>      <div class="invoice-summary-grid">
         <div><strong>Sub Total:</strong> {{ formatCurrency(latestInvoice.sub_total) }}</div>
         <div><strong>Discount:</strong> {{ formatCurrency(latestInvoice.discount_amount) }}</div>
         <div><strong>Referral Amount:</strong> {{ formatCurrency(latestInvoice.referred_doctor_amount) }}</div>
         <div><strong>Grand Total:</strong> {{ formatCurrency(latestInvoice.total_amount) }}</div>
+        @if (latestInvoice.total_in_words) {
+          <div><strong>In words:</strong> {{ latestInvoice.total_in_words }}</div>
+        }
         <div><strong>Paid:</strong> {{ formatCurrency(latestInvoice.paid_amount) }}</div>
         <div><strong>Refunded:</strong> {{ formatCurrency(latestInvoice.refunded_amount) }}</div>
         <div><strong>Due:</strong> {{ formatCurrency(latestInvoice.due_amount) }}</div>
+        @if (hasSurplus(latestInvoice)) {
+          <div><strong>Refundable surplus:</strong> {{ formatCurrency(latestInvoice.overpaid_amount ?? 0) }}</div>
+        }
         @if (latestInvoice.void_reason) {
           <div><strong>Void Reason:</strong> {{ latestInvoice.void_reason }}</div>
         }
       </div>
+</details>
+      }
+      @if(invoicePanel==='transactions'){
 
       @if (paymentMethodSummary.length) {
         <div class="method-strip">
@@ -64,14 +87,7 @@
       }
 
       <div class="payment-grid">
-        @if (isDueMode) {
-        <section class="payment-panel">
-          <div class="section-header">
-            <div>
-              <h3 class="section-title">Collect Payment</h3>
-              <div class="section-copy">Post full or partial payment and keep a receipt trail against the invoice.</div>
-            </div>
-          </div>
+        <details class="payment-panel" [open]="isDueMode"><summary>Collect Payment</summary><p class="section-copy">Post full or partial payment and keep a receipt trail against the invoice.</p>
 
           @if (canCollectPayment(latestInvoice) && sessionService.hasPermission('billing.payment.collect')) {
             <form class="form-grid" [formGroup]="paymentForm" (ngSubmit)="collectPayment()">
@@ -84,13 +100,31 @@
                 <select formControlName="payment_method">
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
-                  <option value="mobile_banking">Mobile Banking</option>
-                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="mobile_banking">Mobile Banking (bKash, Nagad, Rocket, Upay)</option>
+                  <option value="bank_transfer">Bank Transfer / Cheque</option>
                 </select>
               </label>
+              @if (paymentForm.controls.payment_method.value === 'mobile_banking') {
+                <label class="field">
+                  <span>Provider</span>
+                  <select formControlName="payment_provider">
+                    <option value="bkash">bKash</option>
+                    <option value="nagad">Nagad</option>
+                    <option value="rocket">Rocket</option>
+                    <option value="upay">Upay</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+              }
+              @if (paymentForm.controls.payment_method.value !== 'cash') {
+                <label class="field">
+                  <span>{{ paymentForm.controls.payment_method.value === 'mobile_banking' ? 'Transaction ID (TrxID)' : paymentForm.controls.payment_method.value === 'card' ? 'Card approval code' : 'Transfer / cheque no.' }}</span>
+                  <input type="text" formControlName="reference_number" autocomplete="off" />
+                </label>
+              }
               <label class="field" style="grid-column:1/-1;">
                 <span>Note</span>
-                <textarea rows="2" formControlName="note" placeholder="Receipt note or reference"></textarea>
+                <textarea rows="2" formControlName="note" placeholder="Receipt note"></textarea>
               </label>
               <div style="grid-column:1/-1;">
                 <button class="primary-btn" type="submit" [disabled]="collectingPayment" [attr.aria-busy]="collectingPayment">{{ collectingPayment ? 'Collecting...' : 'Collect Payment' }}</button>
@@ -99,18 +133,12 @@
           } @else {
             <div class="empty-state">No further payment collection is available for this invoice.</div>
           }
-        </section>
+        </details>
 
-        <section class="payment-panel">
-          <div class="section-header">
-            <div>
-              <h3 class="section-title">Process Refund</h3>
-              <div class="section-copy">Record a refund against the invoice and optionally tie it to a specific receipt.</div>
-            </div>
-          </div>
+        <details class="payment-panel"><summary>Process Refund</summary><p class="section-copy">Record a refund against the invoice and optionally tie it to a specific receipt.</p>
 
           @if (canRefund(latestInvoice) && sessionService.hasPermission('billing.payment.refund')) {
-            <form class="form-grid" [formGroup]="refundForm" (ngSubmit)="createRefund()">
+            <form class="form-grid" [formGroup]="refundForm" (ngSubmit)="createRefund()"><label class="field"><span>Refund payout method</span><select formControlName="payment_method"><option value="cash">Cash</option><option value="card">Card reversal</option><option value="mobile_banking">Mobile banking</option><option value="bank_transfer">Bank transfer</option></select></label>
               <label class="field">
                 <span>Refund Amount</span>
                 <input type="number" min="0.01" step="0.01" formControlName="amount" />
@@ -135,28 +163,22 @@
           } @else {
             <div class="empty-state">No refundable collected amount is available for this invoice.</div>
           }
-        </section>
+        </details>
 
-        <section class="payment-panel">
-          <div class="section-header">
-            <div>
-              <h3 class="section-title">Return Billing</h3>
-              <div class="section-copy">Return billed items by quantity and post the calculated return amount against this invoice.</div>
-            </div>
-          </div>
+        <details class="payment-panel"><summary>Return Billing</summary><p class="section-copy">Credit unused billed items. The credit reduces unpaid charges first; only excess collected money is paid back. Started investigations and issued medicines require department review.</p>
 
           @if (canReturn(latestInvoice) && sessionService.hasPermission('billing.payment.refund')) {
-            <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="createReturn()">
+            <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="createReturn()"><label class="field"><span>Refund payout method</span><select formControlName="payment_method"><option value="cash">Cash</option><option value="card">Card reversal</option><option value="mobile_banking">Mobile banking</option><option value="bank_transfer">Bank transfer</option></select></label>
               <div class="return-items" formArrayName="items" style="grid-column:1/-1;">
                 @for (item of latestInvoice.items; track item.id; let i = $index) {
                   <div class="return-item" [formGroupName]="i">
                     <div>
                       <strong>{{ item.service_name }}</strong>
-                      <span class="page-subtitle">Billed {{ item.quantity }} · {{ formatCurrency(item.line_total) }}</span>
+                      <span class="page-subtitle">Available to return {{ item.returnable_quantity ?? item.quantity }} of {{ item.quantity }} · {{ formatCurrency(item.line_total) }}</span>
                     </div>
                     <label class="field">
                       <span>Return Qty</span>
-                      <input type="number" min="0" [max]="item.quantity" step="0.01" formControlName="quantity" />
+                      <input type="number" min="0" [max]="item.returnable_quantity ?? item.quantity" step="0.01" formControlName="quantity" />
                     </label>
                   </div>
                 }
@@ -171,8 +193,8 @@
                 </select>
               </label>
               <label class="field">
-                <span>Return Amount</span>
-                <input type="text" [value]="formatCurrency(returnTotal)" readonly />
+                <span>Estimated credit</span>
+                <input type="text" [value]="formatCurrency(returnTotal)" readonly /><small>Estimated payout: {{ formatCurrency(returnPayout) }}. The server confirms the final amounts.</small>
               </label>
               <label class="field" style="grid-column:1/-1;">
                 <span>Reason</span>
@@ -185,16 +207,9 @@
           } @else {
             <div class="empty-state">No return billing is available for this invoice.</div>
           }
-        </section>
-        }
+        </details>
 
-        <section class="payment-panel">
-          <div class="section-header">
-            <div>
-              <h3 class="section-title">Receipt History</h3>
-              <div class="section-copy">Every payment posted against this invoice stays visible here.</div>
-            </div>
-          </div>
+        <details class="payment-panel"><summary>Receipt History</summary><p class="section-copy">Every payment posted against this invoice stays visible here.</p>
 
           @if (latestInvoice.payments.length) {
             <div class="receipt-stack">
@@ -205,25 +220,25 @@
                     <div class="page-subtitle">{{ payment.received_at | date:'medium' }}</div>
                   </div>
                   <div class="receipt-meta">
-                    <span class="pill">{{ formatStatus(payment.payment_method) }}</span>
+                    <span class="pill">{{ formatStatus(payment.payment_method) }}{{ payment.payment_provider ? ' · ' + paymentProviderLabel(payment.payment_provider) : '' }}</span>
                     <strong>{{ formatCurrency(payment.amount) }}</strong>
                   </div>
+                  @if (payment.reference_number) {
+                    <div class="page-subtitle">Ref {{ payment.reference_number }}</div>
+                  }
+                  @if (payment.amount_in_words) {
+                    <div class="page-subtitle">{{ payment.amount_in_words }}</div>
+                  }
                   <div class="page-subtitle">{{ payment.note || 'No note' }}</div>
                 </div>
               }
             </div>
           } @else {
-            <div class="empty-state">No payments collected yet.</div>
+            <div class="empty-state">No payments collected yet.<span class="app-state-guidance">Use the collection form when you are ready to record a payment.</span></div>
           }
-        </section>
+        </details>
 
-        <section class="payment-panel">
-          <div class="section-header">
-            <div>
-              <h3 class="section-title">Refund History</h3>
-              <div class="section-copy">Refund transactions remain attached to the invoice for full audit traceability.</div>
-            </div>
-          </div>
+        <details class="payment-panel"><summary>Refund History</summary><p class="section-copy">Refund transactions remain attached to the invoice for full audit traceability.</p>
 
           @if (latestInvoice.refunds.length) {
             <div class="receipt-stack">
@@ -234,8 +249,8 @@
                     <div class="page-subtitle">{{ refund.refunded_at | date:'medium' }}</div>
                   </div>
                   <div class="receipt-meta">
-                    <span class="pill">{{ refund.refund_type === 'return' ? 'RETURN' : 'REFUND' }}</span>
-                    <strong>{{ formatCurrency(refund.amount) }}</strong>
+                    <span class="pill">{{ refund.refund_type === 'carried_return' ? 'CARRIED RETURN' : refund.refund_type === 'return' ? 'RETURN' : 'REFUND' }}</span>
+                    <strong>Paid back {{ formatCurrency(refund.amount) }}</strong>@if(refund.refund_type === 'return' || refund.refund_type === 'carried_return'){<span>Credit {{ formatCurrency(refund.credit_amount ?? refund.amount) }}</span>}
                   </div>
                   @if (refund.return_items?.length) {
                     <div class="page-subtitle">
@@ -244,15 +259,16 @@
                       }
                     </div>
                   }
-                  <div class="page-subtitle">{{ refund.reason }}</div>
+                  <div class="page-subtitle">{{ refund.reason }}</div><button class="secondary-btn" type="button" (click)="previewRefund(refund)">Print return / refund voucher</button>
                 </div>
               }
             </div>
           } @else {
-            <div class="empty-state">No refunds posted yet.</div>
+            <div class="empty-state">No refunds posted yet.<span class="app-state-guidance">Refunds appear after an eligible refund is processed from this invoice.</span></div>
           }
-        </section>
+        </details>
       </div>
+      }
     </section>
     </div>
   }
@@ -260,7 +276,7 @@
   <section class="soft-panel data-panel">
     <div class="panel-head">
       <div>
-        <h2 class="section-title">{{ listTitle }}</h2>
+        <h1 class="page-title">{{ listTitle }}</h1>
         <div class="section-copy">{{ listCopy }}</div>
       </div>
       <div class="toolbar-row">
@@ -269,11 +285,20 @@
       </div>
     </div>
 
-    <form class="form-grid billing-filter-grid billing-filter-grid--compact" [formGroup]="invoiceFilterForm">
-      <label class="field">
+    <form class="billing-filter-bar" [formGroup]="invoiceFilterForm"><label class="field">
         <span class="compact-label">Search</span>
         <input type="text" formControlName="q" placeholder="Search invoice/patient/doctor" />
-      </label>
+      </label><label class="field">
+        <span class="compact-label">Payment</span>
+        <select formControlName="payment_status">
+          <option value="">All payments</option>
+          <option value="paid">Paid</option>
+          <option value="partial">Partial</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="due">Due</option>
+        </select>
+      </label><details class="billing-more-filters"><summary>More filters and export @if(extraFilterCount){<strong>· {{extraFilterCount}} active</strong>}</summary><div class="form-grid">
+
       <label class="field">
         <span class="compact-label">Doctor</span>
         <select formControlName="internal_referral_user_id">
@@ -291,16 +316,7 @@
           <option value="void">Void</option>
         </select>
       </label>
-      <label class="field">
-        <span class="compact-label">Payment</span>
-        <select formControlName="payment_status">
-          <option value="">All payments</option>
-          <option value="paid">Paid</option>
-          <option value="partial">Partial</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="due">Due</option>
-        </select>
-      </label>
+
       <label class="field" style="grid-column:1/-1;">
         <span class="compact-label">Module</span>
         <div class="toggle-group">
@@ -326,41 +342,15 @@
         <button class="secondary-btn" type="button" (click)="exportInvoicesCsv()">Export CSV</button>
         <button class="secondary-btn" type="button" (click)="clearInvoiceFilters()">Clear Filters</button>
       </div>
-    </form>
+    </div></details></form>
 
     @if (displayedInvoices.length) {
-    <table class="table">
-      <thead>
-        <tr>
-          <th class="sortable-th" [ngClass]="sortClass('invoice_number')" (click)="toggleSort('invoice_number')">Invoice No</th>
-          <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
-          <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
-          <th class="sortable-th" [ngClass]="sortClass('payment_status')" (click)="toggleSort('payment_status')">Payment</th>
-          <th>Doctor</th>
-          <th class="sortable-th" [ngClass]="sortClass('total_amount')" (click)="toggleSort('total_amount')">Total</th>
-          <th>Refunded</th>
-          <th class="sortable-th" [ngClass]="sortClass('due_amount')" (click)="toggleSort('due_amount')">Due</th>
-          <th class="sortable-th" [ngClass]="sortClass('created_at')" (click)="toggleSort('created_at')">Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (invoice of displayedInvoices; track invoice.id) {
-          <tr class="history-row" (click)="loadInvoiceDetail(invoice.id)">
-            <td><strong>{{ invoice.invoice_number }}</strong></td>
-            <td>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }}</td>
-            <td><span class="status-chip" [class]=" 'status-chip ' + invoice.status ">{{ formatStatus(invoice.status) }}</span></td>
-            <td><span class="status-chip" [class]=" 'status-chip ' + invoice.payment_status ">{{ formatStatus(invoice.payment_status) }}</span></td>
-            <td>{{ invoice.referred_doctor_name || '-' }}</td>
-            <td>{{ formatCurrency(invoice.total_amount) }}</td>
-            <td>{{ formatCurrency(invoice.refunded_amount) }}</td>
-            <td>{{ formatCurrency(invoice.due_amount) }}</td>
-            <td>{{ invoice.created_at | date:'medium' }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
+    <div class="table-wrap"><table class="table data-table invoice-records">
+      <thead><tr><th class="sortable-th" (click)="toggleSort('created_at')">Invoice / date</th><th class="sortable-th" (click)="toggleSort('patient')">Patient</th><th class="sortable-th" (click)="toggleSort('payment_status')">Status</th><th class="sortable-th" (click)="toggleSort('total_amount')">Total</th><th class="sortable-th" (click)="toggleSort('due_amount')">Due</th><th></th></tr></thead>
+      <tbody>@for(invoice of displayedInvoices;track invoice.id){<tr class="history-row" (click)="loadInvoiceDetail(invoice.id)"><td><strong class="record-reference" [title]="invoice.invoice_number">{{invoice.invoice_number}}</strong><small>{{invoice.created_at|date:'dd MMM yyyy, HH:mm'}}</small></td><td><strong>{{invoice.patient.first_name}} {{invoice.patient.last_name}}</strong><small>{{invoice.referred_doctor_name||'Direct billing'}}</small></td><td><span class="status-chip">{{formatStatus(invoice.payment_status)}}</span>@if(invoice.status!=='posted'){<small>{{formatStatus(invoice.status)}}</small>}</td><td class="money-cell">{{formatCurrency(invoice.total_amount)}}@if(+invoice.refunded_amount>0){<small>Refund {{formatCurrency(invoice.refunded_amount)}}</small>}</td><td class="money-cell">{{formatCurrency(invoice.due_amount)}}</td><td><button class="ghost-btn compact-btn" type="button" (click)="$event.stopPropagation();loadInvoiceDetail(invoice.id)">Open</button></td></tr>}</tbody>
+    </table></div>
     } @else {
-      <div class="table-empty">No invoices match the selected filters.</div>
+      <div class="table-empty">No invoices match the selected filters.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
     }
   </section>
 

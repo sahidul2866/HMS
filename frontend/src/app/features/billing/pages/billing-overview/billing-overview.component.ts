@@ -1,3 +1,4 @@
+import { SessionService } from '../../../../core/services/session.service';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
@@ -14,6 +15,7 @@ import { BillingServiceApi } from '../../services/billing.service';
   styleUrls: ['./billing-overview.component.scss'],
 })
 export class BillingOverviewComponent {
+  readonly access = inject(SessionService);
   private readonly billingService = inject(BillingServiceApi);
   private readonly router = inject(Router);
 
@@ -38,8 +40,8 @@ export class BillingOverviewComponent {
   }
 
   load(): void {
-    this.billingService.getSummary().subscribe((summary) => (this.summary = summary));
-    this.billingService.getReferralSummary().subscribe((items) => (this.referrals = items.slice(0, 5)));
+    if(this.access.hasPermission('reporting.financial.view')) this.billingService.getSummary().subscribe((summary) => (this.summary = summary));
+    if(this.access.hasPermission('reporting.financial.view')) this.billingService.getReferralSummary().subscribe((items) => (this.referrals = items.slice(0, 5)));
     this.billingService.listInvoices({ status: 'posted' }).subscribe((items) => {
       this.recentInvoices = items.slice(0, 8);
       this.dueInvoices = items.filter((item) => Number(item.due_amount || 0) > 0).slice(0, 6);

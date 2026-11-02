@@ -1,3 +1,4 @@
+import { DialogDirective } from '../../../../shared/directives/dialog.directive';
 import { CommonModule, KeyValue } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -29,7 +30,7 @@ type TransportTab = 'dashboard' | 'requests' | 'dispatch' | 'trips' | 'vehicles'
 @Component({
   selector: 'app-transport-workspace',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [DialogDirective, CommonModule, FormsModule],
   templateUrl: './transport-workspace.component.html',
   styleUrls: ['./transport-workspace.component.scss'],
 })
@@ -43,7 +44,7 @@ export class TransportWorkspaceComponent {
   readonly permissions = PERMISSIONS;
 
   readonly tab = signal<TransportTab>('dashboard');
-  today = new Date().toISOString().slice(0, 10);
+  today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
   filters = { vehicle_type: '', status: '', driver_id: '', department: '', trip_type: '', date: this.today, priority: '' };
   reportFilters = { report_type: 'trip_history', status: '', trip_type: '', vehicle_id: '', driver_id: '' };
 
@@ -59,8 +60,12 @@ export class TransportWorkspaceComponent {
   patients: Patient[] = [];
   employees: HREmployee[] = [];
   report: TransportReport | null = null;
-  modal: '' | 'request' | 'vehicle' | 'driver' | 'dispatch' | 'schedule' | 'maintenance' | 'fuel' | 'setting' = '';
+  modal: '' | 'request' | 'vehicle' | 'driver' | 'dispatch' | 'schedule' | 'maintenance' | 'fuel' | 'setting' | 'fare' = '';
   selectedRequest: TransportRequest | null = null;
+  selectedTrip: TransportTrip | null = null;
+  fareForm: Record<string, unknown> = {};
+  editingVehicleId: string | undefined;
+  saving = false;
   error = '';
   success = '';
 
@@ -89,13 +94,13 @@ export class TransportWorkspaceComponent {
   loadReferenceData(): void {
     this.transport.listVehicles().subscribe((rows) => (this.vehicles = rows));
     this.transport.listDrivers().subscribe((rows) => (this.drivers = rows));
-    this.patientsService.list().subscribe((rows) => (this.patients = rows));
-    this.hrService.listEmployees({ page_size: 500 }).subscribe((response) => (this.employees = response.items));
+    if (this.session.hasPermission('patient.view')) this.patientsService.list().subscribe((rows) => (this.patients = rows));
+    if (this.session.hasPermission('hr.view')) this.hrService.listEmployees({ page_size: 500 }).subscribe((response) => (this.employees = response.items));
   }
 
   loadCurrentTab(): void {
     this.error = '';
-    this.loadDashboard();
+    if (this.session.hasPermission('transport.dashboard.view')) this.loadDashboard();
     if (this.tab() === 'requests' || this.tab() === 'dispatch') this.loadRequests();
     if (this.tab() === 'trips' || this.tab() === 'dispatch') this.loadTrips();
     if (this.tab() === 'vehicles') this.loadVehicles();
@@ -153,11 +158,12 @@ export class TransportWorkspaceComponent {
     this.error = '';
     this.success = '';
     if (name === 'request') this.requestForm = { request_type: 'Emergency', trip_type: 'home_to_hospital', source_department: 'Emergency', patient_id: '', staff_employee_id: '', unknown_patient_name: '', pickup_location: '', dropoff_location: 'Hospital Emergency', required_at: this.localDateTime(), urgency: 'routine', priority: 'normal', required_vehicle_type: 'ambulance', required_equipment: [], attendant_required: false, billing_required: false, reason: '' };
-    if (name === 'vehicle') this.vehicleForm = { vehicle_number: '', registration_number: '', vehicle_type: 'ambulance', capacity: 1, equipment_available: [...this.equipment.slice(0, 3)], fuel_type: 'diesel', current_status: 'available', remarks: '' };
+    if (name === 'vehicle') this.editingVehicleId = undefined;
+    if (name === 'vehicle') this.vehicleForm = { vehicle_number: '', registration_number: '', vehicle_type: 'ambulance', capacity: 1, equipment_available: [], fuel_type: 'diesel', current_status: 'available', remarks: '' };
     if (name === 'driver') this.driverForm = { employee_id: '', driver_name: '', contact_number: '', license_number: '', license_expiry_date: '', assigned_vehicle_id: '', shift: 'day', availability_status: 'available', emergency_contact: '' };
     if (name === 'dispatch') this.dispatchForm = { vehicle_id: this.availableVehicles()[0]?.id || '', driver_id: this.availableDrivers()[0]?.id || '', scheduled_at: this.localDateTime(), override: false, override_reason: '', remarks: '' };
     if (name === 'schedule') this.scheduleForm = { vehicle_id: '', driver_id: '', schedule_type: 'booking', start_at: this.localDateTime(), end_at: this.localDateTime(60), recurrence_rule: '', status: 'scheduled', purpose: '' };
-    if (name === 'maintenance') this.maintenanceForm = { vehicle_id: this.vehicles[0]?.id || '', maintenance_type: 'service', service_date: this.today, odometer_reading: 0, workshop_vendor: '', cost: 0, next_service_date: '', parts_changed: '', status: 'completed' };
+    if (name === 'maintenance') this.maintenanceForm = { vehicle_id: this.vehicles[0]?.id || '', maintenance_type: 'service', service_date: this.today, odometer_reading: 0, workshop_vendor: '', cost: 0, next_service_date: '', parts_changed: '', status: 'scheduled' };
     if (name === 'fuel') this.fuelForm = { vehicle_id: this.vehicles[0]?.id || '', fuel_date: this.today, quantity: 0, fuel_cost: 0, odometer_reading: 0, filled_by: '', expense_category: 'fuel', remarks: '' };
     if (name === 'setting') this.settingForm = { setting_key: '', setting_value: '', description: '' };
   }
@@ -170,8 +176,14 @@ export class TransportWorkspaceComponent {
     this.submit(this.transport.createRequest(this.clean(this.requestForm), emergency), emergency ? 'Emergency request created' : 'Transport request created');
   }
 
+  editVehicle(vehicle: TransportVehicle): void {
+    this.openModal('vehicle');
+    this.editingVehicleId = vehicle.id;
+    this.vehicleForm = {...vehicle};
+  }
+
   saveVehicle(): void {
-    this.submit(this.transport.saveVehicle(this.clean(this.vehicleForm)), 'Vehicle saved');
+    this.submit(this.transport.saveVehicle(this.clean(this.vehicleForm), this.editingVehicleId), 'Vehicle saved');
   }
 
   saveDriver(): void {
@@ -190,6 +202,9 @@ export class TransportWorkspaceComponent {
     this.submit(this.transport.dispatch(this.selectedRequest.id, this.clean(this.dispatchForm)), 'Trip dispatched');
   }
 
+  openFare(trip: TransportTrip): void { this.selectedTrip=trip; this.fareForm={amount: trip.charges?.['total'] || 0, reason: ''}; this.modal='fare'; }
+  saveFare(): void { if(this.selectedTrip) this.submit(this.transport.setFare(this.selectedTrip.id,this.fareForm),'Fare saved; invoice will post on completion'); }
+
   setTripStatus(trip: TransportTrip, status: string): void {
     const payload: Record<string, unknown> = { status };
     if (status === 'completed') {
@@ -201,6 +216,10 @@ export class TransportWorkspaceComponent {
 
   saveSchedule(): void {
     this.submit(this.transport.createSchedule(this.clean(this.scheduleForm)), 'Schedule saved');
+  }
+
+  completeMaintenance(item: TransportMaintenance): void {
+    this.submit(this.transport.completeMaintenance(item.id), 'Maintenance completed; vehicle availability refreshed');
   }
 
   saveMaintenance(): void {
@@ -251,25 +270,28 @@ export class TransportWorkspaceComponent {
   }
 
   private submit<T>(request$: import('rxjs').Observable<T>, message: string): void {
+    if (this.saving) return;
+    this.saving = true;
     request$.subscribe({
       next: () => {
+        this.saving = false;
         this.success = message;
         this.closeModal();
         this.loadReferenceData();
         this.loadCurrentTab();
         this.notifications.success(message);
       },
-      error: (error) => this.showError(error),
+      error: (error) => { this.saving = false; this.showError(error); },
     });
   }
 
   private clean(source: Record<string, unknown>): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, Array.isArray(value) ? value : value === '' ? null : value]));
+    return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, Array.isArray(value) ? value : value === '' ? null : ['required_at','scheduled_at','start_at','end_at'].includes(key) && typeof value === 'string' ? new Date(value).toISOString() : value]));
   }
 
   private showError(error: unknown): void {
-    const anyError = error as { error?: { message?: string; detail?: string }; message?: string };
-    this.error = anyError.error?.message || anyError.error?.detail || anyError.message || 'Could not complete transport action.';
+    const anyError = error as { error?: { message?: string; detail?: string; error?: {message?: string} }; message?: string };
+    this.error = anyError.error?.error?.message || anyError.error?.message || anyError.error?.detail || anyError.message || 'Could not complete transport action.';
   }
 
   private localDateTime(addMinutes = 0): string {

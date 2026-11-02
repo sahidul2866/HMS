@@ -13,13 +13,13 @@
       <button type="button" class="ghost" (click)="close()">Close</button>
     </header>
 
-    <form class="scan-form" (ngSubmit)="resolve()">
+    <form class="scan-form" data-native-enter (ngSubmit)="resolve()">
       <input id="global-scan-input" [(ngModel)]="code" name="code" autocomplete="off" placeholder="Scan or type code" />
       <button type="submit" [disabled]="loading">{{ loading ? 'Scanning' : 'Find' }}</button>
     </form>
 
     <div class="camera-row">
-      <button type="button" class="ghost" (click)="cameraActive ? stopCamera() : startCamera()">{{ cameraActive ? 'Stop Camera' : 'Camera Scan' }}</button>
+      <button type="button" class="ghost" (click)="cameraActive ? stopCamera() : startCamera()" [disabled]="cameraStarting" [attr.aria-busy]="cameraStarting">{{ cameraActive ? 'Stop Camera' : 'Camera Scan' }}</button>
       <span>{{ cameraSupported ? 'Camera supported' : 'Manual or hardware scanner fallback' }}</span>
     </div>
     <video *ngIf="cameraActive" id="global-scan-video" class="camera-preview" muted playsinline></video>

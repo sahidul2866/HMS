@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -154,3 +154,9 @@ class QueueSettingRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class QueueSpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500, pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$")
+    language: Literal["en-US", "bn-BD"] = "en-US"
+    queue_scope: str = Field(default="opd", min_length=2, max_length=60)

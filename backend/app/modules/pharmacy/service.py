@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppException
 from app.models.billing import BillingInvoice, BillingInvoiceItem
+from app.models.encounter import OPDVisitOrder
 from app.models.pharmacy import (
     PharmacyCompany,
     PharmacyCustomer,
@@ -275,40 +276,27 @@ class PharmacyService:
             stmt = stmt.where(InventoryItem.branch_id == actor.branch_id)
         return self.db.scalar(stmt.limit(1))
 
+    def _unbatched_inventory_quantity(self, balance: InventoryStoreItem) -> Decimal:
+        # Expired/inactive batch stock must never become an unbatched fallback.
+        allocated = self.db.scalar(select(func.coalesce(func.sum(StockBatch.quantity), 0)).where(
+            StockBatch.item_id == balance.item_id, StockBatch.store_id == balance.store_id, StockBatch.quantity > 0))
+        return max(Decimal('0'), Decimal(balance.quantity_on_hand) - Decimal(allocated or 0) - Decimal(balance.reserved_quantity))
+
     def _available_inventory_quantity(self, item: InventoryItem) -> Decimal:
-        today = date.today()
-        total = Decimal("0")
-        batch_stmt = (
-            select(StockBatch, InventoryStoreItem)
-            .join(InventoryStoreItem, (InventoryStoreItem.item_id == StockBatch.item_id) & (InventoryStoreItem.store_id == StockBatch.store_id))
-            .where(
-                StockBatch.item_id == item.id,
-                StockBatch.quantity > 0,
-                StockBatch.is_active.is_(True),
-                InventoryStoreItem.is_active.is_(True),
-                InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
-                or_(StockBatch.expiry_date.is_(None), StockBatch.expiry_date >= today),
-            )
-        )
-        batch_store_ids = set()
-        for batch, balance in self.db.execute(batch_stmt).all():
-            batch_store_ids.add(balance.store_id)
-            total += min(
-                Decimal(batch.quantity or 0),
-                max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0)),
-            )
-        balance_stmt = select(InventoryStoreItem).where(
-            InventoryStoreItem.item_id == item.id,
-            InventoryStoreItem.is_active.is_(True),
-            InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
-        )
-        if batch_store_ids:
-            balance_stmt = balance_stmt.where(InventoryStoreItem.store_id.notin_(batch_store_ids))
-        for balance in self.db.scalars(balance_stmt):
-            total += max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0))
+        total = Decimal('0')
+        balances = self.db.scalars(select(InventoryStoreItem).where(InventoryStoreItem.item_id == item.id, InventoryStoreItem.is_active.is_(True)))
+        for balance in balances:
+            if not balance.store or not balance.store.is_active or (item.branch_id and balance.store.branch_id and item.branch_id != balance.store.branch_id):
+                continue
+            usable = self.db.scalar(select(func.coalesce(func.sum(StockBatch.quantity), 0)).where(
+                StockBatch.item_id == item.id, StockBatch.store_id == balance.store_id, StockBatch.quantity > 0,
+                StockBatch.is_active.is_(True), or_(StockBatch.expiry_date.is_(None), StockBatch.expiry_date >= date.today())))
+            free = max(Decimal('0'), Decimal(balance.quantity_on_hand) - Decimal(balance.reserved_quantity))
+            total += min(free, Decimal(usable or 0) + self._unbatched_inventory_quantity(balance))
         return total
 
     def _deduct_inventory_for_dispense(self, *, item: InventoryItem, quantity: Decimal, actor: User, reference_id, note: str | None) -> Decimal:
+        item = self.db.scalar(select(InventoryItem).where(InventoryItem.id == item.id).with_for_update().execution_options(populate_existing=True))
         remaining = Decimal(quantity)
         today = date.today()
 
@@ -321,7 +309,7 @@ class PharmacyService:
                 StockBatch.is_active.is_(True),
                 or_(StockBatch.expiry_date.is_(None), StockBatch.expiry_date >= today),
             )
-            .order_by(StockBatch.expiry_date.is_(None), StockBatch.expiry_date.asc(), StockBatch.created_at.asc())
+            .order_by(StockBatch.expiry_date.is_(None), StockBatch.expiry_date.asc(), StockBatch.created_at.asc()).with_for_update(of=StockBatch)
         )
         for batch in self.db.scalars(batch_stmt).unique():
             if remaining <= 0:
@@ -331,9 +319,9 @@ class PharmacyService:
                     InventoryStoreItem.item_id == item.id,
                     InventoryStoreItem.store_id == batch.store_id,
                     InventoryStoreItem.is_active.is_(True),
-                )
+                ).with_for_update()
             )
-            if not balance:
+            if not balance or not balance.store or not balance.store.is_active:
                 continue
             available = min(
                 max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0)),
@@ -357,12 +345,14 @@ class PharmacyService:
                     InventoryStoreItem.is_active.is_(True),
                     InventoryStoreItem.quantity_on_hand > InventoryStoreItem.reserved_quantity,
                 )
-                .order_by(InventoryStoreItem.updated_at.asc())
+                .order_by(InventoryStoreItem.updated_at.asc()).with_for_update(of=InventoryStoreItem)
             )
             for balance in self.db.scalars(balance_stmt).unique():
                 if remaining <= 0:
                     break
-                available = max(Decimal("0"), Decimal(balance.quantity_on_hand or 0) - Decimal(balance.reserved_quantity or 0))
+                if not balance.store or not balance.store.is_active:
+                    continue
+                available = self._unbatched_inventory_quantity(balance)
                 if available <= 0:
                     continue
                 issued = min(remaining, available)
@@ -382,6 +372,8 @@ class PharmacyService:
             raise AppException(409, "inventory_stock_conflict", f"{item.name} stock would go below zero")
         balance.quantity_on_hand = stock_after
         balance.updated_by = actor.id
+        if batch:
+            item.stock_value = max(Decimal("0"), Decimal(item.stock_value or 0) + quantity * Decimal(batch.unit_cost or 0))
         self.repository.create(
             InventoryStockTransaction(
                 id=uuid4(),
@@ -592,6 +584,9 @@ class PharmacyService:
                         )
                     )
 
+        if inventory_item:
+            total_available = self._available_inventory_quantity(inventory_item)
+
         pharmacy_stock = Decimal(pharmacy_medicine.stock_quantity or 0) if pharmacy_medicine else Decimal("0")
         if pharmacy_stock > 0 and not batches:
             total_available += pharmacy_stock
@@ -610,7 +605,7 @@ class PharmacyService:
         status = "out_of_stock"
         if usable_batches:
             status = "available"
-        elif total_available > 0:
+        elif any(batch.is_expired for batch in batches):
             status = "expired_only"
 
         return PharmacyMedicineAvailabilityRead(
@@ -1403,6 +1398,8 @@ class PharmacyService:
                 source_order = self.opd_repository.get_order(line.source_visit_order_id)
                 if not source_order:
                     raise AppException(404, "opd_order_not_found", "Prescription source order not found")
+                if source_order.status in {"cancelled", "discontinued"}:
+                    raise AppException(409, "prescription_cancelled", "This prescription was cancelled; review it with the prescribing doctor")
                 if source_order.order_type != "prescription":
                     raise AppException(400, "invalid_opd_order_type", "Only prescription orders can be linked to pharmacy sales")
             medicine = self.repository.get_medicine(line.medicine_id, for_update=True)
@@ -2287,7 +2284,7 @@ class PharmacyService:
         orders = self.opd_repository.list_pending_prescription_orders(actor.branch_id)
         pending: list[PharmacyPendingPrescriptionRead] = []
         for order in orders:
-            dispensed_quantity = Decimal(str(self.repository.get_net_dispensed_quantity(order.id)))
+            dispensed_quantity = self.repository.get_issued_quantity(order.id)
             remaining_quantity = max(Decimal("0"), order.quantity - dispensed_quantity)
             if remaining_quantity <= 0:
                 continue
@@ -2339,14 +2336,19 @@ class PharmacyService:
     def dispense(self, payload: PharmacyDispenseCreate, actor: User, context: dict[str, str | None]) -> PharmacyDispense:
         source_order = None
         if payload.source_visit_order_id:
+            self.db.execute(select(OPDVisitOrder.id).where(OPDVisitOrder.id==payload.source_visit_order_id).with_for_update())
             source_order = self.opd_repository.get_order(payload.source_visit_order_id)
             if not source_order:
                 raise AppException(404, "opd_order_not_found", "OPD prescription order not found")
+            if source_order.status in {"cancelled", "discontinued"}:
+                raise AppException(409, "prescription_cancelled", "This prescription was cancelled; review it with the prescribing doctor")
             if source_order.order_type != "prescription":
                 raise AppException(400, "invalid_opd_order_type", "Only prescription orders can be dispensed")
             if actor.branch_id and source_order.visit.branch_id and actor.branch_id != source_order.visit.branch_id:
                 raise AppException(403, "forbidden", "Prescription order belongs to a different branch")
 
+        if source_order and ((payload.patient_id and payload.patient_id!=source_order.visit.patient_id) or (payload.source_visit_id and payload.source_visit_id!=source_order.visit_id)):
+            raise AppException(422,"pharmacy_patient_mismatch","The patient and visit must match the prescription")
         patient_id = payload.patient_id or (source_order.visit.patient_id if source_order else None)
         prescription_ref = payload.prescription_ref or (source_order.visit.visit_number if source_order else None)
         medicine_name = payload.medicine_name or (source_order.item_name if source_order else None)
@@ -2355,7 +2357,7 @@ class PharmacyService:
             raise AppException(400, "invalid_dispense_payload", "Medicine name and quantity are required")
         requested_quantity = source_order.quantity if source_order else payload.quantity
         if source_order:
-            already_dispensed = Decimal(str(self.repository.get_net_dispensed_quantity(source_order.id)))
+            already_dispensed = sum((Decimal(d.quantity) for d in self.db.scalars(select(PharmacyDispense).where(PharmacyDispense.source_visit_order_id==source_order.id,PharmacyDispense.is_active.is_(True),PharmacyDispense.status.notin_(['pending','cancelled'])))),Decimal(0))
             remaining_quantity = source_order.quantity - already_dispensed
             if remaining_quantity <= 0:
                 raise AppException(409, "opd_order_already_dispensed", "Prescription order has no remaining quantity to dispense")
@@ -2375,6 +2377,11 @@ class PharmacyService:
             total_price=total_price,
             prescription_ref=prescription_ref,
         )
+        if source_order is None and billing_invoice_item and billing_invoice_item.source_opd_visit_order_id:
+            # Billing creates a pending work item for a walk-in issue. Consume that
+            # same work item instead of leaving a second medicine issue in the queue.
+            source_order = self.opd_repository.get_order(billing_invoice_item.source_opd_visit_order_id)
+            requested_quantity = source_order.quantity if source_order else quantity
         order_remaining_after = remaining_quantity - quantity if source_order else Decimal("0")
         dispense_status = "partial" if source_order and order_remaining_after > 0 else "dispensed"
         dispense = None
@@ -2431,8 +2438,11 @@ class PharmacyService:
         )
         if actor.branch_id:
             matched_medicine_query = matched_medicine_query.where(PharmacyMedicine.branch_id == actor.branch_id)
-        matched_medicine = self.db.scalar(matched_medicine_query)
+        matched_medicine = self.db.scalar(matched_medicine_query.with_for_update())
         inventory_item = self._find_inventory_item_for_medicine(medicine_name, actor)
+        if inventory_item:
+            self.db.execute(select(InventoryItem.id).where(InventoryItem.id==inventory_item.id).with_for_update())
+            self.db.refresh(inventory_item)
         inventory_available = self._available_inventory_quantity(inventory_item) if inventory_item else Decimal("0")
         dispensed_from_inventory = False
         if inventory_item and inventory_available >= Decimal(quantity):
@@ -2481,48 +2491,11 @@ class PharmacyService:
         return dispense
 
     def return_dispense(self, dispense_id, payload: PharmacyDispenseReturnCreate, actor: User, context: dict[str, str | None]) -> PharmacyDispense:
+        self.db.execute(select(PharmacyDispense.id).where(PharmacyDispense.id==dispense_id).with_for_update())
         dispense = self.repository.get_dispense(dispense_id)
-        if not dispense:
+        if not dispense or not dispense.is_active:
             raise AppException(404, "pharmacy_dispense_not_found", "Pharmacy dispense not found")
         if actor.branch_id and dispense.branch_id and actor.branch_id != dispense.branch_id:
             raise AppException(403, "forbidden", "Dispense belongs to a different branch")
-
-        remaining_returnable = dispense.quantity - dispense.returned_quantity
-        if payload.quantity > remaining_returnable:
-            raise AppException(409, "pharmacy_return_exceeds_dispense", "Return quantity exceeds remaining dispensed quantity")
-
-        dispense.returned_quantity += payload.quantity
-        dispense.return_note = payload.note
-        dispense.updated_by = actor.id
-        if dispense.returned_quantity == dispense.quantity:
-            dispense.status = "returned"
-        else:
-            dispense.status = "partially_returned"
-
-        matched_medicine_query = select(PharmacyMedicine).where(
-            PharmacyMedicine.is_active.is_(True),
-            func.lower(PharmacyMedicine.name) == dispense.medicine_name.strip().lower(),
-        )
-        if actor.branch_id:
-            matched_medicine_query = matched_medicine_query.where(PharmacyMedicine.branch_id == actor.branch_id)
-        matched_medicine = self.db.scalar(matched_medicine_query)
-        if matched_medicine:
-            self._change_stock(
-                medicine=matched_medicine,
-                delta=Decimal(payload.quantity),
-                actor=actor,
-                movement_type="dispense_return_in",
-                reference_type="dispense",
-                reference_id=dispense.id,
-                note=payload.note,
-            )
-
-        if dispense.source_visit_order:
-            net_dispensed = Decimal(str(self.repository.get_net_dispensed_quantity(dispense.source_visit_order.id)))
-            remaining_on_order = dispense.source_visit_order.quantity - net_dispensed
-            dispense.source_visit_order.status = "completed" if remaining_on_order <= 0 else "in_progress"
-            dispense.source_visit_order.updated_by = actor.id
-
-        self._commit_and_log(actor=actor, action="pharmacy.dispense.return", entity_type="pharmacy_dispense", entity_id=str(dispense.id), detail={"medicine_name": dispense.medicine_name, "returned_quantity": str(payload.quantity)}, context=context)
-        self.db.refresh(dispense)
-        return dispense
+        from app.modules.pharmacy.physical_returns import receive
+        return receive(self, dispense, payload, actor, context)

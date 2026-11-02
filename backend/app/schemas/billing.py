@@ -17,10 +17,12 @@ class BillingServiceCreate(BaseModel):
     doctor_share_percentage: Decimal = Field(ge=0, le=100)
     max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
     max_discount_amount: Decimal | None = Field(default=None, ge=0)
+    billing_type_id: UUID | None = None
     room_number: str | None = Field(default=None, max_length=60)
 
 
 class BillingServiceRead(BillingServiceCreate):
+    unit_price: Decimal = Field(ge=0)
     id: UUID
     source_module: str | None = None
     source_entity_id: UUID | None = None
@@ -34,6 +36,7 @@ class BillingServiceControlsUpdate(BaseModel):
     max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
     max_discount_amount: Decimal | None = Field(default=None, ge=0)
     doctor_share_percentage: Decimal = Field(ge=0, le=100)
+    billing_type_id: UUID | None = None
     room_number: str | None = Field(default=None, max_length=60)
     is_active: bool | None = None
 
@@ -55,9 +58,12 @@ class ReferredDoctorRead(ReferredDoctorCreate):
 
 
 class BillingInvoiceItemCreate(BaseModel):
+    bed_charge_date: date | None = None
     billing_service_id: UUID | None = None
     quantity: Decimal = Field(gt=0)
     discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    # Flat Taka discount on this line; use either this or the percentage, not both.
+    discount_amount: Decimal | None = Field(default=None, ge=0)
     source_opd_visit_order_id: UUID | None = None
     source_label: str | None = Field(default=None, max_length=180)
     source_module: str | None = Field(default=None, max_length=40)
@@ -65,6 +71,8 @@ class BillingInvoiceItemCreate(BaseModel):
     source_item_id: UUID | None = None
     source_record_type: str | None = Field(default=None, max_length=80)
     source_record_id: UUID | None = None
+    # Final IPD bills carry an interim line forward at its frozen price and discount.
+    carry_forward_item_id: UUID | None = None
 
 
 class BillingInvoiceCreate(BaseModel):
@@ -76,11 +84,20 @@ class BillingInvoiceCreate(BaseModel):
     billing_stage: str | None = Field(default=None, max_length=40)
     internal_referral_user_id: UUID | None = None
     discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    # Flat Taka discount on the whole invoice; use either this or the percentage, not both.
+    discount_amount: Decimal | None = Field(default=None, ge=0)
     note: str | None = None
+    billing_type_id: UUID | None = None
+    discount_reason: str | None = Field(default=None, max_length=500)
     items: list[BillingInvoiceItemCreate] = Field(min_length=1)
 
 
 class BillingInvoiceItemRead(BaseModel):
+    net_amount: Decimal
+    returnable_quantity: Decimal
+    bed_charge_date: date | None = None
+    billing_type_name: str | None = None
+    billing_department: str | None = None
     id: UUID
     billing_service_id: UUID | None = None
     source_entity_id: UUID | None = None
@@ -104,6 +121,14 @@ class BillingInvoiceItemRead(BaseModel):
 
 
 class BillingInvoiceRead(BaseModel):
+    credited_amount: Decimal = Decimal("0")
+    net_payable_amount: Decimal = Decimal("0")
+    billed_by_user_id: UUID
+    billed_by_name: str | None = None
+    billing_type_id: UUID | None = None
+    billing_type_name: str | None = None
+    billing_department: str | None = None
+    discount_reason: str | None = None
     id: UUID
     invoice_number: str
     patient_id: UUID
@@ -128,6 +153,9 @@ class BillingInvoiceRead(BaseModel):
     paid_amount: Decimal
     refunded_amount: Decimal
     due_amount: Decimal
+    overpaid_amount: Decimal = Decimal("0")
+    total_in_words: str | None = None
+    due_in_words: str | None = None
     referred_doctor_amount: Decimal
     note: str | None = None
     created_at: datetime
@@ -139,6 +167,8 @@ class BillingInvoiceRead(BaseModel):
 
 
 class BillingInvoiceListItem(BaseModel):
+    credited_amount: Decimal = Decimal("0")
+    net_payable_amount: Decimal = Decimal("0")
     id: UUID
     invoice_number: str
     patient_id: UUID
@@ -210,8 +240,12 @@ class BillingInvoiceVoidRequest(BaseModel):
 
 
 class BillingPaymentCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
     amount: Decimal = Field(gt=0)
     payment_method: str = Field(pattern="^(cash|card|mobile_banking|bank_transfer)$")
+    # Mobile banking: provider (bkash, nagad, rocket, upay, other) and TrxID. Card: approval code. Bank: cheque / transfer reference.
+    payment_provider: str | None = Field(default=None, max_length=30)
+    reference_number: str | None = Field(default=None, max_length=80)
     note: str | None = None
     received_at: datetime | None = None
 
@@ -222,7 +256,10 @@ class BillingPaymentRead(BaseModel):
     patient_id: UUID
     receipt_number: str
     payment_method: str
+    payment_provider: str | None = None
+    reference_number: str | None = None
     amount: Decimal
+    amount_in_words: str | None = None
     note: str | None = None
     received_at: datetime
     collected_by_user_id: UUID
@@ -232,6 +269,8 @@ class BillingPaymentRead(BaseModel):
 
 
 class BillingRefundCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    payment_method: str = Field(default="cash", pattern="^(cash|card|mobile_banking|bank_transfer)$")
     amount: Decimal = Field(gt=0)
     payment_id: UUID | None = None
     reason: str = Field(min_length=3, max_length=500)
@@ -244,6 +283,8 @@ class BillingReturnItemCreate(BaseModel):
 
 
 class BillingReturnCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    payment_method: str = Field(default="cash", pattern="^(cash|card|mobile_banking|bank_transfer)$")
     items: list[BillingReturnItemCreate] = Field(min_length=1)
     payment_id: UUID | None = None
     reason: str = Field(min_length=3, max_length=500)
@@ -251,6 +292,9 @@ class BillingReturnCreate(BaseModel):
 
 
 class BillingRefundRead(BaseModel):
+    credit_amount: Decimal = Decimal("0")
+    refunded_by_name: str | None = None
+    payment_method: str = "cash"
     id: UUID
     invoice_id: UUID
     payment_id: UUID | None = None
@@ -279,6 +323,9 @@ class BillingInvoicePreview(BaseModel):
 
 class BillingInvoicePreviewRequest(BaseModel):
     discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    discount_amount: Decimal | None = Field(default=None, ge=0)
+    billing_type_id: UUID | None = None
+    discount_reason: str | None = Field(default=None, max_length=500)
     items: list[BillingInvoiceItemCreate] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -289,6 +336,7 @@ class BillingInvoicePreviewRequest(BaseModel):
 
 
 class BillingDraftItemRead(BaseModel):
+    bed_charge_date: date | None = None
     source_label: str
     source_module: str
     source_item_type: str | None = None
@@ -300,6 +348,7 @@ class BillingDraftItemRead(BaseModel):
     source_opd_visit_order_id: UUID | None = None
     source_record_type: str | None = None
     source_record_id: UUID | None = None
+    carry_forward_item_id: UUID | None = None
     warning: str | None = None
 
 
@@ -352,3 +401,31 @@ class BillingItemLinkRead(BaseModel):
 
 
 BillingInvoiceRead.model_rebuild()
+
+
+class BillingTypeCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    code: str = Field(min_length=2, max_length=40, pattern=r'^[A-Za-z0-9_-]+$')
+    name: str = Field(min_length=2, max_length=120)
+    department: str = Field(min_length=2, max_length=120)
+
+
+class BillingInvoiceAmend(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    reason: str = Field(min_length=3, max_length=500)
+    note: str | None = Field(default=None, max_length=2000)
+    billing_type_id: UUID | None = None
+    discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
+    discount_amount: Decimal | None = Field(default=None, ge=0)
+
+
+class BillingHandoverCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    receiver_id: UUID
+    declared_amount: Decimal = Field(ge=0)
+    note: str = Field(min_length=3, max_length=1000)
+
+
+class BillingHandoverAccept(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    note: str = Field(min_length=3, max_length=1000)

@@ -60,6 +60,10 @@ export class OPDService extends ApiBaseService {
     return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/consultation`), payload).pipe(tap((visit) => this.publishVisitEvent('prescription.updated', visit, 'Prescription/consultation updated.')));
   }
 
+  finalizePrescription(visitId: string, payload: UpdateOPDConsultationPayload): Observable<OPDVisit> {
+    return this.http.post<OPDVisit>(this.url(`/opd/visits/${visitId}/finalize`), payload).pipe(tap(visit => this.publishVisitEvent('prescription.updated', visit, 'Prescription finalized and consultation queue released.')));
+  }
+
   createOrder(visitId: string, payload: CreateOPDVisitOrderPayload): Observable<OPDVisit> {
     return this.http.post<OPDVisit>(this.url(`/opd/visits/${visitId}/orders`), payload).pipe(tap((visit) => this.publishVisitEvent(payload.order_type === 'prescription' ? 'prescription.created' : 'lab.order.created', visit, payload.order_type === 'prescription' ? 'Prescription medicine added.' : 'Investigation/order added.')));
   }

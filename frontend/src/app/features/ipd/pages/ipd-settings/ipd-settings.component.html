@@ -226,6 +226,9 @@
             </div>
             <div class="bed-card__meta">{{ bed.bed_type }} · Daily {{ bed.daily_rate }}</div>
             <div class="bed-card__note">{{ bed.note || 'No note' }}</div>
+            @if(bed.status!=='occupied'&&session.hasPermission('ipd.bed.manage')){
+            <details><summary>Cleaning and availability</summary><form (ngSubmit)="saveBedStatus(bed)"><label class="field"><span>New bed status</span><select name="status" [(ngModel)]="bedStatuses[bed.id]" required><option value="">Select status</option><option value="available">Available · cleaning completed</option><option value="cleaning">Cleaning</option><option value="maintenance">Maintenance</option><option value="blocked">Blocked</option></select></label><label class="field"><span>Inspection / maintenance note</span><input name="reason" [(ngModel)]="bedReasons[bed.id]" required minlength="3" /></label><button class="secondary-btn" [disabled]="bedSaving.has(bed.id)">Save bed status</button></form></details>
+            }@else{<small>Transfer or discharge the patient before marking this bed available.</small>}
           </article>
         }
       </div>

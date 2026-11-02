@@ -39,6 +39,10 @@ TOKEN_TRANSITIONS = {
     "recalled": {"called", "in_progress", "skipped", "no_show", "cancelled"},
     "in_progress": {"completed", "referred", "sent_to_billing", "sent_to_lab", "sent_to_radiology", "sent_to_pharmacy", "cancelled"},
     "skipped": {"recalled", "called", "no_show", "cancelled"},
+    "sent_to_billing": {"completed", "cancelled"},
+    "sent_to_pharmacy": {"completed", "cancelled"},
+    "sent_to_lab": {"completed", "cancelled"},
+    "sent_to_radiology": {"completed", "cancelled"},
 }
 
 SCOPE_VIEW_PERMISSIONS = {
@@ -146,8 +150,7 @@ class QueueService:
         stmt = (
             select(QueueToken)
             .where(*clauses)
-            .order_by(QueueToken.status == "called", QueueToken.created_at.desc())
-            .limit(min(max(limit, 1), 200))
+            .order_by(QueueToken.created_at.desc())
         )
         stmt = self._apply_token_scope_filter(stmt, actor)
         items = list(
@@ -155,25 +158,34 @@ class QueueService:
                 stmt
             )
         )
-        return [self._read(item) for item in sorted(items, key=self._sort_key)]
+        def display_order(item: QueueToken) -> tuple:
+            group = 0 if item.status in {"called", "recalled", "in_progress"} else 1 if item.status in {"waiting", "registered"} else 2
+            return (group, self._sort_key(item))
+        return [self._read(item) for item in sorted(items, key=display_order)[:min(max(limit, 1), 200)]]
 
     def ensure_token(self, payload: QueueTokenCreate, actor: User, *, commit: bool = True) -> QueueToken:
         existing = self.db.scalar(select(QueueToken).where(QueueToken.queue_scope == payload.queue_scope, QueueToken.source_type == payload.source_type, QueueToken.source_id == payload.source_id))
         if existing:
             return existing
+        branch_id = actor.branch_id
+        source_visit = self.db.get(OPDVisit, payload.visit_id) if payload.visit_id else None
+        source_patient = self.db.get(Patient, payload.patient_id) if payload.patient_id else None
+        branch_id = (source_visit.branch_id if source_visit else None) or (source_patient.branch_id if source_patient else None) or branch_id
+        if actor.branch_id and branch_id != actor.branch_id:
+            raise AppException(403, "forbidden", "The queue patient belongs to another branch")
         today = date.today()
-        sequence = self._next_sequence(actor.branch_id, payload.queue_scope, today, payload.doctor_user_id)
-        token_number = self._format_token(payload.queue_scope, payload.department_name, payload.service_area, sequence, payload.doctor_user_id, actor.branch_id)
+        sequence = self._next_sequence(branch_id, payload.queue_scope, today, payload.doctor_user_id)
+        token_number = self._format_token(payload.queue_scope, payload.department_name, payload.service_area, sequence, payload.doctor_user_id, branch_id)
         token_data = payload.model_dump()
         meta = dict(token_data.get("meta") or {})
         if payload.queue_scope == "opd" and payload.due_at:
             scheduled_at = payload.due_at if payload.due_at.tzinfo else payload.due_at.replace(tzinfo=UTC)
-            grace_minutes = int(self._setting_value(actor.branch_id, "opd", "late_grace_minutes", 15) or 15)
+            grace_minutes = int(self._setting_value(branch_id, "opd", "late_grace_minutes", 15) or 15)
             late_minutes = max(int((datetime.now(UTC) - scheduled_at).total_seconds() // 60), 0)
             meta.update({"scheduled_at": scheduled_at.isoformat(), "late_arrival": late_minutes > grace_minutes, "late_by_minutes": late_minutes})
         token_data["meta"] = meta
         item = QueueToken(
-            branch_id=actor.branch_id,
+            branch_id=branch_id,
             token_date=today,
             token_sequence=sequence,
             token_number=token_number,
@@ -196,6 +208,8 @@ class QueueService:
     def call_next(self, actor: User, *, queue_scope: str, counter_id: UUID | None = None, doctor_user_id: UUID | None = None) -> QueueTokenRead:
         self._assert_scope(actor, queue_scope)
         counter = self._get_counter(counter_id, actor) if counter_id else None
+        if counter and (counter.module != queue_scope or (doctor_user_id and counter.doctor_user_id and counter.doctor_user_id != doctor_user_id)):
+            raise AppException(422, "queue_counter_mismatch", "Choose a counter assigned to this queue and doctor")
         doctor_user_id = doctor_user_id or (counter.doctor_user_id if counter else None)
         if queue_scope == "opd" and not doctor_user_id:
             raise AppException(422, "opd_queue_doctor_required", "Select a doctor or doctor counter before calling the next OPD patient")
@@ -206,19 +220,26 @@ class QueueService:
         self.db.refresh(item)
         return self._read(item)
 
-    def _call_next_entity(self, actor: User, *, queue_scope: str, counter: QueueCounter | None, doctor_user_id: UUID | None) -> QueueToken | None:
+    def _call_next_entity(self, actor: User, *, queue_scope: str, counter: QueueCounter | None, doctor_user_id: UUID | None, skip_if_active: bool = False) -> QueueToken | None:
+        if queue_scope == "opd":
+            self._assert_doctor_access(actor, doctor_user_id)
+        doctor = self.db.get(User, doctor_user_id) if queue_scope == "opd" and doctor_user_id else None
+        action_branch = (counter.branch_id if counter else None) or (doctor.branch_id if doctor else None) or actor.branch_id
+        self._lock_queue(action_branch, queue_scope, date.today(), doctor_user_id)
         self._expire_stale_called(actor, queue_scope=queue_scope, doctor_user_id=doctor_user_id)
         if counter and counter.status != "active":
             raise AppException(409, "queue_counter_paused", f"{counter.name} is {counter.status}")
         active_stmt = select(QueueToken.id).where(
             QueueToken.queue_scope == queue_scope,
-            QueueToken.status.in_(["called", "in_progress"]),
+            QueueToken.status.in_(["called", "recalled", "in_progress"]),
             QueueToken.token_date == date.today(),
             QueueToken.is_active.is_(True),
             *([QueueToken.doctor_user_id == doctor_user_id] if doctor_user_id else []),
             *([or_(QueueToken.branch_id == actor.branch_id, QueueToken.branch_id.is_(None))] if actor.branch_id else []),
         )
         if self.db.scalar(active_stmt):
+            if skip_if_active:
+                return None
             raise AppException(409, "queue_active_patient_exists", "Complete, skip, or return the current patient before calling another")
         stmt = select(QueueToken).where(
             QueueToken.queue_scope == queue_scope,
@@ -245,19 +266,29 @@ class QueueService:
         self._audit(actor, "token.called", token=item, counter=counter, detail={"counter": counter.code if counter else None})
         return item
 
-    def update_status(self, token_id: UUID, status: str, actor: User, *, counter_id: UUID | None = None, notes: str | None = None) -> QueueTokenRead:
+    def update_status(self, token_id: UUID, status: str, actor: User, *, counter_id: UUID | None = None, notes: str | None = None, commit: bool = True, internal: bool = False) -> QueueTokenRead:
         item = self._get_token(token_id, actor)
-        self._assert_scope(actor, item.queue_scope)
+        if not internal:
+            self._assert_scope(actor, item.queue_scope)
+        self._lock_queue(item.branch_id, item.queue_scope, item.token_date, item.doctor_user_id)
+        self.db.refresh(item, with_for_update=True)
+        if item.status == status and status in {"completed", "cancelled", "no_show"}:
+            return self._read(item)
+        counter = self._get_counter(counter_id, actor) if counter_id else (self._get_counter(item.counter_id, actor) if item.counter_id else None)
+        if counter and (counter.module != item.queue_scope or (counter.doctor_user_id and counter.doctor_user_id != item.doctor_user_id)):
+            raise AppException(422, "queue_counter_mismatch", "Choose the counter assigned to this doctor and queue")
+        if counter and counter.status != "active" and status in {"called", "recalled", "in_progress"}:
+            raise AppException(409, "queue_counter_paused", "Resume this counter before calling a patient")
         if status != item.status and status not in TOKEN_TRANSITIONS.get(item.status, set()):
             raise AppException(409, "queue_invalid_transition", f"Cannot change queue token from {item.status.replace('_', ' ')} to {status.replace('_', ' ')}")
-        if status in {"called", "in_progress"}:
+        if status in {"called", "recalled", "in_progress"}:
             active = self.db.scalar(
                 select(QueueToken.id).where(
                     QueueToken.id != item.id,
                     QueueToken.queue_scope == item.queue_scope,
                     QueueToken.doctor_user_id == item.doctor_user_id,
                     QueueToken.token_date == item.token_date,
-                    QueueToken.status.in_(["called", "in_progress"]),
+                    QueueToken.status.in_(["called", "recalled", "in_progress"]),
                     QueueToken.is_active.is_(True),
                 )
             )
@@ -268,6 +299,9 @@ class QueueService:
         item.notes = notes or item.notes
         if counter_id:
             item.counter_id = counter_id
+        if counter and status in {"called", "recalled", "in_progress"}:
+            counter.current_token_id = item.id
+            counter.updated_by = actor.id
         if status == "in_progress":
             item.started_at = item.started_at or now
         elif status == "called":
@@ -282,6 +316,7 @@ class QueueService:
             if recall_count > recall_limit:
                 raise AppException(409, "queue_recall_limit", f"Recall limit of {recall_limit} has been reached")
             item.recalled_at = now
+            item.called_at = now
             item.meta = {**(item.meta or {}), "recall_count": recall_count}
         elif status in {"no_show", "cancelled"}:
             item.completed_at = now
@@ -294,36 +329,69 @@ class QueueService:
             counter.updated_by = actor.id
         if status == "completed" and item.queue_scope == "opd" and (not counter or counter.status == "active") and self._setting_value(actor.branch_id, "opd", "auto_call_next", True):
             self.db.flush()
-            self._call_next_entity(actor, queue_scope="opd", counter=counter, doctor_user_id=item.doctor_user_id)
-        self.db.commit()
-        self.db.refresh(item)
+            self._call_next_entity(actor, queue_scope="opd", counter=counter, doctor_user_id=item.doctor_user_id, skip_if_active=True)
+        if commit:
+            self.db.commit()
+            self.db.refresh(item)
+        else:
+            self.db.flush()
         return self._read(item)
 
-    def transfer(self, token_id: UUID, payload, actor: User) -> QueueTokenRead:
+    def transfer(self, token_id: UUID, payload, actor: User, *, commit: bool = True, internal: bool = False) -> QueueTokenRead:
         item = self._get_token(token_id, actor)
-        self._assert_scope(actor, item.queue_scope)
-        self._assert_scope(actor, payload.queue_scope)
-        previous_doctor_id = item.doctor_user_id
-        previous_token_number = item.token_number
-        item.queue_scope = payload.queue_scope
-        item.module = payload.module
-        item.service_area = payload.service_area
-        item.department_name = payload.department_name or item.department_name
-        item.doctor_user_id = payload.doctor_user_id
-        item.counter_id = payload.counter_id
-        item.priority = payload.priority or item.priority
-        item.status = "waiting"
-        if payload.queue_scope == "opd" and payload.doctor_user_id and payload.doctor_user_id != previous_doctor_id:
-            item.token_sequence = self._next_sequence(actor.branch_id, "opd", date.today(), payload.doctor_user_id)
-            item.token_number = self._format_token("opd", item.department_name, item.service_area, item.token_sequence, payload.doctor_user_id, actor.branch_id)
-            item.meta = {**(item.meta or {}), "transferred_from_token": previous_token_number, "transferred_at": datetime.now(UTC).isoformat()}
-        item.notes = payload.notes or item.notes
+        if not internal:
+            self._assert_scope(actor, item.queue_scope)
+            self._assert_scope(actor, payload.queue_scope)
+        if payload.module != payload.queue_scope:
+            raise AppException(422, "queue_module_mismatch", "Queue module must match its destination")
+        if payload.queue_scope == "opd":
+            self._assert_doctor_access(actor, payload.doctor_user_id)
+        for doctor_id in sorted({item.doctor_user_id, payload.doctor_user_id}, key=str):
+            self._lock_queue(item.branch_id, item.queue_scope, item.token_date, doctor_id)
+        self.db.refresh(item, with_for_update=True)
+        if item.queue_scope != payload.queue_scope:
+            if item.status != "in_progress":
+                raise AppException(409, "queue_transfer_not_started", "Start the current consultation before transferring the patient")
+            # Preserve the doctor's original serial and create a separate destination token.
+            target = self.ensure_token(QueueTokenCreate(
+                queue_scope=payload.queue_scope, module=payload.module,
+                service_area=payload.service_area, department_name=payload.department_name or item.department_name,
+                doctor_user_id=payload.doctor_user_id, counter_id=payload.counter_id,
+                patient_id=item.patient_id, patient_label=item.patient_label,
+                priority=payload.priority or item.priority, source_type="queue_transfer", source_id=item.id,
+                visit_id=item.visit_id, appointment_id=item.appointment_id,
+                notes=payload.notes, meta={"transferred_from_token": item.token_number},
+            ), actor, commit=False)
+            item.status = "sent_to_" + {"laboratory": "lab"}.get(payload.queue_scope, payload.queue_scope)
+            self._sync_source_queue_fields(item, actor)
+            if item.counter_id:
+                counter = self.db.get(QueueCounter, item.counter_id)
+                if counter and counter.current_token_id == item.id:
+                    counter.current_token_id = None
+            self._audit(actor, "token.transferred", token=item, detail={"to_scope": payload.queue_scope, "destination_token": target.token_number})
+        else:
+            if item.status not in {"waiting", "registered", "skipped"}:
+                raise AppException(409, "queue_transfer_active", "Only a waiting or skipped serial can be assigned to another doctor")
+            previous_token = item.token_number
+            if item.doctor_user_id != payload.doctor_user_id:
+                item.token_sequence = self._next_sequence(item.branch_id, item.queue_scope, item.token_date, payload.doctor_user_id)
+                item.token_number = self._format_token(item.queue_scope, payload.department_name, payload.service_area, item.token_sequence, payload.doctor_user_id, item.branch_id)
+            item.doctor_user_id = payload.doctor_user_id
+            item.counter_id = payload.counter_id
+            item.department_name = payload.department_name or item.department_name
+            item.due_at = getattr(payload, "due_at", None) or item.due_at
+            item.status = "waiting"
+            item.meta = {**(item.meta or {}), "transferred_from_token": previous_token}
+            self._sync_source_queue_fields(item, actor)
+            self._audit(actor, "token.reassigned", token=item, detail={"previous_token": previous_token})
+            target = item
         item.updated_by = actor.id
-        self._sync_source_queue_fields(item, actor)
-        self._audit(actor, "token.transferred", token=item, detail={"to_scope": payload.queue_scope, "notes": payload.notes})
-        self.db.commit()
-        self.db.refresh(item)
-        return self._read(item)
+        if commit:
+            self.db.commit()
+            self.db.refresh(target)
+        else:
+            self.db.flush()
+        return self._read(target)
 
     def update_priority(self, token_id: UUID, priority: str, reason: str, actor: User) -> QueueTokenRead:
         item = self._get_token(token_id, actor)
@@ -345,7 +413,7 @@ class QueueService:
             clauses.append(QueueToken.queue_scope == queue_scope)
         if doctor_user_id:
             clauses.append(QueueToken.doctor_user_id == doctor_user_id)
-        rows = list(self.db.scalars(select(QueueToken).where(*clauses)))
+        rows = list(self.db.scalars(self._apply_token_scope_filter(select(QueueToken).where(*clauses), actor)))
         if not self.scopes.has_unrestricted_access(actor, module="queue", scope_type="queue_scope"):
             allowed_scopes = self.scopes.scope_values(actor, "queue_scope", module="queue")
             allowed_counters = self.scopes.scope_refs(actor, "queue_counter", module="queue")
@@ -359,8 +427,8 @@ class QueueService:
             if item.counter_id:
                 by_counter[str(item.counter_id)] = by_counter.get(str(item.counter_id), 0) + 1
         return {
-            "total_waiting": sum(1 for item in rows if item.status in {"waiting", "registered", "recalled"}),
-            "total_called": sum(1 for item in rows if item.status == "called"),
+            "total_waiting": sum(1 for item in rows if item.status in {"waiting", "registered"}),
+            "total_called": sum(1 for item in rows if item.status in {"called", "recalled"}),
             "total_in_progress": sum(1 for item in rows if item.status == "in_progress"),
             "total_completed": sum(1 for item in rows if item.status == "completed"),
             "skipped_count": sum(1 for item in rows if item.status == "skipped"),
@@ -373,8 +441,8 @@ class QueueService:
     def display(self, actor: User, scope: str) -> dict:
         self._assert_scope(actor, scope, view_only=True)
         tokens = self.list_tokens(actor, queue_scope=scope, token_date=date.today(), limit=50)
-        current = [item for item in tokens if item.status in {"called", "in_progress"}][:6]
-        next_tokens = [item for item in tokens if item.status in {"waiting", "registered", "recalled"}][:8]
+        current = [item for item in tokens if item.status in {"called", "recalled", "in_progress"}][:6]
+        next_tokens = [item for item in tokens if item.status in {"waiting", "registered"}][:8]
         return {"scope": scope, "current": current, "next_tokens": next_tokens, "announcements": ["Please keep your token ready."]}
 
     def list_settings(self, actor: User) -> list[QueueSettingRead]:
@@ -398,6 +466,15 @@ class QueueService:
         self.db.refresh(item)
         return item
 
+    def viewable_scopes(self, actor: User) -> list[str]:
+        """Queue scopes this user may read: the permission check and the admin-assigned scope both have to pass."""
+        permissions = set(self.auth.get_effective_permissions(actor))
+        return [
+            scope
+            for scope, codes in SCOPE_VIEW_PERMISSIONS.items()
+            if ({"queue.view", *codes} & permissions) and self.scopes.is_in_scope(actor, module="queue", scope_type="queue_scope", scope_value=scope)
+        ]
+
     def _assert_scope(self, actor: User, scope: str, view_only: bool = False) -> None:
         permissions = set(self.auth.get_effective_permissions(actor))
         allowed = {"queue.view"} if view_only else {"queue.call_next"}
@@ -406,6 +483,14 @@ class QueueService:
         if not any(code in permissions for code in allowed):
             raise AppException(403, "forbidden", "You do not have permission for this queue")
         self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_scope", scope_value=scope)
+
+    def _assert_doctor_access(self, actor: User, doctor_user_id: UUID | None) -> None:
+        if any(role.is_doctor_role for role in actor.roles) and "opd.view.doctor_wise" not in self.auth.get_effective_permissions(actor) and doctor_user_id != actor.id:
+            raise AppException(403, "forbidden", "You can only call patients in your own doctor queue")
+
+    def _lock_queue(self, branch_id: UUID | None, scope: str, token_date: date, doctor_user_id: UUID | None) -> None:
+        key = f"queue-action:{branch_id}:{scope}:{token_date}:{doctor_user_id}"
+        self.db.execute(select(func.pg_advisory_xact_lock(func.hashtext(key))))
 
     def _next_sequence(self, branch_id: UUID | None, scope: str, token_date: date, doctor_user_id: UUID | None = None) -> int:
         lock_key = f"queue:{branch_id}:{scope}:{token_date}:{doctor_user_id}"
@@ -439,7 +524,10 @@ class QueueService:
             prefix = "".join(part[0] for part in department.split()[:2]).upper()[:2] or prefix
         elif service_area:
             prefix = service_area[:2].upper()
-        return f"{prefix}-{sequence:03d}"
+        # A stable doctor suffix prevents truncated usernames or configured codes
+        # from colliding between doctors with independent daily serials.
+        doctor_suffix = f"-{doctor_user_id.hex[:8].upper()}" if scope == "opd" and doctor_user_id else ""
+        return f"{prefix}{doctor_suffix}-{sequence:03d}"
 
     def _setting_value(self, branch_id: UUID | None, setting_key: str, value_key: str, default):
         stmt = select(QueueSetting).where(QueueSetting.setting_key.in_([setting_key, "global"]), QueueSetting.is_active.is_(True))
@@ -460,6 +548,8 @@ class QueueService:
         stmt = select(QueueToken).where(
             QueueToken.queue_scope == queue_scope,
             QueueToken.status == "called",
+            QueueToken.is_active.is_(True),
+            *([QueueToken.branch_id == actor.branch_id] if actor.branch_id else []),
             QueueToken.token_date == date.today(),
             *([QueueToken.doctor_user_id == doctor_user_id] if doctor_user_id else []),
         )
@@ -494,12 +584,16 @@ class QueueService:
         token = self.db.get(QueueToken, token_id)
         if not token or not token.is_active or (actor.branch_id and token.branch_id not in {None, actor.branch_id}):
             raise AppException(404, "queue_token_not_found", "Queue token not found")
+        if token.queue_scope == "opd":
+            self._assert_doctor_access(actor, token.doctor_user_id)
         self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_scope", scope_value=token.queue_scope)
         if token.counter_id:
             self.scopes.assert_in_scope(actor, module="queue", scope_type="queue_counter", scope_ref_id=token.counter_id)
         return token
 
     def _apply_token_scope_filter(self, stmt, actor: User):
+        if any(role.is_doctor_role for role in actor.roles) and "opd.view.doctor_wise" not in self.auth.get_effective_permissions(actor):
+            stmt = stmt.where(or_(QueueToken.queue_scope != "opd", QueueToken.doctor_user_id == actor.id))
         if self.scopes.has_unrestricted_access(actor, module="queue", scope_type="queue_scope"):
             return stmt
         allowed_scopes = self.scopes.scope_values(actor, "queue_scope", module="queue")
@@ -514,15 +608,15 @@ class QueueService:
         return stmt.where(or_(*clauses))
 
     def _sync_source_queue_fields(self, item: QueueToken, actor: User) -> None:
-        if item.visit_id:
+        if item.visit_id and item.queue_scope == "opd":
             visit = self.db.get(OPDVisit, item.visit_id)
             if visit:
                 visit.queue_number = item.token_number
                 visit.queue_status = item.status
                 visit.queue_called_at = item.called_at
-                if item.status == "in_progress" and visit.status in {"waiting", "checked_in"}:
+                if item.status == "in_progress" and visit.status in {"waiting", "checked_in", "billed"}:
                     visit.status = "in_consultation"
-                elif item.status == "completed" and visit.status not in {"billed", "cancelled"}:
+                elif item.status == "completed" and visit.status not in {"prescribed", "cancelled"}:
                     visit.status = "completed"
                 visit.updated_by = actor.id
         if item.blood_request_id:

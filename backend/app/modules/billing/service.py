@@ -2,10 +2,17 @@ from datetime import UTC, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID, NAMESPACE_DNS, uuid4, uuid5
 
-from sqlalchemy import or_, select
+import re
+
+from sqlalchemy import or_, select, text, func
 from sqlalchemy.orm import Session
 
+from app.utils.bdt import MOBILE_BANKING_PROVIDERS
+
 from app.core.exceptions import AppException
+from app.modules.ipd.billing_rules import billable_order
+from app.modules.billing.operations import classification, record_event
+from app.modules.billing.return_fulfilment import cancellation_plan, cancel_unused
 from app.models.billing import BillingInvoice, BillingInvoiceItem, BillingItemConfig, BillingPayment, ReferredDoctor
 from app.models.billing import BillingRefund, BillingSetting
 from app.models.billing_links import BillingItemLink
@@ -65,6 +72,8 @@ class BillingServiceManager:
 
     def list_services(self, actor: User) -> list[dict]:
         self._sync_services_from_modules(actor)
+        # Catalog identifiers returned to another HTTP request must be durable.
+        self.db.commit()
         configs = self.repository.list_item_configs(actor.branch_id)
         return [
             {
@@ -81,12 +90,15 @@ class BillingServiceManager:
                 "source_module": item.source_module,
                 "source_entity_id": item.source_entity_id,
                 "billing_instruction": item.billing_instruction,
+                "billing_type_id": item.billing_type_id,
                 "is_active": item.is_active,
             }
             for item in configs
         ]
 
     def create_service(self, payload: BillingServiceCreate, actor: User, context: dict[str, str | None]) -> dict:
+        if actor.branch_id and payload.branch_id and payload.branch_id!=actor.branch_id:
+            raise AppException(403,"billing_branch_scope","Choose this user’s billing branch")
         existing = next((item for item in self.repository.list_item_configs(actor.branch_id) if item.service_code == payload.service_code), None)
         if existing:
             raise AppException(409, "billing_service_exists", "Billing service code already exists")
@@ -100,6 +112,10 @@ class BillingServiceManager:
             unit_price=self._money(payload.unit_price),
             doctor_share_percentage=self._money(payload.doctor_share_percentage),
             billing_instruction=payload.description,
+            billing_type_id=classification(self.db,payload.billing_type_id,actor).id if payload.billing_type_id else None,
+            max_discount_percentage=payload.max_discount_percentage,
+            max_discount_amount=payload.max_discount_amount,
+            room_number=payload.room_number,
             created_by=actor.id,
             updated_by=actor.id,
         )
@@ -129,6 +145,7 @@ class BillingServiceManager:
             "source_module": config.source_module,
             "source_entity_id": config.source_entity_id,
             "billing_instruction": config.billing_instruction,
+            "billing_type_id": config.billing_type_id,
             "is_active": config.is_active,
         }
 
@@ -136,6 +153,7 @@ class BillingServiceManager:
         config = self.repository.get_item_config(service_id, actor.branch_id)
         if not config:
             raise AppException(404, "billing_service_not_found", "Billing item config not found")
+        config.billing_type_id = classification(self.db,payload.billing_type_id,actor).id if payload.billing_type_id else None
         config.max_discount_percentage = self._money(payload.max_discount_percentage) if payload.max_discount_percentage is not None else None
         config.max_discount_amount = self._money(payload.max_discount_amount) if payload.max_discount_amount is not None else None
         config.doctor_share_percentage = self._money(payload.doctor_share_percentage)
@@ -175,6 +193,7 @@ class BillingServiceManager:
             "source_module": config.source_module,
             "source_entity_id": config.source_entity_id,
             "billing_instruction": config.billing_instruction,
+            "billing_type_id": config.billing_type_id,
             "is_active": config.is_active,
         }
 
@@ -322,9 +341,11 @@ class BillingServiceManager:
         ]
 
     def preview_invoice(self, payload: BillingInvoicePreviewRequest, actor: User) -> BillingInvoicePreview:
-        return self._build_preview(payload.discount_percentage, self._resolve_invoice_items(payload.items, actor), actor.branch_id)
+        carried = self._carried_lines(payload.items, actor)
+        return self._build_preview(payload.discount_percentage, self._resolve_invoice_items(payload.items, actor), actor.branch_id, carried, payload.discount_amount)
 
     def build_opd_visit_draft(self, visit_id: UUID, actor: User) -> BillingDraftRead:
+        self.list_services(actor)
         visit = self.opd_repository.get_visit(visit_id)
         if not visit:
             raise AppException(404, "opd_visit_not_found", "OPD visit not found")
@@ -333,11 +354,7 @@ class BillingServiceManager:
         items: list[BillingDraftItemRead] = []
         consultation_invoice = self.repository.get_invoice_by_source(source_opd_visit_id=visit.id, billing_stage="opd")
         if not consultation_invoice:
-            consultation_service = self._match_billing_service(
-                branch_id=actor.branch_id,
-                exact_amount=Decimal(visit.consultation_fee or Decimal("0")),
-                keywords=[visit.department_name, "consultation", "opd", "outpatient"],
-            )
+            consultation_service = self._consultation_service_for_visit(visit, actor)
             items.append(
                 BillingDraftItemRead(
                     source_label=f"Consultation · {visit.consulting_doctor_name}",
@@ -403,6 +420,7 @@ class BillingServiceManager:
         )
 
     def build_ipd_admission_draft(self, admission_id: UUID, actor: User, *, stage: str) -> BillingDraftRead:
+        self.list_services(actor)
         admission = self.ipd_repository.get_admission(admission_id)
         if not admission:
             raise AppException(404, "ipd_admission_not_found", "IPD admission not found")
@@ -434,7 +452,11 @@ class BillingServiceManager:
             for prior_invoice in invoices:
                 if prior_invoice.billing_stage != "ipd_interim":
                     continue
+                returned_quantities = self._returned_quantities(prior_invoice)
                 for prior_item in prior_invoice.items:
+                    carried_quantity = Decimal(prior_item.quantity) - returned_quantities.get(str(prior_item.id), Decimal("0"))
+                    if carried_quantity <= 0:
+                        continue  # returned and credited on the interim bill; it must not be billed again
                     prior_config = self.repository.find_item_config_by_source(
                         self._normalize_module(prior_item.source_module or "billing"),
                         prior_item.source_entity_id,
@@ -453,25 +475,23 @@ class BillingServiceManager:
                             source_module=prior_item.source_module or "ipd",
                             billing_service_id=prior_config.id if prior_config else None,
                             billing_service_name=prior_config.service_name if prior_config else prior_item.service_name,
-                            quantity=prior_item.quantity,
-                            discount_percentage=prior_item.discount_percentage,
+                            quantity=carried_quantity,
+                            carry_forward_item_id=prior_item.id,
+                            discount_percentage=Decimal("0"),
                             source_record_type=source_link.source_entity_type if source_link else None,
                             source_record_id=source_link.source_entity_id if source_link else None,
+                            bed_charge_date=prior_item.bed_charge_date,
                             warning=None if prior_config else f"Select a billing service for prior item {prior_item.service_name}.",
                         )
                     )
-        if billable_days > 0:
-            items.append(BillingDraftItemRead(
-                source_label=f"{stage.title()} Bed Charge · {admission.ward_name} / {admission.bed_number}",
-                source_module="ipd_bed_charge",
-                billing_service_id=service.id if service else None,
-                billing_service_name=service.service_name if service else None,
-                quantity=billable_days,
-                source_record_type="ipd_bed_charge",
-                source_record_id=admission.id,
-                warning=warning,
-            ))
-        active_orders = [order for order in admission.orders if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"]
+        from app.modules.ipd.bed_charges import unbilled_charges,tariff
+        pending_days=unbilled_charges(self.db,admission)
+        billable_days=Decimal(len(pending_days))
+        for day in pending_days:
+            config=tariff(self.db,admission,day,actor)
+            items.append(BillingDraftItemRead(source_label=f"Bed Charge · {day['date']} · {day['ward_name']} / {day['bed_number']}",source_module='ipd_bed_charge',billing_service_id=config.id,billing_service_name=config.service_name,quantity=1,bed_charge_date=day['date'],source_record_type='ipd_bed_charge',source_record_id=admission.id,warning='Legacy rate estimate: earlier bed rates were not recorded.' if day['estimated'] else None))
+        self.db.commit()
+        active_orders = [order for order in admission.orders if billable_order(self.db,order)]
         for order in active_orders:
             order_service = self._match_billing_service(
                 branch_id=actor.branch_id,
@@ -511,8 +531,37 @@ class BillingServiceManager:
             items=items,
         )
 
-    def create_invoice(self, payload: BillingInvoiceCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+    def create_invoice(self, payload: BillingInvoiceCreate, actor: User, context: dict[str, str | None], *, commit: bool = True) -> BillingInvoice:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        if (payload.discount_percentage>0 or (payload.discount_amount or 0)>0 or any(item.discount_percentage>0 or (item.discount_amount or 0)>0 for item in payload.items)) and len((payload.discount_reason or '').strip())<3:
+            raise AppException(422,"billing_discount_reason_required","Enter the discount reason or approval reference (at least 3 characters)")
         patient = self._get_patient(payload.patient_id, actor)
+        if actor.branch_id and payload.branch_id and payload.branch_id!=actor.branch_id:
+            raise AppException(403,"billing_branch_scope","Choose this user’s billing branch")
+        order_ids=[line.source_opd_visit_order_id for line in payload.items if line.source_opd_visit_order_id]
+        if len(order_ids)!=len(set(order_ids)):
+            raise AppException(422,"billing_order_duplicate","An order can appear only once on an invoice")
+        invoice_type = classification(self.db,payload.billing_type_id,actor)
+        if payload.source_opd_visit_id:
+            source_visit = self.db.scalar(select(OPDVisit).where(OPDVisit.id == payload.source_opd_visit_id).with_for_update(of=OPDVisit))
+            if not source_visit or source_visit.patient_id != patient.id:
+                raise AppException(422, "billing_visit_patient_mismatch", "The OPD visit must belong to the billed patient")
+            self._ensure_branch_scope(source_visit, actor)
+        if payload.source_ipd_admission_id:
+            admission = self.db.scalar(select(IPDAdmission).where(IPDAdmission.id==payload.source_ipd_admission_id).with_for_update())
+            if not admission or admission.patient_id != patient.id:
+                raise AppException(422, "billing_admission_patient_mismatch", "The admission must belong to the billed patient")
+            self._ensure_branch_scope(admission,actor)
+        for line in payload.items:
+            if line.source_opd_visit_order_id:
+                order=self.db.get(OPDVisitOrder,line.source_opd_visit_order_id)
+                if not order or order.visit.patient_id!=patient.id:
+                    raise AppException(422,"billing_order_patient_mismatch","The order must belong to the billed patient")
+            if line.source_record_type=="ipd_order" and line.source_record_id:
+                order=self.db.get(IPDOrder,line.source_record_id)
+                if not order or order.admission_id!=payload.source_ipd_admission_id:
+                    raise AppException(422,"billing_order_admission_mismatch","The inpatient order must belong to the billed admission")
         internal_referral_user = self._get_internal_referral_user(payload.internal_referral_user_id, actor) if payload.internal_referral_user_id else None
         duplicate_billed_order = next((item.source_opd_visit_order_id for item in payload.items if item.source_opd_visit_order_id and self.repository.has_item_for_opd_order(item.source_opd_visit_order_id)), None)
         if duplicate_billed_order:
@@ -521,16 +570,34 @@ class BillingServiceManager:
             raise AppException(409, "billing_invoice_duplicate_source", "Billing invoice already exists for this OPD visit and stage")
         if payload.source_ipd_admission_id and payload.billing_stage == "ipd_final" and self.repository.get_invoice_by_source(source_ipd_admission_id=payload.source_ipd_admission_id, billing_stage=payload.billing_stage):
             raise AppException(409, "billing_invoice_duplicate_source", "Billing invoice already exists for this IPD admission and stage")
+        bed_lines=[line for line in payload.items if line.source_record_type=='ipd_bed_charge' and not line.carry_forward_item_id]
+        if bed_lines:
+            from app.modules.ipd.bed_charges import unbilled_charges,tariff
+            if not payload.source_ipd_admission_id:
+                raise AppException(422,'ipd_bed_charge_admission','Select the inpatient admission for bed charges')
+            expected={day['date']:day for day in unbilled_charges(self.db,admission)}
+            seen=set()
+            for line in bed_lines:
+                day=expected.get(line.bed_charge_date)
+                if not day or line.bed_charge_date in seen or line.quantity!=1 or line.source_record_id!=admission.id:
+                    raise AppException(409,'ipd_bed_charge_stale','Bed charges changed or were already billed. Reload the admission draft')
+                config=tariff(self.db,admission,day,actor)
+                if line.billing_service_id!=config.id:
+                    raise AppException(422,'ipd_bed_charge_rate','Use the recorded daily bed rate from the admission draft')
+                seen.add(line.bed_charge_date)
         prior_ipd_invoices = self.repository.list_invoices_for_ipd_admission(payload.source_ipd_admission_id) if payload.source_ipd_admission_id and payload.billing_stage == "ipd_final" else []
+        carried = self._carried_lines(payload.items, actor, payload.source_ipd_admission_id)
+        if payload.billing_stage == "ipd_final":
+            self._ensure_complete_carry_forward(prior_ipd_invoices, payload.items, carried)
         resolved_items = self._resolve_invoice_items(payload.items, actor)
-        preview = self._build_preview(payload.discount_percentage, resolved_items, actor.branch_id)
+        preview = self._build_preview(payload.discount_percentage, resolved_items, actor.branch_id, carried, payload.discount_amount)
         invoice = BillingInvoice(
             patient_id=patient.id,
             source_opd_visit_id=payload.source_opd_visit_id,
             source_ipd_admission_id=payload.source_ipd_admission_id,
             source_module=payload.source_module,
             billing_stage=payload.billing_stage,
-            invoice_number=f"INV-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            invoice_number=f"INV-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
             branch_id=payload.branch_id or actor.branch_id or patient.branch_id,
             internal_referral_user_id=internal_referral_user.id if internal_referral_user else None,
             referred_doctor_id=None,
@@ -548,6 +615,10 @@ class BillingServiceManager:
             referred_doctor_amount=preview.referred_doctor_amount,
             status="posted",
             note=payload.note,
+            billing_type_id=invoice_type.id if invoice_type else None,
+            billing_type_name=invoice_type.name if invoice_type else None,
+            billing_department=invoice_type.department if invoice_type else None,
+            discount_reason=self._final_discount_reason(payload.discount_reason, carried),
             billed_by_user_id=actor.id,
             created_by=actor.id,
             updated_by=actor.id,
@@ -564,30 +635,61 @@ class BillingServiceManager:
 
         settings = self._get_settings_by_branch(actor.branch_id)
         invoice_items: list[BillingInvoiceItem] = []
-        for item in resolved_items:
+        for index, item in enumerate(resolved_items):
             config = configs[item.billing_service_id]
+            item_type = classification(self.db,config.billing_type_id,actor) or invoice_type
+            if index in carried:
+                frozen = carried[index]
+                prior = frozen["prior"]
+                gross = frozen["gross"]
+                invoice_items.append(
+                    BillingInvoiceItem(
+                        bed_charge_date=prior.bed_charge_date,
+                        source_entity_id=prior.source_entity_id,
+                        billing_instruction=prior.billing_instruction,
+                        source_opd_visit_order_id=None,
+                        source_label=item.source_label or prior.source_label,
+                        source_module=prior.source_module,
+                        billing_type_name=prior.billing_type_name,
+                        billing_department=prior.billing_department,
+                        service_name=prior.service_name,
+                        quantity=item.quantity,
+                        unit_price=prior.unit_price,
+                        discount_percentage=self._money((gross - frozen["net"]) * Decimal("100") / gross) if gross else Decimal("0.00"),
+                        discount_amount=self._money(gross - frozen["net"]),
+                        line_total=frozen["net"],
+                        max_discount_percentage=prior.max_discount_percentage,
+                        max_discount_amount=prior.max_discount_amount,
+                        room_number=prior.room_number,
+                        doctor_share_percentage=prior.doctor_share_percentage,
+                        doctor_share_amount=self._money(frozen["net"] * prior.doctor_share_percentage / Decimal("100")),
+                        created_by=actor.id,
+                        updated_by=actor.id,
+                    )
+                )
+                continue
             source_module = item.source_module or config.source_module
             source_label = item.source_label
             if config.billing_instruction:
                 source_label = f"{source_label} · {config.billing_instruction}" if source_label else config.billing_instruction
+            line_gross = config.unit_price * item.quantity
+            line_discount, line_discount_percentage = self._discount_of(line_gross, item.discount_percentage, item.discount_amount)
             invoice_items.append(
                 BillingInvoiceItem(
+                    bed_charge_date=item.bed_charge_date,
                     source_entity_id=config.source_entity_id,
                     billing_instruction=config.billing_instruction,
                     source_opd_visit_order_id=item.source_opd_visit_order_id,
                     source_label=source_label,
                     source_module=source_module,
+                    billing_type_name=item_type.name if item_type else None,
+                    billing_department=item_type.department if item_type else None,
                     service_name=config.service_name,
                     quantity=item.quantity,
                     unit_price=config.unit_price,
-                    discount_percentage=self._money(item.discount_percentage),
-                    discount_amount=self._money(
-                        config.unit_price * item.quantity * item.discount_percentage / Decimal("100")
-                    ),
-                    line_total=self._money(
-                        config.unit_price * item.quantity
-                        - (config.unit_price * item.quantity * item.discount_percentage / Decimal("100"))
-                    ),
+                    discount_percentage=line_discount_percentage,
+                    discount_amount=line_discount,
+                    line_total=self._money(line_gross - line_discount),
                     max_discount_percentage=config.max_discount_percentage
                     if config.max_discount_percentage is not None
                     else settings.max_item_discount_percentage,
@@ -596,14 +698,7 @@ class BillingServiceManager:
                     else settings.max_item_discount_amount,
                     room_number=config.room_number,
                     doctor_share_percentage=config.doctor_share_percentage,
-                    doctor_share_amount=self._money(
-                        (
-                            config.unit_price * item.quantity
-                            - (config.unit_price * item.quantity * item.discount_percentage / Decimal("100"))
-                        )
-                        * config.doctor_share_percentage
-                        / Decimal("100")
-                    ),
+                    doctor_share_amount=self._money((line_gross - line_discount) * config.doctor_share_percentage / Decimal("100")),
                     created_by=actor.id,
                     updated_by=actor.id,
                 )
@@ -617,10 +712,22 @@ class BillingServiceManager:
                 if prior_invoice.billing_stage != "ipd_interim":
                     continue
                 consolidated_numbers.append(prior_invoice.invoice_number)
+                # Carry the money still held (receipts less cash already paid back), not the gross receipts.
+                carried_payment += Decimal(prior_invoice.paid_amount or 0)
                 for payment in prior_invoice.payments:
-                    carried_payment += Decimal(payment.amount or 0)
                     payment.invoice_id = invoice.id
                     payment.updated_by = actor.id
+                # Every payout follows its receipts. Returned quantities/credits were
+                # already removed from carried lines and must not be credited twice.
+                for refund in list(prior_invoice.refunds):
+                    if refund.refund_type == "return":
+                        refund.refund_type = "carried_return"
+                        refund.return_items = [{**line, "original_invoice_id": str(prior_invoice.id),
+                                                "original_invoice_number": prior_invoice.invoice_number}
+                                               for line in refund.return_items or []]
+                    refund.invoice_id = invoice.id
+                    refund.updated_by = actor.id
+                    invoice.refunded_amount = self._money(invoice.refunded_amount + refund.amount)
                 prior_invoice.status = "consolidated"
                 prior_invoice.is_active = False
                 prior_invoice.payment_status = "consolidated"
@@ -629,7 +736,8 @@ class BillingServiceManager:
                 prior_invoice.void_reason = f"Consolidated into final invoice {invoice.invoice_number}"
                 prior_invoice.updated_by = actor.id
             if carried_payment:
-                invoice.paid_amount = min(self._money(carried_payment), invoice.total_amount)
+                # A deposit larger than the final bill stays on the invoice as a refundable surplus.
+                invoice.paid_amount = self._money(carried_payment)
                 self._recalculate_invoice_balance(invoice)
             if consolidated_numbers:
                 consolidation_note = f"Consolidated interim invoices: {', '.join(consolidated_numbers)}"
@@ -716,10 +824,46 @@ class BillingServiceManager:
             detail={"invoice_number": invoice.invoice_number, "patient_id": str(invoice.patient_id)},
             context=context,
         )
-        self.db.commit()
+        record_event(self.db, invoice, actor, "invoice_created", getattr(payload,"reason",None) or getattr(payload,"discount_reason",None))
+        from app.modules.support_posting.service import enroll_invoice
+        enroll_invoice(self.db,actor,invoice,carried)
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         return self.get_invoice(invoice.id, actor)
 
+    def _payment_reference(self, payload: BillingPaymentCreate) -> tuple[str | None, str | None]:
+        """Non-cash receipts must carry the payer's proof: mobile-banking provider + TrxID, card approval code, bank reference."""
+        method = payload.payment_method
+        if method == "cash":
+            return None, None
+        reference = re.sub(r"\s+", "", payload.reference_number or "").upper()
+        provider = (payload.payment_provider or "").strip().lower() or None
+        rules = {"mobile_banking": (6, 30, "mobile banking transaction ID (TrxID)"), "card": (4, 30, "card approval code or last digits"), "bank_transfer": (3, 40, "bank transfer or cheque reference")}
+        low, high, label = rules[method]
+        if not reference:
+            raise AppException(422, "billing_payment_reference_required", f"Enter the {label}")
+        if not re.fullmatch(r"[A-Z0-9\-/]+", reference) or not low <= len(reference) <= high:
+            raise AppException(422, "billing_payment_reference_invalid", f"The {label} must be {low}-{high} letters, digits, - or /")
+        if method == "mobile_banking":
+            if provider not in MOBILE_BANKING_PROVIDERS:
+                raise AppException(422, "billing_payment_provider_required", "Choose the mobile banking provider (bKash, Nagad, Rocket, Upay or Other)")
+        else:
+            provider = None
+        duplicate = self.db.scalar(select(BillingPayment.receipt_number).where(
+            BillingPayment.payment_method == method,
+            func.coalesce(BillingPayment.payment_provider, "") == (provider or ""),
+            BillingPayment.reference_number == reference,
+        ))
+        if duplicate:
+            raise AppException(409, "billing_payment_reference_used", f"This reference was already recorded on receipt {duplicate}")
+        return provider, reference
+
     def create_payment(self, invoice_id: UUID, payload: BillingPaymentCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        self.db.execute(select(BillingInvoice.id).where(BillingInvoice.id == invoice_id).with_for_update())
         invoice = self.get_invoice(invoice_id, actor)
         if invoice.status == "void":
             raise AppException(409, "billing_invoice_void", "Cannot collect payment for a void invoice")
@@ -728,12 +872,15 @@ class BillingServiceManager:
         if payload.amount > invoice.due_amount:
             raise AppException(400, "billing_payment_exceeds_due", "Payment amount cannot exceed invoice due amount")
 
+        provider, reference = self._payment_reference(payload)
         payment = BillingPayment(
             invoice_id=invoice.id,
             patient_id=invoice.patient_id,
             branch_id=invoice.branch_id,
-            receipt_number=f"RCPT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            receipt_number=f"RCPT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
             payment_method=payload.payment_method,
+            payment_provider=provider,
+            reference_number=reference,
             amount=self._money(payload.amount),
             note=payload.note,
             received_at=payload.received_at or datetime.now(UTC),
@@ -748,6 +895,7 @@ class BillingServiceManager:
             raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
         entity.paid_amount = self._money(entity.paid_amount + payment.amount)
         self._recalculate_invoice_balance(entity)
+        self._sync_opd_payment(entity, actor)
         if entity.source_ipd_admission_id and entity.billing_stage == "ipd_final" and entity.due_amount <= Decimal("0.00"):
             admission = self.db.get(IPDAdmission, entity.source_ipd_admission_id)
             if admission:
@@ -769,10 +917,16 @@ class BillingServiceManager:
             },
             context=context,
         )
+        record_event(self.db, entity, actor, "payment_collected", getattr(payload,"reason",None) or getattr(payload,"discount_reason",None))
+        from app.modules.support_posting.service import billing_cash_event
+        billing_cash_event(self.db,actor,entity,payment,"billing_payment")
         self.db.commit()
         return self.get_invoice(invoice_id, actor)
 
     def create_refund(self, invoice_id: UUID, payload: BillingRefundCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        self.db.execute(select(BillingInvoice.id).where(BillingInvoice.id == invoice_id).with_for_update())
         invoice = self.get_invoice(invoice_id, actor)
         if invoice.status == "void":
             raise AppException(409, "billing_invoice_void", "Cannot refund a void invoice")
@@ -796,8 +950,9 @@ class BillingServiceManager:
             payment_id=payment.id if payment else None,
             patient_id=invoice.patient_id,
             branch_id=invoice.branch_id,
-            refund_number=f"RFND-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            refund_number=f"RFND-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
             amount=self._money(payload.amount),
+            payment_method=payload.payment_method,
             refund_type="refund",
             return_items=None,
             reason=payload.reason,
@@ -814,6 +969,7 @@ class BillingServiceManager:
         entity.refunded_amount = self._money(entity.refunded_amount + refund.amount)
         entity.paid_amount = self._money(entity.paid_amount - refund.amount)
         self._recalculate_invoice_balance(entity)
+        self._sync_opd_payment(entity, actor)
         entity.updated_by = actor.id
         self.db.flush()
         AuditService(self.db).log(
@@ -830,20 +986,29 @@ class BillingServiceManager:
             },
             context=context,
         )
+        record_event(self.db, entity, actor, "refund_created", getattr(payload,"reason",None) or getattr(payload,"discount_reason",None))
+        from app.modules.support_posting.service import billing_cash_event
+        billing_cash_event(self.db,actor,entity,refund,"billing_refund")
         self.db.commit()
         return self.get_invoice(invoice_id, actor)
 
     def create_return(self, invoice_id: UUID, payload: BillingReturnCreate, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        self.db.execute(select(BillingInvoice.id).where(BillingInvoice.id == invoice_id).with_for_update())
         invoice = self.get_invoice(invoice_id, actor)
         if invoice.status == "void":
             raise AppException(409, "billing_invoice_void", "Cannot return items from a void invoice")
-        if invoice.paid_amount <= Decimal("0.00"):
-            raise AppException(409, "billing_invoice_unpaid", "Invoice has no collected amount to return")
+        if invoice.status != "posted" or not invoice.is_active:
+            raise AppException(409, "billing_invoice_closed", "Only posted invoices can receive return credits")
 
         items_by_id = {item.id: item for item in invoice.items if item.is_active}
         return_items: list[dict] = []
+        fulfilment_changes = []
         return_amount = Decimal("0.00")
         seen: set[UUID] = set()
+        returned_before = self._returned_quantities(invoice)
+        net_lines = self._net_line_amounts(invoice)
         for requested in payload.items:
             if requested.invoice_item_id in seen:
                 raise AppException(400, "billing_return_duplicate_item", "Return item is duplicated")
@@ -851,10 +1016,13 @@ class BillingServiceManager:
             invoice_item = items_by_id.get(requested.invoice_item_id)
             if not invoice_item:
                 raise AppException(404, "billing_return_item_not_found", "Invoice item was not found for this bill")
-            if requested.quantity > invoice_item.quantity:
+            previous_quantity=returned_before.get(str(invoice_item.id),Decimal(0))
+            if requested.quantity > invoice_item.quantity-previous_quantity:
                 raise AppException(400, "billing_return_quantity_exceeds_billed", f"Return quantity cannot exceed billed quantity for {invoice_item.service_name}")
-            unit_return_amount = self._money(invoice_item.line_total / invoice_item.quantity)
-            line_return_amount = self._money(unit_return_amount * requested.quantity)
+            fulfilment_changes.extend(cancellation_plan(self.db, invoice_item, requested.quantity, previous_quantity, actor))
+            net_line=net_lines[invoice_item.id]
+            unit_return_amount = net_line / invoice_item.quantity
+            line_return_amount = self._money(unit_return_amount * (previous_quantity+requested.quantity))-self._money(unit_return_amount*previous_quantity)
             return_amount += line_return_amount
             return_items.append(
                 {
@@ -870,8 +1038,9 @@ class BillingServiceManager:
         return_amount = self._money(return_amount)
         if return_amount <= Decimal("0.00"):
             raise AppException(400, "billing_return_empty", "Return amount must be greater than zero")
-        if return_amount > invoice.paid_amount:
-            raise AppException(400, "billing_return_exceeds_paid", "Return amount cannot exceed current collected balance")
+        previous_credit = sum((refund.credit_amount for refund in invoice.refunds if refund.refund_type == "return"), Decimal("0"))
+        remaining_charge = max(Decimal("0"), invoice.total_amount - previous_credit - return_amount)
+        payout = min(return_amount, max(Decimal("0"), invoice.paid_amount - remaining_charge))
 
         payment = None
         if payload.payment_id:
@@ -880,16 +1049,18 @@ class BillingServiceManager:
                 raise AppException(404, "billing_payment_not_found", "Billing payment not found for this invoice")
             already_refunded = sum((refund.amount for refund in payment.refunds), start=Decimal("0.00"))
             refundable_amount = self._money(payment.amount - already_refunded)
-            if return_amount > refundable_amount:
-                raise AppException(400, "billing_return_exceeds_payment", "Return amount exceeds refundable balance for this receipt")
+            if payout > refundable_amount:
+                raise AppException(400, "billing_return_exceeds_payment", "Cash payout exceeds refundable balance for this receipt; choose another receipt or any payment")
 
+        cancel_unused(fulfilment_changes, actor)
         refund = BillingRefund(
             invoice_id=invoice.id,
             payment_id=payment.id if payment else None,
             patient_id=invoice.patient_id,
             branch_id=invoice.branch_id,
-            refund_number=f"RTRN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
-            amount=return_amount,
+            refund_number=f"RTRN-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
+            amount=self._money(payout),
+            payment_method=payload.payment_method,
             refund_type="return",
             return_items=return_items,
             reason=payload.reason,
@@ -906,6 +1077,7 @@ class BillingServiceManager:
         entity.refunded_amount = self._money(entity.refunded_amount + refund.amount)
         entity.paid_amount = self._money(entity.paid_amount - refund.amount)
         self._recalculate_invoice_balance(entity)
+        self._sync_opd_payment(entity, actor)
         entity.updated_by = actor.id
         self.db.flush()
         AuditService(self.db).log(
@@ -917,30 +1089,47 @@ class BillingServiceManager:
             detail={
                 "invoice_number": entity.invoice_number,
                 "return_number": refund.refund_number,
+                "credit_amount": str(refund.credit_amount),
                 "amount": str(refund.amount),
                 "items": return_items,
                 "payment_id": str(refund.payment_id) if refund.payment_id else None,
             },
             context=context,
         )
+        record_event(self.db, entity, actor, "items_returned", getattr(payload,"reason",None) or getattr(payload,"discount_reason",None))
+        from app.modules.support_posting.service import billing_cash_event
+        billing_cash_event(self.db,actor,entity,refund,"billing_return")
         self.db.commit()
         return self.get_invoice(invoice_id, actor)
 
     def void_invoice(self, invoice_id: UUID, payload: BillingInvoiceVoidRequest, actor: User, context: dict[str, str | None]) -> BillingInvoice:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        self.db.execute(select(BillingInvoice.id).where(BillingInvoice.id == invoice_id).with_for_update())
         invoice = self.get_invoice(invoice_id, actor)
         if invoice.status == "void":
             raise AppException(409, "billing_invoice_already_void", "Billing invoice is already void")
         if invoice.payments:
             raise AppException(409, "billing_invoice_has_payments", "Refund or settle payments before voiding this invoice")
 
+        from app.modules.support_posting.service import void_invoice_posting
+        void_invoice_posting(self.db,actor,invoice)
         entity = self.repository.get_invoice_entity(invoice_id)
         if not entity:
             raise AppException(404, "billing_invoice_not_found", "Billing invoice not found")
 
+        changes = []
+        for item in invoice.items:
+            if item.is_active and item.returnable_quantity > 0:
+                changes.extend(cancellation_plan(self.db, item, item.returnable_quantity, item.quantity - item.returnable_quantity, actor))
+        cancel_unused(changes, actor)
         entity.status = "void"
+        entity.payment_status = "void"
+        entity.due_amount = Decimal("0")
         entity.void_reason = payload.reason
         entity.voided_at = datetime.now(UTC)
         entity.voided_by_user_id = actor.id
+        self._sync_opd_payment(entity, actor)
         entity.updated_by = actor.id
         self.db.flush()
         AuditService(self.db).log(
@@ -952,6 +1141,7 @@ class BillingServiceManager:
             detail={"invoice_number": entity.invoice_number, "reason": payload.reason},
             context=context,
         )
+        record_event(self.db, entity, actor, "invoice_voided", getattr(payload,"reason",None) or getattr(payload,"discount_reason",None))
         self.db.commit()
         return self.get_invoice(invoice_id, actor)
 
@@ -977,12 +1167,14 @@ class BillingServiceManager:
         if actor.branch_id and entity.branch_id and actor.branch_id != entity.branch_id:
             raise AppException(403, "forbidden", "Source record belongs to a different branch")
 
-    def _match_billing_service(self, *, branch_id: UUID | None, keywords: list[str], exact_amount: Decimal | None = None) -> BillingItemConfig | None:
+    def _match_billing_service(self, *, branch_id: UUID | None, keywords: list[str], exact_amount: Decimal | None = None, source_modules: tuple[str, ...] | None = None) -> BillingItemConfig | None:
         services = self.repository.list_item_configs(branch_id)
         ranked: list[tuple[int, BillingItemConfig]] = []
         normalized_keywords = [keyword.strip().lower() for keyword in keywords if keyword and keyword.strip()]
         for service in services:
             if not service.is_active:
+                continue
+            if source_modules and service.source_module not in source_modules:
                 continue
             haystack = f"{service.service_code} {service.service_name} {service.billing_instruction or ''}".lower()
             score = 0
@@ -997,6 +1189,20 @@ class BillingServiceManager:
                 ranked.append((score, service))
         ranked.sort(key=lambda item: item[0], reverse=True)
         return ranked[0][1] if ranked else None
+
+    def _consultation_service_for_visit(self, visit, actor: User) -> BillingItemConfig | None:
+        """The visit's own doctor fee entry; a keyword match over OPD fees is only the fallback for visits without a doctor."""
+        if visit.consulting_doctor_user_id:
+            kind = "followup" if visit.visit_type == "follow_up" else "consult"
+            own = self.repository.find_item_config_by_source("opd", uuid5(NAMESPACE_DNS, f"opd:{visit.consulting_doctor_user_id}:{kind}"), actor.branch_id)
+            if own and own.is_active:
+                return own
+        return self._match_billing_service(
+            branch_id=actor.branch_id,
+            exact_amount=Decimal(visit.consultation_fee) if visit.consultation_fee else None,
+            keywords=[visit.department_name, "consultation", "opd", "outpatient"],
+            source_modules=("opd", "custom"),
+        )
 
     def _match_medicine(self, order_text: str, actor: User) -> PharmacyMedicine | None:
         normalized = (order_text or "").strip().lower()
@@ -1021,9 +1227,8 @@ class BillingServiceManager:
         return self.db.scalar(exact_stmt) or self.db.scalar(stmt)
 
     def _calculate_ipd_billable_days(self, admission: IPDAdmission, *, final: bool) -> int:
-        end_point = admission.discharged_at.date() if final and admission.discharged_at else datetime.now(UTC).date()
-        start_date = admission.admitted_at.date()
-        return max((end_point - start_date).days + 1, 1)
+        from app.modules.ipd.bed_charges import daily_charges
+        return len(daily_charges(self.db,admission))
 
     def _build_opd_note(self, visit: OPDVisit) -> str:
         note_parts = [
@@ -1096,6 +1301,7 @@ class BillingServiceManager:
             (index, item)
             for index, item in enumerate(items)
             if not item.source_opd_visit_order_id
+            and item.source_record_type != "ipd_order"
             and not (item.source_label or "").startswith("Interim carry-forward")
             and self._normalize_module(item.source_module) in {"laboratory", "radiology", "pharmacy"}
         ]
@@ -1106,7 +1312,7 @@ class BillingServiceManager:
             visit = OPDVisit(
                 branch_id=invoice.branch_id or actor.branch_id or patient.branch_id,
                 patient_id=patient.id,
-                visit_number=f"BILL-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                visit_number=f"BILL-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                 visit_date=datetime.now(UTC).date(),
                 department_name="Billing",
                 consulting_doctor_user_id=invoice.internal_referral_user_id,
@@ -1145,7 +1351,7 @@ class BillingServiceManager:
                     branch_id=visit.branch_id,
                     patient_id=visit.patient_id,
                     visit_id=visit.id,
-                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     status="pending",
                     created_by=actor.id,
                     updated_by=actor.id,
@@ -1166,7 +1372,7 @@ class BillingServiceManager:
                     branch_id=visit.branch_id,
                     patient_id=visit.patient_id,
                     visit_id=visit.id,
-                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     study_description=order.item_name,
                     status="pending",
                     created_by=actor.id,
@@ -1192,7 +1398,7 @@ class BillingServiceManager:
                     branch_id=invoice.branch_id,
                     patient_id=invoice.patient_id,
                     visit_id=order.visit_id,
-                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     status="pending",
                     created_by=actor.id,
                     updated_by=actor.id,
@@ -1214,7 +1420,7 @@ class BillingServiceManager:
                     branch_id=invoice.branch_id,
                     patient_id=invoice.patient_id,
                     visit_id=order.visit_id,
-                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     study_description=order.item_name or item.service_name,
                     status="pending",
                     created_by=actor.id,
@@ -1268,14 +1474,21 @@ class BillingServiceManager:
         return normalized
 
 
-    def _build_preview(self, discount_percentage: Decimal, items, branch_id: UUID | None) -> BillingInvoicePreview:
+    def _discount_of(self, gross: Decimal, percentage: Decimal, amount: Decimal | None) -> tuple[Decimal, Decimal]:
+        """Discount in Taka and its percentage of the gross, from either a percentage or a flat amount (never both)."""
+        percentage = Decimal(percentage or 0)
+        if amount is not None and Decimal(amount) > 0:
+            if percentage > 0:
+                raise AppException(422, "billing_discount_ambiguous", "Give the discount as a percentage or as a Taka amount, not both")
+            discount = self._money(Decimal(amount))
+            if discount > self._money(gross):
+                raise AppException(400, "billing_discount_exceeds_amount", "Discount cannot be more than the amount it is taken from")
+            return discount, (self._money(discount * Decimal("100") / gross) if gross else Decimal("0.00"))
+        return self._money(gross * percentage / Decimal("100")), self._money(percentage)
+
+    def _build_preview(self, discount_percentage: Decimal, items, branch_id: UUID | None, carried: dict | None = None, discount_amount: Decimal | None = None) -> BillingInvoicePreview:
+        carried = carried or {}
         settings = self._get_settings_by_branch(branch_id)
-        if discount_percentage > settings.max_invoice_discount_percentage:
-            raise AppException(
-                400,
-                "billing_invoice_discount_limit_exceeded",
-                f"Invoice discount cannot exceed {settings.max_invoice_discount_percentage}%",
-            )
         configs = {
             config.id: config
             for config in self.repository.list_item_configs_by_ids([item.billing_service_id for item in items if item.billing_service_id], branch_id)
@@ -1286,17 +1499,24 @@ class BillingServiceManager:
         sub_total = Decimal("0.00")
         item_discount_amount = Decimal("0.00")
         referred_doctor_amount = Decimal("0.00")
-        for item in items:
+        for index, item in enumerate(items):
             config = configs[item.billing_service_id]
+            if index in carried:
+                # Interim lines keep the price and discount they were billed and approved at.
+                frozen = carried[index]
+                sub_total += frozen["net"]
+                item_discount_amount += frozen["gross"] - frozen["net"]
+                referred_doctor_amount += self._money(frozen["net"] * frozen["prior"].doctor_share_percentage / Decimal("100"))
+                continue
             item_discount_cap = config.max_discount_percentage if config.max_discount_percentage is not None else settings.max_item_discount_percentage
-            if item.discount_percentage > item_discount_cap:
+            gross_line_total = config.unit_price * item.quantity
+            line_discount_amount, line_discount_percentage = self._discount_of(gross_line_total, item.discount_percentage, item.discount_amount)
+            if line_discount_percentage > item_discount_cap:
                 raise AppException(
                     400,
                     "billing_item_discount_limit_exceeded",
                     f"{config.service_name} discount cannot exceed {item_discount_cap}%",
                 )
-            gross_line_total = config.unit_price * item.quantity
-            line_discount_amount = self._money(gross_line_total * item.discount_percentage / Decimal("100"))
             item_discount_amount_cap = config.max_discount_amount if config.max_discount_amount is not None else settings.max_item_discount_amount
             if item_discount_amount_cap is not None and line_discount_amount > item_discount_amount_cap:
                 raise AppException(
@@ -1311,7 +1531,13 @@ class BillingServiceManager:
 
         sub_total = self._money(sub_total)
         item_discount_amount = self._money(item_discount_amount)
-        invoice_discount_amount = self._money(sub_total * discount_percentage / Decimal("100"))
+        invoice_discount_amount, discount_percentage = self._discount_of(sub_total, discount_percentage, discount_amount)
+        if discount_percentage > settings.max_invoice_discount_percentage:
+            raise AppException(
+                400,
+                "billing_invoice_discount_limit_exceeded",
+                f"Invoice discount cannot exceed {settings.max_invoice_discount_percentage}%",
+            )
         if settings.max_invoice_discount_amount is not None and invoice_discount_amount > settings.max_invoice_discount_amount:
             raise AppException(
                 400,
@@ -1370,6 +1596,7 @@ class BillingServiceManager:
 
     def _sync_services_from_modules(self, actor: User) -> None:
         branch_id = actor.branch_id
+        self.db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": "billing-catalog:" + str(branch_id)})
         default_referral = self._get_settings_by_branch(branch_id).default_referral_percentage
 
         doctor_stmt = select(User).where(User.is_active.is_(True))
@@ -1521,11 +1748,110 @@ class BillingServiceManager:
         return config
 
     def _money(self, value: Decimal) -> Decimal:
-        return value.quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+        return Decimal(str(value)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+
+    def _carried_lines(self, items, actor: User, admission_id: UUID | None = None) -> dict[int, dict]:
+        """Resolve interim lines carried onto a final bill, keyed by position in the request."""
+        carried: dict[int, dict] = {}
+        seen: set[UUID] = set()
+        for index, item in enumerate(items):
+            if not item.carry_forward_item_id:
+                continue
+            if item.carry_forward_item_id in seen:
+                raise AppException(422, "billing_carry_duplicate", "An interim line can be carried forward only once")
+            seen.add(item.carry_forward_item_id)
+            prior = self.db.get(BillingInvoiceItem, item.carry_forward_item_id)
+            invoice = prior.invoice if prior else None
+            if (not invoice or invoice.billing_stage != "ipd_interim" or invoice.status != "posted" or not invoice.is_active
+                    or (admission_id and invoice.source_ipd_admission_id != admission_id)):
+                raise AppException(422, "billing_carry_invalid", "The carried-forward line must come from an open interim bill of this admission")
+            if actor.branch_id and invoice.branch_id != actor.branch_id:
+                raise AppException(403, "billing_branch_scope", "The carried-forward line belongs to another branch")
+            remaining = Decimal(prior.quantity) - self._returned_quantities(invoice).get(str(prior.id), Decimal("0"))
+            if item.quantity > remaining:
+                raise AppException(422, "billing_carry_quantity", f"Only {remaining} of {prior.service_name} remains to carry forward")
+            net_line = self._net_line_amounts(invoice)[prior.id]
+            carried[index] = {
+                "prior": prior,
+                "quantity": item.quantity,
+                "gross": self._money(prior.unit_price * item.quantity),
+                "net": self._money(net_line * item.quantity / prior.quantity),
+            }
+        return carried
+
+    def _ensure_complete_carry_forward(self, prior_invoices, items, carried: dict[int, dict]) -> None:
+        """A final bill replaces its interim bills, so it must carry every outstanding interim line."""
+        expected: dict[UUID, Decimal] = {}
+        for invoice in prior_invoices:
+            if invoice.billing_stage != "ipd_interim":
+                continue
+            returned = self._returned_quantities(invoice)
+            for prior in invoice.items:
+                remaining = Decimal(prior.quantity) - returned.get(str(prior.id), Decimal("0"))
+                if remaining > 0:
+                    expected[prior.id] = remaining
+        given = {frozen["prior"].id: frozen["quantity"] for frozen in carried.values()}
+        if given != expected:
+            raise AppException(422, "billing_carry_incomplete", "Reload the final draft: every interim line must be carried forward in full so billed charges are not dropped")
+
+    @staticmethod
+    def _final_discount_reason(reason: str | None, carried: dict[int, dict]) -> str | None:
+        reasons = [frozen["prior"].invoice.discount_reason for frozen in carried.values() if frozen["prior"].invoice.discount_reason]
+        parts = ([reason] if reason else []) + list(dict.fromkeys(reasons))
+        return " · ".join(parts)[:500] or None
+
+    def _net_line_amounts(self, invoice: BillingInvoice) -> dict[UUID, Decimal]:
+        from app.utils.billing_amounts import net_line_amounts
+        return net_line_amounts(invoice)
+
+    @staticmethod
+    def _returned_quantities(invoice: BillingInvoice) -> dict[str, Decimal]:
+        quantities: dict[str, Decimal] = {}
+        for refund in invoice.refunds:
+            if refund.refund_type != "return":
+                continue
+            for entry in refund.return_items or []:
+                key = entry["invoice_item_id"]
+                quantities[key] = quantities.get(key, Decimal("0")) + Decimal(entry["quantity"])
+        return quantities
+
+    def _sync_opd_payment(self, invoice: BillingInvoice, actor: User) -> None:
+        if invoice.source_ipd_admission_id and invoice.billing_stage=='ipd_final':
+            admission=self.db.get(IPDAdmission,invoice.source_ipd_admission_id)
+            if admission:
+                admission.billing_status='cleared' if invoice.status!='void' and invoice.due_amount<=0 else 'final_billed'
+                admission.updated_by=actor.id
+        if not invoice.source_opd_visit_id or invoice.billing_stage != "opd":
+            return
+        visit = self.db.get(OPDVisit, invoice.source_opd_visit_id)
+        if visit:
+            visit.consultation_payment_status = invoice.payment_status if invoice.status != "void" else "unpaid"
+            visit.consultation_paid_at = datetime.now(UTC) if visit.consultation_payment_status == "paid" else None
+            consultation_items = [item for item in invoice.items if item.source_module in {"opd", "opd_visit"} and not item.source_opd_visit_order_id]
+            if consultation_items:
+                fee = sum((item.unit_price * item.quantity for item in consultation_items), Decimal("0"))
+                line_total = sum((item.line_total for item in consultation_items), Decimal("0"))
+                after_item_discounts = invoice.sub_total - invoice.item_discount_amount
+                invoice_share = invoice.invoice_discount_amount * line_total / after_item_discounts if after_item_discounts else Decimal("0")
+                visit.consultation_fee = self._money(fee)
+                visit.consultation_total = self._money(line_total - invoice_share)
+                visit.consultation_discount = self._money(fee - visit.consultation_total)
+                returned_quantities = self._returned_quantities(invoice)
+                if invoice.status != "void" and all(returned_quantities.get(str(item.id), Decimal("0")) >= item.quantity for item in consultation_items):
+                    # The consultation itself was returned, even if other lines on the invoice remain paid.
+                    visit.consultation_payment_status = "returned"
+                    visit.consultation_paid_at = None
+            visit.updated_by = actor.id
 
     def _recalculate_invoice_balance(self, invoice: BillingInvoice) -> None:
-        invoice.due_amount = self._money(invoice.total_amount - invoice.paid_amount)
-        if invoice.paid_amount <= Decimal("0.00"):
+        returned = sum((refund.credit_amount for refund in self.db.scalars(select(BillingRefund).where(BillingRefund.invoice_id == invoice.id, BillingRefund.refund_type == "return"))), Decimal("0"))
+        invoice.due_amount = max(Decimal(0),self._money(invoice.total_amount - returned - invoice.paid_amount))
+        if returned > Decimal("0.00") and invoice.total_amount - returned <= Decimal("0.00"):
+            # Everything billed was returned: nothing is owed or retained, which is not the same as "paid".
+            invoice.payment_status = "returned"
+        elif invoice.due_amount <= Decimal("0.00"):
+            invoice.payment_status = "paid"
+        elif invoice.paid_amount <= Decimal("0.00"):
             invoice.payment_status = "unpaid"
         elif invoice.due_amount <= Decimal("0.00"):
             invoice.payment_status = "paid"

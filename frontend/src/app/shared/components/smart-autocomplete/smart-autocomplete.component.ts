@@ -30,6 +30,10 @@ export type SmartAutocompleteOption = {
         (keydown.enter)="selectFirst($event)"
         (blur)="closeSoon()"
       />
+      <div class="smart-menu" *ngIf="open && query.trim() && !filteredOptions.length" role="status">
+        <p>No matches. Check the spelling or try a shorter name or reference number.</p>
+        <button type="button" (mousedown)="$event.preventDefault(); onQueryChange('')">Clear search and show available options</button>
+      </div>
       <div class="smart-menu" *ngIf="open && filteredOptions.length">
         <button type="button" *ngFor="let option of filteredOptions" (mousedown)="select(option)">
           <strong>{{ option.label }}</strong>

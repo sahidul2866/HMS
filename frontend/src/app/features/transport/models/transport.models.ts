@@ -103,6 +103,8 @@ export interface TransportRequest {
 }
 
 export interface TransportTrip {
+  billing_invoice_id?: string | null;
+  posting_policy?: string;
   id: string;
   request_id?: string | null;
   request_number?: string | null;

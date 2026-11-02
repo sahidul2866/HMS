@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
@@ -68,6 +69,14 @@ class PharmacyRepository:
             .where(PharmacyDispense.id == dispense_id)
         )
         return self.db.scalar(stmt)
+
+    def get_issued_quantity(self, order_id) -> Decimal:
+        stmt = select(func.coalesce(func.sum(PharmacyDispense.quantity), 0)).where(
+            PharmacyDispense.source_visit_order_id == order_id,
+            PharmacyDispense.is_active.is_(True),
+            PharmacyDispense.status.in_(['dispensed','partial','partially_returned','returned']),
+        )
+        return Decimal(self.db.scalar(stmt) or 0)
 
     def get_net_dispensed_quantity(self, order_id) -> float:
         stmt = select(func.coalesce(func.sum(PharmacyDispense.quantity - PharmacyDispense.returned_quantity), 0)).where(

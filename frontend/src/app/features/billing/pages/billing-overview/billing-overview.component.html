@@ -75,7 +75,7 @@
           </button>
         }
         @if (!dueInvoices.length) {
-          <div class="empty-state">No pending due invoices.</div>
+          <div class="empty-state">No pending due invoices.<span class="app-state-guidance">There are no outstanding invoices in this view. Open the invoice list to review billing history.</span></div>
         }
       </div>
     </section>
@@ -96,7 +96,7 @@
           </div>
         }
         @if (!referrals.length) {
-          <div class="empty-state">No referral data available.</div>
+          <div class="empty-state">No referral data available.<span class="app-state-guidance">Referral totals appear when invoices with referral information are recorded.</span></div>
         }
       </div>
     </section>

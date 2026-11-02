@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PaginatedResponse(BaseModel):
@@ -48,6 +48,14 @@ class HRDesignationRead(HRDesignationCreate):
 
 
 class HREmployeeCreate(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_optional_fields(cls, data):
+        if isinstance(data, dict):
+            data = {key: (None if isinstance(value, str) and not value.strip() and key not in {"full_name", "joining_date", "employee_type", "employee_category", "employment_status"} else value) for key, value in data.items()}
+        return data
+
+    user_id: UUID | None = None
     full_name: str = Field(min_length=2, max_length=160)
     phone: str | None = Field(default=None, max_length=30)
     email: str | None = Field(default=None, max_length=120)
@@ -204,19 +212,19 @@ class HRLeaveRequestRead(HRLeaveRequestCreate):
 class HRSalaryStructureCreate(BaseModel):
     employee_id: UUID
     effective_from: date
-    basic_salary: Decimal
-    house_rent_allowance: Decimal = Decimal("0")
-    medical_allowance: Decimal = Decimal("0")
-    transport_allowance: Decimal = Decimal("0")
-    food_allowance: Decimal = Decimal("0")
-    night_duty_allowance: Decimal = Decimal("0")
-    on_call_allowance: Decimal = Decimal("0")
-    emergency_duty_allowance: Decimal = Decimal("0")
-    overtime_hourly_rate: Decimal = Decimal("0")
-    bonus_incentive: Decimal = Decimal("0")
-    tax_deduction: Decimal = Decimal("0")
-    provident_fund_deduction: Decimal = Decimal("0")
-    other_deductions: Decimal = Decimal("0")
+    basic_salary: Decimal = Field(ge=0, decimal_places=2)
+    house_rent_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    medical_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    transport_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    food_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    night_duty_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    on_call_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    emergency_duty_allowance: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    overtime_hourly_rate: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    bonus_incentive: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    tax_deduction: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    provident_fund_deduction: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    other_deductions: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
 
 
 class HRSalaryStructureRead(HRSalaryStructureCreate):
@@ -231,7 +239,7 @@ class HRSalaryStructureRead(HRSalaryStructureCreate):
 class HROvertimeCreate(BaseModel):
     employee_id: UUID
     overtime_date: date
-    overtime_hours: Decimal
+    overtime_hours: Decimal = Field(gt=0, le=24)
     overtime_type: str = "regular"
     reason: str | None = None
 
@@ -247,8 +255,8 @@ class HROvertimeRead(HROvertimeCreate):
 class HRLoanCreate(BaseModel):
     employee_id: UUID
     loan_type: str = "advance"
-    approved_amount: Decimal
-    monthly_installment: Decimal
+    approved_amount: Decimal = Field(gt=0)
+    monthly_installment: Decimal = Field(gt=0)
     deduction_start_month: str
     note: str | None = None
 
@@ -268,6 +276,9 @@ class HRPayrollRunCreate(BaseModel):
 
 
 class HRPayrollItemRead(BaseModel):
+    adjustment_earnings: Decimal = Decimal("0")
+    adjustment_deductions: Decimal = Decimal("0")
+    staff_meal_deduction: Decimal = Decimal("0")
     id: UUID
     employee_id: UUID
     employee_name: str | None = None
@@ -292,6 +303,9 @@ class HRPayrollItemRead(BaseModel):
 
 
 class HRPayrollRunRead(BaseModel):
+    created_by: UUID | None = None
+    approved_by_user_id: UUID | None = None
+    finalized_at: datetime | None = None
     id: UUID
     payroll_month: str
     department_id: UUID | None = None
@@ -403,3 +417,13 @@ class HRSettingRead(BaseModel):
 class HRSettingUpdate(BaseModel):
     setting_value: str | None = None
     description: str | None = None
+
+
+class HRPayrollAdjustmentCreate(BaseModel):
+    model_config = {"str_strip_whitespace": True}
+    employee_id: UUID
+    source_payroll_item_id: UUID | None = None
+    target_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    kind: str = Field(pattern='^(earning|deduction)$')
+    amount: Decimal = Field(gt=0,decimal_places=2)
+    reason: str = Field(min_length=5,max_length=1000)

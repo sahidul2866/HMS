@@ -1,9 +1,9 @@
 import { HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError, of } from 'rxjs';
 
 import { ApiBaseService } from '../../../core/services/api-base.service';
-import { SKIP_GLOBAL_LOADER } from '../../../core/http/http-context.tokens';
+import { SKIP_ERROR_NOTIFICATION, SKIP_GLOBAL_LOADER } from '../../../core/http/http-context.tokens';
 import { QueueCounter, QueueDisplay, QueueSetting, QueueSummary, QueueToken } from '../models/queue.models';
 
 @Injectable({ providedIn: 'root' })
@@ -41,6 +41,11 @@ export class QueueService extends ApiBaseService {
 
   createCounter(payload: Partial<QueueCounter>): Observable<QueueCounter> {
     return this.http.post<QueueCounter>(this.url('/queue/counters'), payload);
+  }
+
+  /** Queues this user may read, or null when the server cannot say (older backend). Quiet: callers fall back to every queue. */
+  viewableScopes(): Observable<string[] | null> {
+    return this.http.get<string[]>(this.url('/queue/scopes'), { context: new HttpContext().set(SKIP_GLOBAL_LOADER, true).set(SKIP_ERROR_NOTIFICATION, true) }).pipe(catchError(() => of(null)));
   }
 
   summary(params: { queue_scope?: string | null; doctor_user_id?: string | null } = {}): Observable<QueueSummary> {

@@ -1,3 +1,5 @@
+import { forkJoin, of } from 'rxjs';
+import { SessionService } from '../../../../core/services/session.service';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +21,7 @@ import { PharmacyService } from '../../services/pharmacy.service';
   styleUrls: ['./pharmacy-workbench.component.scss'],
 })
 export class PharmacyWorkbenchComponent {
+  readonly session = inject(SessionService);
   private readonly fb = inject(FormBuilder);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly billingService = inject(BillingServiceApi);
@@ -62,9 +65,15 @@ export class PharmacyWorkbenchComponent {
     note: [''],
   });
 
+  returnSources: Array<{id:string;batch_no:string|null;store:string|null;expiry_date:string|null;returnable:string}> = [];
+  returning = false;
+  private returnRequestId = '';
   readonly returnForm = this.fb.group({
     quantity: [1, [Validators.required, Validators.min(0.01)]],
-    note: [''],
+    source_issue_id: ['',Validators.required],
+    restock: [false],
+    inspected: [false,Validators.requiredTrue],
+    note: ['',Validators.required],
   });
 
   constructor() {
@@ -78,18 +87,15 @@ export class PharmacyWorkbenchComponent {
   }
 
   loadAll(): void {
+    if(this.returning) return;
     this.loading = true;
-    this.pharmacyService.list().subscribe((dispenses) => {
-      this.dispenses = dispenses;
-      this.billingService.listInvoices({ status: 'posted' }).subscribe((invoices) => {
-        this.invoices = invoices.slice(0, 20);
-        this.pharmacyService.listPendingPrescriptions(this.queueFilters).subscribe((orders) => {
-          this.pendingPrescriptions = orders;
-          this.applyRouteContext();
-          this.loading = false;
-        });
-      });
-    });
+    forkJoin({dispenses:this.pharmacyService.list(),
+      invoices:this.session.hasPermission('billing.view')?this.billingService.listInvoices({status:'posted'}):of([] as BillingInvoiceListItem[]),
+      prescriptions:this.pharmacyService.listPendingPrescriptions(this.queueFilters)
+    }).subscribe({next:({dispenses,invoices,prescriptions})=>{
+      this.dispenses=dispenses;this.invoices=invoices.slice(0,20);this.pendingPrescriptions=prescriptions;
+      this.applyRouteContext();this.loading=false;
+    },error:()=>{this.loading=false;this.notificationService.error('Could not load pharmacy work. Check your connection and retry.');}});
   }
 
   submit(): void {
@@ -233,6 +239,13 @@ export class PharmacyWorkbenchComponent {
 
   prepareReturn(dispense: PharmacyDispense): void {
     this.returnTarget = dispense;
+    this.returnRequestId = crypto.randomUUID();
+    this.returnSources = [];
+    this.returnForm.reset({quantity:1,source_issue_id:'',restock:false,inspected:false,note:''});
+    this.pharmacyService.returnSources(dispense.id).subscribe(sources=>{
+      this.returnSources=sources.filter(source=>Number(source.returnable)>0);
+      if(this.returnSources.length===1)this.returnForm.patchValue({source_issue_id:this.returnSources[0].id});
+    });
     this.returnForm.patchValue({
       quantity: Number(dispense.remaining_quantity),
       note: dispense.return_note || '',
@@ -240,22 +253,28 @@ export class PharmacyWorkbenchComponent {
   }
 
   submitReturn(): void {
-    if (!this.returnTarget || this.returnForm.invalid) {
+    if (!this.returnTarget || this.returning || this.returnForm.invalid) {
       return;
     }
+    this.returning=true;
     const raw = this.returnForm.getRawValue();
     this.pharmacyService
       .returnDispense(this.returnTarget.id, {
         quantity: Number(raw.quantity ?? 0),
+        source_issue_id: raw.source_issue_id,
+        request_id: this.returnRequestId,
+        inspected: !!raw.inspected,
+        restock: !!raw.restock,
         note: raw.note?.trim() || null,
       })
-      .subscribe((result) => {
+      .subscribe({next: (result) => {
+        this.returning=false;
         this.resultMessage = `Return posted for ${result.medicine_name}. Net issued quantity is now ${result.remaining_quantity}.`;
         this.returnTarget = null;
         this.returnForm.reset({ quantity: 1, note: '' });
         this.loadAll();
-        this.notificationService.warning(`Return recorded for ${result.medicine_name}.`);
-      });
+        this.notificationService.success(`Physical return recorded for ${result.medicine_name}.`, "Cashier can now post the linked invoice credit.");
+      },error:()=>{this.returning=false;}});
   }
 
   resetForm(): void {
@@ -325,7 +344,7 @@ export class PharmacyWorkbenchComponent {
   }
 
   private applyRouteContext(): void {
-    this.route.queryParamMap.subscribe((params) => {
+    const params = this.route.snapshot.queryParamMap;
       const orderId = params.get('orderId');
       const invoiceId = params.get('invoiceId');
       const dispenseId = params.get('dispenseId');
@@ -346,7 +365,6 @@ export class PharmacyWorkbenchComponent {
           this.prepareReturn(dispense);
         }
       }
-    });
   }
 
   get invoicePharmacyItems(): BillingInvoiceItem[] {

@@ -1,5 +1,5 @@
 @if (!sessionService.snapshot.initialized) {
-  <div class="loading-screen">Loading session...</div>
+  <div class="loading-screen" role="status" aria-busy="true">Loading session...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
 } @else {
   <div
     class="shell"
@@ -18,25 +18,7 @@
       [mobileMode]="isMobileViewport"
     ></app-sidebar>
     <main class="content">
-      <header class="topbar" [class.account-menu-open]="accountMenuOpen">
-        <div class="topbar-leading">
-          @if (isMobileViewport) {
-            <button class="menu-btn" type="button" (click)="toggleMobileSidebar()" aria-label="Open navigation">
-              <span></span>
-              <span></span>
-              <span></span>
-            </button>
-          }
-          <button class="topbar-user" type="button" (click)="openProfile()">
-            <span class="account-avatar">{{ userInitials() || 'U' }}</span>
-            <span>
-              <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
-              <span class="muted">{{ accountTypeLabel() }}</span>
-            </span>
-          </button>
-        </div>
-        <div class="topbar-actions">
-          <app-global-scanner module="global" action="lookup"></app-global-scanner>
+      <ng-template #displayOptions>
           <div class="chrome-density" role="group" aria-label="Page space">
             @for (option of chromeDensityOptions; track option.value) {
               <button
@@ -61,9 +43,32 @@
               }
             </select>
           </label>
+      </ng-template>
+      <header class="topbar" [class.account-menu-open]="accountMenuOpen">
+        <div class="topbar-leading">
+          @if (isMobileViewport) {
+            <button class="menu-btn" type="button" (click)="toggleMobileSidebar()" aria-label="Open navigation">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+          }
+          <button class="topbar-user" type="button" (click)="openProfile()">
+            <span class="account-avatar">{{ userInitials() || 'U' }}</span>
+            <span>
+              <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
+              <span class="muted">{{ accountTypeLabel() }}</span>
+            </span>
+          </button>
+        </div>
+        <div class="topbar-actions">
+          <app-global-scanner module="global" action="lookup"></app-global-scanner>
+          @if (!isMobileViewport) {
+            <ng-container [ngTemplateOutlet]="displayOptions"></ng-container>
+          }
           <app-notification-center></app-notification-center>
           <div class="account-menu" [class.open]="accountMenuOpen">
-            <button class="account-menu-trigger" type="button" (click)="toggleAccountMenu()" aria-label="Open account menu">
+            <button class="account-menu-trigger" type="button" (click)="toggleAccountMenu()" aria-label="Open account menu" [attr.aria-expanded]="accountMenuOpen" aria-controls="account-menu-panel">
               <span class="account-avatar compact">{{ userInitials() || 'U' }}</span>
               <span class="account-menu-text">
                 <strong>{{ sessionService.snapshot.user?.full_name }}</strong>
@@ -72,7 +77,7 @@
               <span class="account-caret">⌄</span>
             </button>
             @if (accountMenuOpen) {
-              <div class="account-menu-panel">
+              <div class="account-menu-panel" id="account-menu-panel">
                 <div class="account-menu-header">
                   <span class="account-avatar">{{ userInitials() || 'U' }}</span>
                   <div>
@@ -86,6 +91,12 @@
                   <button type="button" (click)="navigate('/portal'); closeAccountMenu()">My Portal</button>
                 } @else {
                   <button type="button" (click)="navigate('/dashboard'); closeAccountMenu()">Dashboard</button>
+                }
+                @if (isMobileViewport) {
+                  <div class="account-preferences">
+                    <p>Display and help</p>
+                    <ng-container [ngTemplateOutlet]="displayOptions"></ng-container>
+                  </div>
                 }
                 <button class="danger-menu-item" type="button" (click)="logout()">Logout</button>
               </div>
@@ -181,15 +192,17 @@
         </nav>
       }
 
-      <app-tab-strip></app-tab-strip>
+      <div class="workspace-tools">
+        <app-tab-strip></app-tab-strip>
+        @if (showStaffAssistant()) {
+          <app-floating-assistant title="Hospital Assistant"></app-floating-assistant>
+        }
+      </div>
 
       <section class="page-body">
         <router-outlet></router-outlet>
       </section>
 
-      @if (showStaffAssistant()) {
-        <app-floating-assistant title="Hospital Assistant"></app-floating-assistant>
-      }
       <app-command-palette></app-command-palette>
     </main>
   </div>

@@ -1,7 +1,9 @@
+import { HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { ApiCacheService } from '../../../core/services/api-cache.service';
+import { SKIP_ERROR_NOTIFICATION } from '../../../core/http/http-context.tokens';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import {
   PatientAppointment,
@@ -16,7 +18,7 @@ export class PatientPortalService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
 
   getOverview(): Observable<PatientPortalOverview> {
-    return this.cache.get('portal:overview', () => this.http.get<PatientPortalOverview>(this.url('/portal/overview')));
+    return this.cache.get('portal:overview', () => this.http.get<PatientPortalOverview>(this.url('/portal/overview'), { context: new HttpContext().set(SKIP_ERROR_NOTIFICATION, true) }));
   }
 
   listAppointments(): Observable<PatientAppointment[]> {

@@ -170,7 +170,7 @@
             <div class="slot-grid-head">
               <strong>Available Slots</strong>
               @if (loadingSlots) {
-                <span>Loading...</span>
+                <span role="status" aria-busy="true">Loading...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
               } @else {
                 <span>{{ slots.length }} slots</span>
               }

@@ -42,6 +42,10 @@ export class PharmacyService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
 
+  stockWorkspace<T>(): Observable<T> { return this.http.get<T>(this.url('/pharmacy/stock-reviews/workspace')); }
+  submitStockReview<T>(kind:string, payload:object): Observable<T> { return this.http.post<T>(this.url('/pharmacy/stock-reviews/'+kind),payload).pipe(tap(()=>this.clearCache())); }
+  decideStockReview<T>(id:string, payload:object): Observable<T> { return this.http.post<T>(this.url('/pharmacy/stock-reviews/'+id+'/decision'),payload).pipe(tap(()=>this.clearCache())); }
+
   getSummary(): Observable<PharmacySummary> {
     return this.cache.get('pharmacy:summary', () => this.http.get<PharmacySummary>(this.url('/pharmacy/summary')));
   }
@@ -71,6 +75,10 @@ export class PharmacyService extends ApiBaseService {
         this.publishPharmacyEvent('pharmacy.dispense.completed', 'pharmacy_dispense', dispense.id, 'Pharmacy dispense status updated.', dispense.patient_id, dispense.source_visit_id);
       })
     );
+  }
+
+  returnSources(id: string): Observable<Array<{id:string;batch_no:string|null;store:string|null;expiry_date:string|null;returnable:string}>> {
+    return this.http.get<Array<{id:string;batch_no:string|null;store:string|null;expiry_date:string|null;returnable:string}>>(this.url(`/pharmacy/dispenses/${id}/return-sources`));
   }
 
   returnDispense(dispenseId: string, payload: PharmacyReturnPayload): Observable<PharmacyDispense> {
@@ -148,6 +156,11 @@ export class PharmacyService extends ApiBaseService {
 
   deleteCustomer(id: string): Observable<{ success: boolean }> {
     return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/customers/${id}`)).pipe(tap(() => this.clearCache()));
+  }
+
+  prescribingMedicines(params: {page_size?: number;q?:string;is_active?:boolean} = {}): Observable<PaginatedResponse<PharmacyMedicine>> {
+    const query=new URLSearchParams({page_size:String(params.page_size||30)});if(params.q)query.set('q',params.q);
+    return this.http.get<PaginatedResponse<PharmacyMedicine>>(this.url('/pharmacy/prescribing-catalog?'+query));
   }
 
   listMedicines(params: Record<string, string | number | boolean | undefined> = {}): Observable<PaginatedResponse<PharmacyMedicine>> {

@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormsModule, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
+import { SessionService } from '../../../../core/services/session.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { AdminRole, ScopeAssignment } from '../../../admin/models/admin.models';
 import { RoleService } from '../../../admin/services/role.service';
@@ -11,16 +12,25 @@ import { IPDService } from '../../services/ipd.service';
 @Component({
   selector: 'app-ipd-settings',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './ipd-settings.component.html',
   styleUrls: ['./ipd-settings.component.scss'],
 })
 export class IPDSettingsComponent {
+  readonly session=inject(SessionService);
   private readonly fb = inject(FormBuilder);
   private readonly ipdService = inject(IPDService);
   private readonly roleService = inject(RoleService);
   private readonly notificationService = inject(NotificationService);
 
+  bedStatuses:Record<string,string>={};bedReasons:Record<string,string>={};bedSaving=new Set<string>();
+  saveBedStatus(bed:IPDBed):void {
+    const status=this.bedStatuses[bed.id];const reason=(this.bedReasons[bed.id]||'').trim();
+    if(!status||this.bedSaving.has(bed.id))return;
+    if(reason.length<3){this.notificationService.warning('Enter a bed turnover or maintenance reason (at least 3 characters).');return;}
+    this.bedSaving.add(bed.id);
+    this.ipdService.updateBedStatus(bed.id,status,reason).subscribe({next:()=>{this.bedSaving.delete(bed.id);this.bedReasons[bed.id]='';this.notificationService.success('Bed status updated. Available beds can now be assigned.');this.loadBeds();},error:()=>this.bedSaving.delete(bed.id)});
+  }
   beds: IPDBed[] = [];
   roles: AdminRole[] = [];
   roleScopes: ScopeAssignment[] = [];

@@ -852,3 +852,17 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ipd-form-fields {display:contents;border:0;padding:0;margin:0;min-width:0;}
+.patient-workspace-mode .patient-popup-backdrop {z-index:5300;}
+.patient-workspace-mode .patient-popup.patient-popup-open {z-index:5301;width:min(980px,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);border:1px solid var(--border);box-shadow:0 24px 72px #0f172a44;}
+.patient-popup .form-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+.patient-popup .popup-title-row {position:sticky;top:-1.25rem;z-index:2;background:var(--surface);padding:.8rem 0;border-bottom:1px solid var(--border);}
+.patient-popup input,.patient-popup select,.patient-popup textarea{min-width:0;max-width:100%;}
+.patient-popup table{display:block;max-width:100%;overflow-x:auto;}
+.ipd-loading{min-height:90px;display:grid;gap:1rem;}
+@media(max-width:640px){.patient-action-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.patient-action-grid button{min-height:76px;padding:.7rem;}.patient-popup .form-grid{grid-template-columns:minmax(0,1fr);}.patient-workspace-mode .patient-popup.patient-popup-open{padding:.85rem;width:calc(100vw - 1rem);}.patient-popup .popup-title-row{top:-.85rem;}}
+
+.care-records,.rate-history {display:grid;gap:.6rem;margin:.6rem 0;}.care-records article,.rate-history article{padding:.8rem;border:1px solid var(--border);border-radius:10px;background:var(--surface);}.care-records small{display:block;color:var(--text-muted);}.care-records p{white-space:pre-wrap;overflow-wrap:anywhere;}.vitals-record{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.5rem;}.patient-popup summary{cursor:pointer;padding:.6rem 0;font-weight:650;}
+
+.ipd-action-error{padding:.8rem;border:1px solid #fca5a5;border-radius:8px;background:#fff1f2;color:#991b1b;}

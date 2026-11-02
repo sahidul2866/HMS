@@ -70,3 +70,8 @@
     align-items: stretch;
   }
 }
+
+.medicine-editor summary { cursor: pointer; margin: 0; }
+.medicine-editor[open] summary { margin-bottom: 1rem; }
+.table-wrap { max-width:100%; overflow-x:auto; }
+.table.data-table { min-width: 760px; }

@@ -352,6 +352,7 @@ export interface InvestigationPayload {
 }
 
 export interface PharmacyDispense {
+  return_history?: Array<{id:string;quantity:string;restocked:boolean;batch_no:string|null;received_at:string;reason:string}>;
   id: string;
   patient_id?: string | null;
   billing_invoice_id?: string | null;
@@ -429,6 +430,10 @@ export interface PharmacySummary {
 }
 
 export interface PharmacyReturnPayload {
+  request_id?: string;
+  source_issue_id?: string | null;
+  restock?: boolean;
+  inspected?: boolean;
   quantity: number;
   note?: string | null;
 }

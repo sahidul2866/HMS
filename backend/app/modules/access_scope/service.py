@@ -183,6 +183,26 @@ class AccessScopeService:
             modules.append("*")
         return sorted(set(modules))
 
+    def is_in_scope(
+        self,
+        actor: User,
+        *,
+        module: str,
+        scope_type: str,
+        scope_value: str | None = None,
+        scope_ref_id: UUID | None = None,
+    ) -> bool:
+        """Side-effect free scope test, for callers that only want to know what to offer the user."""
+        if self.has_unrestricted_access(actor, module=module, scope_type=scope_type):
+            return True
+        if not self.has_scope_assignments(actor, scope_type, module=module):
+            return True
+        values = self.scope_values(actor, scope_type, module=module)
+        refs = self.scope_refs(actor, scope_type, module=module)
+        value_ok = bool(scope_value and scope_value.strip().lower() in values)
+        ref_ok = bool(scope_ref_id and scope_ref_id in refs)
+        return value_ok or ref_ok
+
     def assert_in_scope(
         self,
         actor: User,
@@ -193,15 +213,7 @@ class AccessScopeService:
         scope_ref_id: UUID | None = None,
         context: dict[str, str | None] | None = None,
     ) -> None:
-        if self.has_unrestricted_access(actor, module=module, scope_type=scope_type):
-            return
-        if not self.has_scope_assignments(actor, scope_type, module=module):
-            return
-        values = self.scope_values(actor, scope_type, module=module)
-        refs = self.scope_refs(actor, scope_type, module=module)
-        value_ok = bool(scope_value and scope_value.strip().lower() in values)
-        ref_ok = bool(scope_ref_id and scope_ref_id in refs)
-        if value_ok or ref_ok:
+        if self.is_in_scope(actor, module=module, scope_type=scope_type, scope_value=scope_value, scope_ref_id=scope_ref_id):
             return
         self._audit(actor, "scope.access.denied", module, None, {"scope_type": scope_type, "scope_value": scope_value, "scope_ref_id": str(scope_ref_id) if scope_ref_id else None}, context or {})
         raise AppException(403, "scope_forbidden", "This record is outside your assigned operational scope")

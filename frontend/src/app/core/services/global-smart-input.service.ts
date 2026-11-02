@@ -108,6 +108,7 @@ export class GlobalSmartInputService {
   }
 
   private showTextAreaSuggestions(textarea: HTMLTextAreaElement): void {
+    if (textarea.closest('.no-smart-input')) return;
     const suggestions = this.suggestionsFor(textarea).slice(0, 6);
     let strip = textarea.nextElementSibling instanceof HTMLElement && textarea.nextElementSibling.classList.contains('smart-suggestion-strip')
       ? textarea.nextElementSibling
@@ -145,6 +146,7 @@ export class GlobalSmartInputService {
   }
 
   private storeRecentValue(control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): void {
+    if (control.closest('.no-smart-input')) return;
     const value = control instanceof HTMLSelectElement ? control.selectedOptions.item(0)?.textContent?.trim() || '' : control.value.trim();
     if (!value || value.length < 2 || value.length > 90) return;
     const key = this.fieldKey(control);

@@ -25,7 +25,7 @@
     <label class="check"><input type="checkbox" [(ngModel)]="form.audit_logging" name="audit" /> Audit AI prompts and sensitive actions</label>
     <label class="check"><input type="checkbox" [(ngModel)]="form.require_confirmation_for_sensitive_actions" name="confirm" /> Require confirmation for sensitive actions</label>
 
-    <div class="module-grid">
+    <details class="module-options"><summary>Choose enabled modules</summary><div class="module-grid">
       <label class="check"><input type="checkbox" [(ngModel)]="form.patients" name="patients" /> Patients</label>
       <label class="check"><input type="checkbox" [(ngModel)]="form.opd" name="opd" /> OPD</label>
       <label class="check"><input type="checkbox" [(ngModel)]="form.ipd" name="ipd" /> IPD</label>
@@ -40,15 +40,15 @@
       <label class="check"><input type="checkbox" [(ngModel)]="form.payroll" name="payroll" /> Payroll</label>
       <label class="check"><input type="checkbox" [(ngModel)]="form.accounting" name="accounting" /> Accounting</label>
       <label class="check"><input type="checkbox" [(ngModel)]="form.reports" name="reports" /> Reports</label>
-    </div>
+    </div></details>
 
     <button type="submit">Save Settings</button>
   </form>
 
-  <div class="settings-list">
+  <details class="saved-settings"><summary>Saved configurations</summary><div class="settings-list">
     <article *ngFor="let setting of settings">
       <strong>{{ setting.setting_key.replaceAll('_', ' ') }}</strong>
       <code>{{ setting.setting_value | json }}</code>
     </article>
-  </div>
+  </div></details>
 </section>

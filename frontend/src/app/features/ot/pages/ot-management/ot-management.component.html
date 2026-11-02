@@ -7,10 +7,10 @@
         <div class="page-subtitle">Schedule, checklist, anesthesia, recovery and billing.</div>
       </div>
       <div class="toolbar-row">
-        <button class="primary-btn" type="button" (click)="openModal('booking')">Book OT</button>
-        <button class="secondary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
-        <button class="secondary-btn" type="button" (click)="openModal('room')">Rooms</button>
-        <button class="secondary-btn" type="button" (click)="printCaseSheet()">Print</button>
+        <button *ngIf="can('ot.booking.manage')" class="primary-btn" type="button" (click)="openModal('booking')">Book OT</button>
+        <button *ngIf="can('ot.schedule.manage')" class="secondary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
+        <button *ngIf="can('ot.room.manage')" class="secondary-btn" type="button" (click)="openModal('room')">Rooms</button>
+        <button class="secondary-btn" type="button" *ngIf="can('ot.reports.view')" (click)="printCaseSheet()">Print</button>
       </div>
     </div>
   </section>
@@ -60,7 +60,7 @@
     <section class="page-card">
       <div class="list-toolbar">
         <input [(ngModel)]="q" (input)="load()" placeholder="Search booking, patient, procedure" />
-        <button class="primary-btn" type="button" (click)="openModal('booking')">New Booking</button>
+        <button *ngIf="can('ot.booking.manage')" class="primary-btn" type="button" (click)="openModal('booking')">New Booking</button>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Booking</th><th>Patient</th><th>Procedure</th><th>Type</th><th>Priority</th><th>Preferred</th><th>Status</th></tr></thead><tbody>
         @for (booking of bookings; track booking.id) {
@@ -71,25 +71,26 @@
   }
 
   @if (tab() === 'calendar' || tab() === 'checklist' || tab() === 'anesthesia' || tab() === 'notes' || tab() === 'recovery' || tab() === 'consumables' || tab() === 'billing' || tab() === 'documents' || tab() === 'reports') {
-    <section class="workflow-layout">
+    <section class="workflow-layout" [class.case-selected]="!!selectedSchedule">
       <section class="page-card">
         <div class="list-toolbar">
           <input type="date" [(ngModel)]="calendarDay" (change)="loadSchedules()" />
           <select [(ngModel)]="statusFilter" (change)="loadSchedules()"><option value="">All status</option><option>scheduled</option><option>ready_for_ot</option><option>in_progress</option><option>completed</option><option>cancelled</option></select>
-          <button class="primary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
+          <button *ngIf="can('ot.schedule.manage')" class="primary-btn" type="button" (click)="openModal('schedule')">Schedule</button>
         </div>
+        <label class="case-search">Find case<input type="search" [(ngModel)]="q" name="caseSearch" placeholder="Search patient, procedure or booking" /></label>
         <div class="schedule-list">
-          @for (schedule of schedules; track schedule.id) {
+          @for (schedule of displayedSchedules; track schedule.id) {
             <button type="button" class="schedule-card" [class.active]="selectedSchedule?.id === schedule.id" (click)="selectSchedule(schedule)">
               <strong>{{ schedule.procedure_name }}</strong>
               <span>{{ schedule.patient_name }} · {{ schedule.room_number }} · {{ schedule.scheduled_start_at | date:'shortTime' }}</span>
               <i [class]="statusClass(schedule.status)">{{ schedule.status }}</i>
             </button>
-          }
+          } @empty {<p class="empty">No cases match your search. Try a patient number, a shorter name or another date.</p>}
         </div>
       </section>
 
-      <aside class="page-card case-panel">
+      <aside class="page-card case-panel" [attr.data-case-id]="caseSheet?.schedule?.id">
         <div class="panel-head"><h2>OT Case Sheet</h2><span>{{ selectedSchedule?.booking_number || 'Select case' }}</span></div>
         @if (selectedSchedule) {
           <div class="case-title">
@@ -97,20 +98,20 @@
             <span>{{ selectedSchedule.patient_name }} · {{ selectedSchedule.patient_number }}</span>
           </div>
           <div class="action-grid">
-            <button type="button" (click)="openModal('preop')">Pre-Op</button>
-            <button type="button" (click)="openModal('anesthesia')">Anesthesia</button>
-            <button type="button" (click)="openModal('note')">Notes</button>
-            <button type="button" (click)="openModal('recovery')">Recovery</button>
-            <button type="button" (click)="openModal('consumable')">Consumable</button>
-            <button type="button" (click)="openModal('equipment')">Equipment</button>
-            <button type="button" (click)="openModal('billing')">Billing</button>
-            <button type="button" (click)="openModal('document')">Document</button>
+            <button *ngIf="can('ot.preop.manage')" type="button" (click)="openModal('preop')">Pre-Op</button>
+            <button *ngIf="can('ot.anesthesia.manage')" type="button" (click)="openModal('anesthesia')">Anesthesia</button>
+            <button *ngIf="can('ot.surgery.signoff')" type="button" (click)="openModal('note')">Notes</button>
+            <button *ngIf="can('ot.recovery.manage')" type="button" (click)="openModal('recovery')">Recovery</button>
+            <button *ngIf="can('ot.inventory.manage')" type="button" (click)="openModal('consumable')">Consumable</button>
+            <button *ngIf="can('ot.inventory.manage')" type="button" (click)="openModal('equipment')">Equipment</button>
+            <button *ngIf="can('ot.billing.manage')" type="button" (click)="openModal('billing')">Billing</button>
+            <button *ngIf="can('ot.documents.manage')" type="button" (click)="openModal('document')">Document</button>
           </div>
-          <div class="status-actions">
-            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'ready_for_ot')">Ready</button>
-            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'in_progress')">Start</button>
-            <button class="secondary-btn" type="button" (click)="updateStatus(selectedSchedule, 'completed')">Complete</button>
-            <button class="danger-btn" type="button" (click)="updateStatus(selectedSchedule, 'cancelled')">Cancel</button>
+          <div class="status-actions" *ngIf="can('ot.workflow.manage')">
+            <button class="secondary-btn" type="button" [disabled]="saving || !canTransition('ready_for_ot')" (click)="updateStatus(selectedSchedule, 'ready_for_ot')">Ready</button>
+            <button class="secondary-btn" type="button" [disabled]="saving || !canTransition('in_progress')" (click)="updateStatus(selectedSchedule, 'in_progress')">Start</button>
+            <button class="secondary-btn" type="button" [disabled]="saving || !canTransition('completed')" (click)="updateStatus(selectedSchedule, 'completed')">Complete</button>
+            <button class="danger-btn" type="button" [disabled]="saving || !canTransition('cancelled')" (click)="updateStatus(selectedSchedule, 'cancelled')">Cancel</button>
           </div>
           @if (caseSheet) {
             <div class="case-sections">
@@ -120,6 +121,8 @@
               <div><b>Recovery</b><span>{{ caseSheet.recovery?.['transfer_to'] || '-' }}</span></div>
               <div><b>Consumables</b><span>{{ caseSheet.consumables.length }} item(s)</span></div>
               <div><b>Billing</b><span>{{ caseSheet.billing.length }} charge(s)</span></div>
+              @if(can('ot.billing.manage')){@for(charge of caseSheet.billing;track charge['id']){<div class="ot-charge" [attr.data-charge-id]="charge['id']"><b>{{charge['description']}}</b><span>{{formatMoney($any(charge['amount']))}}</span>@if(charge['billing_invoice_id']){<a class="secondary-btn" [routerLink]="['/billing/list']" [queryParams]="{invoiceId:charge['billing_invoice_id']}">Open cashier invoice</a>}@else if(can('billing.invoice.create')){<button [disabled]="saving" (click)="postInvoice($any(charge['id']))">Post cashier invoice</button>}</div>}}
+
             </div>
           }
         } @else {
@@ -131,10 +134,10 @@
 
   @if (tab() === 'rooms') {
     <section class="panel">
-      <div class="list-toolbar"><button type="button" (click)="openModal('room')">Add Room</button></div>
+      <div class="list-toolbar"><button *ngIf="can('ot.room.manage')" type="button" (click)="openModal('room')">Add Room</button></div>
       <div class="room-board large">
         @for (room of rooms; track room.id) {
-          <div [class]="statusClass(room.status)"><strong>{{ room.room_number }}</strong><span>{{ room.name }}</span><small>{{ room.room_type }} · {{ formatMoney(room.hourly_charge) }}/hr</small><em>{{ room.equipment_summary }}</em></div>
+          <div [class]="statusClass(room.status)"><strong>{{ room.room_number }}</strong><span>{{ room.name }}</span><small>{{ room.room_type }} · {{ formatMoney(room.hourly_charge) }}/hr</small><em>{{ room.equipment_summary }}</em><details *ngIf="can('ot.room.manage')"><summary>Room availability</summary><label>Status<select [(ngModel)]="roomStatuses[room.id]" [name]="'roomStatus'+room.id"><option value="">Choose status</option><option>available</option><option>cleaning</option><option>maintenance</option><option>closed</option></select></label><label>Inspection / change reason<input [(ngModel)]="roomReasons[room.id]" [name]="'roomReason'+room.id" /></label><button [disabled]="saving" (click)="saveRoomStatus(room)">Save room status</button></details></div>
         }
       </div>
     </section>
@@ -143,57 +146,57 @@
 
 @if (modal) {
   <div class="modal-backdrop" (click)="closeModal()">
-    <form class="modal-card" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
+    <form class="modal-card no-smart-input" appDialog (appDialogClose)="closeModal()" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
       <div class="modal-head"><h2>{{ modal | titlecase }}</h2><button type="button" (click)="closeModal()">Close</button></div>
 
       @if (modal === 'room') {
         <div class="form-grid"><label>No<input [(ngModel)]="roomForm['room_number']" name="rno" /></label><label>Name<input [(ngModel)]="roomForm['name']" name="rname" /></label><label>Type<select [(ngModel)]="roomForm['room_type']" name="rtype"><option>major</option><option>minor</option><option>emergency</option><option>daycare</option></select></label><label>Status<select [(ngModel)]="roomForm['status']" name="rstatus"><option>available</option><option>booked</option><option>in_use</option><option>cleaning</option><option>maintenance</option><option>closed</option></select></label><label>Charge<input type="number" [(ngModel)]="roomForm['hourly_charge']" name="charge" /></label><label class="wide">Equipment<input [(ngModel)]="roomForm['equipment_summary']" name="equip" /></label></div>
-        <button class="primary" type="button" (click)="saveRoom()">Save Room</button>
+        <button class="primary" [disabled]="saving" type="button" (click)="saveRoom()">Save Room</button>
       }
 
       @if (modal === 'booking') {
         <div class="form-grid"><label class="wide">Patient Search<input [(ngModel)]="bookingForm['patient_label']" name="patient" (input)="patientSearchChanged($any($event.target).value)" /></label>
           @if (patientMatches.length) { <div class="dropdown wide">@for (patient of patientMatches; track patient.id) { <button type="button" (click)="selectPatient(patient)">{{ patient.patient_number }} - {{ patient.full_name }}</button> }</div> }
           <label>Procedure<input [(ngModel)]="bookingForm['procedure_name']" name="proc" /></label><label>Type<select [(ngModel)]="bookingForm['surgery_type']" name="stype"><option>elective</option><option>emergency</option><option>minor</option><option>major</option><option>daycare</option></select></label><label>Priority<select [(ngModel)]="bookingForm['priority_level']" name="priority"><option>critical</option><option>high</option><option>normal</option><option>low</option></select></label><label>Preferred<input type="datetime-local" [(ngModel)]="bookingForm['preferred_start_at']" name="pref" /></label><label>Duration<input type="number" [(ngModel)]="bookingForm['estimated_duration_minutes']" name="duration" /></label><label>Department<input [(ngModel)]="bookingForm['department_name']" name="dept" /></label><label class="wide">Diagnosis<input [(ngModel)]="bookingForm['diagnosis']" name="diag" /></label></div>
-        <button class="primary" type="button" (click)="saveBooking()">Create Booking</button>
+        <button class="primary" [disabled]="saving" type="button" (click)="saveBooking()">Create Booking</button>
       }
 
       @if (modal === 'schedule') {
         <div class="form-grid"><label>Booking<select [(ngModel)]="scheduleForm['booking_id']" name="book">@for (booking of bookings; track booking.id) { <option [value]="booking.id">{{ booking.booking_number }} - {{ booking.procedure_name }}</option> }</select></label><label>Room<select [(ngModel)]="scheduleForm['room_id']" name="room">@for (room of rooms; track room.id) { <option [value]="room.id">{{ room.room_number }} - {{ room.name }}</option> }</select></label><label>Start<input type="datetime-local" [(ngModel)]="scheduleForm['scheduled_start_at']" name="start" /></label><label>End<input type="datetime-local" [(ngModel)]="scheduleForm['scheduled_end_at']" name="end" /></label><label>Status<select [(ngModel)]="scheduleForm['status']" name="status"><option>approved</option><option>scheduled</option><option>ready_for_ot</option></select></label></div>
-        <button class="primary" type="button" (click)="saveSchedule()">Schedule Surgery</button>
+        <button class="primary" [disabled]="saving" type="button" (click)="saveSchedule()">Schedule Surgery</button>
       }
 
       @if (modal === 'preop') {
         <div class="check-grid">@for (key of ['consent_signed','anesthesia_cleared','lab_verified','radiology_verified','blood_arranged','npo_confirmed','site_marked','equipment_confirmed','implant_confirmed','ready_for_ot']; track key) { <label><input type="checkbox" [(ngModel)]="preOpForm[key]" [name]="key" /> {{ key.replaceAll('_', ' ') }}</label> }</div>
-        <label>Risk Notes<input [(ngModel)]="preOpForm['risk_assessment_notes']" name="risk" /></label><button class="primary" type="button" (click)="savePreOp()">Save Checklist</button>
+        <label>Risk Notes<input [(ngModel)]="preOpForm['risk_assessment_notes']" name="risk" /></label><button class="primary" [disabled]="saving" type="button" (click)="savePreOp()">Save Checklist</button>
       }
 
       @if (modal === 'anesthesia') {
-        <div class="form-grid"><label>Type<select [(ngModel)]="anesthesiaForm['anesthesia_type']" name="atype"><option>general</option><option>local</option><option>regional</option><option>spinal</option><option>epidural</option><option>sedation</option></select></label><label>Status<select [(ngModel)]="anesthesiaForm['clearance_status']" name="clear"><option>pending</option><option>cleared</option><option>hold</option></select></label><label class="wide">Assessment<input [(ngModel)]="anesthesiaForm['pre_assessment']" name="assessment" /></label><label class="wide">Vitals<input [(ngModel)]="anesthesiaForm['vitals_summary']" name="vitals" /></label></div><button class="primary" type="button" (click)="saveAnesthesia()">Save Anesthesia</button>
+        <div class="form-grid"><label>Type<select [(ngModel)]="anesthesiaForm['anesthesia_type']" name="atype"><option>general</option><option>local</option><option>regional</option><option>spinal</option><option>epidural</option><option>sedation</option></select></label><label>Status<select [(ngModel)]="anesthesiaForm['clearance_status']" name="clear"><option>pending</option><option>cleared</option><option>hold</option></select></label><label class="wide">Assessment<input [(ngModel)]="anesthesiaForm['pre_assessment']" name="assessment" /></label><label class="wide">Vitals<input [(ngModel)]="anesthesiaForm['vitals_summary']" name="vitals" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveAnesthesia()">Save Anesthesia</button>
       }
 
       @if (modal === 'note') {
-        <div class="form-grid"><label class="wide">Procedure<input [(ngModel)]="noteForm['procedure_performed']" name="done" /></label><label class="wide">Findings<input [(ngModel)]="noteForm['operative_findings']" name="findings" /></label><label class="wide">Surgeon Notes<input [(ngModel)]="noteForm['surgeon_notes']" name="surgeon" /></label><label><input type="checkbox" [(ngModel)]="noteForm['instrument_count_confirmed']" name="inst" /> Instrument count</label><label><input type="checkbox" [(ngModel)]="noteForm['sponge_count_confirmed']" name="sponge" /> Sponge count</label><label>Outcome<select [(ngModel)]="noteForm['surgery_outcome']" name="outcome"><option>successful</option><option>completed_with_observation</option><option>referred</option><option>cancelled</option><option>postponed</option></select></label></div><button class="primary" type="button" (click)="saveNote()">Save Notes</button>
+        <div class="form-grid"><label class="wide">Procedure<input [(ngModel)]="noteForm['procedure_performed']" name="done" /></label><label class="wide">Findings<input [(ngModel)]="noteForm['operative_findings']" name="findings" /></label><label class="wide">Surgeon Notes<input [(ngModel)]="noteForm['surgeon_notes']" name="surgeon" /></label><label><input type="checkbox" [(ngModel)]="noteForm['instrument_count_confirmed']" name="inst" /> Instrument count</label><label><input type="checkbox" [(ngModel)]="noteForm['sponge_count_confirmed']" name="sponge" /> Sponge count</label><label>Outcome<select [(ngModel)]="noteForm['surgery_outcome']" name="outcome"><option>successful</option><option>completed_with_observation</option><option>referred</option><option>cancelled</option><option>postponed</option></select></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveNote()">Save Notes</button>
       }
 
       @if (modal === 'recovery') {
-        <div class="form-grid"><label>Transfer<select [(ngModel)]="recoveryForm['transfer_to']" name="transfer"><option>recovery</option><option>icu</option><option>ward</option><option>discharge</option></select></label><label>Pain<input type="number" [(ngModel)]="recoveryForm['pain_score']" name="pain" /></label><label>Status<input [(ngModel)]="recoveryForm['consciousness_status']" name="conc" /></label><label class="wide">Handover<input [(ngModel)]="recoveryForm['handover_notes']" name="handover" /></label></div><button class="primary" type="button" (click)="saveRecovery()">Save Recovery</button>
+        <div class="form-grid"><label>Transfer<select [(ngModel)]="recoveryForm['transfer_to']" name="transfer"><option>recovery</option><option>icu</option><option>ward</option><option>discharge</option></select></label><label>Pain<input type="number" [(ngModel)]="recoveryForm['pain_score']" name="pain" /></label><label>Status<input [(ngModel)]="recoveryForm['consciousness_status']" name="conc" /></label><label class="wide">Handover<input [(ngModel)]="recoveryForm['handover_notes']" name="handover" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveRecovery()">Save Recovery</button>
       }
 
       @if (modal === 'consumable') {
-        <div class="form-grid"><label>Item<input [(ngModel)]="consumableForm['item_name']" name="citem" /></label><label>Batch<input [(ngModel)]="consumableForm['batch_no']" name="batch" /></label><label>Qty<input type="number" [(ngModel)]="consumableForm['quantity_used']" name="qty" /></label><label>Charge<input type="number" [(ngModel)]="consumableForm['charged_amount']" name="ccharge" /></label></div><button class="primary" type="button" (click)="saveConsumable()">Save Consumable</button>
+        <div class="form-grid"><label>Item<input [(ngModel)]="consumableForm['item_name']" name="citem" /></label><label>Batch<input [(ngModel)]="consumableForm['batch_no']" name="batch" /></label><label>Qty<input type="number" [(ngModel)]="consumableForm['quantity_used']" name="qty" /></label><label>Charge<input type="number" [(ngModel)]="consumableForm['charged_amount']" name="ccharge" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveConsumable()">Save Consumable</button>
       }
 
       @if (modal === 'equipment') {
-        <div class="form-grid"><label>Name<input [(ngModel)]="equipmentForm['equipment_name']" name="ename" /></label><label>Charge<input type="number" [(ngModel)]="equipmentForm['charge_amount']" name="echarge" /></label><label class="wide">Notes<input [(ngModel)]="equipmentForm['usage_notes']" name="enote" /></label></div><button class="primary" type="button" (click)="saveEquipment()">Save Equipment</button>
+        <div class="form-grid"><label>Name<input [(ngModel)]="equipmentForm['equipment_name']" name="ename" /></label><label>Charge<input type="number" [(ngModel)]="equipmentForm['charge_amount']" name="echarge" /></label><label class="wide">Notes<input [(ngModel)]="equipmentForm['usage_notes']" name="enote" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveEquipment()">Save Equipment</button>
       }
 
       @if (modal === 'billing') {
-        <div class="form-grid"><label>Type<select [(ngModel)]="billingForm['charge_type']" name="btype"><option>procedure</option><option>room</option><option>surgeon_fee</option><option>anesthesia</option><option>consumable</option><option>implant</option><option>equipment</option><option>emergency_surcharge</option></select></label><label>Amount<input type="number" [(ngModel)]="billingForm['amount']" name="amount" /></label><label class="wide">Description<input [(ngModel)]="billingForm['description']" name="desc" /></label></div><button class="primary" type="button" (click)="saveBilling()">Save Charge</button>
+        <div class="form-grid"><label>Type<select [(ngModel)]="billingForm['charge_type']" name="btype"><option>procedure</option><option>room</option><option>surgeon_fee</option><option>anesthesia</option><option>consumable</option><option>implant</option><option>equipment</option><option>emergency_surcharge</option></select></label><label>Amount<input type="number" [(ngModel)]="billingForm['amount']" name="amount" /></label><label class="wide">Description<input [(ngModel)]="billingForm['description']" name="desc" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveBilling()">Save Charge</button>
       }
 
       @if (modal === 'document') {
-        <div class="form-grid"><label>Type<select [(ngModel)]="documentForm['document_type']" name="dtype"><option>consent</option><option>anesthesia_form</option><option>operative_note</option><option>lab_report</option><option>radiology_report</option><option>case_sheet</option></select></label><label>Title<input [(ngModel)]="documentForm['title']" name="title" /></label><label class="wide">Body<input [(ngModel)]="documentForm['body']" name="body" /></label></div><button class="primary" type="button" (click)="saveDocument()">Save Document</button>
+        <div class="form-grid"><label>Type<select [(ngModel)]="documentForm['document_type']" name="dtype"><option>consent</option><option>anesthesia_form</option><option>operative_note</option><option>lab_report</option><option>radiology_report</option><option>case_sheet</option></select></label><label>Title<input [(ngModel)]="documentForm['title']" name="title" /></label><label class="wide">Body<input [(ngModel)]="documentForm['body']" name="body" /></label></div><button class="primary" [disabled]="saving" type="button" (click)="saveDocument()">Save Document</button>
       }
     </form>
   </div>

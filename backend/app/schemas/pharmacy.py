@@ -355,8 +355,8 @@ class PharmacyDispenseCreate(BaseModel):
     source_visit_order_id: UUID | None = None
     prescription_ref: str | None = None
     medicine_name: str = Field(min_length=2, max_length=150)
-    quantity: Decimal
-    unit_price: Decimal
+    quantity: Decimal = Field(gt=0)
+    unit_price: Decimal = Field(ge=0)
     note: str | None = None
 
     @model_validator(mode="before")
@@ -374,11 +374,16 @@ class PharmacyDispenseCreate(BaseModel):
 
 
 class PharmacyDispenseReturnCreate(BaseModel):
-    quantity: Decimal = Field(gt=0)
+    request_id: str | None = Field(default=None, min_length=8, max_length=80)
+    source_issue_id: UUID | None = None
+    restock: bool = False
+    inspected: bool = False
+    quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     note: str | None = None
 
 
 class PharmacyDispenseRead(BaseModel):
+    return_history: list[dict] = []
     id: UUID
     patient_id: UUID | None = None
     billing_invoice_id: UUID | None = None

@@ -10,6 +10,7 @@ import { TabService } from './tab.service';
 import { TokenStorageService } from './token-storage.service';
 import { CurrentUserService } from './current-user.service';
 import { UiStateService } from './ui-state.service';
+import { ConnectionStateService } from './connection-state.service';
 import { ApiCacheService } from './api-cache.service';
 
 @Injectable({ providedIn: 'root' })
@@ -24,6 +25,7 @@ export class AuthService {
   private readonly apiCache = inject(ApiCacheService);
   private readonly tabService = inject(TabService);
   private readonly uiStateService = inject(UiStateService);
+  private readonly connection = inject(ConnectionStateService);
   private refreshInFlight$: Observable<LoginResponse> | null = null;
 
   async bootstrapSession(): Promise<void> {
@@ -61,7 +63,7 @@ export class AuthService {
     }
   }
 
-  login(username_or_email: string, password: string): Observable<User> {
+  login(username_or_email: string, password: string, expectedUserId?: string): Observable<User> {
     const payload = { username_or_email, password };
     return this.http
       .post<LoginResponse>(`${runtimeConfig.apiBaseUrl}/auth/login`, payload, {
@@ -83,6 +85,10 @@ export class AuthService {
       )
       .pipe(
         tap((response) => {
+          if (expectedUserId && (response.user.id !== expectedUserId || (response.user.principal_type ?? 'user') !== (this.sessionService.snapshot.user?.principal_type ?? 'user'))) {
+            throw { status: 403, message: 'Sign in with the same account to resume your open work.' };
+          }
+          this.connection.sessionExpired.set(false);
           this.apiCache.clearAll();
           this.persistTokens(response.tokens);
           this.currentUserService.setCachedUser(response.user);
@@ -194,7 +200,6 @@ export class AuthService {
       || request.headers.has('X-Retry-Attempt')
       || request.headers.has(AuthService.SKIP_AUTH_REFRESH_HEADER)
     ) {
-      this.clearSession(true);
       return throwError(() => ({ status: 401, code: 'unauthorized', message: 'Authentication failed' } as ApiError));
     }
 
@@ -209,7 +214,14 @@ export class AuthService {
         return next(retried);
       }),
       catchError((error) => {
-        this.clearSession(true);
+        if (error?.status === 401) {
+          if (this.sessionService.snapshot.authenticated) {
+            this.tokenStorage.clear();
+            this.connection.sessionExpired.set(true);
+          } else {
+            this.clearSession(true);
+          }
+        }
         return throwError(() => error);
       })
     );
@@ -235,6 +247,7 @@ export class AuthService {
   }
 
   clearSession(navigate = false): void {
+    this.connection.sessionExpired.set(false);
     this.tokenStorage.clear();
     this.currentUserService.clearCache();
     this.apiCache.clearAll();

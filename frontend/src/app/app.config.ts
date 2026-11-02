@@ -4,6 +4,7 @@ import { provideRouter, RouteReuseStrategy, withHashLocation, withRouterConfig }
 
 import { appRoutes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { offlineInterceptor } from './core/interceptors/offline.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 import { mutationSyncInterceptor } from './core/interceptors/mutation-sync.interceptor';
@@ -38,7 +39,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(appRoutes, withHashLocation(), withRouterConfig({ onSameUrlNavigation: 'reload' })),
-    provideHttpClient(withInterceptors([loadingInterceptor, errorInterceptor, authInterceptor, mutationSyncInterceptor])),
+    provideHttpClient(withInterceptors([loadingInterceptor, errorInterceptor, offlineInterceptor, authInterceptor, mutationSyncInterceptor])),
     TabRouteReuseStrategy,
     {
       provide: RouteReuseStrategy,

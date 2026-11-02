@@ -26,6 +26,7 @@ export interface HRDashboardSummary {
 }
 
 export interface HREmployee {
+  user_id?: string | null;
   id: string;
   staff_code: string;
   full_name: string;
@@ -139,6 +140,9 @@ export interface HRLeaveRequest {
 }
 
 export interface HRPayrollItem {
+  adjustment_earnings?: string | number;
+  adjustment_deductions?: string | number;
+  staff_meal_deduction?: string | number;
   id: string;
   employee_id: string;
   employee_name?: string | null;
@@ -162,6 +166,8 @@ export interface HRPayrollItem {
 }
 
 export interface HRPayrollRun {
+  created_by?: string | null;
+  approved_by_user_id?: string | null;
   id: string;
   payroll_month: string;
   department_id?: string | null;
@@ -236,4 +242,9 @@ export interface HRSetting {
   setting_key: string;
   setting_value?: string | null;
   description?: string | null;
+}
+
+export interface HRPayrollAdjustment {
+  id: string; employee_id: string; employee_name?: string; source_payroll_item_id?: string | null;
+  target_month: string; kind: string; amount: string | number; reason: string; status: string; created_by?: string;
 }

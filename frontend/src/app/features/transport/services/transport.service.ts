@@ -66,6 +66,8 @@ export class TransportService extends ApiBaseService {
     return this.cache.get(`transport:trips:${query}`, () => this.http.get<TransportTrip[]>(this.url(`/transport/trips${query}`)));
   }
 
+  setFare(id: string, payload: Record<string, unknown>): Observable<TransportTrip> { return this.http.patch<TransportTrip>(this.url(`/transport/trips/${id}/fare`),payload).pipe(tap(() => this.publish())); }
+
   updateTripStatus(tripId: string, payload: Record<string, unknown>): Observable<TransportTrip> {
     return this.http.patch<TransportTrip>(this.url(`/transport/trips/${tripId}/status`), payload).pipe(tap(() => this.publish()));
   }
@@ -84,6 +86,10 @@ export class TransportService extends ApiBaseService {
 
   listMaintenance(): Observable<TransportMaintenance[]> {
     return this.cache.get('transport:maintenance', () => this.http.get<TransportMaintenance[]>(this.url('/transport/maintenance')));
+  }
+
+  completeMaintenance(id: string): Observable<TransportMaintenance> {
+    return this.http.patch<TransportMaintenance>(this.url(`/transport/maintenance/${id}/complete`), {}).pipe(tap(() => this.publish()));
   }
 
   createMaintenance(payload: Partial<TransportMaintenance> | Record<string, unknown>): Observable<TransportMaintenance> {
@@ -120,8 +126,8 @@ export class TransportService extends ApiBaseService {
     this.dataSync.publish({
       name: 'data.updated',
       entityType: 'transport',
-      modules: ['transport', 'er', 'opd', 'ipd', 'billing', 'inventory', 'hr', 'notifications', 'dashboard'],
-      cachePrefixes: ['transport:', 'er:', 'opd:', 'ipd:', 'billing:', 'inventory:', 'hr:', 'notifications:', 'dashboard:'],
+      modules: ['transport', 'er', 'opd', 'ipd', 'billing', 'inventory', 'hr', 'notifications', 'accounting', 'dashboard'],
+      cachePrefixes: ['transport:', 'er:', 'opd:', 'ipd:', 'billing:', 'inventory:', 'hr:', 'notifications:', 'accounting:', 'dashboard:'],
       message: 'Transport updates are available.',
     });
   }

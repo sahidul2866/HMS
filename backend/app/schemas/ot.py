@@ -183,7 +183,7 @@ class OTBillingItemCreate(BaseModel):
     schedule_id: UUID
     charge_type: str
     description: str
-    amount: Decimal
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     payment_status: str = "pending"
 
 
@@ -211,3 +211,8 @@ class OTCaseSheetRead(BaseModel):
 class OTStatusUpdate(BaseModel):
     status: str
     note: str | None = None
+
+
+class OTRoomStatusUpdate(BaseModel):
+    status: str = Field(pattern='^(available|cleaning|maintenance|closed)$')
+    reason: str = Field(min_length=5,max_length=500)

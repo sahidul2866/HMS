@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.logging import request_id_ctx
@@ -31,7 +32,7 @@ def install_exception_handlers(app: FastAPI) -> None:
                 "request_id": request_id,
             },
         }
-        response = JSONResponse(status_code=status_code, content=payload)
+        response = JSONResponse(status_code=status_code, content=jsonable_encoder(payload, custom_encoder={Exception: str}))
         if request_id:
             response.headers["X-Request-ID"] = request_id
         return response

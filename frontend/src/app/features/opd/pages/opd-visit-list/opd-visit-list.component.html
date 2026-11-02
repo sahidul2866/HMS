@@ -1,4 +1,5 @@
 <section class="workspace-shell">
+  @if(accessNotice){<section class="page-card operational-access-state" role="status">{{accessNotice}}<button type="button" class="secondary-btn" (click)="loadVisits()">Refresh access</button></section>}
   <section class="page-card module-hero">
     <div class="hero-row">
       <div>
@@ -6,6 +7,7 @@
         <h1 class="page-title">Visit List</h1>
       </div>
       <div class="toolbar-row">
+        <button class="secondary-btn" type="button" (click)="navigateToQueue()">Doctor Serials &amp; PA</button>
         <button class="secondary-btn" type="button" (click)="navigateToNewPatient()">Add New Patient</button>
         <button class="primary-btn" type="button" (click)="navigateToRegisterVisit()">New Visit</button>
       </div>
@@ -45,6 +47,7 @@
               <option value="">All</option>
               <option value="paid">Paid</option>
               <option value="unpaid">Unpaid</option>
+              <option value="partial">Partially paid</option>
             </select>
           </label>
           <label class="field">
@@ -67,15 +70,12 @@
     </div>
 
     @if (displayedVisits.length) {
-    <table class="table">
+    <div class="table-wrap"><table class="table data-table opd-visits-table">
       <thead>
         <tr>
-          <th class="sortable-th" [ngClass]="sortClass('visit_number')" (click)="toggleSort('visit_number')">Visit No</th>
-          <th>Token</th>
+          <th class="sortable-th" [ngClass]="sortClass('visit_number')" (click)="toggleSort('visit_number')">Visit / serial</th>
           <th class="sortable-th" [ngClass]="sortClass('patient')" (click)="toggleSort('patient')">Patient</th>
-          <th class="sortable-th" [ngClass]="sortClass('department')" (click)="toggleSort('department')">Department</th>
           <th class="sortable-th" [ngClass]="sortClass('doctor')" (click)="toggleSort('doctor')">Doctor</th>
-          <th class="sortable-th" [ngClass]="sortClass('fee')" (click)="toggleSort('fee')">Fee</th>
           <th class="sortable-th" [ngClass]="sortClass('payment')" (click)="toggleSort('payment')">Payment</th>
           <th class="sortable-th" [ngClass]="sortClass('status')" (click)="toggleSort('status')">Status</th>
           <th>Actions</th>
@@ -84,15 +84,9 @@
       <tbody>
         @for (visit of displayedVisits; track visit.id) {
           <tr class="list-row" (click)="openVisit(visit.id)">
-            <td>{{ visit.visit_number }}</td>
-            <td>
-              <strong>{{ visit.queue_number || '-' }}</strong>
-              <span class="page-subtitle">{{ (visit.queue_status || 'waiting').replace('_', ' ') }}</span>
-            </td>
-            <td>{{ visit.patient.first_name }} {{ visit.patient.last_name }}</td>
-            <td>{{ visit.department_name }}</td>
-            <td>{{ visit.consulting_doctor_name }}</td>
-            <td>{{ formatCurrency(visit.consultation_fee) }}</td>
+            <td><strong class="record-reference" [title]="visit.visit_number">{{visit.visit_number}}</strong><small>Serial {{visit.queue_number||'—'}} · {{(visit.queue_status||'waiting').replaceAll('_',' ')}}</small></td>
+            <td><strong>{{visit.patient.first_name}} {{visit.patient.last_name}}</strong><small>{{visit.department_name}}</small></td>
+            <td>{{visit.consulting_doctor_name}}</td>
             <td>
               <div>{{ formatCurrency(visit.consultation_total || visit.consultation_fee) }}</div>
               <span class="page-subtitle">{{ visit.consultation_payment_status || 'unpaid' }}</span>
@@ -104,13 +98,13 @@
                 <div class="row-action-menu__panel">
                   <button type="button" (click)="openVisit(visit.id)">Open</button>
                   <button type="button" (click)="printPrescription(visit)">Print Prescription</button>
-                  @if (canStartVisit && isPaymentDone(visit)) {
+                  @if (canStartVisit && ['waiting', 'billed', 'in_consultation'].includes(visit.status)) {
                     <button type="button" (click)="startVisit(visit)">Start Visit</button>
                   }
                   @if (!isPaymentDone(visit) && session.hasPermission(permissions.billingPaymentCollect)) {
                     <button type="button" (click)="openPayment(visit)">Collect Payment</button>
                   }
-                  @if (session.hasPermission(permissions.ipdAdmissionManage) && visit.status !== 'admitted') {
+                  @if (session.hasAnyPermission([permissions.ipdAdmit, permissions.ipdAdmissionManage]) && !visit.converted_ipd_admission_id && visit.status !== 'cancelled') {
                     <button type="button" (click)="convertToIpd(visit)">Convert to IPD</button>
                   }
                 </div>
@@ -119,14 +113,14 @@
           </tr>
         }
       </tbody>
-    </table>
+    </table></div>
     <div class="pager-row">
       <button class="secondary-btn" type="button" [disabled]="page <= 1" (click)="previousPage()">Previous</button>
       <span>Page {{ page }} of {{ totalPages }}</span>
       <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
     </div>
     } @else {
-      <div class="table-empty">No OPD visits match the selected filters.</div>
+      <div class="table-empty">No OPD visits match the selected filters.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
     }
   </section>
 
@@ -141,7 +135,7 @@
           <div class="toolbar-row">
             <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Print Prescription</button>
             <button class="secondary-btn" type="button" (click)="closeVisit()">Close</button>
-            @if (canStartVisit && isPaymentDone(selectedVisit)) {
+            @if (canStartVisit && ['waiting', 'billed', 'in_consultation'].includes(selectedVisit.status)) {
               <button class="primary-btn" type="button" (click)="startVisit(selectedVisit)">Start Visit</button>
             }
           </div>
@@ -169,7 +163,7 @@
             </div>
             <div class="toolbar-row">
               <button class="secondary-btn" type="button" (click)="saveConsultation()" [disabled]="savingConsultation">Save Draft</button>
-              <button class="primary-btn" type="button" (click)="finalizePrescription()" [disabled]="savingConsultation">Finalize Prescription</button>
+              <button class="primary-btn" type="button" (click)="finalizePrescription()" [disabled]="savingConsultation || savingOrder || selectedVisit.status !== 'in_consultation'">Finalize Prescription</button>
             </div>
           </div>
 
@@ -316,7 +310,7 @@
 	                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="$event.preventDefault(); addPrescriptionMedicine()" placeholder="Extra instructions" />
 	                      <div class="suggestion-list">
 	                        @if (medicineSuggestionsLoading) {
-	                          <div class="suggestion-loading">Searching medicines...</div>
+	                          <div class="suggestion-loading" role="status" aria-busy="true">Searching medicines...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
 	                        }
 	                        @for (medicine of filteredMedicineSuggestions; track medicine.id) {
 	                          <button type="button" (click)="selectMedicineSuggestion(medicine, true)">
@@ -363,7 +357,7 @@
 	                      </div>
 	                      <div class="suggestion-list suggestion-list--compact">
 	                        @if (investigationSuggestionsLoading) {
-	                          <div class="suggestion-loading">Searching tests...</div>
+	                          <div class="suggestion-loading" role="status" aria-busy="true">Searching tests...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
 	                        }
 	                        @for (item of filteredInvestigationSuggestions; track item.id) {
 	                          <button type="button" (click)="selectInvestigationSuggestion(item, true)">

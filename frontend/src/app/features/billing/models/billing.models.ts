@@ -1,6 +1,9 @@
 import { Patient } from '../../patients/models/patient.models';
 
+export interface BillingType { id: string; code: string; name: string; department: string; }
+
 export interface BillingService {
+  billing_type_id?: string | null;
   id: string;
   service_code: string;
   name: string;
@@ -17,6 +20,7 @@ export interface BillingService {
 }
 
 export interface CreateBillingServicePayload {
+  billing_type_id?: string | null;
   branch_id?: string | null;
   service_code: string;
   name: string;
@@ -29,6 +33,7 @@ export interface CreateBillingServicePayload {
 }
 
 export interface UpdateBillingServiceControlsPayload {
+  billing_type_id?: string | null;
   max_discount_percentage?: number | null;
   max_discount_amount?: number | null;
   doctor_share_percentage: number;
@@ -59,9 +64,13 @@ export interface BillingInvoiceItemPayload {
   billing_service_id?: string | null;
   quantity: number;
   discount_percentage: number;
+  /** Flat Taka discount on the line; used instead of the percentage. */
+  discount_amount?: number | null;
   source_opd_visit_order_id?: string | null;
   source_record_type?: string | null;
   source_record_id?: string | null;
+  bed_charge_date?: string | null;
+  carry_forward_item_id?: string | null;
   source_label?: string | null;
   source_module?: string | null;
   source_item_type?: 'billing_service' | 'medicine' | 'investigation_setting' | null;
@@ -69,6 +78,8 @@ export interface BillingInvoiceItemPayload {
 }
 
 export interface CreateBillingInvoicePayload {
+  billing_type_id?: string | null;
+  discount_reason?: string | null;
   branch_id?: string | null;
   patient_id: string;
   source_opd_visit_id?: string | null;
@@ -77,6 +88,8 @@ export interface CreateBillingInvoicePayload {
   billing_stage?: string | null;
   internal_referral_user_id?: string | null;
   discount_percentage: number;
+  /** Flat Taka discount on the whole invoice; used instead of the percentage. */
+  discount_amount?: number | null;
   note?: string | null;
   items: BillingInvoiceItemPayload[];
 }
@@ -105,7 +118,10 @@ export interface BillingPayment {
   patient_id: string;
   receipt_number: string;
   payment_method: string;
+  payment_provider?: string | null;
+  reference_number?: string | null;
   amount: string;
+  amount_in_words?: string | null;
   note?: string | null;
   received_at: string;
   collected_by_user_id: string;
@@ -115,11 +131,18 @@ export interface BillingPayment {
 export interface BillingPaymentPayload {
   amount: number;
   payment_method: 'cash' | 'card' | 'mobile_banking' | 'bank_transfer';
+  /** bkash, nagad, rocket, upay or other, for mobile banking. */
+  payment_provider?: string | null;
+  /** TrxID, card approval code or bank / cheque reference. */
+  reference_number?: string | null;
   note?: string | null;
   received_at?: string | null;
 }
 
 export interface BillingRefund {
+  credit_amount?: string;
+  refunded_by_name?: string | null;
+  payment_method?: string;
   id: string;
   invoice_id: string;
   payment_id?: string | null;
@@ -135,6 +158,7 @@ export interface BillingRefund {
 }
 
 export interface BillingRefundPayload {
+  payment_method?: string;
   amount: number;
   payment_id?: string | null;
   reason: string;
@@ -142,6 +166,7 @@ export interface BillingRefundPayload {
 }
 
 export interface BillingReturnPayload {
+  payment_method?: string;
   items: Array<{ invoice_item_id: string; quantity: number }>;
   payment_id?: string | null;
   reason: string;
@@ -149,6 +174,8 @@ export interface BillingReturnPayload {
 }
 
 export interface BillingInvoiceItem {
+  net_amount?: string;
+  returnable_quantity?: string;
   id: string;
   billing_service_id?: string | null;
   source_entity_id?: string | null;
@@ -170,6 +197,14 @@ export interface BillingInvoiceItem {
 }
 
 export interface BillingInvoice {
+  credited_amount?: string;
+  net_payable_amount?: string;
+  billed_by_user_id: string;
+  billed_by_name?: string | null;
+  billing_type_id?: string | null;
+  billing_type_name?: string | null;
+  billing_department?: string | null;
+  discount_reason?: string | null;
   id: string;
   invoice_number: string;
   patient_id: string;
@@ -193,6 +228,9 @@ export interface BillingInvoice {
   paid_amount: string;
   refunded_amount: string;
   due_amount: string;
+  overpaid_amount?: string;
+  total_in_words?: string | null;
+  due_in_words?: string | null;
   referred_doctor_amount: string;
   note?: string | null;
   created_at: string;
@@ -202,6 +240,8 @@ export interface BillingInvoice {
 }
 
 export interface BillingInvoiceListItem {
+  credited_amount?: string;
+  net_payable_amount?: string;
   id: string;
   invoice_number: string;
   patient_id: string;
@@ -281,6 +321,8 @@ export interface BillingDraftItem {
   source_opd_visit_order_id?: string | null;
   source_record_type?: string | null;
   source_record_id?: string | null;
+  bed_charge_date?: string | null;
+  carry_forward_item_id?: string | null;
   warning?: string | null;
 }
 

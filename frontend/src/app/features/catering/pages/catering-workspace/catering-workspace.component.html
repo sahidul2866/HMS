@@ -6,9 +6,9 @@
       <p>Diet orders, kitchen preparation, delivery, safety checks, billing and stock visibility.</p>
     </div>
     <div class="header-actions">
-      <button type="button" (click)="openModal('diet-order')">New diet order</button>
-      <button type="button" class="secondary" (click)="generateMeals()">Generate meals</button>
-      <button type="button" class="secondary" (click)="openModal('staff-meal')">Staff meal</button>
+      <button *ngIf="access.hasPermission('catering.diet_order.create')" type="button" (click)="openModal('diet-order')">New diet order</button>
+      <button [disabled]="saving" type="button" class="secondary" *ngIf="access.hasPermission('catering.meal.prepare')" (click)="generateMeals()">Generate meals</button>
+      <button *ngIf="access.hasPermission('catering.staff_meal.manage')" type="button" class="secondary" (click)="openModal('staff-meal')">Staff meal</button>
     </div>
   </header>
 
@@ -20,17 +20,18 @@
   }
 
   <nav class="tabs">
-    <a [class.active]="tab() === 'dashboard'" routerLink="/catering/dashboard">Dashboard</a>
-    <a [class.active]="tab() === 'diet-orders'" routerLink="/catering/diet-orders">Patient Diet Orders</a>
-    <a [class.active]="tab() === 'kitchen'" routerLink="/catering/kitchen">Kitchen Queue</a>
-    <a [class.active]="tab() === 'schedule'" routerLink="/catering/schedule">Meal Schedule</a>
-    <a [class.active]="tab() === 'delivery'" routerLink="/catering/delivery">Delivery</a>
-    <a [class.active]="tab() === 'staff-meals'" routerLink="/catering/staff-meals">Staff Meals</a>
-    <a [class.active]="tab() === 'inventory'" routerLink="/catering/inventory">Inventory/Requisition</a>
-    <a [class.active]="tab() === 'reports'" routerLink="/catering/reports">Reports</a>
-    <a [class.active]="tab() === 'settings'" routerLink="/catering/settings">Settings</a>
+    <a *ngIf="access.hasPermission('catering.dashboard.view')" [class.active]="tab() === 'dashboard'" routerLink="/catering/dashboard">Dashboard</a>
+    <a *ngIf="access.hasPermission('catering.view')" [class.active]="tab() === 'diet-orders'" routerLink="/catering/diet-orders">Patient Diet Orders</a>
+    <a *ngIf="access.hasPermission('catering.kitchen_queue.view')" [class.active]="tab() === 'kitchen'" routerLink="/catering/kitchen">Kitchen Queue</a>
+    <a *ngIf="access.hasPermission('catering.settings.manage')" [class.active]="tab() === 'schedule'" routerLink="/catering/schedule">Meal Schedule</a>
+    <a *ngIf="access.hasPermission('catering.meal.deliver')" [class.active]="tab() === 'delivery'" routerLink="/catering/delivery">Delivery</a>
+    <a *ngIf="access.hasPermission('catering.staff_meal.manage')" [class.active]="tab() === 'staff-meals'" routerLink="/catering/staff-meals">Staff Meals</a>
+    <a *ngIf="access.hasPermission('catering.kitchen_queue.view')" [class.active]="tab() === 'inventory'" routerLink="/catering/inventory">Inventory/Requisition</a>
+    <a *ngIf="access.hasPermission('catering.report.view')" [class.active]="tab() === 'reports'" routerLink="/catering/reports">Reports</a>
+    <a *ngIf="access.hasPermission('catering.settings.manage')" [class.active]="tab() === 'settings'" routerLink="/catering/settings">Settings</a>
   </nav>
 
+  <details class="filter-disclosure"><summary>Filters · {{ filters.meal_date }}</summary>
   <section class="filter-bar">
     <label>Date <input type="date" [(ngModel)]="filters.meal_date" /></label>
     <label>Meal <select [(ngModel)]="filters.meal_type"><option value="">All</option>@for (schedule of schedules; track schedule.id) {<option [value]="schedule.meal_type">{{ schedule.display_name }}</option>}</select></label>
@@ -40,7 +41,7 @@
     <label>Kitchen <select [(ngModel)]="filters.kitchen_status"><option value="">All</option><option>scheduled</option><option>sent_to_kitchen</option><option>preparing</option><option>ready</option><option>on_hold</option><option>cancelled</option></select></label>
     <label>Delivery <select [(ngModel)]="filters.delivery_status"><option value="">All</option><option>pending</option><option>out_for_delivery</option><option>delivered</option><option>refused</option><option>missed</option></select></label>
     <button type="button" (click)="loadCurrentTab()">Apply</button>
-  </section>
+  </section></details>
 
   @if (tab() === 'dashboard' && dashboard) {
     <section class="metric-grid">
@@ -80,7 +81,7 @@
 
   @if (tab() === 'diet-orders') {
     <section class="table-panel">
-      <div class="panel-title"><h2>Patient Diet Orders</h2><button type="button" (click)="openModal('diet-order')">Add order</button></div>
+      <div class="panel-title"><h2>Patient Diet Orders</h2><button *ngIf="access.hasPermission('catering.diet_order.create')" type="button" (click)="openModal('diet-order')">Add order</button></div>
       <table>
         <thead><tr><th>Patient</th><th>Location</th><th>Diet</th><th>Restrictions</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
@@ -91,7 +92,7 @@
               <td>{{ order.diet_type_name }}<small>{{ order.meal_plan_name || 'Plan from schedule' }}</small></td>
               <td><span class="risk" *ngIf="order.allergies">Allergy: {{ order.allergies }}</span><small>{{ order.restrictions || '-' }}</small></td>
               <td><span [class]="statusClass(order.status)">{{ order.status }}</span></td>
-              <td><button type="button" class="small" *ngIf="order.status === 'pending_approval'" (click)="approveDietOrder(order)">Approve</button></td>
+              <td><button type="button" class="small" *ngIf="access.hasPermission('catering.diet_order.edit')" (click)="editDiet(order)">Edit diet</button><button type="button" class="small" *ngIf="access.hasPermission('catering.diet_order.approve') && order.status === 'pending_approval'" (click)="approveDietOrder(order)">Approve</button></td>
             </tr>
           }
         </tbody>
@@ -101,29 +102,33 @@
 
   @if (tab() === 'kitchen' || tab() === 'delivery' || tab() === 'inventory') {
     <section class="queue-list">
+      @if (!meals.length) {<div class="panel"><h2>No meals for these filters</h2><p>Check the meal date and filters. Kitchen staff can generate tickets for approved active diets.</p></div>}
       @for (meal of meals; track meal.id) {
         <article class="meal-row">
           <div>
             <strong>{{ meal.meal_number }}</strong>
             <span>{{ meal.patient_name }} · {{ meal.ward_name || '-' }}/{{ meal.bed_number || '-' }}</span>
             <small>{{ meal.diet_type_name }} · {{ meal.meal_type }} · Due {{ meal.due_at | date: 'shortTime' }}</small>
-            @if (meal.allergies || meal.restrictions || meal.safety_warnings.length) {
-              <p class="risk">{{ meal.safety_warnings.join(', ') || ('Allergy/Restriction: ' + (meal.allergies || meal.restrictions)) }}</p>
-            }
+            @if (meal.allergies) { <p class="risk">Allergies: {{ meal.allergies }}</p> }
+            @if (meal.restrictions) { <p>Restrictions: {{ meal.restrictions }}</p> }
+            @if (meal.safety_warnings.length) { <p class="risk">{{ meal.safety_warnings.join(', ') }}</p> }
           </div>
           <div class="status-stack">
-            <span [class]="statusClass(meal.preparation_status)">{{ meal.preparation_status }}</span>
-            <span [class]="statusClass(meal.delivery_status)">{{ meal.delivery_status }}</span>
+            <span *ngIf="meal.preparation_status !== meal.delivery_status" [class]="statusClass(meal.preparation_status)">{{ meal.preparation_status }}</span>
+            <span [class]="statusClass(meal.delivery_status)">{{ meal.delivery_status }}</span><small>Stock: {{ meal.inventory_status || 'not configured' }}</small>
+            @if (meal.billing_invoice_id) {<small>Invoice posted to cashier</small>@if(access.hasPermission('billing.view')) {<a [routerLink]="['/billing/list']" [queryParams]="{invoiceId: meal.billing_invoice_id}">View invoice</a>}}
+            @if (meal.posting_policy === 'manual_review') {<small>Legacy record: posting needs review</small>}
             @if (tab() === 'inventory') { <span [class]="statusClass(meal.inventory_status || 'not_configured')">{{ meal.inventory_status || 'not configured' }}</span> }
             @if (+meal.billable_amount) { <small>Billable {{ formatMoney(meal.billable_amount) }}</small> }
           </div>
-          <div class="quick-actions">
-            <button type="button" class="small" (click)="setMealStatus(meal, 'sent_to_kitchen')">Send</button>
-            <button type="button" class="small" (click)="setMealStatus(meal, 'preparing')">Prepare</button>
-            <button type="button" class="small" (click)="setMealStatus(meal, 'ready')">Ready</button>
-            <button type="button" class="small" (click)="setMealStatus(meal, undefined, 'out_for_delivery')">Out</button>
-            <button type="button" class="small primary" (click)="setMealStatus(meal, undefined, 'delivered')">Delivered</button>
-            <button type="button" class="small danger" (click)="setMealStatus(meal, undefined, 'refused')">Refused</button>
+          <div class="quick-actions"><button *ngIf="access.hasPermission('catering.meal.cancel') && !['delivered','cancelled','refused','missed'].includes(meal.delivery_status)" type="button" (click)="cancelMeal(meal)">Cancel meal</button>
+            <button *ngIf="access.hasPermission('catering.diet_order.approve') && meal.safety_warnings.length && !meal.override_reason && meal.preparation_status === 'on_hold'" type="button" (click)="authorizeMeal(meal)">Authorize safety exception</button>
+            <button *ngIf="access.hasPermission('catering.meal.prepare') && meal.preparation_status === 'scheduled'" type="button" class="small" (click)="setMealStatus(meal, 'sent_to_kitchen')">Send</button>
+            <button *ngIf="access.hasPermission('catering.meal.prepare') && ['scheduled','sent_to_kitchen','on_hold'].includes(meal.preparation_status)" type="button" class="small" (click)="setMealStatus(meal, 'preparing')">Prepare</button>
+            <button *ngIf="access.hasPermission('catering.meal.prepare') && meal.preparation_status === 'preparing'" type="button" class="small" (click)="setMealStatus(meal, 'ready')">Ready</button>
+            <button *ngIf="access.hasPermission('catering.meal.deliver') && meal.preparation_status === 'ready'" type="button" class="small" (click)="setMealStatus(meal, undefined, 'out_for_delivery')">Out</button>
+            <button *ngIf="access.hasPermission('catering.meal.deliver') && meal.delivery_status === 'out_for_delivery'" type="button" class="small primary" (click)="setMealStatus(meal, undefined, 'delivered')">Delivered</button>
+            <button *ngIf="access.hasPermission('catering.meal.deliver') && meal.delivery_status === 'out_for_delivery'" type="button" class="small danger" (click)="setMealStatus(meal, undefined, 'refused')">Refused</button>
           </div>
         </article>
       }
@@ -140,10 +145,10 @@
 
   @if (tab() === 'staff-meals') {
     <section class="table-panel">
-      <div class="panel-title"><h2>Staff Meals</h2><button type="button" (click)="openModal('staff-meal')">New staff meal</button></div>
+      <div class="panel-title"><h2>Staff Meals</h2><button *ngIf="access.hasPermission('catering.staff_meal.manage')" type="button" (click)="openModal('staff-meal')">New staff meal</button></div>
       <table><thead><tr><th>Staff</th><th>Meal</th><th>Eligibility</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @for (item of staffMeals; track item.id) {
-          <tr><td>{{ item.staff_name }}<small>{{ item.staff_code }} {{ item.department_name || '' }}</small></td><td>{{ item.meal_date }} · {{ item.meal_type }}</td><td>{{ item.eligibility_type }}</td><td>{{ formatMoney(item.amount) }}</td><td><span [class]="statusClass(item.status)">{{ item.status }}</span></td><td><button type="button" class="small" (click)="updateStaffMealStatus(item, 'issued')">Issue</button><button type="button" class="small primary" (click)="updateStaffMealStatus(item, 'served')">Served</button></td></tr>
+          <tr><td>{{ item.staff_name }}<small>{{ item.staff_code }} {{ item.department_name || '' }}</small></td><td>{{ item.meal_date }} · {{ item.meal_type }}</td><td>{{ item.eligibility_type }}</td><td>{{ formatMoney(item.amount) }}</td><td><span [class]="statusClass(item.status)">{{ item.status }}</span><small *ngIf="item.payroll_deductible">Payroll: {{ item.deduction_state || 'manual review' }}</small></td><td><button type="button" class="small" *ngIf="item.status === 'ordered'" (click)="updateStaffMealStatus(item, 'issued')">Issue</button><button type="button" class="small primary" *ngIf="item.status === 'issued'" (click)="updateStaffMealStatus(item, 'served')">Served</button></td></tr>
         }
       </tbody></table>
     </section>
@@ -165,6 +170,7 @@
     </section>
   }
 
+  @if(tab() === 'reports') {<details class="table-panel"><summary>Automatic posting history</summary><p>Source-linked invoices and balanced accounting entries. Prepared food is consumed, including refused/cancelled portions.</p>@for (post of postings; track post.id) {<div class="report-row"><span>{{ post.source_type }} · {{ post.event }}</span><strong>{{ formatMoney(post.amount) }}</strong><small>{{ post.journal_id ? 'Journal posted' : 'Review required' }}</small></div>} @empty {<p>No automatic postings yet.</p>}</details>}
   @if (tab() === 'settings') {
     <section class="table-panel">
       <div class="panel-title"><h2>Catering Settings</h2><button type="button" (click)="openModal('setting')">Add setting</button></div>
@@ -173,42 +179,43 @@
   }
 
   @if (modal) {
-    <div class="modal-backdrop" (click)="closeModal()"></div>
-    <section class="modal">
-      <button type="button" class="close" (click)="closeModal()">x</button>
+    <div class="modal-backdrop" (click)="closeModal()">
+    <section class="modal-card catering-dialog" appDialog (appDialogClose)="closeModal()" (click)="$event.stopPropagation()">
+      <button type="button" class="close" aria-label="Close dialog" (click)="closeModal()">x</button>
       @if (modal === 'diet-order') {
-        <h2>Patient diet order</h2>
+        @if (error) {<p class="alert error" role="alert">{{ error }}</p>}<h2>Patient diet order</h2>
         <div class="form-grid">
-          <label>Patient <select [(ngModel)]="dietOrderForm['patient_id']">@for (patient of patients; track patient.id) {<option [value]="patient.id">{{ patient.first_name }} {{ patient.last_name }} · {{ patient.patient_number }}</option>}</select></label>
+          <label>Patient <select [disabled]="!!editingDietId" (ngModelChange)="dietOrderForm['patient_id']=$event; dietOrderForm['ipd_admission_id']=''; loadEncounters()" [(ngModel)]="dietOrderForm['patient_id']">@for (patient of patients; track patient.id) {<option [value]="patient.id">{{ patient.first_name }} {{ patient.last_name }} · {{ patient.patient_number }}</option>}</select></label>
           <label>Diet type <select [(ngModel)]="dietOrderForm['diet_type_id']">@for (diet of dietTypes; track diet.id) {<option [value]="diet.id">{{ diet.name }}</option>}</select></label>
           <label>Meal plan <select [(ngModel)]="dietOrderForm['meal_plan_id']"><option value="">Schedule based</option>@for (plan of mealPlans; track plan.id) {<option [value]="plan.id">{{ plan.name }} · {{ plan.meal_type }}</option>}</select></label>
-          <label>Admission/Visit <input [(ngModel)]="dietOrderForm['admission_number']" /></label>
+          <label>Active admission<select [(ngModel)]="dietOrderForm['ipd_admission_id']" (change)="selectEncounter()"><option value="">No linked admission</option>@for (encounter of encounters; track encounter.id) {<option [value]="encounter.id">{{ encounter.number }} · {{ encounter.ward }} / {{ encounter.bed }}</option>}</select></label><label>Admission/Visit <input [(ngModel)]="dietOrderForm['admission_number']" /></label>
           <label>Ward <input [(ngModel)]="dietOrderForm['ward_name']" /></label>
           <label>Bed <input [(ngModel)]="dietOrderForm['bed_number']" /></label>
           <label>Start <input type="datetime-local" [(ngModel)]="dietOrderForm['start_at']" /></label>
-          <label>End <input type="datetime-local" [(ngModel)]="dietOrderForm['end_at']" /></label>
+          <label>End <input type="datetime-local" [(ngModel)]="dietOrderForm['end_at']" /></label>@if(editingDietId) {<label>Order status<select name="diet_status" [(ngModel)]="dietOrderForm['status']"><option value="active">Active (renew approval when required)</option><option value="stopped">Stopped</option><option value="cancelled">Cancelled</option></select></label>}
           <label>Allergies <textarea [(ngModel)]="dietOrderForm['allergies']"></textarea></label>
           <label>Restrictions <textarea [(ngModel)]="dietOrderForm['restrictions']"></textarea></label>
           <label>Special instructions <textarea [(ngModel)]="dietOrderForm['special_instructions']"></textarea></label>
           <label>Nutrition notes <textarea [(ngModel)]="dietOrderForm['nutrition_notes']"></textarea></label>
         </div>
-        <button type="button" (click)="saveDietOrder()">Save diet order</button>
+        <button [disabled]="saving" type="button" (click)="saveDietOrder()">Save diet order</button>
       }
       @if (modal === 'meal-plan') {
-        <h2>Meal plan</h2><div class="form-grid"><label>Name <input [(ngModel)]="mealPlanForm['name']" /></label><label>Diet <select [(ngModel)]="mealPlanForm['diet_type_id']">@for (diet of dietTypes; track diet.id) {<option [value]="diet.id">{{ diet.name }}</option>}</select></label><label>Meal <input [(ngModel)]="mealPlanForm['meal_type']" /></label><label>Charge <input type="number" [(ngModel)]="mealPlanForm['billable_amount']" /></label><label>Ingredients <textarea [(ngModel)]="mealPlanForm['ingredients']"></textarea></label><label>Allergens <textarea [(ngModel)]="mealPlanForm['allergens']"></textarea></label></div><button type="button" (click)="saveMealPlan()">Save plan</button>
+        <h2>Meal plan</h2><div class="form-grid"><label>Name <input [(ngModel)]="mealPlanForm['name']" /></label><label>Diet <select [(ngModel)]="mealPlanForm['diet_type_id']">@for (diet of dietTypes; track diet.id) {<option [value]="diet.id">{{ diet.name }}</option>}</select></label><label>Meal <input [(ngModel)]="mealPlanForm['meal_type']" /></label><label>Charge <input type="number" min="0" step="0.01" [(ngModel)]="mealPlanForm['billable_amount']" /></label><label>Stock item<select name="plan_stock_item" [(ngModel)]="mealPlanForm['inventory_item_id']"><option value="">No stock recipe</option>@for (item of stockItems; track item.id) {<option [value]="item.id">{{ item.name }} · {{ item.unit }}</option>}</select></label><label>Kitchen store<select name="plan_stock_store" [(ngModel)]="mealPlanForm['inventory_store_id']"><option value="">Choose store</option>@for (store of stockStores; track store.id) {<option [value]="store.id">{{ store.name }}</option>}</select></label><label>Quantity per meal<input name="plan_stock_quantity" min="0" type="number" step="0.01" [(ngModel)]="mealPlanForm['inventory_quantity']" /></label><label>Ingredients <textarea [(ngModel)]="mealPlanForm['ingredients']"></textarea></label><label>Allergens <textarea [(ngModel)]="mealPlanForm['allergens']"></textarea></label></div><button [disabled]="saving" type="button" (click)="saveMealPlan()">Save plan</button>
       }
       @if (modal === 'diet-type') {
-        <h2>Diet type</h2><div class="form-grid"><label>Code <input [(ngModel)]="dietTypeForm['code']" /></label><label>Name <input [(ngModel)]="dietTypeForm['name']" /></label><label>Description <textarea [(ngModel)]="dietTypeForm['description']"></textarea></label><label>Default restrictions <textarea [(ngModel)]="dietTypeForm['default_restrictions']"></textarea></label><label class="check"><input type="checkbox" [(ngModel)]="dietTypeForm['is_npo']" /> NPO</label><label class="check"><input type="checkbox" [(ngModel)]="dietTypeForm['requires_approval']" /> Requires approval</label></div><button type="button" (click)="saveDietType()">Save diet type</button>
+        <h2>Diet type</h2><div class="form-grid"><label>Code <input [(ngModel)]="dietTypeForm['code']" /></label><label>Name <input [(ngModel)]="dietTypeForm['name']" /></label><label>Description <textarea [(ngModel)]="dietTypeForm['description']"></textarea></label><label>Default restrictions <textarea [(ngModel)]="dietTypeForm['default_restrictions']"></textarea></label><label class="check"><input type="checkbox" [(ngModel)]="dietTypeForm['is_npo']" /> NPO</label><label class="check"><input type="checkbox" [(ngModel)]="dietTypeForm['requires_approval']" /> Requires approval</label></div><button [disabled]="saving" type="button" (click)="saveDietType()">Save diet type</button>
       }
       @if (modal === 'schedule') {
-        <h2>Meal schedule</h2><div class="form-grid"><label>Meal type <input [(ngModel)]="scheduleForm['meal_type']" /></label><label>Display name <input [(ngModel)]="scheduleForm['display_name']" /></label><label>Serving time <input type="time" [(ngModel)]="scheduleForm['serving_time']" /></label><label>Cutoff minutes <input type="number" [(ngModel)]="scheduleForm['cutoff_minutes']" /></label></div><button type="button" (click)="saveSchedule()">Save schedule</button>
+        <h2>Meal schedule</h2><div class="form-grid"><label>Meal type <input [(ngModel)]="scheduleForm['meal_type']" /></label><label>Display name <input [(ngModel)]="scheduleForm['display_name']" /></label><label>Serving time <input type="time" [(ngModel)]="scheduleForm['serving_time']" /></label><label>Cutoff minutes <input type="number" [(ngModel)]="scheduleForm['cutoff_minutes']" /></label></div><button [disabled]="saving" type="button" (click)="saveSchedule()">Save schedule</button>
       }
       @if (modal === 'staff-meal') {
-        <h2>Staff meal</h2><div class="form-grid"><label>Employee <select [(ngModel)]="staffMealForm['employee_id']"><option value="">Manual staff</option>@for (employee of employees; track employee.id) {<option [value]="employee.id">{{ employee.full_name }} · {{ employee.staff_code }}</option>}</select></label><label>Name <input [(ngModel)]="staffMealForm['staff_name']" /></label><label>Date <input type="date" [(ngModel)]="staffMealForm['meal_date']" /></label><label>Meal <input [(ngModel)]="staffMealForm['meal_type']" /></label><label>Eligibility <select [(ngModel)]="staffMealForm['eligibility_type']"><option>paid</option><option>duty_free</option><option>complimentary</option></select></label><label>Amount <input type="number" [(ngModel)]="staffMealForm['amount']" /></label><label class="check"><input type="checkbox" [(ngModel)]="staffMealForm['payroll_deductible']" /> Payroll deduction</label><label>Remarks <textarea [(ngModel)]="staffMealForm['remarks']"></textarea></label></div><button type="button" (click)="saveStaffMeal()">Save staff meal</button>
+        <h2>Staff meal</h2><div class="form-grid"><label>Employee <select [(ngModel)]="staffMealForm['employee_id']"><option value="">Manual staff</option>@for (employee of employees; track employee.id) {<option [value]="employee.id">{{ employee.full_name }} · {{ employee.staff_code }}</option>}</select></label><label>Name <input [(ngModel)]="staffMealForm['staff_name']" /></label><label>Date <input type="date" [(ngModel)]="staffMealForm['meal_date']" /></label><label>Meal <input [(ngModel)]="staffMealForm['meal_type']" /></label><label>Eligibility <select [(ngModel)]="staffMealForm['eligibility_type']"><option>paid</option><option>duty_free</option><option>complimentary</option></select></label><label>Amount <input type="number" min="0" step="0.01" [(ngModel)]="staffMealForm['amount']" /></label><label class="check"><input type="checkbox" [(ngModel)]="staffMealForm['payroll_deductible']" /> Deduct served meal in payroll</label><label>Remarks <textarea [(ngModel)]="staffMealForm['remarks']"></textarea></label></div><button [disabled]="saving" type="button" (click)="saveStaffMeal()">Save staff meal</button>
       }
       @if (modal === 'setting') {
-        <h2>Catering setting</h2><div class="form-grid"><label>Key <input [(ngModel)]="settingForm['setting_key']" /></label><label>Value <textarea [(ngModel)]="settingForm['setting_value']"></textarea></label><label>Description <textarea [(ngModel)]="settingForm['description']"></textarea></label></div><button type="button" (click)="saveSetting()">Save setting</button>
+        <h2>Catering setting</h2><div class="form-grid"><label>Key <input [(ngModel)]="settingForm['setting_key']" /></label><label>Value <textarea [(ngModel)]="settingForm['setting_value']"></textarea></label><label>Description <textarea [(ngModel)]="settingForm['description']"></textarea></label></div><button [disabled]="saving" type="button" (click)="saveSetting()">Save setting</button>
       }
     </section>
+    </div>
   }
 </section>

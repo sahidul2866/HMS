@@ -26,6 +26,7 @@ export interface CateringDietType {
 }
 
 export interface CateringMealPlan {
+  inventory_store_id?: string | null;
   id: string;
   diet_type_id?: string | null;
   diet_type_name?: string | null;
@@ -83,6 +84,8 @@ export interface CateringDietOrder {
 }
 
 export interface CateringMealTask {
+  billing_invoice_id?: string | null;
+  posting_policy?: string;
   id: string;
   diet_order_id: string;
   patient_id: string;
@@ -120,6 +123,8 @@ export interface CateringMealTask {
 }
 
 export interface CateringStaffMeal {
+  deduction_state?: string;
+  payroll_item_id?: string | null;
   id: string;
   employee_id?: string | null;
   department_id?: string | null;

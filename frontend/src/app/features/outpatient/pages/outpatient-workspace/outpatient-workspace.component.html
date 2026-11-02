@@ -1,6 +1,6 @@
 <section class="outpatient-shell">
   <header class="module-header">
-    <div><p class="eyebrow">Unified Outpatient</p><h1>OPD + Telemedicine Queue</h1></div>
+    <div><p class="eyebrow">Unified Outpatient</p><h1>{{tab()==='dashboard'?'Outpatient overview':tab()==='reports'?'Outpatient reports':tab()==='consultation'?'Outpatient consultation':'Outpatient queue'}}</h1></div>
     <button type="button" (click)="loadCurrentTab()">Refresh</button>
   </header>
 
@@ -34,7 +34,7 @@
   <section *ngIf="tab() === 'queue' || tab() === 'consultation'" class="queue-layout">
     <section class="table-section">
       <h2>Doctor Queue</h2>
-      <table>
+      <div class="table-wrap"><table>
         <thead><tr><th>Token</th><th>Patient</th><th>Mode</th><th>Status</th><th>Wait</th><th></th></tr></thead>
         <tbody>
           <tr *ngFor="let item of queue" [class.active-row]="selected?.token_id === item.token_id">
@@ -46,7 +46,7 @@
             <td><button type="button" (click)="selected = item">Open</button></td>
           </tr>
         </tbody>
-      </table>
+      </table></div>
     </section>
 
     <section class="table-section consult-panel" *ngIf="selected">
@@ -76,6 +76,6 @@
       <div class="actions"><select [(ngModel)]="reportFilters.report_type" name="reportType"><option value="queue_waiting_time">Queue waiting time</option><option value="opd_visit">OPD visit</option><option value="telemedicine_visit">Telemedicine visit</option><option value="doctor_wise">Doctor-wise</option><option value="no_show">No-show</option><option value="follow_up">Follow-up</option><option value="revenue">Revenue</option></select><button type="button" (click)="loadReport()">Run</button></div>
     </div>
     <div class="report-totals"><span *ngFor="let item of report?.totals | keyvalue">{{ item.key }}: <strong>{{ item.value }}</strong></span></div>
-    <table *ngIf="report?.rows?.length"><thead><tr><th *ngFor="let col of (report?.rows?.[0] || {}) | keyvalue">{{ col.key }}</th></tr></thead><tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let col of row | keyvalue">{{ rowValue(row, col.key) }}</td></tr></tbody></table>
+    <div class="table-wrap"><table *ngIf="report?.rows?.length"><thead><tr><th *ngFor="let col of (report?.rows?.[0] || {}) | keyvalue">{{ col.key }}</th></tr></thead><tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let col of row | keyvalue">{{ rowValue(row, col.key) }}</td></tr></tbody></table></div>
   </section>
 </section>

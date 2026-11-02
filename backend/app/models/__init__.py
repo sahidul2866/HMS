@@ -343,3 +343,5 @@ __all__ = [
     "user_permissions",
     "user_roles",
 ]
+
+from app.models.operational_posting import OperationalPosting, HRSalaryRevision, HRPayrollAdjustment

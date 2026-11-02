@@ -99,6 +99,7 @@ PERMISSION_CATALOG = [
     ("pharmacy.view", "pharmacy", "view", "View pharmacy module"),
     ("pharmacy.dispense", "pharmacy", "dispense", "Dispense medicine"),
     ("pharmacy.sale.create", "pharmacy", "sale.create", "Create pharmacy sales"),
+    ("pharmacy.stock.approve", "pharmacy", "stock.approve", "Approve stock reconciliation and disposal evidence"),
     ("pharmacy.return", "pharmacy", "return", "Process pharmacy returns"),
     ("pharmacy.stock.adjust", "pharmacy", "stock.adjust", "Adjust pharmacy stock"),
     ("pharmacy.purchase.manage", "pharmacy", "purchase.manage", "Manage pharmacy purchases"),
@@ -360,6 +361,7 @@ ROLE_CATALOG = {
         "patient.create",
         "appointment.view",
         "opd.view",
+        "opd.view.doctor_wise",
         "opd.visit.create",
         "ipd.view",
         "ipd.admit",
@@ -398,6 +400,7 @@ ROLE_CATALOG = {
         "appointment.book",
         "appointment.manage",
         "opd.view",
+        "opd.view.doctor_wise",
         "opd.visit.create",
         "opd.visit.edit",
         "opd.queue.view",
@@ -417,6 +420,7 @@ ROLE_CATALOG = {
         "ot.schedule.manage",
         "ot.preop.manage",
         "ot.workflow.manage",
+        "ot.inventory.manage",
         "ot.documents.manage",
         "ot.reports.view",
         "queue.scope.all",
@@ -452,6 +456,7 @@ ROLE_CATALOG = {
         "ot.billing.manage",
         "billing.view",
         "billing.invoice.create",
+        "billing.item.service",
         "billing.payment.collect",
     ],
     "HR_MANAGER": [
@@ -520,6 +525,7 @@ ROLE_CATALOG = {
         "appointment.manage",
         "appointment.cancel",
         "opd.view",
+        "opd.view.doctor_wise",
         "opd.visit.create",
         "opd.visit.edit",
         "billing.view",
@@ -729,6 +735,7 @@ ROLE_CATALOG = {
         "patient.view",
         "appointment.view",
         "opd.view",
+        "opd.view.doctor_wise",
         "ipd.view",
         "er.view",
         "laboratory.view",
@@ -755,6 +762,14 @@ ROLE_CATALOG = {
         "blood_bank.scope.all",
     ],
 }
+
+ROLE_CATALOG["HR_MANAGER"].append("hr.payroll.approve")
+ROLE_CATALOG["TRANSPORT_MANAGER"] = ["dashboard.view", "patient.view", "hr.view", "transport.view", "transport.dashboard.view", "transport.vehicle.create", "transport.vehicle.edit", "transport.vehicle.status.update", "transport.driver.manage", "transport.request.create", "transport.request.approve", "transport.dispatch", "transport.trip.update", "transport.trip.complete", "transport.trip.cancel", "transport.maintenance.manage", "transport.fuel.manage", "transport.billing.manage", "transport.report.view", "transport.report.export", "transport.settings.manage"]
+ROLE_CATALOG["TRANSPORT_DRIVER"] = ["dashboard.view", "transport.view", "transport.trip.update", "transport.trip.complete"]
+ROLE_CATALOG["CATERING_MANAGER"] = ["dashboard.view", "catering.view", "catering.dashboard.view", "catering.kitchen_queue.view", "catering.meal.prepare", "catering.meal.deliver", "catering.meal.cancel", "catering.staff_meal.manage", "catering.report.view", "catering.report.export", "catering.settings.manage"]
+
+for code in ('KITCHEN_STAFF','CATERING_MANAGER','TRANSPORT_DRIVER','TRANSPORT_MANAGER'):
+    ROLE_CATALOG[code].append('billing.item.service')
 
 for role_code, permissions in ROLE_CATALOG.items():
     if role_code != "PATIENT" and "scanner.use" not in permissions:

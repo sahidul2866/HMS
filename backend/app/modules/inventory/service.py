@@ -106,6 +106,12 @@ class InventoryService:
         if actor.branch_id and branch_id and actor.branch_id != branch_id:
             raise AppException(403, "forbidden", "Record belongs to a different branch")
 
+    def _bootstrap_stores(self, actor):
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        self._ensure_default_stores(actor)
+        self.db.commit()
+
     def _ensure_default_stores(self, actor: User) -> InventoryStore:
         main = self.repository.get_main_store(actor.branch_id)
         if main:
@@ -153,11 +159,14 @@ class InventoryService:
                 continue
             if self.repository.get_store_balance(main.id, item.id):
                 continue
+            known=self.db.scalar(select(func.coalesce(func.sum(InventoryStoreItem.quantity_on_hand),0)).where(InventoryStoreItem.item_id==item.id)) or Decimal(0)
+            unallocated=Decimal(item.stock_quantity)-Decimal(known)
+            if unallocated<=0:continue
             balance = InventoryStoreItem(
                 id=uuid4(),
                 store_id=main.id,
                 item_id=item.id,
-                quantity_on_hand=item.stock_quantity,
+                quantity_on_hand=unallocated,
                 reserved_quantity=Decimal(0),
                 reorder_level=item.reorder_level or Decimal(0),
                 minimum_stock_level=item.minimum_stock_level or Decimal(0),
@@ -462,7 +471,7 @@ class InventoryService:
 
     def list_stores(self, page: int = 1, page_size: int = 50, q: str | None = None, include_inactive: bool = False, user: User | None = None):
         if user:
-            self._ensure_default_stores(user)
+            self._bootstrap_stores(user)
         stmt = self.repository.list_stores(branch_id=user.branch_id if user else None, q=q, include_inactive=include_inactive)
         stmt = self._filter_store_stmt(stmt, user, InventoryStore.id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
@@ -511,7 +520,7 @@ class InventoryService:
 
     def list_store_balances(self, page: int = 1, page_size: int = 100, q: str | None = None, store_id: str | None = None, item_id: str | None = None, stock_status: str | None = None, user: User | None = None):
         if user:
-            self._ensure_default_stores(user)
+            self._bootstrap_stores(user)
         stmt = self.repository.list_store_balances(branch_id=user.branch_id if user else None, store_id=store_id, item_id=item_id, q=q, stock_status=stock_status)
         stmt = self._filter_store_stmt(stmt, user, InventoryStoreItem.store_id)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
@@ -521,6 +530,15 @@ class InventoryService:
         stmt = self.repository.list_items(branch_id=user.branch_id if user else None, q=q, category_id=category_id, supplier_id=supplier_id, low_stock=low_stock)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
         return [self._serialize_item(item) for item in items], total
+
+    def get_batch(self, entity_id, user):
+        batch = self.db.get(StockBatch, entity_id)
+        if not batch or not batch.is_active or not batch.item or not batch.item.is_active:
+            raise AppException(404, "stock_batch_not_found", "Stock batch is unavailable")
+        self._ensure_branch_scope(batch.item, user)
+        if batch.store:
+            self._ensure_branch_scope(batch.store, user)
+        return batch
 
     def get_item(self, entity_id: str, user: User | None = None):
         item = self.repository.get_item(entity_id)
@@ -683,7 +701,13 @@ class InventoryService:
         ) for record in items], total
 
     def create_receiving(self, payload: StockReceivingCreate, actor: User, context: dict[str, str | None]):
+        from app.modules.support_posting.service import lock_branch,journal,ZERO
+        lock_branch(self.db,actor)
+        expected=(Decimal(payload.quantity)*Decimal(payload.unit_cost)).quantize(Decimal('.01'))
+        if Decimal(payload.total_cost).quantize(Decimal('.01'))!=expected:
+            raise AppException(422,'receiving_cost_mismatch','Total cost must equal quantity multiplied by unit cost')
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         store = self._get_store_for_update(str(payload.store_id) if payload.store_id else None, actor)
         batch = None
         if payload.batch_no and item.is_batch_tracked:
@@ -735,6 +759,7 @@ class InventoryService:
         )
         self.repository.create(receiving)
         self._change_store_stock(store=store, item=item, delta=payload.quantity, actor=actor, movement_type="receive", reference_type="receiving", reference_id=str(receiving.id), batch=batch, note=payload.note, unit_cost=payload.unit_cost)
+        journal(self.db,actor,"inventory_receiving",receiving.id,"receive",[("1300",expected,ZERO),("2400",ZERO,expected)],details={"item_id":str(item.id),"store_id":str(store.id),"quantity":str(payload.quantity)})
         self._commit_and_log(actor=actor, action="inventory.receive.create", entity_type="StockReceiving", entity_id=str(receiving.id), detail={"item": item.name, "quantity": str(payload.quantity)}, context=context)
         return StockReceivingRead(
             id=receiving.id,
@@ -783,6 +808,7 @@ class InventoryService:
 
     def create_issue(self, payload: StockIssueCreate, actor: User, context: dict[str, str | None]):
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         store = self._get_store_for_update(str(payload.store_id) if payload.store_id else None, actor)
         balance = self._get_or_create_balance(store, item, actor, for_update=True)
         if payload.quantity > balance.quantity_on_hand:
@@ -863,6 +889,7 @@ class InventoryService:
 
     def create_transfer(self, payload: StockTransferCreate, actor: User, context: dict[str, str | None]):
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         source_store = self._get_store_for_update(str(payload.source_store_id) if payload.source_store_id else None, actor)
         destination_store = self._get_store_for_update(str(payload.destination_store_id) if payload.destination_store_id else None, actor)
         source_balance = self._get_or_create_balance(source_store, item, actor, for_update=True)
@@ -974,6 +1001,7 @@ class InventoryService:
 
     def create_adjustment(self, payload: StockAdjustmentCreate, actor: User, context: dict[str, str | None]):
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         store = self._get_store_for_update(str(payload.store_id) if payload.store_id else None, actor)
         balance = self._get_or_create_balance(store, item, actor, for_update=True)
         batch = self._get_batch_for_update(str(payload.batch_id)) if payload.batch_id else None
@@ -1041,6 +1069,7 @@ class InventoryService:
 
     def create_purchase_request(self, payload: PurchaseRequestCreate, actor: User, context: dict[str, str | None]):
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         request = PurchaseRequest(
             id=uuid4(),
             item_id=item.id,
@@ -1133,7 +1162,7 @@ class InventoryService:
 
     def list_requisitions(self, page: int = 1, page_size: int = 50, q: str | None = None, store_id: str | None = None, status: str | None = None, user: User | None = None):
         if user:
-            self._ensure_default_stores(user)
+            self._bootstrap_stores(user)
         stmt = self.repository.list_requisitions(branch_id=user.branch_id if user else None, q=q, store_id=store_id, status=status)
         stmt = self._filter_requisition_store_stmt(stmt, user)
         items, total = self._paginate(stmt, page=page, page_size=page_size)
@@ -1141,6 +1170,7 @@ class InventoryService:
 
     def create_requisition(self, payload: InventoryRequisitionCreate, actor: User, context: dict[str, str | None]):
         item = self._get_item_for_update(str(payload.item_id))
+        self._ensure_branch_scope(item,actor)
         destination = self._get_store_for_update(str(payload.destination_store_id), actor)
         source = self._get_store_for_update(str(payload.source_store_id) if payload.source_store_id else None, actor)
         req = InventoryRequisition(
@@ -1502,7 +1532,7 @@ class InventoryService:
     def get_dashboard_summary(self, user: User | None = None):
         branch_id = user.branch_id if user else None
         if user:
-            self._ensure_default_stores(user)
+            self._bootstrap_stores(user)
         allowed_store_ids = self._allowed_store_ids(user)
         allowed_store_values = self._allowed_store_values(user)
         scoped_store_ids = self._store_ids_for_scope_values(allowed_store_values) if allowed_store_values else None

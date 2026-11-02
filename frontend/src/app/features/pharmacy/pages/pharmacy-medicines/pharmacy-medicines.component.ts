@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
+import { SessionService } from '../../../../core/services/session.service';
 import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { PharmacyCompany, PharmacyGeneric, PharmacyMedicine, PharmacyMedicineType } from '../../models/pharmacy.models';
@@ -21,6 +22,10 @@ export class PharmacyMedicinesComponent {
   private readonly notificationService = inject(NotificationService);
   private readonly confirmationService = inject(ActionConfirmationService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  readonly session = inject(SessionService);
+  medicineFormOpen = false;
+  scannedMedicine: PharmacyMedicine | null = null;
 
   medicines: PharmacyMedicine[] = [];
   medicineTypes: PharmacyMedicineType[] = [];
@@ -57,6 +62,11 @@ export class PharmacyMedicinesComponent {
   constructor() {
     this.loadReferenceData();
     this.loadPage();
+    this.route.queryParamMap.subscribe(params => {
+      const id = params.get('medicineId');
+      this.scannedMedicine = null;
+      if (id) this.pharmacyService.getMedicine(id).subscribe({next: item => this.scannedMedicine = item, error: () => this.notificationService.error('Scanned medicine is unavailable. Check your access or scan another label.')});
+    });
   }
 
   get totalPages(): number {
@@ -112,7 +122,7 @@ export class PharmacyMedicinesComponent {
 
   get displayedMedicines(): PharmacyMedicine[] {
     const dir = this.sortDirection === 'asc' ? 1 : -1;
-    return [...this.medicines].sort((a, b) => {
+    return [...(this.scannedMedicine ? [this.scannedMedicine] : this.medicines)].sort((a, b) => {
       switch (this.sortField) {
         case 'type':
           return dir * (a.medicine_type_name || '').localeCompare(b.medicine_type_name || '');
@@ -152,6 +162,7 @@ export class PharmacyMedicinesComponent {
   }
 
   edit(item: PharmacyMedicine): void {
+    this.medicineFormOpen = true;
     this.editingId = item.id;
     this.form.reset({
       medicine_type_id: item.medicine_type_id,

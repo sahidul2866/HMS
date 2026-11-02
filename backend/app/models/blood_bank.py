@@ -107,6 +107,8 @@ class BloodCollection(Base, BaseModelMixin):
 class BloodUnit(Base, BaseModelMixin):
     __tablename__ = "blood_units"
 
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"), index=True)
+
     collection_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("blood_collections.id"), index=True)
     donor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("blood_donors.id"), index=True)
     source_unit_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("blood_units.id"))
@@ -155,6 +157,8 @@ class BloodTestResult(Base, BaseModelMixin):
 
 class BloodRequest(Base, BaseModelMixin):
     __tablename__ = "blood_requests"
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"), index=True)
 
     request_number: Mapped[str] = mapped_column(String(60), unique=True, nullable=False, index=True)
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False, index=True)
@@ -224,7 +228,7 @@ class BloodIssue(Base, BaseModelMixin):
     request = relationship("BloodRequest")
     unit = relationship("BloodUnit")
 
-    __table_args__ = (UniqueConstraint("unit_id", name="uq_blood_issues_unit_id"),)
+
 
 
 class BloodTransfusion(Base, BaseModelMixin):

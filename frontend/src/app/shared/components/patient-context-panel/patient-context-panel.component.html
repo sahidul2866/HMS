@@ -14,7 +14,7 @@
     </div>
 
     @if (loading) {
-      <div class="patient-context__loading">Loading patient context...</div>
+      <div class="patient-context__loading" role="status" aria-busy="true">Loading patient context...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
     } @else {
       <div class="patient-context__summary">
         <article>

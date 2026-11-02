@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, effect, inject, signal } from '@angular/core';
 
+import { ConnectionStateService } from '../../../core/services/connection-state.service';
 import { LoadingService } from '../../../core/services/loading.service';
 
 @Component({
@@ -11,6 +12,7 @@ import { LoadingService } from '../../../core/services/loading.service';
   styleUrl: './global-loader.component.scss',
 })
 export class GlobalLoaderComponent {
+  readonly connection = inject(ConnectionStateService);
   readonly loadingService = inject(LoadingService);
   readonly elapsedSeconds = signal(0);
 

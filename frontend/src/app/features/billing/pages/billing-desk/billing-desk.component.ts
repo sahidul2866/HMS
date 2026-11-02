@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, ViewChild, inject } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormsModule, FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { debounceTime } from 'rxjs';
 
@@ -13,6 +13,7 @@ import { UiStateService } from '../../../../core/services/ui-state.service';
 import { buildBarcodeSvg, escapePrintHtml } from '../../../../shared/utils/print-layout.utils';
 import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import {
+  BillingRefund,
   BillingInvoice,
   BillingInvoiceFilters,
   BillingInvoiceListItem,
@@ -23,7 +24,7 @@ import { BillingServiceApi } from '../../services/billing.service';
 @Component({
   selector: 'app-billing-desk',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule],
   templateUrl: './billing-desk.component.html',
   styleUrls: ['./billing-desk.component.scss'],
 })
@@ -40,6 +41,13 @@ export class BillingDeskComponent {
   private readonly uiStateService = inject(UiStateService);
   readonly sessionService = inject(SessionService);
 
+  invoicePanel:'summary'|'transactions'|'history'='summary';
+  history: {id:string;kind:string;reason?:string;actor_id:string;created_at:string;snapshot:{actor_name?:string;before?:Record<string,unknown>;after:Record<string,unknown>}}[]=[];
+  editReason='';editNote='';editDiscount=0;editType='';billingTypes:{id:string;name:string;department:string}[]=[];
+  editBusy=false;
+  openOperations():void { void this.router.navigate(['/billing/operations']); }
+  loadHistory():void { if(this.latestInvoice)this.billingService.operations<typeof this.history>('invoices/'+this.latestInvoice.id+'/history').subscribe(h=>this.history=h); }
+  saveAmendment():void {if(!this.latestInvoice)return;this.editBusy=true;this.billingService.amendInvoice(this.latestInvoice.id,{reason:this.editReason,note:this.editNote,billing_type_id:this.editType||null,discount_percentage:this.editDiscount}).subscribe({next:invoice=>{this.latestInvoice=invoice;this.editBusy=false;this.notificationService.success('Invoice correction recorded. History retains the previous values.');this.loadHistory();this.loadInvoices();},error:()=>this.editBusy=false});}
   internalReferralDoctors: { id: string; full_name: string }[] = [];
   recentInvoices: BillingInvoiceListItem[] = [];
   latestInvoice: BillingInvoice | null = null;
@@ -68,17 +76,21 @@ export class BillingDeskComponent {
 
   readonly paymentForm = this.fb.group({
     amount: [0, [Validators.required, Validators.min(0.01)]],
-    payment_method: ['cash' as const, Validators.required],
+    payment_method: ['cash' as 'cash' | 'card' | 'mobile_banking' | 'bank_transfer', Validators.required],
+    payment_provider: ['bkash'],
+    reference_number: [''],
     note: [''],
   });
 
   readonly refundForm = this.fb.group({
+    payment_method: ['cash',Validators.required],
     amount: [0, [Validators.required, Validators.min(0.01)]],
     payment_id: [''],
     reason: ['', [Validators.required, Validators.minLength(3)]],
   });
 
   readonly returnForm = this.fb.group({
+    payment_method: ['cash',Validators.required],
     payment_id: [''],
     reason: ['', [Validators.required, Validators.minLength(3)]],
     items: this.fb.array([]),
@@ -105,6 +117,8 @@ export class BillingDeskComponent {
   loadDoctors(): void {
     this.doctorDirectoryService.listDoctors(true).subscribe((doctors) => (this.internalReferralDoctors = doctors));
   }
+
+  get extraFilterCount():number {const value=this.invoiceFilterForm.getRawValue();return [value.internal_referral_user_id,value.status,value.source_module,value.date_from,value.date_to].filter(Boolean).length;}
 
   loadInvoices(): void {
     this.billingService.listInvoices(this.getInvoiceFilters()).subscribe((invoices) => {
@@ -146,6 +160,10 @@ export class BillingDeskComponent {
     }
     this.sortField = field;
     this.sortDirection = field === 'created_at' ? 'desc' : 'asc';
+  }
+
+  hasSurplus(invoice: { overpaid_amount?: string } | null | undefined): boolean {
+    return Number(invoice?.overpaid_amount ?? 0) > 0;
   }
 
   sortClass(field: BillingDeskComponent['sortField']): string {
@@ -267,7 +285,7 @@ export class BillingDeskComponent {
 
   private buildInvoicePrintHtml(invoice: BillingInvoice): string {
     const patientName = `${invoice.patient.first_name} ${invoice.patient.last_name}`.trim();
-    const combinedBarcode = buildBarcodeSvg(`${invoice.patient.patient_number} | ${invoice.invoice_number}`, 'Patient + Invoice ID');
+    const combinedBarcode = buildBarcodeSvg(invoice.invoice_number, invoice.invoice_number);
     const printTime = new Date().toLocaleString();
     const patientAge = this.getPatientAgeLabel(invoice.patient.date_of_birth);
     const itemDiscountAmount = Number(invoice.item_discount_amount ?? 0);
@@ -275,7 +293,7 @@ export class BillingDeskComponent {
     const grossAmount = Number(invoice.sub_total ?? 0) + itemDiscountAmount;
     const dueAmount = Number(invoice.due_amount ?? 0);
     const paidAmount = Number(invoice.paid_amount ?? 0);
-    const preparedBy = this.sessionService.snapshot.user?.full_name || 'Billing Desk';
+    const preparedBy = invoice.billed_by_name || 'Billing Desk';
     const rows = invoice.items
       .map(
         (item, index) => `
@@ -291,6 +309,9 @@ export class BillingDeskComponent {
           </tr>`
       )
       .join('');
+    const paymentProofRows = (invoice.payments ?? []).length
+      ? `<tr><td colspan="5"><b>Received :</b> ${(invoice.payments ?? []).map((payment) => escapePrintHtml(`${this.formatStatus(payment.payment_method)}${payment.payment_provider ? ' ' + this.paymentProviderLabel(payment.payment_provider) : ''}${payment.reference_number ? ' ref ' + payment.reference_number : ''} ${this.formatCurrency(payment.amount)}`)).join('; ')}</td></tr>`
+      : '';
     const summaryDiscountRows = `
       ${itemDiscountAmount > 0 ? `<tr><td colspan="4" style="text-align:right;"><b>Item Discount</b></td><td>${this.formatCurrency(itemDiscountAmount)}</td></tr>` : ''}
       ${invoiceDiscountAmount > 0 ? `<tr><td colspan="4" style="text-align:right;"><b>Extra Discount</b></td><td>${this.formatCurrency(invoiceDiscountAmount)}</td></tr>` : ''}
@@ -359,8 +380,9 @@ export class BillingDeskComponent {
                 <td>${this.formatCurrency(dueAmount)}</td>
               </tr>
               <tr>
-                <td colspan="5"><b>Inward :</b> ${escapePrintHtml(this.amountInWords(paidAmount || Number(invoice.total_amount ?? 0)))} Only.</td>
+                <td colspan="5"><b>In words :</b> ${escapePrintHtml(invoice.total_in_words || `Taka ${this.amountInWords(Number(invoice.total_amount ?? 0))} Only`)}${dueAmount > 0 && invoice.due_in_words ? `<br /><b>Due in words :</b> ${escapePrintHtml(invoice.due_in_words)}` : ''}</td>
               </tr>
+              ${paymentProofRows}
             </tbody>
           </table>
         </section>
@@ -444,6 +466,9 @@ export class BillingDeskComponent {
   loadInvoiceDetail(invoiceId: string, openPreview = false): void {
     this.billingService.getInvoice(invoiceId).subscribe((invoice) => {
       this.latestInvoice = invoice;
+      this.invoicePanel=this.isDueMode?'transactions':'summary';
+      this.editReason='';this.editNote=invoice.note||'';this.editDiscount=Number(invoice.discount_percentage);this.editType=invoice.billing_type_id||'';
+      this.billingService.listTypes().subscribe(t=>this.billingTypes=t);this.loadHistory();
       this.syncPaymentForm(invoice);
       this.syncRefundForm(invoice);
       this.syncReturnForm(invoice);
@@ -463,12 +488,20 @@ export class BillingDeskComponent {
       return;
     }
 
-    this.collectingPayment = true;
     const raw = this.paymentForm.getRawValue();
+    const method = raw.payment_method ?? 'cash';
+    const reference = (raw.reference_number ?? '').trim();
+    if (method !== 'cash' && !reference) {
+      this.notificationService.warning(method === 'mobile_banking' ? 'Enter the mobile banking transaction ID (TrxID).' : method === 'card' ? 'Enter the card approval code.' : 'Enter the transfer or cheque number.');
+      return;
+    }
+    this.collectingPayment = true;
     this.billingService
       .collectPayment(this.latestInvoice.id, {
         amount: Number(raw.amount ?? 0),
-        payment_method: raw.payment_method ?? 'cash',
+        payment_method: method,
+        payment_provider: method === 'mobile_banking' ? raw.payment_provider || null : null,
+        reference_number: method === 'cash' ? null : reference,
         note: raw.note?.trim() || null,
       })
       .subscribe({
@@ -558,6 +591,7 @@ export class BillingDeskComponent {
     this.billingService
       .createRefund(this.latestInvoice.id, {
         amount: Number(raw.amount ?? 0),
+        payment_method: raw.payment_method || 'cash',
         payment_id: raw.payment_id || null,
         reason: raw.reason?.trim() || '',
       })
@@ -592,6 +626,7 @@ export class BillingDeskComponent {
     this.billingService
       .createReturn(this.latestInvoice.id, {
         items,
+        payment_method: raw.payment_method || 'cash',
         payment_id: raw.payment_id || null,
         reason: raw.reason?.trim() || '',
       })
@@ -603,7 +638,7 @@ export class BillingDeskComponent {
           this.syncRefundForm(invoice);
           this.syncReturnForm(invoice);
           this.loadInvoices();
-          this.notificationService.warning(`Return billing posted for ${invoice.invoice_number}.`);
+          this.notificationService.success(`Return credit recorded for ${invoice.invoice_number}.`, "Review the updated balance and print the credit voucher.");
         },
         error: () => {
           this.returning = false;
@@ -624,7 +659,7 @@ export class BillingDeskComponent {
   }
 
   canReturn(invoice: BillingInvoice): boolean {
-    return this.canRefund(invoice) && invoice.items.length > 0;
+    return invoice.status === "posted" && invoice.items.some(item => Number(item.returnable_quantity ?? item.quantity) > 0);
   }
 
   get returnItemsForm(): FormArray {
@@ -641,9 +676,18 @@ export class BillingDeskComponent {
         return sum;
       }
       const billedQuantity = Number(item.quantity || 0);
-      const unitReturnAmount = billedQuantity > 0 ? Number(item.line_total || 0) / billedQuantity : 0;
-      return sum + unitReturnAmount * quantity;
+      const unitReturnAmount = billedQuantity > 0 ? Number(item.net_amount ?? item.line_total) / billedQuantity : 0;
+      const previous = billedQuantity - Number(item.returnable_quantity ?? item.quantity);
+      const cents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+      return sum + cents(unitReturnAmount * (previous + quantity)) - cents(unitReturnAmount * previous);
     }, 0);
+  }
+
+  get returnPayout(): number {
+    if (!this.latestInvoice) return 0;
+    const invoice = this.latestInvoice;
+    const credits = invoice.refunds.filter(refund => refund.refund_type === 'return').reduce((sum, refund) => sum + Number(refund.credit_amount ?? refund.amount), 0);
+    return Math.min(this.returnTotal, Math.max(0, Number(invoice.paid_amount) - Math.max(0, Number(invoice.total_amount) - credits - this.returnTotal)));
   }
 
   get returnItemsPayload(): Array<{ invoice_item_id: string; quantity: number }> {
@@ -685,6 +729,10 @@ export class BillingDeskComponent {
       return;
     }
     this.printStickersByInvoiceId(this.invoicePreviewInvoice.id, this.invoicePreviewInvoice.invoice_number);
+  }
+
+  paymentProviderLabel(code?: string | null): string {
+    return ({ bkash: 'bKash', nagad: 'Nagad', rocket: 'Rocket', upay: 'Upay', other: 'Other' } as Record<string, string>)[code ?? ''] ?? this.formatStatus(code ?? '');
   }
 
   formatCurrency(value: string | number): string {
@@ -735,6 +783,8 @@ export class BillingDeskComponent {
     this.paymentForm.patchValue({
       amount: Number(invoice.due_amount),
       payment_method: 'cash',
+      payment_provider: 'bkash',
+      reference_number: '',
       note: '',
     });
   }
@@ -743,6 +793,7 @@ export class BillingDeskComponent {
     this.refundForm.patchValue({
       amount: Number(invoice.paid_amount),
       payment_id: '',
+      payment_method: 'cash',
       reason: '',
     });
   }
@@ -753,14 +804,25 @@ export class BillingDeskComponent {
       this.returnItemsForm.push(
         this.fb.group({
           invoice_item_id: [item.id],
-          quantity: [0, [Validators.min(0), Validators.max(Number(item.quantity || 0))]],
+          quantity: [0, [Validators.min(0), Validators.max(Number(item.returnable_quantity ?? item.quantity ?? 0))]],
         })
       );
     }
     this.returnForm.patchValue({
       payment_id: '',
+      payment_method: 'cash',
       reason: '',
     });
+  }
+
+  previewRefund(refund:BillingRefund):void {
+    if(!this.latestInvoice)return;
+    const invoice=this.latestInvoice;
+    const e=escapePrintHtml;
+    const rows=(refund.return_items||[]).map(row=>`<tr><td>${e(String(row['service_name']||''))}</td><td>${e(String(row['quantity']||''))}</td><td>${e(String(row['return_amount']||''))}</td></tr>`).join('');
+    this.invoicePreviewInvoice=invoice;
+    this.invoicePreviewHtml=`<!doctype html><html><head><title>${e(refund.refund_number)}</title><style>body{font:15px Arial;padding:32px;color:#111}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #ccc}svg{max-width:100%;height:100px}small{color:#444}</style></head><body><h1>${['return','carried_return'].includes(refund.refund_type||'')?'Return credit invoice':'Refund voucher'}</h1><h2>${e(refund.refund_number)}</h2><p>Original invoice: ${e(invoice.invoice_number)}</p><p>Patient: ${e(invoice.patient.first_name+' '+invoice.patient.last_name)} · ${e(invoice.patient.patient_number)}</p><p>Date: ${e(new Date(refund.refunded_at).toLocaleString())}</p><p>Recorded by: ${e(refund.refunded_by_name||'Billing staff')}</p><table><thead><tr><th>Returned item</th><th>Quantity</th><th>Credit</th></tr></thead><tbody>${rows}</tbody></table><h2>Credit: ${e(this.formatCurrency(refund.credit_amount || 0))}</h2><h2>Paid back: ${e(this.formatCurrency(refund.amount))}</h2><p>Payout method: ${e(refund.payment_method||'cash')}</p><p>Reason: ${e(refund.reason)}</p>${buildBarcodeSvg(invoice.invoice_number)}<small>Barcode opens the original invoice and its credit history.</small><p>Receiver signature: __________________</p></body></html>`;
+    this.invoicePreviewUrl=this.buildPreviewUrl(this.invoicePreviewHtml);
   }
 
   private openInvoicePreview(invoice: BillingInvoice): void {

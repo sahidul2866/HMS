@@ -53,9 +53,7 @@ export class AppointmentsService extends ApiBaseService {
 
   getDoctorSlots(doctorUserId: string, slotDate: string): Observable<DoctorSlotsResponse> {
     const params = `doctor_user_id=${encodeURIComponent(doctorUserId)}&slot_date=${encodeURIComponent(slotDate)}`;
-    return this.cache.get(`appointments:slots:${doctorUserId}:${slotDate}`, () =>
-      this.http.get<DoctorSlotsResponse>(this.url(`/appointments/doctor-slots?${params}`))
-    );
+    return this.http.get<DoctorSlotsResponse>(this.url(`/appointments/doctor-slots?${params}`));
   }
 
   listDoctorSchedules(doctorUserId?: string): Observable<Array<{

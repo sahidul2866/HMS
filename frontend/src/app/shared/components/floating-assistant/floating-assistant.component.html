@@ -1,5 +1,5 @@
 <div class="assistant-fab">
-  <button type="button" class="assistant-button" (click)="toggle()" [attr.aria-expanded]="open">
+  <button type="button" class="assistant-button" (click)="toggle()" [attr.aria-expanded]="open" aria-label="Hospital assistant">
     <span class="assistant-dot" *ngIf="!open"></span>
     <span class="assistant-icon">AI</span>
     <span class="assistant-label" *ngIf="!open">Assistant</span>
@@ -75,7 +75,7 @@
           <strong>{{ patient.full_name }}</strong>
           <span>{{ patient.patient_number }} · {{ patient.phone || 'No phone' }}</span>
         </button>
-        <span *ngIf="patientsLoading">Searching patients...</span>
+        <span *ngIf="patientsLoading" role="status" aria-busy="true">Searching patients...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
       </div>
 
       <div class="assistant-doctor-grid">
@@ -88,7 +88,7 @@
           <span>{{ doctor.opd_prescription_header_specialty || doctor.opd_prescription_header_degrees || 'Consultant' }}</span>
           <small>Fee {{ doctor.opd_consultation_fee || 'N/A' }}</small>
         </button>
-        <span *ngIf="doctorsLoading">Loading doctors...</span>
+        <span *ngIf="doctorsLoading" role="status" aria-busy="true">Loading doctors...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
       </div>
 
       <div class="assistant-slot-grid" *ngIf="selectedDoctor">
@@ -102,8 +102,8 @@
           <strong>{{ formatSlotTime(slot.slot_start_at) }}</strong>
           <span>{{ slot.status }}</span>
         </button>
-        <span *ngIf="slotsLoading">Loading slots...</span>
-        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date.</span>
+        <span *ngIf="slotsLoading" role="status" aria-busy="true">Loading slots...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
+        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date. Choose another date or doctor and check again.</span>
       </div>
 
       <div class="assistant-form-grid">
@@ -138,7 +138,7 @@
           <strong>{{ patient.full_name }}</strong>
           <span>{{ patient.patient_number }} · {{ patient.phone || patient.email || 'No contact' }}</span>
         </button>
-        <span *ngIf="patientsLoading">Searching patients...</span>
+        <span *ngIf="patientsLoading" role="status" aria-busy="true">Searching patients...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
       </div>
     </div>
 
@@ -171,8 +171,8 @@
           <strong>{{ formatSlotTime(slot.slot_start_at) }}</strong>
           <span>{{ slot.status }}</span>
         </button>
-        <span *ngIf="slotsLoading">Loading slots...</span>
-        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date.</span>
+        <span *ngIf="slotsLoading" role="status" aria-busy="true">Loading slots...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
+        <span *ngIf="!slotsLoading && !slots.length">No slots configured for this date. Choose another date or doctor and check again.</span>
       </div>
     </div>
 

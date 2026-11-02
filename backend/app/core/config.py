@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     auto_db_bootstrap: bool | str = Field(default=True, alias="AUTO_DB_BOOTSTRAP")
     auto_seed_sample_data: bool | str = Field(default=False, alias="AUTO_SEED_SAMPLE_DATA")
     max_patients_per_mobile: int = Field(default=5, alias="MAX_PATIENTS_PER_MOBILE")
+    azure_speech_key: str | None = Field(default=None, alias="AZURE_SPEECH_KEY")
+    azure_speech_region: str | None = Field(default=None, alias="AZURE_SPEECH_REGION")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
     patient_bot_max_gemini_calls_per_day: int = Field(default=5, alias="PATIENT_BOT_MAX_GEMINI_CALLS_PER_DAY")

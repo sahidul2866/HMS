@@ -1,7 +1,7 @@
 <section class="workspace-shell">
   @if (historyLoading) {
     <section class="page-card">
-      <div class="muted">Loading patient history...</div>
+      <div class="muted" role="status" aria-busy="true">Loading patient history...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
     </section>
   }
 

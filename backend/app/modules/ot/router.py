@@ -120,3 +120,16 @@ def add_document(payload: OTDocumentCreate, user=Depends(get_current_user), db: 
 @router.get("/case-sheet/{schedule_id}", response_model=OTCaseSheetRead, dependencies=[Depends(require_permissions("ot.view"))])
 def case_sheet(schedule_id: UUID, user=Depends(get_current_user), db: Session = Depends(get_db)) -> OTCaseSheetRead:
     return OTCaseSheetRead(**OTService(db).get_case_sheet(schedule_id, user))
+
+
+@router.post('/billing-items/{charge_id}/invoice', dependencies=[Depends(require_permissions('ot.billing.manage','billing.invoice.create'))])
+def post_ot_invoice(charge_id: UUID, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return OTService(db).post_charge_invoice(charge_id,user,{})
+
+
+from app.schemas.ot import OTRoomStatusUpdate
+
+
+@router.patch('/rooms/{room_id}/status', response_model=OTRoomRead, dependencies=[Depends(require_permissions('ot.room.manage'))])
+def update_ot_room_status(room_id: UUID, payload: OTRoomStatusUpdate, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return OTService(db).update_room_status(room_id,payload.status,payload.reason,user)

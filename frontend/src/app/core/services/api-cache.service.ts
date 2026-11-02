@@ -4,7 +4,10 @@ import { Observable, of, shareReplay, tap } from 'rxjs';
 @Injectable({ providedIn: 'root' })
 export class ApiCacheService {
   private readonly persistentPrefix = 'hms-api-cache:';
+  /** Stored lookups are reused for this long; after that the next read asks the server again. */
+  private readonly persistentTtlMs = 2 * 60 * 1000;
   private readonly cache = new Map<string, Observable<unknown>>();
+  private readonly fetchedAt = new Map<string, number>();
 
   get<T>(key: string, factory: () => Observable<T>): Observable<T> {
     if (!this.cache.has(key)) {
@@ -18,7 +21,9 @@ export class ApiCacheService {
     if (stored !== null) {
       return of(stored);
     }
-    if (!this.cache.has(key)) {
+    const fetchedAt = this.fetchedAt.get(key);
+    if (!this.cache.has(key) || fetchedAt === undefined || Date.now() - fetchedAt > this.persistentTtlMs) {
+      this.fetchedAt.set(key, Date.now());
       this.cache.set(
         key,
         factory().pipe(
@@ -67,7 +72,12 @@ export class ApiCacheService {
       return null;
     }
     try {
-      return JSON.parse(raw) as T;
+      const entry = JSON.parse(raw) as { storedAt?: number; value?: T };
+      if (typeof entry?.storedAt !== 'number' || Date.now() - entry.storedAt > this.persistentTtlMs) {
+        sessionStorage.removeItem(this.storageKey(key));
+        return null;
+      }
+      return (entry.value ?? null) as T | null;
     } catch {
       sessionStorage.removeItem(this.storageKey(key));
       return null;
@@ -75,8 +85,12 @@ export class ApiCacheService {
   }
 
   private writeStored<T>(key: string, value: T): void {
+    // An empty list usually means the setup has not been done yet; keeping it would hide what others add next.
+    if (Array.isArray(value) && !value.length) {
+      return;
+    }
     try {
-      sessionStorage.setItem(this.storageKey(key), JSON.stringify(value));
+      sessionStorage.setItem(this.storageKey(key), JSON.stringify({ storedAt: Date.now(), value }));
     } catch {
       // Storage can be unavailable or full; in-memory cache still covers the active tab.
     }

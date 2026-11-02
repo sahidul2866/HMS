@@ -62,6 +62,10 @@ export class OPDOverviewComponent {
     void this.router.navigate(['/opd/register']);
   }
 
+  navigateToQueue(): void {
+    void this.router.navigate(['/opd/queue']);
+  }
+
   navigateToVisitList(): void {
     void this.router.navigate(['/opd/visits']);
   }

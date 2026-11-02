@@ -127,6 +127,7 @@ class TransportTrip(Base, BaseModelMixin):
     location_updates: Mapped[list | None] = mapped_column(JSON)
     charges: Mapped[dict | None] = mapped_column(JSON)
     billing_status: Mapped[str] = mapped_column(String(40), nullable=False, default="not_required")
+    posting_policy: Mapped[str] = mapped_column(String(30), nullable=False, default="automatic", server_default="manual_review")
     billing_invoice_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"))
     completed_by_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

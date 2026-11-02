@@ -38,7 +38,7 @@
             <span>{{ profile.is_default ? 'Default profile' : doctorName(profile.target_id) }}</span>
           </button>
         } @empty {
-          <div class="empty-state">No profile configured yet.</div>
+          <div class="empty-state">No profile configured yet.<span class="app-state-guidance">Complete and save the configuration form to create this profile.</span></div>
         }
       </div>
     </aside>

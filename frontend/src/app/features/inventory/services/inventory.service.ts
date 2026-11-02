@@ -35,6 +35,14 @@ export class InventoryService extends ApiBaseService {
     return this.cache.get('inventory:reports', () => this.http.get<InventoryReport>(this.url('/inventory/reports')));
   }
 
+  getBatch(id: string): Observable<{id:string;item_id:string;batch_no:string|null;expiry_date:string|null;quantity:string|number}> {
+    return this.http.get<{id:string;item_id:string;batch_no:string|null;expiry_date:string|null;quantity:string|number}>(this.url(`/inventory/batches/${id}`));
+  }
+
+  getItem(id: string): Observable<InventoryItem> {
+    return this.http.get<InventoryItem>(this.url(`/inventory/items/${id}`));
+  }
+
   listItems(q = '', lowStock = false): Observable<PaginatedResponse<InventoryItem>> {
     const params = new URLSearchParams({ page: '1', page_size: '60' });
     if (q.trim()) params.set('q', q.trim());
@@ -137,6 +145,10 @@ export class InventoryService extends ApiBaseService {
     return this.cache.get(`inventory:receivings:${query}`, () => this.http.get<PaginatedResponse<StockReceiving>>(this.url(`/inventory/receivings?${query}`)));
   }
 
+  createItem(payload: Record<string, unknown>): Observable<InventoryItem> {
+    return this.http.post<InventoryItem>(this.url('/inventory/items'),payload).pipe(tap(() => this.clear()));
+  }
+
   createReceiving(payload: Record<string, unknown>): Observable<StockReceiving> {
     return this.http.post<StockReceiving>(this.url('/inventory/receivings'), payload).pipe(
       tap((receiving) => {
@@ -181,6 +193,8 @@ export class InventoryService extends ApiBaseService {
   clear(): void {
     this.cache.clearPrefix('inventory:');
     this.cache.clearPrefix('dashboard:');
+    this.cache.clearPrefix('accounting:');
+    this.cache.clearPrefix('catering:');
   }
 
   private publishInventoryEvent(
@@ -197,7 +211,7 @@ export class InventoryService extends ApiBaseService {
       entityId,
       patientId,
       visitId,
-      modules: ['inventory', 'pharmacy', 'billing', 'laboratory', 'radiology', 'opd', 'patients', 'dashboard'],
+      modules: ['inventory', 'pharmacy', 'billing', 'laboratory', 'radiology', 'opd', 'patients', 'catering', 'accounting', 'dashboard'],
       cachePrefixes: ['inventory:', 'pharmacy:', 'billing:', 'laboratory:', 'radiology:', 'diagnostics:', 'opd:', 'patients:', 'dashboard:'],
       message,
     });

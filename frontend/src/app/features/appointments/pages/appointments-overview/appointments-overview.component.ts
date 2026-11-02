@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { ActionConfirmationService } from '../../../../core/services/action-confirmation.service';
 import { User } from '../../../../core/models/auth.models';
@@ -26,6 +26,8 @@ export class AppointmentsOverviewComponent {
   private readonly confirmationService = inject(ActionConfirmationService);
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private requestedAppointmentId = '';
   readonly sessionService = inject(SessionService);
 
   appointments: Appointment[] = [];
@@ -49,12 +51,19 @@ export class AppointmentsOverviewComponent {
 
   constructor() {
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
+    this.route.queryParamMap.subscribe(params => {
+      this.requestedAppointmentId = params.get('appointmentId') || '';
+      const selected = this.appointments.find(item => item.id === this.requestedAppointmentId);
+      if (selected) this.selectAppointment(selected);
+    });
     this.loadAppointments();
   }
 
   loadAppointments(): void {
     this.appointmentsService.list().subscribe((appointments) => {
       this.appointments = appointments;
+      const requested = appointments.find(item => item.id === this.requestedAppointmentId);
+      if (requested) this.selectAppointment(requested);
       if (this.selectedAppointment) {
         this.selectedAppointment = appointments.find((item) => item.id === this.selectedAppointment?.id) ?? null;
       }

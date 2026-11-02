@@ -54,7 +54,7 @@ class OPDRepository:
             select(OPDVisitOrder)
             .join(OPDVisitOrder.visit)
             .options(joinedload(OPDVisitOrder.visit).joinedload(OPDVisit.patient))
-            .where(OPDVisitOrder.order_type == "prescription", OPDVisitOrder.status == "pending")
+            .where(OPDVisitOrder.order_type == "prescription", OPDVisitOrder.status.in_(["pending", "in_progress"]))
             .order_by(OPDVisit.created_at.desc(), OPDVisitOrder.created_at.desc())
         )
         if branch_id:

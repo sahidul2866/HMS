@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,7 @@ class BillingItemConfig(Base, BaseModelMixin):
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     source_module: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     source_entity_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    billing_type_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_types.id"))
     service_code: Mapped[str] = mapped_column(String(80), nullable=False)
     service_name: Mapped[str] = mapped_column(String(180), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -67,6 +68,10 @@ class BillingInvoice(Base, BaseModelMixin):
     source_ipd_admission_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("ipd_admissions.id"))
     source_module: Mapped[str | None] = mapped_column(String(40))
     billing_stage: Mapped[str | None] = mapped_column(String(40))
+    billing_type_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_types.id"))
+    billing_type_name: Mapped[str | None] = mapped_column(String(120))
+    billing_department: Mapped[str | None] = mapped_column(String(120))
+    discount_reason: Mapped[str | None] = mapped_column(Text)
     invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     internal_referral_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
     referred_doctor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("referred_doctors.id"))
@@ -97,6 +102,36 @@ class BillingInvoice(Base, BaseModelMixin):
     referred_doctor = relationship("ReferredDoctor", back_populates="invoices")
     billed_by = relationship("User", foreign_keys=[billed_by_user_id], back_populates="billed_invoices")
     voided_by = relationship("User", foreign_keys=[voided_by_user_id], back_populates="voided_invoices")
+    @property
+    def billed_by_name(self) -> str | None:
+        return self.billed_by.full_name if self.billed_by else None
+
+    @property
+    def total_in_words(self) -> str:
+        from app.utils.bdt import amount_in_words
+        return amount_in_words(self.total_amount)
+
+    @property
+    def due_in_words(self) -> str:
+        from app.utils.bdt import amount_in_words
+        return amount_in_words(self.due_amount)
+
+    @property
+    def credited_amount(self) -> Decimal:
+        return sum((refund.credit_amount for refund in self.refunds if refund.refund_type == "return"), Decimal("0"))
+
+    @property
+    def net_payable_amount(self) -> Decimal:
+        if self.status == "void":
+            return Decimal("0")
+        return max(Decimal("0"), Decimal(self.total_amount or 0) - self.credited_amount)
+
+    @property
+    def overpaid_amount(self) -> Decimal:
+        """Collected money beyond what the patient owes after returns; refundable surplus."""
+        returned = sum((refund.credit_amount for refund in self.refunds if refund.refund_type == "return"), Decimal("0"))
+        return max(Decimal("0"), Decimal(self.paid_amount or 0) - (Decimal(self.total_amount or 0) - returned))
+
     items = relationship("BillingInvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("BillingPayment", back_populates="invoice", cascade="all, delete-orphan")
     refunds = relationship("BillingRefund", back_populates="invoice", cascade="all, delete-orphan")
@@ -106,11 +141,14 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     __tablename__ = "billing_invoice_items"
 
     invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
+    bed_charge_date: Mapped[date | None] = mapped_column(Date())
     source_entity_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     billing_instruction: Mapped[str | None] = mapped_column(Text)
     source_opd_visit_order_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visit_orders.id"))
     source_label: Mapped[str | None] = mapped_column(String(180))
     source_module: Mapped[str | None] = mapped_column(String(40))
+    billing_type_name: Mapped[str | None] = mapped_column(String(120))
+    billing_department: Mapped[str | None] = mapped_column(String(120))
     service_name: Mapped[str] = mapped_column(String(150), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -122,6 +160,18 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     room_number: Mapped[str | None] = mapped_column(String(60))
     doctor_share_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
     doctor_share_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+
+    @property
+    def net_amount(self) -> Decimal:
+        from app.utils.billing_amounts import net_line_amounts
+        return net_line_amounts(self.invoice).get(self.id, Decimal("0"))
+
+    @property
+    def returnable_quantity(self) -> Decimal:
+        returned = sum((Decimal(line["quantity"]) for refund in self.invoice.refunds
+                        if refund.refund_type == "return" for line in refund.return_items or []
+                        if line["invoice_item_id"] == str(self.id)), Decimal("0"))
+        return max(Decimal("0"), self.quantity - returned)
 
     invoice = relationship("BillingInvoice", back_populates="items")
     source_opd_visit_order = relationship("OPDVisitOrder", foreign_keys=[source_opd_visit_order_id])
@@ -136,10 +186,18 @@ class BillingPayment(Base, BaseModelMixin):
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     receipt_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     payment_method: Mapped[str] = mapped_column(String(30), nullable=False, default="cash")
+    # Mobile banking provider (bKash, Nagad, Rocket...) and the TrxID / card approval / bank reference given by the payer.
+    payment_provider: Mapped[str | None] = mapped_column(String(30))
+    reference_number: Mapped[str | None] = mapped_column(String(80))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     collected_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    @property
+    def amount_in_words(self) -> str:
+        from app.utils.bdt import amount_in_words
+        return amount_in_words(self.amount)
 
     invoice = relationship("BillingInvoice", back_populates="payments")
     patient = relationship("Patient")
@@ -157,6 +215,7 @@ class BillingRefund(Base, BaseModelMixin):
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     refund_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(30), nullable=False, default="cash", server_default="cash")
     refund_type: Mapped[str] = mapped_column(String(30), nullable=False, default="refund")
     return_items: Mapped[list[dict] | None] = mapped_column(JSON)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
@@ -168,6 +227,23 @@ class BillingRefund(Base, BaseModelMixin):
     patient = relationship("Patient")
     branch = relationship("Branch")
     refunded_by = relationship("User", foreign_keys=[refunded_by_user_id])
+
+    @property
+    def credit_amount(self) -> Decimal:
+        """Charge cancelled, distinct from actual money paid out in amount.
+
+        Existing return snapshots already contain the per-line credit. Older records
+        without those snapshots retain their historical amount as the credit.
+        """
+        if self.refund_type not in {"return", "carried_return"}:
+            return Decimal("0.00")
+        if self.return_items and all("return_amount" in item for item in self.return_items):
+            return sum((Decimal(item["return_amount"]) for item in self.return_items), Decimal("0.00"))
+        return Decimal(self.amount or 0)
+
+    @property
+    def refunded_by_name(self) -> str | None:
+        return self.refunded_by.full_name if self.refunded_by else None
 
 
 class BillingSetting(Base, BaseModelMixin):
@@ -182,3 +258,54 @@ class BillingSetting(Base, BaseModelMixin):
     default_referral_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False, default=0)
 
     branch = relationship("Branch")
+
+
+class BillingType(Base, BaseModelMixin):
+    __tablename__ = "billing_types"
+    __table_args__ = (UniqueConstraint("branch_id", "code", name="uq_billing_types_branch_code"),)
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    department: Mapped[str] = mapped_column(String(120), nullable=False)
+
+
+class BillingEvent(Base, BaseModelMixin):
+    """Append-only financial snapshots; historical values survive later corrections."""
+    __tablename__ = "billing_events"
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), index=True)
+    actor_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    snapshot: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class BillingCashHandover(Base, BaseModelMixin):
+    __tablename__ = "billing_cash_handovers"
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    number: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
+    collector_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    receiver_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    expected_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    declared_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    variance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="submitted")
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acceptance_note: Mapped[str | None] = mapped_column(Text)
+
+
+class BillingCashHandoverEntry(Base, BaseModelMixin):
+    __tablename__ = "billing_cash_handover_entries"
+    handover_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_cash_handovers.id"), nullable=False)
+    payment_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_payments.id"), unique=True)
+    refund_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_refunds.id"), unique=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+
+class BillingReportSnapshot(Base, BaseModelMixin):
+    __tablename__ = "billing_report_snapshots"
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    actor_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+    filters: Mapped[dict] = mapped_column(JSON, nullable=False)
+    statistics: Mapped[dict] = mapped_column(JSON, nullable=False)

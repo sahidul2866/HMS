@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
+from uuid import uuid4
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -60,7 +61,7 @@ class AppointmentsService:
             branch_id=actor.branch_id or patient.branch_id or doctor.branch_id,
             patient_id=patient.id,
             doctor_user_id=doctor.id,
-            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
             appointment_at=slot_start,
             slot_start_at=slot_start,
             status="scheduled",
@@ -101,7 +102,7 @@ class AppointmentsService:
             branch_id=actor.branch_id or patient.branch_id or doctor.branch_id,
             patient_id=patient.id,
             doctor_user_id=doctor.id,
-            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            appointment_number=f"APT-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
             appointment_at=slot_start,
             slot_start_at=slot_start,
             status="scheduled",
@@ -134,6 +135,8 @@ class AppointmentsService:
 
     def update_appointment(self, appointment_id, payload: AppointmentUpdate, actor: User) -> AppointmentRead:
         appointment = self._get_accessible_appointment(appointment_id, actor)
+        if appointment.status not in {"scheduled", "confirmed"}:
+            raise AppException(409, "appointment_not_editable", "Only scheduled or confirmed appointments can be rescheduled")
         patient, doctor = self._validate_patient_doctor(appointment.patient_id, payload.doctor_user_id, actor)
         new_start = self._normalize_dt(payload.slot_start_at)
         new_end = self._slot_end_for_doctor(doctor.id, new_start, actor)
@@ -180,6 +183,9 @@ class AppointmentsService:
 
     def update_status(self, appointment_id, status: str, actor: User) -> AppointmentRead:
         appointment = self._get_accessible_appointment(appointment_id, actor)
+        transitions = {"scheduled": {"confirmed", "cancelled"}, "confirmed": {"scheduled", "cancelled"}, "checked_in": {"completed"}}
+        if status != appointment.status and status not in transitions.get(appointment.status, set()):
+            raise AppException(409, "appointment_invalid_transition", "Use OPD check-in for arrival; completed or cancelled appointments cannot be reopened")
         appointment.status = status
         appointment.updated_by = actor.id
         if status == "cancelled":
@@ -190,6 +196,9 @@ class AppointmentsService:
 
     def check_in_to_opd(self, appointment_id, payload: AppointmentCheckInRequest, actor: User, context: dict[str, str | None]):
         appointment = self._get_accessible_appointment(appointment_id, actor)
+        self.db.refresh(appointment, with_for_update={"of": Appointment})
+        if appointment.status not in {"scheduled", "confirmed", "checked_in"}:
+            raise AppException(409, "appointment_not_checkable", "Only scheduled or confirmed appointments can be checked in")
         if appointment.status == "checked_in":
             raise AppException(409, "appointment_already_checked_in", "Appointment already checked in")
         existing_visit = self.db.scalar(select(OPDVisit.id).where(OPDVisit.source_appointment_id == appointment.id))
@@ -211,6 +220,7 @@ class AppointmentsService:
             actor,
             context,
             source_appointment_id=appointment.id,
+            commit=False,
         )
         visit.updated_by = actor.id
         appointment.status = "checked_in"

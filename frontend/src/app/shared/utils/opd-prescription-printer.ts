@@ -29,7 +29,7 @@ const DEFAULT_SECTIONS: PrintableSection[] = [
   { key: 'signature', label: 'Signature', placement: 'full', height: 48 },
 ];
 
-export function printOPDPrescription(payload: PrintPayload): boolean {
+export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
   const { visit, doctor, layoutProfile } = payload;
   const layoutPayload = layoutProfile?.payload || {};
   const paperSize = String(layoutPayload['paper_size'] || 'A5');
@@ -51,8 +51,8 @@ export function printOPDPrescription(payload: PrintPayload): boolean {
     <style>
       @page { size: ${escapePrintHtml(paperSize)}; margin: 7mm; }
       * { box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; color: #111827; font-family: Arial, sans-serif; font-size: ${Math.min(fontSize, 10.5)}px; }
-      .sheet { height: 100vh; max-height: 100vh; overflow: hidden; padding: 4px 3px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 5px; page-break-inside: avoid; break-inside: avoid; }
+      html, body { width: 100%; min-height: 100%; margin: 0; padding: 0; overflow: visible; background: #fff; color: #111827; font-family: Arial, sans-serif; font-size: ${Math.min(fontSize, 10.5)}px; }
+      .sheet { min-height: 90vh; height: auto; overflow: visible; padding: 4px 3px; display: grid; grid-template-rows: auto auto auto auto auto; gap: 5px; page-break-inside: auto; break-inside: auto; }
       .doctor-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, auto); gap: 10px; padding-bottom: 5px; border-bottom: 2px solid #111827; }
       .doctor-name { font-size: 18px; font-weight: 800; color: #111827; }
       .doctor-meta { margin-top: 1px; color: #334155; line-height: 1.2; }
@@ -62,14 +62,15 @@ export function printOPDPrescription(payload: PrintPayload): boolean {
       .meta:nth-child(4n) { border-right: 0; }
       .meta b { color: #475569; font-size: 8px; text-transform: uppercase; letter-spacing: .03em; margin-right: 4px; }
       .meta span { font-weight: 700; }
-      .body-grid { min-height: 0; overflow: hidden; display: grid; grid-template-columns: ${layout === 'single_column' ? '1fr' : `${leftColumnWidth}fr ${rightColumnWidth}fr`}; gap: 0; align-content: stretch; border: 1px solid #111827; border-top: 0; }
-      .column { min-height: 0; overflow: hidden; display: grid; align-content: start; gap: 5px; padding: 6px; }
+      .body-grid { min-height: 0; overflow: visible; display: grid; grid-template-columns: ${layout === 'single_column' ? '1fr' : `${leftColumnWidth}fr ${rightColumnWidth}fr`}; gap: 0; align-content: stretch; border: 1px solid #111827; border-top: 0; }
+      .column { min-height: 0; overflow: visible; display: grid; align-content: start; gap: 5px; padding: 6px; }
       .column-left { border-right: ${layout === 'single_column' ? '0' : '1px solid #111827'}; }
-      .full-row { border-left: 1px solid #111827; border-right: 1px solid #111827; padding: 4px 6px; overflow: hidden; }
+      .full-row { border-left: 1px solid #111827; border-right: 1px solid #111827; padding: 4px 6px; overflow: visible; }
       .clinical-line { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 5px; margin-bottom: 4px; break-inside: avoid; }
       .clinical-line b { color: #111827; font-size: 9px; }
       .print-line { line-height: 1.25; margin-bottom: 1px; color: #1f2937; }
       .rx-mark { font-family: Georgia, serif; font-size: 25px; font-weight: 800; color: #111827; margin-bottom: 2px; }
+      tr { break-inside: avoid; } thead { display: table-header-group; }
       table { width: 100%; border-collapse: collapse; }
       th, td { border-bottom: 1px solid #cbd5e1; padding: 3px 3px; text-align: left; vertical-align: top; line-height: 1.2; }
       th { color: #475569; font-size: 8px; text-transform: uppercase; letter-spacing: .03em; }
@@ -79,8 +80,8 @@ export function printOPDPrescription(payload: PrintPayload): boolean {
       .signature { text-align: center; border-top: 1px solid #111827; padding-top: 4px; color: #334155; }
       .muted { color: #64748b; }
       @media print {
-        html, body { width: 100%; height: 100%; overflow: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .sheet { height: 100vh; max-height: 100vh; overflow: hidden; page-break-after: avoid; page-break-before: avoid; }
+        html, body { width: 100%; height: auto; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .sheet { min-height: 90vh; height: auto; overflow: visible; page-break-after: avoid; page-break-before: avoid; }
       }
     </style>
   </head>
@@ -104,6 +105,11 @@ export function printOPDPrescription(payload: PrintPayload): boolean {
   </body>
   </html>`;
 
+  return html;
+}
+
+export function printOPDPrescription(payload: PrintPayload): boolean {
+  const html = buildOPDPrescriptionHtml(payload);
   const iframe = document.createElement('iframe');
   iframe.style.position = 'fixed';
   iframe.style.right = '0';

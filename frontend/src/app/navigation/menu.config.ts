@@ -2,6 +2,7 @@ export interface MenuItem {
   label: string;
   icon: string;
   permissions: string[];
+  permissionMode?: 'any';
   route?: string;
   children?: MenuItem[];
 }
@@ -221,6 +222,7 @@ export const menuSections: MenuSection[] = [
       { label: 'Purchases', icon: 'receipt', route: '/pharmacy/purchases', permissions: ['pharmacy.purchase.manage'] },
       { label: 'Returns', icon: 'list', route: '/pharmacy/returns', permissions: ['pharmacy.return'] },
       { label: 'Dispense', icon: 'pharmacy', route: '/pharmacy/dispense', permissions: ['pharmacy.dispense'] },
+      { label: 'Stock Review', icon: 'list', permissionMode: 'any', route: '/pharmacy/stock-review', permissions: ['pharmacy.stock.adjust','pharmacy.stock.approve'] },
       { label: 'Settings', icon: 'settings', route: '/pharmacy/settings', permissions: ['pharmacy.settings.manage'] },
     ],
   },

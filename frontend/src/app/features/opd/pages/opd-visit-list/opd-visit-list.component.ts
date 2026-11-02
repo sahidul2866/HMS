@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -70,7 +70,8 @@ const DEFAULT_PRESCRIPTION_SECTIONS: PrescriptionSectionView[] = [
   templateUrl: './opd-visit-list.component.html',
   styleUrls: ['./opd-visit-list.component.scss'],
 })
-export class OPDVisitListComponent {
+export class OPDVisitListComponent implements OnDestroy {
+  private consultationSnapshot = '';
   private readonly opdService = inject(OPDService);
   private readonly pharmacyService = inject(PharmacyService);
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
@@ -128,7 +129,7 @@ export class OPDVisitListComponent {
 
   constructor() {
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
-    this.configurationService.workspace().subscribe((workspace) => (this.configurationProfiles = workspace.profiles));
+    if(this.session.hasPermission('settings.configuration.manage')) this.configurationService.workspace().subscribe((workspace) => (this.configurationProfiles = workspace.profiles));
     this.loadPrescriptionCatalog();
     this.loadVisits();
     this.route.queryParamMap.subscribe((params) => {
@@ -139,12 +140,15 @@ export class OPDVisitListComponent {
     });
   }
 
+  accessNotice = "";
   loadVisits(): void {
+    this.accessNotice="";
     const doctorUserId = this.selectedDoctorUserId || null;
-    this.opdService.listVisits(doctorUserId).subscribe((visits) => (this.visits = visits));
+    this.opdService.listVisits(doctorUserId).subscribe({next:visits=>this.visits=visits,error:error=>{this.visits=[];this.accessNotice=error.status===403 ? "Doctor access has not been assigned to your account. Ask administration to grant access to the doctors you support; registration and appointment check-in remain available." : "Visits could not be loaded. Check your connection and refresh.";}});
   }
 
   openVisit(visitId: string): void {
+    if (this.hasUnsavedChanges() && !window.confirm('Discard the unsaved prescription changes and open this visit?')) return;
     this.opdService.getVisit(visitId).subscribe((visit) => {
       this.setSelectedVisit(visit);
       this.applyVisitToPrescriptionDraft(visit);
@@ -153,7 +157,26 @@ export class OPDVisitListComponent {
   }
 
   closeVisit(): void {
+    if (this.hasUnsavedChanges() && !window.confirm('Discard the unsaved prescription changes?')) return;
     this.selectedVisit = null;
+  }
+
+  hasUnsavedChanges(): boolean {
+    return !!this.selectedVisit && !!this.consultationSnapshot && JSON.stringify(this.consultationPayload()) !== this.consultationSnapshot;
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  protectDraft(event: BeforeUnloadEvent): void {
+    if (this.hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  }
+
+  ngOnDestroy(): void {
+    if (this.medicineSearchTimer) clearTimeout(this.medicineSearchTimer);
+    if (this.investigationSearchTimer) clearTimeout(this.investigationSearchTimer);
+  }
+
+  navigateToQueue(): void {
+    void this.router.navigate(['/opd/queue']);
   }
 
   navigateToRegisterVisit(): void {
@@ -166,7 +189,25 @@ export class OPDVisitListComponent {
 
   startVisit(visit: OPDVisit): void {
     if (!this.canStartVisit) return;
-    void this.router.navigate(['/opd'], { queryParams: { openVisit: visit.id } });
+    if (this.savingConsultation) return;
+    if (this.hasUnsavedChanges() && !window.confirm('Discard your unsaved consultation changes before starting this visit?')) return;
+    if (visit.status === 'in_consultation') {
+      this.openVisit(visit.id);
+      return;
+    }
+    this.savingConsultation = true;
+    this.opdService.updateStatus(visit.id, 'in_consultation').subscribe({
+      next: updated => {
+        this.savingConsultation = false;
+        this.setSelectedVisit(updated);
+        this.applyVisitToPrescriptionDraft(updated);
+        this.loadPreviousVisits(updated);
+      },
+      error: error => {
+        this.savingConsultation = false;
+        this.notificationService.error(error?.message || 'Unable to start this consultation. Check the doctor’s current patient.');
+      },
+    });
   }
 
   openPayment(visit: OPDVisit): void {
@@ -175,7 +216,7 @@ export class OPDVisitListComponent {
   }
 
   convertToIpd(visit: OPDVisit): void {
-    if (!this.session.hasPermission(PERMISSIONS.ipdAdmissionManage)) return;
+    if (!this.session.hasAnyPermission([PERMISSIONS.ipdAdmit, PERMISSIONS.ipdAdmissionManage])) return;
     const clinicalContext = [
       visit.chief_complaint ? `Chief complaint: ${visit.chief_complaint}` : '',
       visit.history_of_present_illness ? `History: ${visit.history_of_present_illness}` : '',
@@ -294,8 +335,7 @@ export class OPDVisitListComponent {
   }
 
   get canStartVisit(): boolean {
-    const user = this.session.snapshot.user;
-    return !!user?.roles?.some((role) => role.is_doctor_role || role.code === 'DOCTOR');
+    return this.session.hasPermission(PERMISSIONS.opdVisitManage);
   }
 
   get activeLayoutProfile(): ConfigurationProfile | null {
@@ -535,21 +575,25 @@ export class OPDVisitListComponent {
   }
 
   finalizePrescription(): void {
-    if (!this.selectedVisit || !window.confirm('Finalize this prescription?')) return;
+    if (!this.selectedVisit || this.savingConsultation || this.savingOrder) return;
+    if (this.selectedVisit.status !== 'in_consultation') {
+      this.notificationService.warning('Start this consultation before finalizing its prescription.');
+      return;
+    }
+    if (!window.confirm('Finalize this prescription and release the doctor’s current serial?')) return;
     this.savingConsultation = true;
-    this.opdService.updateConsultation(this.selectedVisit.id, this.consultationPayload()).subscribe((visit) => {
-      this.setSelectedVisit(visit);
-      if (!this.session.hasPermission(PERMISSIONS.opdVisitManage)) {
+    this.opdService.finalizePrescription(this.selectedVisit.id, this.consultationPayload()).subscribe({
+      next: visit => {
         this.savingConsultation = false;
-        this.notificationService.success('Prescription saved.');
-        return;
-      }
-      this.opdService.updateStatus(visit.id, 'prescribed').subscribe((updatedVisit) => {
+        this.setSelectedVisit(visit);
+        this.applyVisitToPrescriptionDraft(visit);
+        this.notificationService.success('Prescription finalized.', 'Print the prescription, review billing, or send the patient to IPD if needed.');
+      },
+      error: error => {
         this.savingConsultation = false;
-        this.setSelectedVisit(updatedVisit);
-        this.notificationService.success('Prescription finalized.');
-      }, () => (this.savingConsultation = false));
-    }, () => (this.savingConsultation = false));
+        this.notificationService.error(error?.message || 'Finalization failed. Your draft is still open; review it and try again.');
+      },
+    });
   }
 
   addPrescriptionMedicine(showMessage = true): void {
@@ -671,17 +715,19 @@ export class OPDVisitListComponent {
       instructions: '',
       quantity: 1,
     };
+    this.consultationSnapshot = JSON.stringify(this.consultationPayload());
   }
 
   private loadPrescriptionCatalog(): void {
-    this.pharmacyService.listMedicines({ page_size: 30, is_active: true }).subscribe((response) => (this.pharmacyMedicines = response.items));
+    if(!this.session.hasPermission('opd.prescribe')) return;
+    this.pharmacyService.prescribingMedicines({ page_size: 30, is_active: true }).subscribe((response) => (this.pharmacyMedicines = response.items));
     this.pharmacyService.listInvestigationSettings({ page_size: 30, is_active: 'true' }).subscribe((response) => (this.investigationSettings = response.items));
   }
 
   private searchMedicineCatalog(query: string): void {
     const token = ++this.medicineSearchToken;
     this.medicineSuggestionsLoading = true;
-    this.pharmacyService.listMedicines({ page_size: 12, q: query, is_active: true }).subscribe((response) => {
+    this.pharmacyService.prescribingMedicines({ page_size: 12, q: query, is_active: true }).subscribe((response) => {
       if (token !== this.medicineSearchToken) return;
       this.medicineSuggestionsLoading = false;
       this.pharmacyMedicines = this.mergeMedicines(response.items, this.pharmacyMedicines);

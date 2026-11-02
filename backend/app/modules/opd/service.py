@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +30,7 @@ from app.schemas.encounter import (
     OPDVisitOrderUpdate,
     OPDVisitUpdate,
 )
-from app.schemas.queue import QueueTokenCreate
+from app.schemas.queue import QueueTokenCreate, QueueTransferRequest
 from app.utils.enums import AuditAction
 
 
@@ -64,7 +65,7 @@ class OPDService:
             completed_visits=totals[3],
         )
 
-    def create_visit(self, payload: OPDVisitCreate, actor: User, context: dict[str, str | None], source_appointment_id=None) -> OPDVisit:
+    def create_visit(self, payload: OPDVisitCreate, actor: User, context: dict[str, str | None], source_appointment_id=None, *, commit: bool = True) -> OPDVisit:
         patient = self.patients.get_patient(payload.patient_id)
         if not patient:
             raise AppException(404, "patient_not_found", "Patient not found")
@@ -81,7 +82,8 @@ class OPDService:
                     last_visit = self.db.query(OPDVisit).filter(
                         OPDVisit.patient_id == payload.patient_id,
                         OPDVisit.consulting_doctor_user_id == payload.doctor_user_id,
-                        OPDVisit.status.in_(['completed', 'waiting', 'in_consultation', 'billed', 'prescribed']),
+                        OPDVisit.status.in_(['completed', 'prescribed']),
+                        OPDVisit.visit_date <= payload.visit_date,
                     ).order_by(OPDVisit.visit_date.desc()).first()
                     if last_visit:
                         days_since_last_visit = (payload.visit_date - last_visit.visit_date).days
@@ -93,7 +95,7 @@ class OPDService:
                 else:
                     consultation_fee = doctor.opd_consultation_fee
 
-        visit_number = f"OPD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+        visit_number = f"OPD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}"
         slot_start_at = payload.slot_start_at
         if slot_start_at and not slot_start_at.tzinfo:
             slot_start_at = slot_start_at.replace(tzinfo=UTC)
@@ -155,12 +157,16 @@ class OPDService:
             detail={"visit_number": visit.visit_number, "patient_id": str(visit.patient_id), "visit_type": payload.visit_type.value},
             context=context,
         )
-        self.db.commit()
-        self.db.refresh(visit)
+        if commit:
+            self.db.commit()
+            self.db.refresh(visit)
         return self.repository.get_visit(visit.id) or visit
 
     def update_visit(self, visit_id, payload: OPDVisitUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
+        if visit.status not in {"waiting", "billed"}:
+            raise AppException(409, "opd_visit_active", "Only a waiting visit can be reassigned or rescheduled")
+        previous_doctor_id = visit.consulting_doctor_user_id
         consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
         new_slot_start = payload.slot_start_at or visit.slot_start_at
         if new_slot_start and not new_slot_start.tzinfo:
@@ -192,6 +198,15 @@ class OPDService:
             if booking:
                 self.db.delete(booking)
                 self.db.flush()
+        token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd"))
+        if token and previous_doctor_id != visit.consulting_doctor_user_id:
+            self.db.flush()
+            QueueService(self.db).transfer(token.id, QueueTransferRequest(
+                queue_scope="opd", module="opd", service_area="consultation",
+                doctor_user_id=visit.consulting_doctor_user_id, department_name=visit.department_name,
+            ), actor, commit=False, internal=True)
+        if token:
+            token.due_at = new_slot_start
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.OPD_VISIT_STATUS_UPDATE,
@@ -212,8 +227,6 @@ class OPDService:
         visit.consultation_total = self._money(payload.amount - payload.discount)
         visit.consultation_payment_status = "paid"
         visit.consultation_paid_at = datetime.now(UTC)
-        if visit.status in {"waiting", "in_consultation", "prescribed"}:
-            visit.status = "billed"
         visit.updated_by = actor.id
         AuditService(self.db).log(
             user_id=actor.id,
@@ -235,15 +248,24 @@ class OPDService:
 
     def update_status(self, visit_id, status: str, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
+        transitions = {
+            "waiting": {"in_consultation", "cancelled"},
+            "billed": {"in_consultation", "cancelled"},
+            "in_consultation": {"prescribed", "completed", "waiting", "cancelled"},
+            "prescribed": {"completed"},
+            "completed": set(), "cancelled": set(),
+        }
+        if status != visit.status and status not in transitions.get(visit.status, set()):
+            raise AppException(409, "opd_invalid_transition", f"Cannot change visit from {visit.status} to {status}")
         visit.status = status
         visit.updated_by = actor.id
         queue_token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd", QueueToken.is_active.is_(True)))
-        if queue_token and status in {"in_consultation", "completed", "cancelled"}:
-            target_queue_status = {"in_consultation": "in_progress", "completed": "completed", "cancelled": "cancelled"}[status]
+        if queue_token and status in {"in_consultation", "prescribed", "completed", "cancelled"}:
+            target_queue_status = {"in_consultation": "in_progress", "prescribed": "completed", "completed": "completed", "cancelled": "cancelled"}[status]
             if target_queue_status != queue_token.status:
-                QueueService(self.db).update_status(queue_token.id, target_queue_status, actor, notes=f"Synchronized from OPD visit {visit.visit_number}")
+                QueueService(self.db).update_status(queue_token.id, target_queue_status, actor, notes=f"Synchronized from OPD visit {visit.visit_number}", commit=False, internal=True)
         if status == "prescribed":
-            prescription_orders = [order for order in visit.orders if order.order_type == "prescription"]
+            prescription_orders = [order for order in visit.orders if order.order_type == "prescription" and order.status != "cancelled"]
             if prescription_orders:
                 QueueService(self.db).ensure_token(
                     QueueTokenCreate(
@@ -274,9 +296,9 @@ class OPDService:
         self.db.refresh(visit)
         return visit
 
-    def update_consultation(self, visit_id, payload: OPDVisitConsultationUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+    def update_consultation(self, visit_id, payload: OPDVisitConsultationUpdate, actor: User, context: dict[str, str | None], *, commit: bool = True) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
-        for field, value in payload.model_dump().items():
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(visit, field, value)
         visit.updated_by = actor.id
         AuditService(self.db).log(
@@ -288,9 +310,23 @@ class OPDService:
             detail={"visit_number": visit.visit_number, "consultation_updated": True},
             context=context,
         )
-        self.db.commit()
-        self.db.refresh(visit)
+        if commit:
+            self.db.commit()
+            self.db.refresh(visit)
         return visit
+
+    def finalize_prescription(self, visit_id, payload: OPDVisitConsultationUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+        visit = self.get_visit(visit_id, actor)
+        token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd"))
+        if token:
+            QueueService(self.db)._lock_queue(token.branch_id, "opd", token.token_date, token.doctor_user_id)
+        self.db.refresh(visit, with_for_update={"of": OPDVisit})
+        if visit.status == "prescribed":
+            return visit  # A retried finalization must not call another serial.
+        if visit.status != "in_consultation":
+            raise AppException(409, "opd_consultation_required", "Start the consultation before finalizing a prescription")
+        self.update_consultation(visit.id, payload, actor, context, commit=False)
+        return self.update_status(visit.id, "prescribed", actor, context)
 
     def create_order(self, visit_id, payload: OPDVisitOrderCreate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
@@ -310,7 +346,7 @@ class OPDService:
                     branch_id=visit.branch_id,
                     patient_id=visit.patient_id,
                     visit_id=visit.id,
-                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"LAB-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     status="pending",
                     created_by=actor.id,
                     updated_by=actor.id,
@@ -348,7 +384,7 @@ class OPDService:
                     branch_id=visit.branch_id,
                     patient_id=visit.patient_id,
                     visit_id=visit.id,
-                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+                    order_number=f"RAD-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                     study_description=order.item_name,
                     status="pending",
                     created_by=actor.id,
@@ -458,6 +494,12 @@ class OPDService:
 
     def convert_to_ipd(self, visit_id, payload: OPDConvertToIPD, actor: User, context: dict[str, str | None]):
         visit = self.get_visit(visit_id, actor)
+        current_token = self.db.scalar(select(QueueToken).where(QueueToken.visit_id == visit.id, QueueToken.queue_scope == "opd"))
+        if current_token:
+            QueueService(self.db)._lock_queue(current_token.branch_id, "opd", current_token.token_date, current_token.doctor_user_id)
+        self.db.refresh(visit, with_for_update={"of": OPDVisit})
+        if visit.status == "cancelled":
+            raise AppException(409, "opd_cancelled", "A cancelled visit cannot be admitted to IPD")
         if visit.converted_ipd_admission_id:
             raise AppException(409, "opd_already_converted", "OPD visit already converted to IPD")
 
@@ -471,14 +513,14 @@ class OPDService:
             patient_condition=payload.patient_condition,
             ward_name=payload.ward_name,
             bed_number=payload.bed_number,
-            doctor_user_id=payload.doctor_user_id,
+            doctor_user_id=payload.doctor_user_id or visit.consulting_doctor_user_id,
             attending_doctor_name=payload.attending_doctor_name or visit.consulting_doctor_name,
-            diagnosis=payload.diagnosis or visit.chief_complaint,
+            diagnosis=payload.diagnosis or visit.final_diagnosis or visit.provisional_diagnosis or visit.chief_complaint,
             daily_charge=payload.daily_charge,
             advance_amount=payload.advance_amount,
             expected_discharge_date=payload.expected_discharge_date,
         )
-        admission = IPDService(self.db).create_admission(ipd_payload, actor, context)
+        admission = IPDService(self.db).create_admission(ipd_payload, actor, context, commit=False)
         visit.converted_ipd_admission_id = admission.id
         visit.status = "completed"
         visit.updated_by = actor.id
@@ -486,7 +528,7 @@ class OPDService:
         if queue_token and queue_token.status not in {"completed", "cancelled", "no_show"}:
             if queue_token.status != "in_progress":
                 queue_token.status = "in_progress"
-            QueueService(self.db).update_status(queue_token.id, "completed", actor, notes=f"OPD visit converted to {admission.admission_number}")
+            QueueService(self.db).update_status(queue_token.id, "completed", actor, notes=f"OPD visit converted to {admission.admission_number}", commit=False, internal=True)
         AuditService(self.db).log(
             user_id=actor.id,
             action=AuditAction.IPD_ADMISSION_CREATE,
@@ -546,7 +588,7 @@ class OPDService:
         return any(role.is_doctor_role for role in actor.roles)
 
     def _money(self, value: Decimal) -> Decimal:
-        return value.quantize(self.TWOPLACES)
+        return Decimal(str(value)).quantize(self.TWOPLACES)
 
     def _assert_slot_within_schedule(self, doctor_user_id, slot_start_at: datetime) -> None:
         schedule = self.db.scalar(

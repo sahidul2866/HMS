@@ -239,6 +239,7 @@ export class OPDRegisterComponent {
       return;
     }
     this.selectedSlot = slot;
+    this.form.patchValue({ visit_date: this.form.controls.slot_date.getRawValue() });
   }
 
   formatTime(value: string): string {
@@ -327,6 +328,8 @@ export class OPDRegisterComponent {
       this.form.patchValue({ visit_type: 'new' });
       this.notificationService.warning('Follow-up visit is not available. Please select "New Visit" instead.');
     }
+    const doctor = this.doctors.find(item => item.id === value.doctor_user_id);
+    if (doctor) this.form.patchValue({ consultation_fee: Number(this.form.controls.visit_type.value === 'follow_up' ? doctor.opd_follow_up_fee ?? 0 : doctor.opd_consultation_fee ?? 0) });
   }
 
   private checkFollowUpEligibility(doctor: User): void {
@@ -339,7 +342,7 @@ export class OPDRegisterComponent {
     // Check if there's a previous visit to this doctor within the follow-up period
     this.opdService.getPatientVisits(patientId).subscribe((visits) => {
       const doctorVisits = visits.filter(v => v.consulting_doctor_user_id === doctor.id && 
-                                               ['completed', 'waiting', 'in_consultation', 'billed', 'prescribed'].includes(v.status));
+                                               ['completed', 'prescribed'].includes(v.status) && v.visit_date <= (this.form.getRawValue().visit_date || ''));
       if (doctorVisits.length === 0) {
         this.isFollowUpAllowed = false;
         return;
@@ -352,7 +355,8 @@ export class OPDRegisterComponent {
         return;
       }
       const daysSinceLastVisit = Math.floor((new Date(currentVisitDate).getTime() - new Date(lastVisit.visit_date).getTime()) / (1000 * 60 * 60 * 24));
-      this.isFollowUpAllowed = daysSinceLastVisit <= (doctor.opd_follow_up_days ?? 30);
+      this.isFollowUpAllowed = daysSinceLastVisit >= 0 && daysSinceLastVisit <= (doctor.opd_follow_up_days ?? 30);
+      this.onVisitTypeChanged();
     });
   }
 

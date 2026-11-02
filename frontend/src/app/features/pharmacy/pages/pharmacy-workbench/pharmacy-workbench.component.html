@@ -14,7 +14,7 @@
 
   @if (loading) {
     <section class="page-card soft-panel">
-      <div class="empty-state">Loading pharmacy workspace...</div>
+      <div class="empty-state" role="status" aria-busy="true">Loading pharmacy workspace...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
     </section>
   } @else {
     <section class="spotlight-grid">
@@ -195,7 +195,7 @@
           </div>
         </div>
 
-        @if (returnTarget) {
+        @if (returnTarget && session.hasPermission('pharmacy.return')) {
           <div class="context-card active" style="margin-bottom: 1rem;">
             <div>
               <strong>Return Target</strong>
@@ -206,13 +206,18 @@
             </div>
           </div>
 
-          <form class="form-grid" [formGroup]="returnForm" (ngSubmit)="submitReturn()">
+          @if(returnTarget.return_history?.length){<details><summary>Physical receipt history</summary>@for(entry of returnTarget.return_history;track entry.id){<p>{{entry.quantity}} · {{entry.batch_no || 'Unbatched'}} · {{entry.restocked ? 'Restocked' : 'Received for disposal'}} · {{entry.received_at | date:'short'}} · {{entry.reason}}</p>}</details>}
+          <form class="form-grid no-smart-input" [formGroup]="returnForm" (ngSubmit)="submitReturn()">
+            <label class="field"><span>Original issue / batch</span><select formControlName="source_issue_id"><option value="">Select the batch physically received</option>@for(source of returnSources;track source.id){<option [value]="source.id">{{source.batch_no || 'Unbatched'}} · {{source.store || 'Pharmacy'}} · Remaining {{source.returnable}} · Expiry {{source.expiry_date || 'Not recorded'}}</option>}</select></label>
+            <label><input type="checkbox" formControlName="inspected" /> I physically received and inspected this medicine</label>
+            <label><input type="checkbox" formControlName="restock" /> Sealed, safe and suitable for saleable stock</label>
+            <p>Unchecked goods are recorded as received for disposal and do not increase available stock. Financial credit is posted separately by the cashier.</p>
             <label class="field">
               <span>Return Quantity</span>
               <input type="number" min="0.01" step="0.01" formControlName="quantity" />
             </label>
             <label class="field" style="grid-column:1/-1;">
-              <span>Return Note</span>
+              <span>Inspection and return reason</span>
               <textarea rows="2" formControlName="note" placeholder="Why the patient returned this medicine"></textarea>
             </label>
             <div class="item-foot" style="grid-column:1/-1;">
@@ -221,11 +226,11 @@
                 <span class="pill">Issued {{ returnTarget.quantity }}</span>
                 <span class="pill">Returnable {{ returnTarget.remaining_quantity }}</span>
               </div>
-              <button class="danger-btn" type="submit">Post Return</button>
+              <button class="danger-btn" type="submit" [disabled]="returning">{{returning ? 'Receiving…' : 'Post Return'}}</button>
             </div>
           </form>
         } @else {
-          <div class="empty-state">Open a dispense record from the queue page to process a return here.</div>
+          <div class="empty-state">Open a dispense record from the queue page to process a return. Your account must have pharmacy return permission.</div>
         }
       </section>
     </section>

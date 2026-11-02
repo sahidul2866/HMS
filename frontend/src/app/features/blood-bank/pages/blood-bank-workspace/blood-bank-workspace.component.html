@@ -7,15 +7,15 @@
     <button type="button" class="icon-btn" title="Refresh" (click)="reload()">Refresh</button>
   </header>
 
-  <div class="filters">
-    <input [(ngModel)]="filters.q" name="donorSearch" placeholder="Search donor or phone" />
-    <select [(ngModel)]="filters.blood_group" name="bloodGroup"><option value="">All groups</option><option *ngFor="let group of bloodGroups" [value]="group">{{ group }}</option></select>
-    <select [(ngModel)]="filters.component_type" name="componentType"><option value="">All components</option><option *ngFor="let component of components" [value]="component">{{ component }}</option></select>
-    <select [(ngModel)]="filters.status_value" name="unitStatus"><option value="">All unit status</option><option *ngFor="let status of unitStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select>
-    <select [(ngModel)]="filters.request_status" name="requestStatus"><option value="">All requests</option><option *ngFor="let status of requestStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select>
-    <select [(ngModel)]="filters.storage_location_id" name="locationFilter"><option value="">All locations</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
+  <details class="record-filters"><summary>Search and filter records{{ filters.q || filters.blood_group || filters.component_type || filters.status_value || filters.request_status || filters.storage_location_id ? ' · Filters active' : '' }}</summary><div class="filters">
+    <label class="field">Search donor or phone<input [(ngModel)]="filters.q" name="donorSearch" placeholder="Search donor or phone" /></label>
+    <label class="field">Blood group<select [(ngModel)]="filters.blood_group" name="bloodGroup"><option value="">All groups</option><option *ngFor="let group of bloodGroups" [value]="group">{{ group }}</option></select></label>
+    <label class="field">Component type<select [(ngModel)]="filters.component_type" name="componentType"><option value="">All components</option><option *ngFor="let component of components" [value]="component">{{ component }}</option></select></label>
+    <label class="field">Unit status<select [(ngModel)]="filters.status_value" name="unitStatus"><option value="">All unit status</option><option *ngFor="let status of unitStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select></label>
+    <label class="field">Request status<select [(ngModel)]="filters.request_status" name="requestStatus"><option value="">All requests</option><option *ngFor="let status of requestStatuses" [value]="status">{{ status.replaceAll('_', ' ') }}</option></select></label>
+    <label class="field">Location filter<select [(ngModel)]="filters.storage_location_id" name="locationFilter"><option value="">All locations</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select></label>
     <button type="button" (click)="reload()">Apply</button>
-  </div>
+  </div></details>
 
   <p *ngIf="message" class="message">{{ message }}</p>
 
@@ -89,16 +89,16 @@
   </section>
 
   <section *ngIf="activeTab === 'donors'" class="panel grid-two">
-    <form class="form" (ngSubmit)="createDonor()" *appHasPermission="'blood_bank.donor.create'">
+    <form class="form no-smart-input" (ngSubmit)="createDonor()" *appHasPermission="'blood_bank.donor.create'">
       <h2>Register Donor</h2>
-      <input required [(ngModel)]="donorForm.name" name="donorName" placeholder="Donor name" />
-      <input type="number" [(ngModel)]="donorForm.age" name="age" placeholder="Age" />
-      <select [(ngModel)]="donorForm.gender" name="gender"><option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option></select>
-      <select [(ngModel)]="donorForm.blood_group" name="donorGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
-      <input [(ngModel)]="donorForm.phone" name="phone" placeholder="Phone" />
-      <textarea [(ngModel)]="donorForm.address" name="address" placeholder="Address"></textarea>
-      <textarea [(ngModel)]="donorForm.remarks" name="remarks" placeholder="Remarks"></textarea>
-      <button type="submit">Save Donor</button>
+      <label class="field">Donor name<input required [(ngModel)]="donorForm.name" name="donorName" placeholder="Donor name" /></label>
+      <label class="field">Age<input type="number" [(ngModel)]="donorForm.age" name="age" placeholder="Age" /></label>
+      <label class="field">Gender<select [(ngModel)]="donorForm.gender" name="gender"><option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option></select></label>
+      <label class="field">Donor group<select [(ngModel)]="donorForm.blood_group" name="donorGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select></label>
+      <label class="field">Phone<input [(ngModel)]="donorForm.phone" name="phone" placeholder="Phone" /></label>
+      <label class="field">Address<textarea [(ngModel)]="donorForm.address" name="address" placeholder="Address"></textarea></label>
+      <label class="field">Remarks<textarea [(ngModel)]="donorForm.remarks" name="remarks" placeholder="Remarks"></textarea></label>
+      <button type="submit" [disabled]="saving">Save Donor</button>
     </form>
     <div class="table-wrap">
       <h2>Donor Register</h2>
@@ -107,63 +107,64 @@
   </section>
 
   <section *ngIf="activeTab === 'screening'" class="panel">
-    <form class="form columns" (ngSubmit)="screenDonor()">
+    <form class="form columns no-smart-input" (ngSubmit)="screenDonor()">
       <h2>Donor Screening</h2>
-      <select required [(ngModel)]="screeningForm.donor_id" name="screenDonor"><option value="">Donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select>
-      <input type="number" [(ngModel)]="screeningForm.weight" name="weight" placeholder="Weight kg" />
-      <input type="number" [(ngModel)]="screeningForm.hemoglobin_level" name="hb" placeholder="Hemoglobin" />
-      <input [(ngModel)]="screeningForm.blood_pressure" name="bp" placeholder="Blood pressure" />
-      <input type="number" [(ngModel)]="screeningForm.temperature" name="temp" placeholder="Temperature" />
-      <input type="number" [(ngModel)]="screeningForm.pulse" name="pulse" placeholder="Pulse" />
-      <select [(ngModel)]="screeningForm.eligibility_result" name="eligibility"><option value="eligible">Eligible</option><option value="temporarily_deferred">Temporarily deferred</option><option value="permanently_deferred">Permanently deferred</option></select>
+      <label class="field">Screen donor<select required [(ngModel)]="screeningForm.donor_id" name="screenDonor"><option value="">Donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select></label>
+      <label class="field">Weight kg<input type="number" [(ngModel)]="screeningForm.weight" name="weight" placeholder="Weight kg" /></label>
+      <label class="field">Hemoglobin<input type="number" [(ngModel)]="screeningForm.hemoglobin_level" name="hb" placeholder="Hemoglobin" /></label>
+      <label class="field">Blood pressure<input [(ngModel)]="screeningForm.blood_pressure" name="bp" placeholder="Blood pressure" /></label>
+      <label class="field">Temperature<input type="number" [(ngModel)]="screeningForm.temperature" name="temp" placeholder="Temperature" /></label>
+      <label class="field">Pulse<input type="number" [(ngModel)]="screeningForm.pulse" name="pulse" placeholder="Pulse" /></label>
+      <label class="field">Eligibility<select [(ngModel)]="screeningForm.eligibility_result" name="eligibility"><option value="eligible">Eligible</option><option value="temporarily_deferred">Temporarily deferred</option><option value="permanently_deferred">Permanently deferred</option></select></label>
       <input type="date" [(ngModel)]="screeningForm.next_eligible_date" name="nextEligible" />
-      <textarea [(ngModel)]="screeningForm.deferral_reason" name="deferral" placeholder="Deferral reason"></textarea>
-      <textarea [(ngModel)]="screeningForm.recent_illness" name="illness" placeholder="Recent illness"></textarea>
-      <textarea [(ngModel)]="screeningForm.medication_history" name="meds" placeholder="Medication history"></textarea>
-      <textarea [(ngModel)]="screeningForm.travel_history" name="travel" placeholder="Travel history"></textarea>
-      <button type="submit">Save Screening</button>
+      <label class="field">Deferral reason<textarea [(ngModel)]="screeningForm.deferral_reason" name="deferral" placeholder="Deferral reason"></textarea></label>
+      <label class="field">Recent illness<textarea [(ngModel)]="screeningForm.recent_illness" name="illness" placeholder="Recent illness"></textarea></label>
+      <label class="field">Medication history<textarea [(ngModel)]="screeningForm.medication_history" name="meds" placeholder="Medication history"></textarea></label>
+      <label class="field">Travel history<textarea [(ngModel)]="screeningForm.travel_history" name="travel" placeholder="Travel history"></textarea></label>
+      <button type="submit" [disabled]="saving">Save Screening</button>
     </form>
   </section>
 
   <section *ngIf="activeTab === 'collection'" class="panel">
-    <form class="form columns" (ngSubmit)="collectBlood()">
+    <form class="form columns no-smart-input" (ngSubmit)="collectBlood()">
       <h2>Blood Collection</h2>
-      <select required [(ngModel)]="collectionForm.donor_id" name="collectionDonor"><option value="">Eligible donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select>
-      <select required [(ngModel)]="collectionForm.blood_group" name="collectionGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
-      <input type="number" [(ngModel)]="collectionForm.collection_volume_ml" name="volume" placeholder="Volume ml" />
-      <input [(ngModel)]="collectionForm.bag_type" name="bagType" placeholder="Bag type" />
-      <input [(ngModel)]="collectionForm.anticoagulant_type" name="anticoagulant" placeholder="Anticoagulant" />
-      <input [(ngModel)]="collectionForm.collection_location" name="collectionLocation" placeholder="Collection location" />
-      <textarea [(ngModel)]="collectionForm.remarks" name="collectionRemarks" placeholder="Remarks"></textarea>
-      <button type="submit">Create Unit & Label</button>
+      <label class="field">Collection donor<select required [(ngModel)]="collectionForm.donor_id" name="collectionDonor"><option value="">Eligible donor</option><option *ngFor="let donor of donors" [value]="donor.id">{{ donor.donor_number }} - {{ donor.name }}</option></select></label>
+      <label class="field">Collection group<select required [(ngModel)]="collectionForm.blood_group" name="collectionGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select></label>
+      <label>Product expiry<input type="date" required [(ngModel)]="collectionForm.expiry_date" name="collectionExpiry" /></label>
+      <label class="field">Volume ml<input type="number" [(ngModel)]="collectionForm.collection_volume_ml" name="volume" placeholder="Volume ml" /></label>
+      <label class="field">Bag type<input [(ngModel)]="collectionForm.bag_type" name="bagType" placeholder="Bag type" /></label>
+      <label class="field">Anticoagulant<input [(ngModel)]="collectionForm.anticoagulant_type" name="anticoagulant" placeholder="Anticoagulant" /></label>
+      <label class="field">Collection location<input [(ngModel)]="collectionForm.collection_location" name="collectionLocation" placeholder="Collection location" /></label>
+      <label class="field">Remarks<textarea [(ngModel)]="collectionForm.remarks" name="collectionRemarks" placeholder="Remarks"></textarea></label>
+      <button type="submit" [disabled]="saving">Create Unit & Label</button>
     </form>
   </section>
 
   <section *ngIf="activeTab === 'testing' || activeTab === 'components' || activeTab === 'stock'" class="panel grid-two">
-    <form *ngIf="activeTab === 'testing'" class="form" (ngSubmit)="updateTest()">
+    <form *ngIf="activeTab === 'testing'" class="form no-smart-input" (ngSubmit)="updateTest()">
       <h2>Blood Testing</h2>
-      <select required [(ngModel)]="testForm.unit_id" name="testUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }} {{ unit.component_type }}</option></select>
-      <input [(ngModel)]="testForm.test_name" name="testName" placeholder="Test name" />
-      <select [(ngModel)]="testForm.status" name="testStatus"><option>pending</option><option>in_progress</option><option>completed</option><option>reactive</option><option>positive</option><option>negative</option><option>rejected</option></select>
-      <input [(ngModel)]="testForm.result" name="testResult" placeholder="Result" />
+      <label class="field">Test unit<select required [(ngModel)]="testForm.unit_id" name="testUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }} {{ unit.component_type }}</option></select></label>
+      <label class="field">Test name<input [(ngModel)]="testForm.test_name" name="testName" placeholder="Test name" /></label>
+      <label class="field">Test status<select [(ngModel)]="testForm.status" name="testStatus"><option>pending</option><option>in_progress</option><option>completed</option><option>reactive</option><option>positive</option><option>negative</option><option>rejected</option></select></label>
+      <label class="field">Result<input [(ngModel)]="testForm.result" name="testResult" placeholder="Result" /></label>
       <label><input type="checkbox" [(ngModel)]="testForm.verified" name="verified" /> Verified</label>
-      <button type="submit">Save Test</button>
+      <button type="submit" [disabled]="saving">Save Test</button>
     </form>
-    <form *ngIf="activeTab === 'components'" class="form" (ngSubmit)="prepareComponent()">
+    <form *ngIf="activeTab === 'components'" class="form no-smart-input" (ngSubmit)="prepareComponent()">
       <h2>Component Preparation</h2>
-      <select required [(ngModel)]="componentForm.source_unit_id" name="sourceUnit"><option value="">Source unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select>
-      <select [(ngModel)]="componentForm.component_type" name="component"><option *ngFor="let component of components">{{ component }}</option></select>
+      <label class="field">Source unit<select required [(ngModel)]="componentForm.source_unit_id" name="sourceUnit"><option value="">Source unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select></label>
+      <label class="field">Component<select [(ngModel)]="componentForm.component_type" name="component"><option *ngFor="let component of components">{{ component }}</option></select></label>
       <input type="date" required [(ngModel)]="componentForm.expiry_date" name="expiry" />
-      <input type="number" [(ngModel)]="componentForm.volume_ml" name="componentVolume" placeholder="Volume ml" />
-      <select [(ngModel)]="componentForm.storage_location_id" name="componentStorage"><option value="">Storage location</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
-      <button type="submit">Prepare Component</button>
+      <label class="field">Volume ml<input type="number" [(ngModel)]="componentForm.volume_ml" name="componentVolume" placeholder="Volume ml" /></label>
+      <label class="field">Component storage<select [(ngModel)]="componentForm.storage_location_id" name="componentStorage"><option value="">Storage location</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select></label>
+      <button type="submit" [disabled]="saving">Prepare Component</button>
     </form>
-    <form *ngIf="activeTab === 'stock'" class="form" (ngSubmit)="moveUnit()">
+    <form *ngIf="activeTab === 'stock'" class="form no-smart-input" (ngSubmit)="moveUnit()">
       <h2>Move Unit</h2>
-      <select required [(ngModel)]="moveForm.unit_id" name="moveUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }}</option></select>
-      <select required [(ngModel)]="moveForm.storage_location_id" name="moveLocation"><option value="">Destination</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select>
-      <input [(ngModel)]="moveForm.remarks" name="moveRemarks" placeholder="Move note" />
-      <button type="submit">Move</button>
+      <label class="field">Move unit<select required [(ngModel)]="moveForm.unit_id" name="moveUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }}</option></select></label>
+      <label class="field">Move location<select required [(ngModel)]="moveForm.storage_location_id" name="moveLocation"><option value="">Destination</option><option *ngFor="let location of locations" [value]="location.id">{{ location.name }}</option></select></label>
+      <label class="field">Move note<input [(ngModel)]="moveForm.remarks" name="moveRemarks" placeholder="Move note" /></label>
+      <button type="submit" [disabled]="saving">Move</button>
     </form>
     <div class="table-wrap">
       <h2>Blood Stock</h2>
@@ -172,39 +173,39 @@
   </section>
 
   <section *ngIf="activeTab === 'requests' || activeTab === 'crossmatch' || activeTab === 'issue'" class="panel grid-two">
-    <form *ngIf="activeTab === 'requests'" class="form" (ngSubmit)="createRequest()">
+    <form *ngIf="activeTab === 'requests'" class="form no-smart-input" (ngSubmit)="createRequest()">
       <h2>Blood Request</h2>
-      <input required [(ngModel)]="requestForm.patient_id" name="patientId" placeholder="Patient ID" />
-      <select required [(ngModel)]="requestForm.blood_group" name="requestGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
-      <select [(ngModel)]="requestForm.component_type" name="requestComponent"><option *ngFor="let component of components">{{ component }}</option></select>
-      <input type="number" min="1" [(ngModel)]="requestForm.quantity_units" name="quantity" placeholder="Units" />
-      <select [(ngModel)]="requestForm.urgency" name="urgency"><option>routine</option><option>urgent</option><option>emergency</option></select>
-      <input [(ngModel)]="requestForm.department_name" name="department" placeholder="Department / ward / OT" />
-      <textarea [(ngModel)]="requestForm.indication" name="indication" placeholder="Indication"></textarea>
-      <textarea [(ngModel)]="requestForm.diagnosis" name="diagnosis" placeholder="Diagnosis"></textarea>
-      <button type="submit">Create Request</button>
+      <label>Patient<select required [(ngModel)]="requestForm.patient_id" name="patientId"><option value="">Select patient</option><option *ngFor="let patient of patients" [value]="patient.id">{{patient.patient_number}} · {{patient.first_name}} {{patient.last_name}}</option></select></label>
+      <label class="field">Request group<select required [(ngModel)]="requestForm.blood_group" name="requestGroup"><option value="">Blood group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select></label>
+      <label class="field">Request component<select [(ngModel)]="requestForm.component_type" name="requestComponent"><option *ngFor="let component of components">{{ component }}</option></select></label>
+      <label class="field">Units<input type="number" min="1" [(ngModel)]="requestForm.quantity_units" name="quantity" placeholder="Units" /></label>
+      <label class="field">Urgency<select [(ngModel)]="requestForm.urgency" name="urgency"><option>routine</option><option>urgent</option><option>emergency</option></select></label>
+      <label class="field">Department / ward / OT<input [(ngModel)]="requestForm.department_name" name="department" placeholder="Department / ward / OT" /></label>
+      <label class="field">Indication<textarea [(ngModel)]="requestForm.indication" name="indication" placeholder="Indication"></textarea></label>
+      <label class="field">Diagnosis<textarea [(ngModel)]="requestForm.diagnosis" name="diagnosis" placeholder="Diagnosis"></textarea></label>
+      <button type="submit" [disabled]="saving">Create Request</button>
     </form>
-    <form *ngIf="activeTab === 'crossmatch'" class="form" (ngSubmit)="crossmatch()">
+    <form *ngIf="activeTab === 'crossmatch'" class="form no-smart-input" (ngSubmit)="crossmatch()">
       <h2>Crossmatch</h2>
-      <select required [(ngModel)]="crossmatchForm.request_id" name="crossRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.blood_group }}</option></select>
-      <select required [(ngModel)]="crossmatchForm.unit_id" name="crossUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select>
-      <select [(ngModel)]="crossmatchForm.patient_blood_group" name="patientGroup"><option value="">Patient group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select>
-      <select [(ngModel)]="crossmatchForm.compatibility_status" name="compatibility"><option>compatible</option><option>incompatible</option></select>
-      <input [(ngModel)]="crossmatchForm.result" name="crossResult" placeholder="Result" />
+      <label class="field">Cross request<select required [(ngModel)]="crossmatchForm.request_id" name="crossRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.blood_group }}</option></select></label>
+      <label class="field">Cross unit<select required [(ngModel)]="crossmatchForm.unit_id" name="crossUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.blood_group }}</option></select></label>
+      <label class="field">Patient group<select [(ngModel)]="crossmatchForm.patient_blood_group" name="patientGroup"><option value="">Patient group</option><option *ngFor="let group of bloodGroups">{{ group }}</option></select></label>
+      <label class="field">Compatibility<select [(ngModel)]="crossmatchForm.compatibility_status" name="compatibility"><option>compatible</option><option>incompatible</option></select></label>
+      <label class="field">Result<input [(ngModel)]="crossmatchForm.result" name="crossResult" placeholder="Result" /></label>
       <label><input type="checkbox" [(ngModel)]="crossmatchForm.emergency_override" name="crossOverride" /> Emergency override</label>
-      <textarea [(ngModel)]="crossmatchForm.override_reason" name="crossOverrideReason" placeholder="Override reason"></textarea>
-      <button type="submit">Record Crossmatch</button>
+      <label class="field">Override reason<textarea [(ngModel)]="crossmatchForm.override_reason" name="crossOverrideReason" placeholder="Override reason"></textarea></label>
+      <button type="submit" [disabled]="saving">Record Crossmatch</button>
     </form>
-    <form *ngIf="activeTab === 'issue'" class="form" (ngSubmit)="issue()">
+    <form *ngIf="activeTab === 'issue'" class="form no-smart-input" (ngSubmit)="issue()">
       <h2>Issue Unit</h2>
-      <select required [(ngModel)]="issueForm.request_id" name="issueRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.status }}</option></select>
-      <select required [(ngModel)]="issueForm.unit_id" name="issueUnit"><option value="">Safe unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select>
-      <input [(ngModel)]="issueForm.received_by" name="receivedBy" placeholder="Received by" />
-      <input [(ngModel)]="issueForm.destination" name="destination" placeholder="Ward / OT / emergency" />
-      <input [(ngModel)]="issueForm.transport_condition" name="transport" placeholder="Transport condition" />
+      <label class="field">Issue request<select required [(ngModel)]="issueForm.request_id" name="issueRequest"><option value="">Request</option><option *ngFor="let request of requests" [value]="request.id">{{ request.request_number }} - {{ request.status }}</option></select></label>
+      <label class="field">Issue unit<select required [(ngModel)]="issueForm.unit_id" name="issueUnit"><option value="">Safe unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select></label>
+      <label class="field">Received by<input [(ngModel)]="issueForm.received_by" name="receivedBy" placeholder="Received by" /></label>
+      <label class="field">Ward / OT / emergency<input [(ngModel)]="issueForm.destination" name="destination" placeholder="Ward / OT / emergency" /></label>
+      <label class="field">Transport condition<input [(ngModel)]="issueForm.transport_condition" name="transport" placeholder="Transport condition" /></label>
       <label><input type="checkbox" [(ngModel)]="issueForm.emergency_override" name="issueOverride" /> Emergency override</label>
-      <textarea [(ngModel)]="issueForm.override_reason" name="issueOverrideReason" placeholder="Override reason"></textarea>
-      <button type="submit">Issue Blood</button>
+      <label class="field">Override reason<textarea [(ngModel)]="issueForm.override_reason" name="issueOverrideReason" placeholder="Override reason"></textarea></label>
+      <button type="submit" [disabled]="saving">Issue Blood</button>
     </form>
     <div class="table-wrap">
       <h2>Request Queue</h2>
@@ -213,58 +214,60 @@
   </section>
 
   <section *ngIf="activeTab === 'transfusion' || activeTab === 'return' || activeTab === 'discard'" class="panel">
-    <form *ngIf="activeTab === 'transfusion'" class="form columns" (ngSubmit)="updateTransfusion()">
+    <form *ngIf="activeTab === 'transfusion'" class="form columns no-smart-input" (ngSubmit)="updateTransfusion()">
       <h2>Transfusion Tracking</h2>
-      <input required [(ngModel)]="transfusionForm.issue_id" name="transIssue" placeholder="Issue ID" />
-      <select [(ngModel)]="transfusionForm.status" name="transStatus"><option>started</option><option>held</option><option>stopped</option><option>completed</option><option>reaction</option></select>
+      <label>Issued unit and patient<select required [(ngModel)]="transfusionForm.issue_id" name="transIssue"><option value="">Select issue record</option><option *ngFor="let issue of issues" [value]="issue.id" [disabled]="issue.returned || issue.unit_status !== 'issued'">{{issue.issue_number}} · {{issue.unit_number}} · {{issue.patient_name}} · {{issue.transfusion_status || issue.unit_status}}</option></select></label>
+      <label class="field">Trans status<select [(ngModel)]="transfusionForm.status" name="transStatus"><option>started</option><option>held</option><option>stopped</option><option>completed</option><option>reaction</option></select></label>
       <textarea [(ngModel)]="transfusionForm.vitals" name="vitals" placeholder='Vitals JSON or note'></textarea>
       <label><input type="checkbox" [(ngModel)]="transfusionForm.reaction_observed" name="reaction" /> Reaction observed</label>
-      <textarea [(ngModel)]="transfusionForm.reaction_details" name="reactionDetails" placeholder="Reaction details"></textarea>
-      <textarea [(ngModel)]="transfusionForm.remarks" name="transRemarks" placeholder="Remarks"></textarea>
-      <button type="submit">Update Transfusion</button>
+      <label class="field">Reaction details<textarea [(ngModel)]="transfusionForm.reaction_details" name="reactionDetails" placeholder="Reaction details"></textarea></label>
+      <label class="field">Remarks<textarea [(ngModel)]="transfusionForm.remarks" name="transRemarks" placeholder="Remarks"></textarea></label>
+      <button type="submit" [disabled]="saving">Update Transfusion</button>
     </form>
-    <form *ngIf="activeTab === 'return'" class="form columns" (ngSubmit)="returnUnit()">
+    <form *ngIf="activeTab === 'return'" class="form columns no-smart-input" (ngSubmit)="returnUnit()">
       <h2>Return Unit</h2>
-      <input required [(ngModel)]="returnForm.issue_id" name="returnIssue" placeholder="Issue ID" />
-      <input [(ngModel)]="returnForm.returned_by" name="returnedBy" placeholder="Returned by" />
-      <input [(ngModel)]="returnForm.condition_on_return" name="condition" placeholder="Condition" />
-      <input type="number" [(ngModel)]="returnForm.minutes_outside_bank" name="outsideTime" placeholder="Minutes outside bank" />
-      <select [(ngModel)]="returnForm.decision" name="returnDecision"><option>accept</option><option>quarantine</option><option>discard</option></select>
-      <textarea [(ngModel)]="returnForm.reason" name="returnReason" placeholder="Reason"></textarea>
-      <button type="submit">Save Return</button>
+      <label>Issued unit and patient<select required [(ngModel)]="returnForm.issue_id" name="returnIssue"><option value="">Select issue record</option><option *ngFor="let issue of issues" [value]="issue.id" [disabled]="issue.returned || issue.unit_status !== 'issued'">{{issue.issue_number}} · {{issue.unit_number}} · {{issue.patient_name}} · {{issue.transfusion_status || issue.unit_status}}</option></select></label>
+      <label class="field">Returned by<input [(ngModel)]="returnForm.returned_by" name="returnedBy" placeholder="Returned by" /></label>
+      <label class="field">Condition<input [(ngModel)]="returnForm.condition_on_return" name="condition" placeholder="Condition" /></label>
+      <label class="field">Minutes outside bank<input type="number" [(ngModel)]="returnForm.minutes_outside_bank" name="outsideTime" placeholder="Minutes outside bank" /></label>
+      <label class="field">Return decision<select [(ngModel)]="returnForm.decision" name="returnDecision"><option>accept</option><option>quarantine</option><option>discard</option></select></label>
+      <label class="field">Reason<textarea [(ngModel)]="returnForm.reason" name="returnReason" placeholder="Reason"></textarea></label>
+      <button type="submit" [disabled]="saving">Save Return</button>
     </form>
-    <form *ngIf="activeTab === 'discard'" class="form columns" (ngSubmit)="discard()">
+    <form *ngIf="activeTab === 'discard'" class="form columns no-smart-input" (ngSubmit)="discard()">
       <h2>Discard Unit</h2>
-      <select required [(ngModel)]="discardForm.unit_id" name="discardUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select>
-      <select [(ngModel)]="discardForm.reason" name="discardReason"><option>Expired</option><option>Reactive/positive test</option><option>Damaged bag</option><option>Temperature excursion</option><option>Contamination concern</option><option>Return not acceptable</option><option>Hemolysis</option><option>Leakage</option><option>Other reason</option></select>
-      <textarea [(ngModel)]="discardForm.details" name="discardDetails" placeholder="Details"></textarea>
-      <button type="submit">Discard</button>
+      <label class="field">Discard unit<select required [(ngModel)]="discardForm.unit_id" name="discardUnit"><option value="">Unit</option><option *ngFor="let unit of units" [value]="unit.id">{{ unit.unit_number }} - {{ unit.status }}</option></select></label>
+      <label class="field">Discard reason<select [(ngModel)]="discardForm.reason" name="discardReason"><option>Expired</option><option>Reactive/positive test</option><option>Damaged bag</option><option>Temperature excursion</option><option>Contamination concern</option><option>Return not acceptable</option><option>Hemolysis</option><option>Leakage</option><option>Other reason</option></select></label>
+      <label class="field">Details<textarea [(ngModel)]="discardForm.details" name="discardDetails" placeholder="Details"></textarea></label>
+      <button type="submit" [disabled]="saving">Discard</button>
     </form>
   </section>
 
   <section *ngIf="activeTab === 'reports'" class="panel">
     <div class="filters report-filter">
-      <select [(ngModel)]="reportFilters.report_type" name="reportType"><option *ngFor="let item of reports" [value]="item">{{ item.replaceAll('_', ' ') }}</option></select>
-      <input type="date" [(ngModel)]="reportFilters.date_from" name="dateFrom" />
-      <input type="date" [(ngModel)]="reportFilters.date_to" name="dateTo" />
+      <label class="field">Report type<select [(ngModel)]="reportFilters.report_type" name="reportType"><option *ngFor="let item of reports" [value]="item">{{ item.replaceAll('_', ' ') }}</option></select></label>
+      <label>From date<input type="date" [(ngModel)]="reportFilters.date_from" name="dateFrom" /></label>
+      <label>Through date<input type="date" [(ngModel)]="reportFilters.date_to" name="dateTo" /></label>
       <button type="button" (click)="loadReport()">Run</button>
     </div>
     <div class="table-wrap">
       <h2>Report Results</h2>
-      <table><thead><tr><th>#</th><th>Record</th></tr></thead><tbody><tr *ngFor="let row of report?.rows; let i = index"><td>{{ i + 1 }}</td><td><code>{{ row | json }}</code></td></tr></tbody></table>
+      <p *ngIf="reportLoading" role="status">Loading report…<span class="app-inline-skeleton"></span></p>
+      <p *ngIf="report">{{report.rows.length}} records · {{report.generated_at | date:'medium'}}. Detailed reports show up to 500 records; narrow the date range for review.</p>
+      <table *ngIf="report?.rows?.length"><thead><tr><th *ngFor="let key of reportColumns">{{key.replaceAll('_',' ') | titlecase}}</th></tr></thead><tbody><tr *ngFor="let row of report?.rows"><td *ngFor="let key of reportColumns">{{reportValue(row,key)}}</td></tr></tbody></table><p *ngIf="report && !report.rows.length" class="empty">No records match this report and date range. Try a wider date range or another report.</p>
     </div>
   </section>
 
   <section *ngIf="activeTab === 'settings'" class="panel grid-two">
-    <form class="form" (ngSubmit)="createLocation()">
+    <form class="form no-smart-input" (ngSubmit)="createLocation()">
       <h2>Storage Location</h2>
-      <input required [(ngModel)]="locationForm.code" name="locationCode" placeholder="Code" />
-      <input required [(ngModel)]="locationForm.name" name="locationName" placeholder="Name" />
-      <select [(ngModel)]="locationForm.location_type" name="locationType"><option>refrigerator</option><option>freezer</option><option>shelf</option><option>rack</option><option>compartment</option></select>
-      <input type="number" [(ngModel)]="locationForm.temperature_min" name="tempMin" placeholder="Min C" />
-      <input type="number" [(ngModel)]="locationForm.temperature_max" name="tempMax" placeholder="Max C" />
-      <input type="number" [(ngModel)]="locationForm.current_temperature" name="currentTemp" placeholder="Current C" />
-      <button type="submit">Save Location</button>
+      <label class="field">Code<input required [(ngModel)]="locationForm.code" name="locationCode" placeholder="Code" /></label>
+      <label class="field">Name<input required [(ngModel)]="locationForm.name" name="locationName" placeholder="Name" /></label>
+      <label class="field">Location type<select [(ngModel)]="locationForm.location_type" name="locationType"><option>refrigerator</option><option>freezer</option><option>shelf</option><option>rack</option><option>compartment</option></select></label>
+      <label class="field">Min C<input type="number" [(ngModel)]="locationForm.temperature_min" name="tempMin" placeholder="Min C" /></label>
+      <label class="field">Max C<input type="number" [(ngModel)]="locationForm.temperature_max" name="tempMax" placeholder="Max C" /></label>
+      <label class="field">Current C<input type="number" [(ngModel)]="locationForm.current_temperature" name="currentTemp" placeholder="Current C" /></label>
+      <button type="submit" [disabled]="saving">Save Location</button>
     </form>
     <div class="settings-list">
       <h2>Configured Rules</h2>

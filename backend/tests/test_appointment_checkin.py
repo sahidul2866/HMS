@@ -19,7 +19,7 @@ class FakeDB:
     def commit(self) -> None:
         pass
 
-    def refresh(self, entity) -> None:  # noqa: ANN001
+    def refresh(self, entity, **kwargs) -> None:  # noqa: ANN001
         pass
 
 

@@ -65,7 +65,7 @@ class InventoryRepository:
     def get_item(self, entity_id, *, for_update: bool = False):
         stmt = select(InventoryItem).options(joinedload(InventoryItem.category), joinedload(InventoryItem.preferred_supplier)).where(InventoryItem.id == entity_id)
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=InventoryItem).execution_options(populate_existing=True)
         return self.db.scalar(stmt)
 
     def get_supplier(self, entity_id):
@@ -106,7 +106,7 @@ class InventoryRepository:
             InventoryStoreItem.is_active.is_(True),
         )
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=InventoryStoreItem)
         return self.db.scalar(stmt)
 
     def list_store_balances(self, branch_id=None, store_id=None, item_id=None, q=None, stock_status=None):
@@ -215,7 +215,7 @@ class InventoryRepository:
             joinedload(InventoryRequisition.issued_by_user),
         ).where(InventoryRequisition.id == entity_id)
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=InventoryRequisition)
         return self.db.scalar(stmt)
 
     def list_requisitions(self, branch_id=None, q=None, store_id=None, status=None):

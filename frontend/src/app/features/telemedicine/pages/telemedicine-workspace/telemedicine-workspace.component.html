@@ -74,7 +74,7 @@
         </tr>
       </tbody>
     </table>
-    <div *ngIf="!appointments.length" class="table-empty">No telemedicine appointments match the selected filters.</div>
+    <div *ngIf="!appointments.length" class="table-empty">No telemedicine appointments match the selected filters.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
   </section>
 
   <section *ngIf="tab() === 'consultation' || tab() === 'completed'" class="consult-layout">
@@ -83,7 +83,7 @@
       <button class="list-row" type="button" *ngFor="let item of consultations" [class.active]="selectedConsultation?.id === item.id" (click)="selectConsultation(item)">
         <strong>{{ item.patient_name }}</strong><span>{{ item.telemedicine_number }} · {{ item.status.replaceAll('_', ' ') }}</span>
       </button>
-      <div *ngIf="!consultations.length" class="table-empty">No consultations match the selected filters.</div>
+      <div *ngIf="!consultations.length" class="table-empty">No consultations match the selected filters.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
     </aside>
     <section class="page-card consult-panel" *ngIf="selectedConsultation">
       <div class="section-header"><div><h2 class="section-title">{{ selectedConsultation.patient_name }} · {{ selectedConsultation.patient_number }}</h2><div class="section-copy">{{ selectedConsultation.telemedicine_number }} · Started {{ selectedConsultation.started_at | date:'short' }}</div></div><span [class]="statusClass(selectedConsultation.connection_status)">{{ selectedConsultation.connection_status }}</span></div>
@@ -131,7 +131,7 @@
         <option value="">{{ appointmentSlotsLoading ? 'Loading slots...' : 'Select available slot' }}</option>
         <option *ngFor="let slot of availableAppointmentSlots()" [value]="slot.slot_start_at">{{ slot.slot_start_at | date:'shortTime' }}</option>
       </select>
-      <div class="table-empty compact-empty" *ngIf="!appointmentSlotsLoading && appointmentForm['doctor_user_id'] && appointmentForm['appointment_date'] && !availableAppointmentSlots().length">No available slots for this doctor/date.</div>
+      <div class="table-empty compact-empty" *ngIf="!appointmentSlotsLoading && appointmentForm['doctor_user_id'] && appointmentForm['appointment_date'] && !availableAppointmentSlots().length">No available slots for this doctor/date.<span class="app-state-guidance">Choose another date or doctor and check availability again.</span></div>
       <textarea name="reason" [(ngModel)]="appointmentForm['consultation_reason']" placeholder="Consultation reason"></textarea>
       <select name="visitType" [(ngModel)]="appointmentForm['visit_type']"><option value="new">New</option><option value="follow_up">Follow-up</option></select>
       <select name="appointmentType" [(ngModel)]="appointmentForm['appointment_type']"><option value="video">Video</option><option value="audio">Audio</option><option value="chat">Chat</option></select>

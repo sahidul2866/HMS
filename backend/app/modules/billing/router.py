@@ -247,3 +247,77 @@ def void_billing_invoice(
 ) -> BillingInvoiceRead:
     invoice = BillingServiceManager(db).void_invoice(invoice_id, payload, user, context)
     return BillingInvoiceRead.model_validate(invoice, from_attributes=True)
+
+# Operations use billing administration for configuration/corrections and receipt custody.
+from fastapi.encoders import jsonable_encoder
+from app.modules.billing.operations import BillingOperations
+from app.schemas.billing import BillingTypeCreate, BillingInvoiceAmend, BillingHandoverCreate, BillingHandoverAccept
+
+
+def operation_payload(value):
+    # SQLAlchemy public columns only; never serialize internal session state.
+    if isinstance(value,list):return [operation_payload(v) for v in value]
+    return jsonable_encoder({column.name:getattr(value,column.name) for column in value.__table__.columns})
+
+
+@router.get('/types', dependencies=[Depends(require_permissions('billing.view'))])
+def billing_types(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).types(user))
+
+
+@router.post('/types', dependencies=[Depends(require_permissions('billing.service.manage'))])
+def create_billing_type(payload: BillingTypeCreate,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).create_type(payload,user))
+
+
+@router.patch('/invoices/{invoice_id}',response_model=BillingInvoiceRead,dependencies=[Depends(require_permissions('billing.service.manage'))])
+def amend_billing_invoice(invoice_id: UUID,payload: BillingInvoiceAmend,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return BillingOperations(db).amend(invoice_id,payload,user)
+
+
+@router.get('/invoices/{invoice_id}/history',dependencies=[Depends(require_permissions('billing.view'))])
+def invoice_history(invoice_id: UUID,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).history(invoice_id,user))
+
+
+@router.get('/cash/balance',dependencies=[Depends(require_permissions('billing.payment.collect'))])
+def cashier_balance(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return BillingOperations(db).cash_balance(user)
+
+
+@router.get('/cash/handovers',dependencies=[Depends(require_permissions('billing.payment.collect'))])
+def cash_handovers(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).handovers(user))
+
+
+@router.post('/cash/handovers',dependencies=[Depends(require_permissions('billing.payment.collect'))])
+def submit_cash_handover(payload: BillingHandoverCreate,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).submit_handover(payload,user))
+
+
+@router.post('/cash/handovers/{handover_id}/accept',dependencies=[Depends(require_permissions('billing.service.manage'))])
+def accept_cash_handover(handover_id: UUID,payload: BillingHandoverAccept,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return operation_payload(BillingOperations(db).accept_handover(handover_id,payload,user))
+
+
+@router.get('/reports/operations',dependencies=[Depends(require_permissions('reporting.financial.view'))])
+def billing_operations_report(date_from: date | None=None,date_to: date | None=None,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return BillingOperations(db).statistics(user,date_from,date_to)
+
+
+@router.get('/cash/receivers',dependencies=[Depends(require_permissions('billing.payment.collect'))])
+def cash_receivers(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.user import User
+    from app.modules.auth.service import AuthService
+    stmt=select(User).where(User.is_active.is_(True),User.id!=user.id)
+    if user.branch_id:stmt=stmt.where(User.branch_id==user.branch_id)
+    return [{'id':str(u.id),'name':u.full_name} for u in db.scalars(stmt) if 'billing.service.manage' in AuthService(db).get_effective_permissions(u)]
+
+
+@router.get('/reports/snapshots',dependencies=[Depends(require_permissions('reporting.financial.view'))])
+def saved_billing_reports(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.billing import BillingReportSnapshot
+    stmt=BillingOperations(db).scoped(select(BillingReportSnapshot),BillingReportSnapshot,user).order_by(BillingReportSnapshot.created_at.desc()).limit(100)
+    return operation_payload(list(db.scalars(stmt)))

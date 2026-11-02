@@ -31,6 +31,10 @@ export class IPDService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
 
+  updateBedStatus(bedId:string,status:string,reason:string):Observable<IPDBed> {
+    return this.http.patch<IPDBed>(this.url(`/ipd/beds/${bedId}/status`),{status,reason}).pipe(tap(()=>this.clearCache()));
+  }
+
   listAdmissions(): Observable<IPDAdmission[]> {
     return this.cache.get('ipd:admissions', () => this.http.get<IPDAdmission[]>(this.url('/ipd/admissions')));
   }
@@ -182,6 +186,10 @@ export class IPDService extends ApiBaseService {
 
   acknowledgeHandover(handoverId: string): Observable<unknown> {
     return this.http.post(this.url(`/ipd/handovers/${handoverId}/acknowledge`), {}).pipe(tap(() => this.clearCache()));
+  }
+
+  updateClearance(admissionId: string, department: 'pharmacy' | 'lab' | 'radiology', note: string): Observable<IPDAdmission> {
+    return this.http.patch<IPDAdmission>(this.url(`/ipd/admissions/${admissionId}/clearance`), { department, status: 'cleared', note }).pipe(tap(() => this.clearCache()));
   }
 
   planDischarge(admissionId: string, status = 'requested'): Observable<IPDAdmission> {

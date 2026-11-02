@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -46,7 +47,7 @@ class OTService:
         self.db = db
 
     def dashboard(self, actor: User) -> dict:
-        today = date.today()
+        today = datetime.now(ZoneInfo("Asia/Dhaka")).date()
         schedules = self.list_schedules(actor, day=today)
         upcoming = self.db.scalar(select(func.count(SurgerySchedule.id)).where(SurgerySchedule.branch_id == actor.branch_id, SurgerySchedule.scheduled_start_at > datetime.now(UTC), SurgerySchedule.status.in_(["scheduled", "ready_for_ot"]))) or 0
         available_rooms = self.db.scalar(select(func.count(OTRoom.id)).where(OTRoom.branch_id == actor.branch_id, OTRoom.status == "available")) or 0
@@ -100,7 +101,20 @@ class OTService:
             stmt = stmt.join(OTBooking.patient).where(or_(OTBooking.booking_number.ilike(pattern), OTBooking.procedure_name.ilike(pattern), Patient.patient_number.ilike(pattern), Patient.first_name.ilike(pattern), Patient.last_name.ilike(pattern)))
         return list(self.db.scalars(stmt))
 
+    def update_room_status(self, identifier, status, reason, actor):
+        room=self.db.scalar(select(OTRoom).where(OTRoom.id==identifier).with_for_update().execution_options(populate_existing=True))
+        if not room or room.branch_id!=actor.branch_id:
+            raise AppException(404,'ot_room_not_found','OT room not found')
+        if self.db.scalar(select(SurgerySchedule.id).where(SurgerySchedule.room_id==room.id,SurgerySchedule.status=='in_progress')):
+            raise AppException(409,'ot_room_in_use','Complete the active surgery before changing room availability')
+        room.status=status;room.updated_by=actor.id
+        self._audit(actor,'room.status','ot_room',str(room.id),reason)
+        self.db.commit();return room
+
     def create_booking(self, payload: OTBookingCreate, actor: User) -> OTBooking:
+        patient = self.db.get(Patient, payload.patient_id)
+        if not patient or not patient.is_active or patient.branch_id != actor.branch_id:
+            raise AppException(403, 'ot_patient_scope', 'Select a patient from your branch')
         booking = OTBooking(
             **payload.model_dump(),
             branch_id=actor.branch_id,
@@ -132,12 +146,20 @@ class OTService:
             .order_by(SurgerySchedule.scheduled_start_at)
         )
         if day:
-            stmt = stmt.where(func.date(SurgerySchedule.scheduled_start_at) == day)
+            stmt = stmt.where(func.date(func.timezone("Asia/Dhaka", SurgerySchedule.scheduled_start_at)) == day)
         if status:
             stmt = stmt.where(SurgerySchedule.status == status)
         return list(self.db.scalars(stmt))
 
     def create_schedule(self, payload: SurgeryScheduleCreate, actor: User) -> SurgerySchedule:
+        room=self.db.scalar(select(OTRoom).where(OTRoom.id == payload.room_id).with_for_update().execution_options(populate_existing=True))
+        if not room or room.branch_id!=actor.branch_id or room.status in {'cleaning','maintenance','closed'}:
+            raise AppException(409,'ot_room_unavailable','Release the cleaned room or choose another available theatre')
+        self.db.scalar(select(OTBooking).where(OTBooking.id == payload.booking_id).with_for_update())
+        if payload.scheduled_end_at <= payload.scheduled_start_at:
+            raise AppException(422, 'ot_schedule_time', 'Surgery end must be after its start')
+        if self.db.scalar(select(SurgerySchedule.id).where(SurgerySchedule.booking_id == payload.booking_id, SurgerySchedule.status != 'cancelled')):
+            raise AppException(409, 'ot_booking_already_scheduled', 'This booking already has an active schedule')
         self._validate_schedule_conflict(payload, actor)
         schedule = SurgerySchedule(**payload.model_dump(), branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
         booking = self.db.get(OTBooking, payload.booking_id)
@@ -156,8 +178,17 @@ class OTService:
         return schedule
 
     def update_status(self, schedule_id: UUID, status: str, actor: User, note: str | None = None) -> SurgerySchedule:
+        self.db.execute(select(SurgerySchedule.id).where(SurgerySchedule.id==schedule_id).with_for_update())
         schedule = self._get_schedule(schedule_id, actor)
         now = datetime.now(UTC)
+        transitions={'approved':{'ready_for_ot','cancelled'},'scheduled':{'ready_for_ot','cancelled'},'ready_for_ot':{'in_progress','cancelled'},'in_progress':{'completed'}}
+        if status == schedule.status: return schedule
+        if status not in transitions.get(schedule.status,set()):
+            raise AppException(409, 'ot_invalid_transition', 'Follow the scheduled, ready, started and completed sequence')
+        if status in {'ready_for_ot','in_progress'} and not (schedule.pre_op_checklist and schedule.pre_op_checklist.ready_for_ot and schedule.pre_op_checklist.consent_signed and schedule.anesthesia_record and schedule.anesthesia_record.clearance_status=='cleared'):
+            raise AppException(409, 'ot_not_ready', 'Record the pre-op readiness/consent and anesthesia clearance before starting')
+        if status=='completed' and not (schedule.surgery_notes and (schedule.surgery_notes.surgeon_notes or '').strip()):
+            raise AppException(409, 'ot_note_required', 'Record an operative note before completion')
         schedule.status = status
         if status == "ready_for_ot" and schedule.booking:
             schedule.booking.status = "ready_for_ot"
@@ -184,13 +215,15 @@ class OTService:
 
     def upsert_pre_op(self, schedule_id: UUID, payload: PreOpChecklistUpdate, actor: User) -> PreOpChecklist:
         schedule = self._get_schedule(schedule_id, actor)
+        if schedule.status in {'completed','cancelled'}:
+            raise AppException(409,'ot_case_closed','The closed case cannot change pre-op readiness')
         item = schedule.pre_op_checklist or PreOpChecklist(schedule_id=schedule.id, created_by=actor.id)
         for key, value in payload.model_dump().items():
             setattr(item, key, value)
         item.checked_by_user_id = actor.id
         item.updated_by = actor.id
         self.db.add(item)
-        if item.ready_for_ot:
+        if item.ready_for_ot and item.consent_signed and schedule.anesthesia_record and schedule.anesthesia_record.clearance_status=="cleared" and schedule.status in {"scheduled","approved"}:
             schedule.status = "ready_for_ot"
             if schedule.booking:
                 schedule.booking.status = "ready_for_ot"
@@ -209,6 +242,9 @@ class OTService:
             item.signed_off_at = datetime.now(UTC)
         item.updated_by = actor.id
         self.db.add(item)
+        if item.clearance_status=='cleared' and schedule.pre_op_checklist and schedule.pre_op_checklist.ready_for_ot and schedule.pre_op_checklist.consent_signed and schedule.status in {'scheduled','approved'}:
+            schedule.status='ready_for_ot'
+            schedule.booking.status='ready_for_ot'
         self._audit(actor, "anesthesia.update", "anesthesia_record", str(schedule.id), item.clearance_status)
         self.db.commit()
         self.db.refresh(item)
@@ -271,12 +307,33 @@ class OTService:
 
     def add_billing_item(self, payload: OTBillingItemCreate, actor: User) -> OTBillingItem:
         self._get_schedule(payload.schedule_id, actor)
+        if payload.payment_status != "pending":
+            raise AppException(422,"ot_payment_invoice_required","Collect money against the linked cashier invoice")
         item = OTBillingItem(**payload.model_dump(), created_by=actor.id, updated_by=actor.id)
         self.db.add(item)
         self._audit(actor, "billing.add", "ot_billing_item", str(payload.schedule_id), payload.charge_type)
         self.db.commit()
         self.db.refresh(item)
         return item
+
+    def post_charge_invoice(self, charge_id: UUID, actor: User, context: dict):
+        charge = self.db.scalar(select(OTBillingItem).where(OTBillingItem.id == charge_id).with_for_update().execution_options(populate_existing=True))
+        if not charge or not charge.is_active:
+            raise AppException(404,'ot_charge_not_found','OT charge not found')
+        schedule = self._get_schedule(charge.schedule_id,actor)
+        if charge.billing_invoice_id:
+            return {'invoice_id':str(charge.billing_invoice_id)}
+        from uuid import uuid4
+        from app.models.billing import BillingItemConfig
+        from app.modules.billing.service import BillingServiceManager
+        from app.schemas.billing import BillingInvoiceCreate, BillingInvoiceItemCreate
+        config=BillingItemConfig(id=uuid4(),branch_id=actor.branch_id,source_module='ot',source_entity_id=charge.id,service_code='OT-'+charge.id.hex,service_name=charge.description,unit_price=charge.amount,created_by=actor.id,updated_by=actor.id)
+        self.db.add(config);self.db.flush()
+        invoice=BillingServiceManager(self.db).create_invoice(BillingInvoiceCreate(patient_id=schedule.booking.patient_id,source_module='ot',note='OT case '+schedule.booking.booking_number,items=[BillingInvoiceItemCreate(billing_service_id=config.id,quantity=1,source_module='ot',source_record_type='ot_billing_item',source_record_id=charge.id)]),actor,context,commit=False)
+        charge.billing_invoice_id=invoice.id;charge.updated_by=actor.id
+        self._audit(actor,'billing.invoice_posted','ot_billing_item',str(charge.id),str(invoice.id))
+        self.db.commit()
+        return {'invoice_id':str(invoice.id)}
 
     def add_document(self, payload: OTDocumentCreate, actor: User) -> OTDocument:
         self._get_schedule(payload.schedule_id, actor)
@@ -343,7 +400,7 @@ class OTService:
                 selectinload(SurgerySchedule.surgery_notes),
                 selectinload(SurgerySchedule.recovery),
             )
-            .where(SurgerySchedule.id == schedule_id)
+            .where(SurgerySchedule.id == schedule_id).execution_options(populate_existing=True)
         )
         if not schedule or schedule.branch_id != actor.branch_id:
             raise AppException(404, "ot_schedule_not_found", "Surgery schedule not found")

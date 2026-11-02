@@ -2,17 +2,21 @@ import { DOCUMENT } from '@angular/common';
 import { Component, NgZone, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { ConnectionStateService } from './core/services/connection-state.service';
+import { AppStateComponent } from './shared/components/app-state/app-state.component';
 import { ThemeService } from './core/services/theme.service';
 import { GlobalLoaderComponent } from './shared/components/global-loader/global-loader.component';
 import { SyncUpdateBannerComponent } from './shared/components/sync-update-banner/sync-update-banner.component';
 
 @Component({
   selector: 'app-root',
+  host: { '[class.light-view]': 'connection.lightMode()' },
   standalone: true,
-  imports: [RouterOutlet, GlobalLoaderComponent, SyncUpdateBannerComponent],
+  imports: [AppStateComponent, RouterOutlet, GlobalLoaderComponent, SyncUpdateBannerComponent],
   templateUrl: './app.component.html',
 })
 export class AppComponent {
+  readonly connection = inject(ConnectionStateService);
   private readonly themeService = inject(ThemeService);
   private readonly document = inject(DOCUMENT);
   private readonly zone = inject(NgZone);

@@ -19,7 +19,7 @@
 
   <section class="page-card">
     @if (loading) {
-      <div class="table-loading">Loading patients...</div>
+      <div class="table-loading" role="status" aria-busy="true">Loading patients...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
     } @else {
       <div class="table-toolbar">
         <div class="table-toolbar__main">
@@ -75,7 +75,7 @@
           <button class="secondary-btn" type="button" [disabled]="page >= totalPages" (click)="nextPage()">Next</button>
         </div>
       } @else {
-        <div class="table-empty">No patients match the current search.</div>
+        <div class="table-empty">No patients match the current search.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
       }
     }
   </section>

@@ -37,6 +37,7 @@ class CateringMealPlan(Base, BaseModelMixin):
     protein_grams: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     billable_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     inventory_item_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"))
+    inventory_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
     inventory_quantity: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
 
     branch = relationship("Branch")
@@ -122,6 +123,7 @@ class CateringMealTask(Base, BaseModelMixin):
     refusal_reason: Mapped[str | None] = mapped_column(Text)
     remarks: Mapped[str | None] = mapped_column(Text)
     billable_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    posting_policy: Mapped[str] = mapped_column(String(30), nullable=False, default="automatic", server_default="manual_review")
     billing_invoice_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"))
     inventory_status: Mapped[str | None] = mapped_column(String(40))
     ticket_code: Mapped[str | None] = mapped_column(String(120), unique=True)
@@ -149,6 +151,8 @@ class CateringStaffMealOrder(Base, BaseModelMixin):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="ordered")
     token_code: Mapped[str | None] = mapped_column(String(120), unique=True)
+    payroll_item_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("hr_payroll_items.id"))
+    deduction_state: Mapped[str] = mapped_column(String(30), nullable=False, default="not_applicable", server_default="manual_review")
     payroll_deductible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     remarks: Mapped[str | None] = mapped_column(Text)
 
@@ -161,6 +165,8 @@ class CateringInventoryUsage(Base, BaseModelMixin):
     __tablename__ = "catering_inventory_usage"
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    inventory_store_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stores.id"))
+    stock_transaction_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_stock_transactions.id"))
     meal_task_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("catering_meal_tasks.id"))
     inventory_item_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"))
     item_name: Mapped[str] = mapped_column(String(160), nullable=False)

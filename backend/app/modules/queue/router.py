@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,6 +11,7 @@ from app.dependencies.auth import get_current_user
 from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.queue.service import QueueService
 from app.schemas.queue import (
+    QueueSpeechRequest,
     QueueCounterCreate,
     QueueCounterRead,
     QueueCounterStatusUpdate,
@@ -116,6 +117,11 @@ def create_counter(payload: QueueCounterCreate, user=Depends(get_current_user), 
     return QueueService(db).create_counter(payload, user)
 
 
+@router.get("/scopes", response_model=list[str], dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
+def viewable_scopes(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[str]:
+    return QueueService(db).viewable_scopes(user)
+
+
 @router.get("/summary", response_model=QueueSummary, dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
 def queue_summary(queue_scope: str | None = None, doctor_user_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueSummary:
     return QueueService(db).summary(user, queue_scope=queue_scope, doctor_user_id=doctor_user_id)
@@ -139,3 +145,17 @@ def list_settings(user=Depends(get_current_user), db: Session = Depends(get_db))
 @router.post("/settings", response_model=QueueSettingRead, dependencies=[Depends(require_permissions("queue.counter.manage"))])
 def save_setting(payload: QueueSettingUpsert, user=Depends(get_current_user), db: Session = Depends(get_db)) -> QueueSettingRead:
     return QueueService(db).save_setting(payload, user)
+
+
+@router.get("/speech/config", dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
+def speech_configuration(user=Depends(get_current_user)) -> dict:
+    from app.modules.queue.speech import configuration
+    return configuration()
+
+
+@router.post("/speech", dependencies=[Depends(require_any_permissions("queue.view", "opd.queue.view"))])
+def synthesize_announcement(payload: QueueSpeechRequest, user=Depends(get_current_user), db: Session = Depends(get_db)) -> Response:
+    from app.modules.queue.speech import synthesize, VOICES
+    QueueService(db)._assert_scope(user, payload.queue_scope, view_only=True)
+    audio = synthesize(payload.text, payload.language, str(user.id))
+    return Response(content=audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store", "X-Voice-Name": VOICES[payload.language]})

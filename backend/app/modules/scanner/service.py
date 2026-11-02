@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from secrets import token_urlsafe
+from secrets import token_urlsafe, token_hex
 from uuid import UUID
 
 from fastapi import status
@@ -36,27 +36,36 @@ class ScannerService:
         denied = False
         permissions = set(AuthService(self.db).get_effective_permissions(user))
 
+        mismatch = False
         for record in records:
+            if not self._can_access(record, user, permissions):
+                denied = True
+                continue
             if payload.expected_record_type and record.record_type != payload.expected_record_type:
-                record.safety["mismatch"] = "record_type"
+                mismatch = True
+                continue
             if payload.expected_patient_id:
                 patient_id = record.data.get("patient_id") or (str(record.record_id) if record.record_type == "patient" else None)
-                if patient_id and patient_id != str(payload.expected_patient_id):
-                    record.safety["mismatch"] = "patient"
-            if record.permission in permissions:
-                allowed_records.append(record)
-            else:
-                denied = True
+                if patient_id != str(payload.expected_patient_id):
+                    mismatch = True
+                    continue
+            allowed_records.append(record)
 
         success = bool(allowed_records)
-        message = "Record found" if success else "Permission denied" if denied else "Invalid barcode"
+        message = "Record found" if success else "Scan does not match the expected patient or record type" if mismatch else "Permission denied" if denied else "Invalid barcode"
         self._log_scan(payload, code, user, success, message, allowed_records[0] if allowed_records else None, context)
         return ScanResolveResponse(success=success, message=message, code=code, match_count=len(allowed_records), records=allowed_records, action=payload.action)
 
     def create_code(self, payload: ScanCodeCreate, user, context: dict | None = None) -> ScanCode:
+        records = self._record_by_type(payload.record_type, payload.record_id)
+        if not records:
+            raise AppException(404, "scan_record_not_found", "The record does not exist or does not support barcode generation")
+        permissions = set(AuthService(self.db).get_effective_permissions(user))
+        if not self._can_access(records[0], user, permissions):
+            raise AppException(403, "scan_record_forbidden", "You cannot generate a barcode for this record")
         code = ScanCode(
             branch_id=getattr(user, "branch_id", None),
-            code_value=self._secure_code(payload.record_type, payload.purpose),
+            code_value=self._secure_code(payload.record_type, payload.purpose, payload.code_type),
             code_type=payload.code_type,
             purpose=payload.purpose,
             record_type=payload.record_type,
@@ -105,7 +114,7 @@ class ScannerService:
         return setting
 
     def _resolve_registered(self, code: str) -> list[ScanResolvedRecord]:
-        scan_code = self.db.scalar(select(ScanCode).where(func.lower(ScanCode.code_value) == code.lower(), ScanCode.is_active.is_(True)))
+        scan_code = self.db.scalar(select(ScanCode).where(ScanCode.code_value == code, ScanCode.is_active.is_(True)))
         if not scan_code or (scan_code.expires_at and scan_code.expires_at < datetime.now(UTC)):
             return []
         return self._record_by_type(scan_code.record_type, scan_code.record_id)
@@ -158,21 +167,17 @@ class ScannerService:
         if radiology_report:
             records.append(self._record("radiology_report", radiology_report.id, radiology_report.report_number, "radiology", "radiology.view", "/radiology", {"order_id": str(radiology_report.order_id), "status": radiology_report.status}))
 
-        medicine = self.db.scalar(select(PharmacyMedicine).where(or_(func.lower(func.coalesce(PharmacyMedicine.barcode, "")) == lower, func.lower(func.coalesce(PharmacyMedicine.sku, "")) == lower)))
-        if medicine:
+        for medicine in self.db.scalars(select(PharmacyMedicine).where(or_(func.lower(func.coalesce(PharmacyMedicine.barcode, "")) == lower, func.lower(func.coalesce(PharmacyMedicine.sku, "")) == lower))):
             safety = {"expired": False, "stock_available": str(medicine.stock_quantity)}
             records.append(self._record("pharmacy_medicine", medicine.id, medicine.name, "pharmacy", "pharmacy.view", "/pharmacy/medicines", {"barcode": medicine.barcode, "stock_quantity": str(medicine.stock_quantity)}, safety))
 
-        dispense = self.db.scalar(select(PharmacyDispense).where(func.lower(PharmacyDispense.prescription_ref) == lower))
-        if dispense:
+        for dispense in self.db.scalars(select(PharmacyDispense).where(func.lower(PharmacyDispense.prescription_ref) == lower)):
             records.append(self._record("pharmacy_dispense", dispense.id, dispense.prescription_ref or str(dispense.id), "pharmacy", "pharmacy.dispense", "/pharmacy/dispense", {"patient_id": str(dispense.patient_id), "status": dispense.status}))
 
-        item = self.db.scalar(select(InventoryItem).where(or_(func.lower(func.coalesce(InventoryItem.barcode, "")) == lower, func.lower(func.coalesce(InventoryItem.item_code, "")) == lower)))
-        if item:
+        for item in self.db.scalars(select(InventoryItem).where(or_(func.lower(func.coalesce(InventoryItem.barcode, "")) == lower, func.lower(func.coalesce(InventoryItem.item_code, "")) == lower))):
             records.append(self._record("inventory_item", item.id, item.name, "inventory", "inventory.view", "/inventory", {"barcode": item.barcode, "stock_quantity": str(item.stock_quantity)}))
 
-        batch = self.db.scalar(select(StockBatch).where(func.lower(func.coalesce(StockBatch.batch_no, "")) == lower))
-        if batch:
+        for batch in self.db.scalars(select(StockBatch).where(func.lower(func.coalesce(StockBatch.batch_no, "")) == lower)):
             records.append(self._record("stock_batch", batch.id, batch.batch_no or str(batch.id), "inventory", "inventory.view", "/inventory", {"item_id": str(batch.item_id), "expiry_date": str(batch.expiry_date) if batch.expiry_date else None, "quantity": str(batch.quantity)}))
 
         store = self.db.scalar(select(InventoryStore).where(func.lower(InventoryStore.code) == lower))
@@ -200,8 +205,7 @@ class ScannerService:
         if legacy_journal:
             records.append(self._record("accounting_journal", legacy_journal.id, legacy_journal.journal_number, "accounting", "accounting.view", "/accounting", {"status": legacy_journal.status, "reference": legacy_journal.reference}))
 
-        bed = self.db.scalar(select(IPDBed).where(or_(func.lower(IPDBed.bed_number) == lower, func.lower(func.coalesce(IPDBed.ward_name, "")) == lower)))
-        if bed:
+        for bed in self.db.scalars(select(IPDBed).where(func.lower(IPDBed.bed_number) == lower)):
             records.append(self._record("ipd_bed", bed.id, f"{bed.ward_name} / {bed.bed_number}", "ipd", "ipd.view", "/ipd/settings", {"status": bed.status}))
 
         return records
@@ -217,6 +221,22 @@ class ScannerService:
             "blood_request": (BloodRequest, lambda x: self._record("blood_request", x.id, x.request_number, "blood_bank", "blood_bank.view", "/blood-bank", {"patient_id": str(x.patient_id), "status": x.status, "blood_group": x.blood_group, "component_type": x.component_type})),
             "queue_token": (QueueToken, lambda x: self._record("queue_token", x.id, x.token_number, x.module, "queue.view", "/queue", {"patient_id": str(x.patient_id) if x.patient_id else None, "queue_scope": x.queue_scope, "status": x.status})),
         }
+        model_map.update({
+            "lab_order": (LabOrder, lambda x: self._record("lab_order", x.id, x.order_number, "laboratory", "laboratory.view", "/laboratory", {"patient_id": str(x.patient_id), "status": x.status})),
+            "radiology_order": (RadiologyOrder, lambda x: self._record("radiology_order", x.id, x.order_number, "radiology", "radiology.view", "/radiology", {"patient_id": str(x.patient_id), "status": x.status})),
+        })
+        model_map.update({
+            "lab_report": (LabResult, lambda x: self._record("lab_report", x.id, x.report_number, "laboratory", "laboratory.view", "/laboratory", {"order_id": str(x.order_id), "status": x.status})),
+            "radiology_report": (RadiologyReport, lambda x: self._record("radiology_report", x.id, x.report_number, "radiology", "radiology.view", "/radiology", {"order_id": str(x.order_id), "status": x.status})),
+            "pharmacy_medicine": (PharmacyMedicine, lambda x: self._record("pharmacy_medicine", x.id, x.name, "pharmacy", "pharmacy.view", "/pharmacy/medicines", {"barcode": x.barcode, "sku": x.sku, "stock_quantity": str(x.stock_quantity)})),
+            "pharmacy_dispense": (PharmacyDispense, lambda x: self._record("pharmacy_dispense", x.id, x.prescription_ref or str(x.id), "pharmacy", "pharmacy.dispense", "/pharmacy/dispense", {"patient_id": str(x.patient_id), "status": x.status})),
+            "inventory_item": (InventoryItem, lambda x: self._record("inventory_item", x.id, x.name, "inventory", "inventory.view", "/inventory", {"barcode": x.barcode, "item_code": x.item_code, "stock_quantity": str(x.stock_quantity)})),
+            "stock_batch": (StockBatch, lambda x: self._record("stock_batch", x.id, x.batch_no or str(x.id), "inventory", "inventory.view", "/inventory", {"item_id": str(x.item_id), "batch_no": x.batch_no, "quantity": str(x.quantity), "expiry_date": str(x.expiry_date) if x.expiry_date else None})),
+            "inventory_store": (InventoryStore, lambda x: self._record("inventory_store", x.id, x.name, "inventory", "inventory.store.manage", "/inventory", {"code": x.code, "store_type": x.store_type})),
+            "er_visit": (ERVisit, lambda x: self._record("er_visit", x.id, x.visit_number, "emergency", "er.view", "/er", {"patient_id": str(x.patient_id), "status": x.status})),
+            "ipd_bed": (IPDBed, lambda x: self._record("ipd_bed", x.id, f"{x.ward_name} / {x.bed_number}", "ipd", "ipd.view", "/ipd/settings", {"status": x.status})),
+            "employee": (HREmployee, lambda x: self._record("employee", x.id, f"{x.staff_code} - {x.full_name}", "hr", "hr.view", "/hr", {"employment_status": x.employment_status})),
+        })
         entry = model_map.get(record_type)
         if not entry:
             return []
@@ -247,7 +267,72 @@ class ScannerService:
         )
 
     def _record(self, record_type: str, record_id: UUID, display: str, module: str, permission: str, route: str, data: dict, safety: dict | None = None) -> ScanResolvedRecord:
-        return ScanResolvedRecord(record_type=record_type, record_id=record_id, display=display, module=module, permission=permission, route=route, data=data, status=data.get("status"), safety=safety or {})
+        query_params: dict[str, str] = {}
+        if record_type == "opd_visit":
+            query_params["openVisit"] = str(record_id)
+        elif record_type == "billing_invoice":
+            query_params["invoiceId"] = str(record_id)
+        elif record_type == "appointment":
+            query_params["appointmentId"] = str(record_id)
+        elif record_type == "ipd_admission":
+            route = f"/ipd/admissions/{record_id}"
+        elif record_type in {"lab_order", "radiology_order"}:
+            route = f"/{'laboratory' if record_type == 'lab_order' else 'radiology'}/workbench/{record_id}"
+        elif record_type in {"lab_report", "radiology_report"} and data.get("order_id"):
+            route = f"/{'laboratory' if record_type == 'lab_report' else 'radiology'}/workbench/{data['order_id']}"
+        elif record_type == "queue_token" and data.get("queue_scope") == "opd":
+            route = "/opd/queue"
+        elif record_type == "inventory_item":
+            query_params["itemId"] = str(record_id)
+        elif record_type == "stock_batch":
+            query_params["itemId"] = data["item_id"]
+            query_params["batchId"] = str(record_id)
+        elif record_type == "inventory_store":
+            query_params["storeId"] = str(record_id)
+        elif record_type == "pharmacy_medicine":
+            query_params["medicineId"] = str(record_id)
+        return ScanResolvedRecord(record_type=record_type, record_id=record_id, display=display, module=module, permission=permission, route=route, query_params=query_params, data=data, status=data.get("status"), safety=safety or {})
+
+    def _can_access(self, record: ScanResolvedRecord, user, permissions: set[str]) -> bool:
+        allowed = record.permission in permissions or (record.record_type == "queue_token" and record.data.get("queue_scope") == "opd" and "opd.queue.view" in permissions)
+        if not allowed:
+            return False
+        models = {"patient": Patient, "appointment": Appointment, "opd_visit": OPDVisit, "ipd_admission": IPDAdmission, "er_visit": ERVisit, "billing_invoice": BillingInvoice, "lab_order": LabOrder, "lab_report": LabResult, "radiology_order": RadiologyOrder, "radiology_report": RadiologyReport, "queue_token": QueueToken, "pharmacy_medicine": PharmacyMedicine, "pharmacy_dispense": PharmacyDispense, "inventory_item": InventoryItem, "stock_batch": StockBatch, "inventory_store": InventoryStore, "blood_unit": BloodUnit, "blood_request": BloodRequest, "employee": HREmployee, "accounting_voucher": JournalEntry, "accounting_journal": AccountingJournal, "ipd_bed": IPDBed}
+        model = models.get(record.record_type)
+        entity = self.db.get(model, record.record_id) if model else None
+        if not entity or not entity.is_active:
+            return False
+        branch_id = getattr(entity, "branch_id", None)
+        if record.record_type == "stock_batch":
+            if not entity.item or not entity.item.is_active:
+                return False
+            branch_id = entity.item.branch_id
+            if getattr(user, "branch_id", None) and entity.store and entity.store.branch_id and user.branch_id != entity.store.branch_id:
+                return False
+        if record.record_type in {"lab_report", "radiology_report"}:
+            branch_id = entity.order.branch_id
+            record.data["patient_id"] = str(entity.order.patient_id)
+        if getattr(user, "branch_id", None) and branch_id and user.branch_id != branch_id:
+            return False
+        try:
+            if record.record_type == "opd_visit":
+                from app.modules.opd.service import OPDService
+                OPDService(self.db).get_visit(record.record_id, user)
+            elif record.record_type == "ipd_admission":
+                from app.modules.ipd.service import IPDService
+                IPDService(self.db).get_admission(record.record_id, user)
+            elif record.record_type == "queue_token":
+                from app.modules.queue.service import QueueService
+                service = QueueService(self.db)
+                service._get_token(record.record_id, user)
+                service._assert_scope(user, entity.queue_scope, view_only=True)
+            elif record.record_type == "appointment" and any(role.is_doctor_role for role in user.roles) and entity.doctor_user_id != user.id:
+                return False
+        except AppException as error:
+            if error.status_code in {403, 404}:
+                return False
+            raise
+        return True
 
     def _log_scan(self, payload: ScanResolveRequest, normalized_code: str, user, success: bool, message: str, record: ScanResolvedRecord | None, context: dict | None) -> None:
         self.db.add(
@@ -272,8 +357,11 @@ class ScannerService:
         )
         self.db.commit()
 
-    def _secure_code(self, record_type: str, purpose: str) -> str:
-        return f"HMS:{purpose.upper()}:{record_type.upper()}:{token_urlsafe(18)}"
+    def _secure_code(self, record_type: str, purpose: str, code_type: str = "code128") -> str:
+        # Metadata belongs in the registry; compact labels retain readable bar widths.
+        if code_type.lower() == "code39":
+            return "HMS-" + token_hex(12).upper()
+        return "HMS:" + token_urlsafe(18)
 
     def _normalize(self, code: str) -> str:
         return code.strip()

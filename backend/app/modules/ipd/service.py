@@ -1,17 +1,19 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
+from app.modules.ipd.billing_rules import billable_order
 from app.models.configuration import ConfigurationProfile
 from app.models.billing import BillingInvoice
 from app.models.encounter import (
     IPDAdmission,
     IPDAdmissionMovement,
+    IPDBedStay,
     IPDBed,
     IPDClinicalNote,
     IPDHandover,
@@ -25,6 +27,7 @@ from app.models.encounter import (
 from app.models.hr import HREmployee, HRDutyRoster, HRLeaveRequest
 from app.models.laboratory import LabOrder, LabOrderItem
 from app.models.radiology import RadiologyOrder
+from app.models.patient import Patient
 from app.models.role import Role
 from app.models.user import User
 from app.modules.access_scope.service import AccessScopeService
@@ -34,6 +37,8 @@ from app.modules.ipd.repository import IPDRepository
 from app.modules.patients.repository import PatientsRepository
 from app.modules.users.repository import UsersRepository
 from app.schemas.encounter import (
+    IPDBedStatusUpdate,
+    IPDClearanceUpdate,
     IPDAdmissionCreate,
     IPDAdmissionRead,
     IPDBedBoardRow,
@@ -76,6 +81,7 @@ class IPDService:
         self.patients = PatientsRepository(db)
         self.users = UsersRepository(db)
         self.scopes = AccessScopeService(db)
+        self.auth = AuthService(db)
 
     def list_admissions(self, actor: User) -> list[IPDAdmission]:
         return [admission for admission in self.repository.list_admissions(actor.branch_id) if self._admission_in_scope(actor, admission)]
@@ -182,7 +188,7 @@ class IPDService:
             discharge_planned=sum(1 for admission in admissions if admission.discharge_status in {"requested", "planned", "summary_drafted", "ready"}),
         )
 
-    def create_admission(self, payload: IPDAdmissionCreate, actor: User, context: dict[str, str | None]) -> IPDAdmission:
+    def create_admission(self, payload: IPDAdmissionCreate, actor: User, context: dict[str, str | None], *, commit: bool = True) -> IPDAdmission:
         settings = self._settings(actor)
         self._validate_required_fields(payload.model_dump(), settings.required_admission_fields, "admission")
         patient = self.patients.get_patient(payload.patient_id)
@@ -190,6 +196,8 @@ class IPDService:
             raise AppException(404, "patient_not_found", "Patient not found")
         if actor.branch_id and patient.branch_id and actor.branch_id != patient.branch_id:
             raise AppException(403, "forbidden", "Patient belongs to a different branch")
+        # Serialize admissions for one patient, including requests using different beds.
+        self.db.execute(select(Patient.id).where(Patient.id == patient.id).with_for_update())
         active_existing = self.db.scalar(
             select(IPDAdmission.id).where(
                 IPDAdmission.patient_id == patient.id,
@@ -201,12 +209,17 @@ class IPDService:
             raise AppException(409, "ipd_active_admission_exists", "Patient already has an active IPD admission")
 
         bed = None
+        if not payload.bed_id:
+            registered = self.repository.get_bed_by_number(actor.branch_id,payload.ward_name,payload.bed_number)
+            if registered:
+                payload = payload.model_copy(update={"bed_id":registered.id})
         if payload.bed_id:
             bed = self.repository.get_bed(payload.bed_id)
             if not bed:
                 raise AppException(404, "ipd_bed_not_found", "IPD bed not found")
             if actor.branch_id and bed.branch_id and actor.branch_id != bed.branch_id:
                 raise AppException(403, "forbidden", "IPD bed belongs to a different branch")
+            self.db.refresh(bed, with_for_update={"of": IPDBed})
             if bed.status != "available":
                 raise AppException(409, "ipd_bed_unavailable", "Selected bed is not available")
 
@@ -229,7 +242,9 @@ class IPDService:
         if bed:
             bed.status = "occupied"
             bed.updated_by = actor.id
+        self._assert_admission_scope(actor,admission)
         self.repository.create_admission(admission)
+        self.db.add(IPDBedStay(admission_id=admission.id,bed_id=admission.bed_id,ward_name=admission.ward_name,bed_number=admission.bed_number,daily_rate=admission.daily_charge,started_at=admission.admitted_at,created_by=actor.id,updated_by=actor.id))
         self.repository.create_movement(
             IPDAdmissionMovement(
                 admission_id=admission.id,
@@ -253,28 +268,40 @@ class IPDService:
             detail={"admission_number": admission.admission_number, "patient_id": str(admission.patient_id)},
             context=context,
         )
-        self.db.commit()
-        self.db.refresh(admission)
+        if commit:
+            self.db.commit()
+            self.db.refresh(admission)
         return self.repository.get_admission(admission.id) or admission
 
     def transfer(self, admission_id, payload: IPDTransfer, actor: User, context: dict[str, str | None]) -> IPDAdmission:
-        admission = self.repository.get_admission(admission_id)
-        if not admission:
-            raise AppException(404, "ipd_admission_not_found", "IPD admission not found")
+        admission = self.get_admission(admission_id, actor)
+        self.db.refresh(admission, with_for_update={"of": IPDAdmission})
         if admission.status == "discharged":
             raise AppException(409, "ipd_already_discharged", "Discharged admissions cannot be transferred")
         if actor.branch_id and admission.branch_id and actor.branch_id != admission.branch_id:
             raise AppException(403, "forbidden", "IPD admission belongs to a different branch")
 
+        transfer_at=payload.transfer_time or datetime.now(UTC)
+        from app.modules.ipd.bed_charges import aware
+        if aware(transfer_at)<aware(admission.admitted_at) or aware(transfer_at)>datetime.now(UTC)+timedelta(minutes=1):
+            raise AppException(422,"ipd_transfer_time","Transfer time must be between admission and now")
+        open_stays=list(self.db.scalars(select(IPDBedStay).where(IPDBedStay.admission_id==admission.id,IPDBedStay.ended_at.is_(None)).with_for_update()))
+        if any(aware(transfer_at)<aware(stay.started_at) for stay in open_stays):
+            raise AppException(422,"ipd_transfer_time","Transfer time cannot be before the previous bed assignment")
         previous_ward = admission.ward_name
         previous_bed_number = admission.bed_number
         new_bed = None
+        if not payload.bed_id:
+            registered = self.repository.get_bed_by_number(actor.branch_id,payload.ward_name,payload.bed_number)
+            if registered:
+                payload = payload.model_copy(update={"bed_id":registered.id})
         if payload.bed_id:
             new_bed = self.repository.get_bed(payload.bed_id)
             if not new_bed:
                 raise AppException(404, "ipd_bed_not_found", "IPD bed not found")
             if actor.branch_id and new_bed.branch_id and actor.branch_id != new_bed.branch_id:
                 raise AppException(403, "forbidden", "IPD bed belongs to a different branch")
+            self.db.refresh(new_bed, with_for_update={"of": IPDBed})
             if new_bed.status != "available":
                 raise AppException(409, "ipd_bed_unavailable", "Selected bed is not available")
             admission.ward_name = new_bed.ward_name
@@ -293,6 +320,9 @@ class IPDService:
                 admission.bed.status = "cleaning"
                 admission.bed.updated_by = actor.id
 
+        for stay in open_stays:stay.ended_at=transfer_at;stay.updated_by=actor.id
+        if new_bed:admission.daily_charge=new_bed.daily_rate
+        self.db.add(IPDBedStay(admission_id=admission.id,bed_id=admission.bed_id,ward_name=admission.ward_name,bed_number=admission.bed_number,daily_rate=admission.daily_charge,started_at=transfer_at,created_by=actor.id,updated_by=actor.id))
         admission.updated_by = actor.id
         self.repository.create_movement(
             IPDAdmissionMovement(
@@ -329,15 +359,25 @@ class IPDService:
         return self.repository.get_admission(admission.id) or admission
 
     def discharge(self, admission_id, payload: IPDDischarge, actor: User, context: dict[str, str | None]) -> IPDAdmission:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         admission = self.get_admission(admission_id, actor)
+        self.db.refresh(admission, with_for_update={"of": IPDAdmission})
         if admission.status == "discharged":
             raise AppException(409, "ipd_already_discharged", "Patient already discharged")
         readiness = self.discharge_readiness(admission_id, actor, discharge_payload=payload)
         if not readiness.ready and not payload.allow_override:
             raise AppException(409, "ipd_discharge_not_ready", "Discharge is blocked: " + "; ".join(readiness.blockers))
+        if payload.allow_override and not {"ipd.discharge.approve", "scope.override"}.intersection(self.auth.get_effective_permissions(actor)):
+            raise AppException(403, "ipd_discharge_override_forbidden", "Authorized discharge approval permission is required for an override")
         if payload.allow_override and not payload.override_reason:
             raise AppException(422, "ipd_discharge_override_reason_required", "Override reason is required for final discharge")
 
+        discharged_at=datetime.now(UTC)
+        for stay in self.db.scalars(select(IPDBedStay).where(IPDBedStay.admission_id==admission.id,IPDBedStay.ended_at.is_(None))):
+            stay.ended_at=discharged_at;stay.updated_by=actor.id
+        from app.modules.catering.service import CateringService
+        CateringService(self.db).stop_admission(admission.id, actor)
         admission.status = "discharged"
         admission.discharge_status = "completed"
         admission.discharge_condition = payload.discharge_condition
@@ -384,6 +424,7 @@ class IPDService:
 
         return IPDPatientWorkspace(
             admission=IPDAdmissionRead.model_validate(self._admission_payload(admission)),
+            bed_stays=list(self.db.scalars(select(IPDBedStay).where(IPDBedStay.admission_id==admission.id).order_by(IPDBedStay.started_at))),
             assignments=admission.staff_assignments,
             clinical_notes=sorted(admission.clinical_notes, key=lambda item: item.authored_at, reverse=True),
             nursing_notes=sorted(admission.nursing_notes, key=lambda item: item.recorded_at, reverse=True),
@@ -395,7 +436,7 @@ class IPDService:
         )
 
     def assign_staff(self, admission_id, payload: IPDStaffAssignmentCreate, actor: User, context: dict[str, str | None]) -> IPDStaffAssignment:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         self._validate_assignment_type(payload, actor)
         self._require_assignment_permission(payload.role_type, actor)
         staff = self.users.get_user(payload.staff_user_id)
@@ -489,7 +530,7 @@ class IPDService:
         )
 
     def create_clinical_note(self, admission_id, payload: IPDClinicalNoteCreate, actor: User, context: dict[str, str | None]) -> IPDClinicalNote:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         note = IPDClinicalNote(admission_id=admission.id, **payload.model_dump(), authored_by_user_id=actor.id, authored_at=datetime.now(UTC), created_by=actor.id, updated_by=actor.id)
         self.repository.create(note)
         if payload.diagnosis:
@@ -500,7 +541,7 @@ class IPDService:
         return note
 
     def create_nursing_note(self, admission_id, payload: IPDNursingNoteCreate, actor: User, context: dict[str, str | None]) -> IPDNursingNote:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         abnormal = self._abnormal_vitals(payload)
         note = IPDNursingNote(admission_id=admission.id, **payload.model_dump(), abnormal_alert=abnormal, recorded_by_user_id=actor.id, recorded_at=datetime.now(UTC), created_by=actor.id, updated_by=actor.id)
         self.repository.create(note)
@@ -510,11 +551,14 @@ class IPDService:
         return note
 
     def create_order(self, admission_id, payload: IPDOrderCreate, actor: User, context: dict[str, str | None]) -> IPDOrder:
-        admission = self.get_admission(admission_id, actor)
-        service_area = payload.service_area or self._service_area_for_order(payload.order_type)
+        admission = self._active_admission(admission_id, actor)
+        service_area = self._service_area_for_order(payload.order_type) or payload.service_area
         order_data = payload.model_dump()
         order_data["service_area"] = service_area
-        order = IPDOrder(admission_id=admission.id, **order_data, status="active", ordered_by_user_id=actor.id, ordered_at=datetime.now(UTC), created_by=actor.id, updated_by=actor.id)
+        clearance={"medicine":"pharmacy","lab":"lab","radiology":"radiology"}.get(payload.order_type)
+        if clearance:
+            setattr(admission,clearance+"_clearance_status","pending")
+        order = IPDOrder(admission_id=admission.id, **order_data, status="active", billing_status="unbilled" if payload.order_type in {"medicine", "lab", "radiology", "procedure"} else "not_applicable", ordered_by_user_id=actor.id, ordered_at=datetime.now(UTC), created_by=actor.id, updated_by=actor.id)
         self.repository.create(order)
         self._sync_downstream_order(admission, order, actor)
         self._generate_execution_items(admission, order, actor)
@@ -524,10 +568,20 @@ class IPDService:
         return order
 
     def update_order_status(self, admission_id, order_id, payload: IPDOrderStatusUpdate, actor: User, context: dict[str, str | None]) -> IPDOrder:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         order = next((item for item in admission.orders if item.id == order_id), None)
         if not order:
             raise AppException(404, "ipd_order_not_found", "IPD order not found")
+        if order.status in {"cancelled","discontinued","completed"} and payload.status != order.status:
+            raise AppException(409,"ipd_order_closed","This order is closed. Create a new order to continue treatment")
+        if payload.status == order.status:
+            return order
+        if payload.status in {"cancelled","discontinued"} and not (payload.reason or '').strip():
+            raise AppException(422,"ipd_order_reason_required","Enter why this order is being stopped")
+        if payload.status=='completed' and (order.lab_order_id or order.radiology_order_id):
+            domain=self.db.get(LabOrder,order.lab_order_id) if order.lab_order_id else self.db.get(RadiologyOrder,order.radiology_order_id)
+            if domain and domain.status!='verified':
+                raise AppException(409,"ipd_diagnostic_pending","The responsible department must verify the diagnostic result before this order is complete")
         now = datetime.now(UTC)
         order.status = payload.status
         order.updated_by = actor.id
@@ -537,6 +591,19 @@ class IPDService:
         if payload.status == "discontinued":
             order.discontinued_at = now
             order.discontinued_by_user_id = actor.id
+        if payload.status in {"cancelled","discontinued"}:
+            for medication in self.db.scalars(select(IPDMedicationAdministration).where(IPDMedicationAdministration.order_id==order.id,IPDMedicationAdministration.status.in_(["due","held","delayed"]))):
+                medication.status="skipped";medication.reason=payload.reason;medication.updated_by=actor.id
+            for task in self.db.scalars(select(IPDNursingTask).where(IPDNursingTask.order_id==order.id,IPDNursingTask.status.in_(["pending","in_progress","overdue"]))):
+                task.status="cancelled";task.completion_note=payload.reason;task.updated_by=actor.id
+            if order.lab_order_id:
+                downstream=self.db.get(LabOrder,order.lab_order_id)
+                if downstream and downstream.status not in {"completed","verified","reported"}:
+                    downstream.status="cancelled";downstream.updated_by=actor.id
+            if order.radiology_order_id:
+                downstream=self.db.get(RadiologyOrder,order.radiology_order_id)
+                if downstream and downstream.status not in {"completed","verified","reported"}:
+                    downstream.status="cancelled";downstream.updated_by=actor.id
         self._timeline(admission, actor, "order_status", f"Order {payload.status}", payload.reason or order.item_name, "ipd_order", order.id)
         self.db.commit()
         self.db.refresh(order)
@@ -550,7 +617,21 @@ class IPDService:
         return [IPDOrderGroupRead(order_type=key[0], status=key[1], orders=value) for key, value in sorted(groups.items())]
 
     def administer_medication(self, admission_id, payload: IPDMedicationAdministrationCreate, actor: User, context: dict[str, str | None]) -> IPDMedicationAdministration:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
+        if payload.order_id:
+            order = self.db.get(IPDOrder, payload.order_id)
+            if not order or order.admission_id != admission.id or order.order_type != "medicine":
+                raise AppException(422, "ipd_medication_order_mismatch", "The medication order must belong to this admission")
+            if order.status in {"cancelled","discontinued","completed"}:
+                raise AppException(409,"ipd_medication_order_closed","This medication order is closed. Review the active prescription before recording another dose")
+            if order.item_name.strip().casefold()!=payload.medicine_name.strip().casefold():
+                raise AppException(422,"ipd_medication_name_mismatch","Use the medicine named on the selected order")
+        if payload.status in {"skipped","held","delayed","refused"} and not (payload.reason or '').strip():
+            raise AppException(422,"ipd_medication_reason_required","Enter the reason this dose was not administered")
+        if payload.allow_duplicate and "ipd.discharge.approve" not in self.auth.get_effective_permissions(actor):
+            raise AppException(403,"ipd_medication_override_forbidden","A clinical approver must authorize duplicate dose recording")
+        if payload.allow_duplicate and not (payload.reason or '').strip():
+            raise AppException(422,"ipd_medication_override_reason","Explain the duplicate dose entry")
         if payload.status == "administered" and not payload.allow_duplicate:
             duplicate = self.db.scalar(
                 select(IPDMedicationAdministration.id).where(
@@ -565,15 +646,36 @@ class IPDService:
             if duplicate:
                 raise AppException(409, "ipd_medication_duplicate", "This scheduled medicine has already been administered")
         administered_at = payload.administered_at or (datetime.now(UTC) if payload.status == "administered" else None)
-        med = IPDMedicationAdministration(
-            admission_id=admission.id,
-            **payload.model_dump(exclude={"administered_at", "allow_duplicate"}),
-            administered_at=administered_at,
-            administered_by_user_id=actor.id if payload.status in {"administered", "skipped", "held", "delayed", "refused"} else None,
-            created_by=actor.id,
-            updated_by=actor.id,
-        )
-        self.repository.create(med)
+        pending = None
+        if payload.order_id and payload.status != "due":
+            pending = self.db.scalar(select(IPDMedicationAdministration).where(
+                IPDMedicationAdministration.admission_id == admission.id,
+                IPDMedicationAdministration.order_id == payload.order_id,
+                IPDMedicationAdministration.scheduled_at == payload.scheduled_at,
+                IPDMedicationAdministration.status.in_(["due", "held", "delayed"]),
+                IPDMedicationAdministration.is_active.is_(True),
+            ).with_for_update())
+        values = payload.model_dump(exclude={"administered_at", "allow_duplicate"})
+        if pending:
+            med = pending
+            for field, value in values.items():
+                setattr(med, field, value)
+            med.administered_at = administered_at
+            med.administered_by_user_id = actor.id
+            med.updated_by = actor.id
+        else:
+            med = IPDMedicationAdministration(
+                admission_id=admission.id,
+                **values,
+                administered_at=administered_at,
+                administered_by_user_id=actor.id if payload.status in {"administered", "skipped", "held", "delayed", "refused"} else None,
+                created_by=actor.id,
+                updated_by=actor.id,
+            )
+            self.repository.create(med)
+        if payload.order_id and payload.status=='administered':
+            for task in self.db.scalars(select(IPDNursingTask).where(IPDNursingTask.order_id==payload.order_id,IPDNursingTask.task_type=='medication',IPDNursingTask.status.in_(['pending','in_progress']),IPDNursingTask.due_at==payload.scheduled_at)):
+                task.status='completed';task.completed_at=administered_at;task.completed_by_user_id=actor.id;task.updated_by=actor.id
         self._timeline(admission, actor, "medication", f"Medication {payload.status}", payload.medicine_name, "ipd_medication_administration", med.id)
         self.db.commit()
         self.db.refresh(med)
@@ -598,7 +700,7 @@ class IPDService:
         return items[:200]
 
     def create_nursing_task(self, admission_id, payload: IPDNursingTaskCreate, actor: User, context: dict[str, str | None]) -> IPDNursingTask:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         task = IPDNursingTask(admission_id=admission.id, ward_name=admission.ward_name, bed_number=admission.bed_number, **payload.model_dump(), created_by=actor.id, updated_by=actor.id)
         self.repository.create(task)
         self._timeline(admission, actor, "nursing_task", "Nursing task created", task.title, "ipd_nursing_task", task.id)
@@ -610,7 +712,10 @@ class IPDService:
         task = self.db.get(IPDNursingTask, task_id)
         if not task:
             raise AppException(404, "ipd_nursing_task_not_found", "Nursing task not found")
-        admission = self.get_admission(task.admission_id, actor)
+        admission = self._active_admission(task.admission_id, actor)
+        self.db.refresh(task,with_for_update=True)
+        if task.status in {"completed","cancelled"} and payload.status!=task.status:
+            raise AppException(409,"ipd_task_closed","This nursing task is closed. Create a new task if more care is needed")
         task.status = payload.status
         task.completion_note = payload.completion_note
         task.updated_by = actor.id
@@ -657,9 +762,13 @@ class IPDService:
         ]
 
     def create_handover(self, admission_id, payload: IPDHandoverCreate, actor: User, context: dict[str, str | None]) -> IPDHandover:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
         settings = self._settings(actor)
         self._validate_required_fields(payload.model_dump(), settings.required_handover_fields, "handover")
+        if payload.receiver_user_id:
+            receiver=self.users.get_user(payload.receiver_user_id)
+            if not receiver or not receiver.is_active or (admission.branch_id and receiver.branch_id and receiver.branch_id!=admission.branch_id):
+                raise AppException(422,"ipd_handover_receiver","Choose active receiving staff from this hospital branch")
         handover = IPDHandover(admission_id=admission.id, **payload.model_dump(), sender_user_id=actor.id, handed_over_at=datetime.now(UTC), created_by=actor.id, updated_by=actor.id)
         self.repository.create(handover)
         self._timeline(admission, actor, "handover", "Duty handover", payload.summary, "ipd_handover", handover.id)
@@ -692,6 +801,11 @@ class IPDService:
         if not handover:
             raise AppException(404, "ipd_handover_not_found", "Handover not found")
         admission = self.get_admission(handover.admission_id, actor)
+        self.db.refresh(handover,with_for_update=True)
+        if handover.receiver_user_id and handover.receiver_user_id!=actor.id:
+            raise AppException(403,"ipd_handover_receiver","Only the designated receiver can acknowledge this handover")
+        if handover.status=="acknowledged":
+            raise AppException(409,"ipd_handover_acknowledged","This handover has already been acknowledged")
         handover.status = "acknowledged"
         handover.acknowledged_at = datetime.now(UTC)
         handover.receiver_user_id = handover.receiver_user_id or actor.id
@@ -701,8 +815,29 @@ class IPDService:
         self.db.refresh(handover)
         return handover
 
+    def update_clearance(self, admission_id, payload: IPDClearanceUpdate, actor: User) -> IPDAdmission:
+        admission = self._active_admission(admission_id, actor)
+        required = {"pharmacy": "pharmacy.dispense", "lab": "laboratory.manage", "radiology": "radiology.manage"}[payload.department]
+        if not {required, "ipd.discharge.approve"}.intersection(self.auth.get_effective_permissions(actor)):
+            raise AppException(403, "ipd_clearance_forbidden", "Clearance must be recorded by the responsible department or discharge approver")
+        if payload.status == "cleared":
+            order_type = {"pharmacy": "medicine", "lab": "lab", "radiology": "radiology"}[payload.department]
+            pending = [order for order in admission.orders if order.order_type == order_type and order.status not in {"completed", "cancelled", "discontinued"}]
+            if pending:
+                raise AppException(409, "ipd_clearance_pending_orders", "Complete or cancel the department's pending orders before recording clearance")
+        setattr(admission, f"{payload.department}_clearance_status", payload.status)
+        admission.updated_by = actor.id
+        self._timeline(admission, actor, "clearance", f"{payload.department.title()} {payload.status}", payload.note, "ipd_admission", admission.id)
+        self.db.commit()
+        self.db.refresh(admission)
+        return admission
+
     def plan_discharge(self, admission_id, actor: User, context: dict[str, str | None], status: str = "requested") -> IPDAdmission:
-        admission = self.get_admission(admission_id, actor)
+        admission = self._active_admission(admission_id, actor)
+        if status not in {"requested", "planned", "approved", "ready"}:
+            raise AppException(422, "ipd_invalid_discharge_status", "Select a supported discharge planning status")
+        if status in {"approved", "ready"} and "ipd.discharge.approve" not in self.auth.get_effective_permissions(actor):
+            raise AppException(403, "ipd_discharge_approval_required", "Doctor approval permission is required")
         admission.discharge_status = status
         admission.status = "discharge_planned" if status in {"requested", "planned"} else admission.status
         admission.updated_by = actor.id
@@ -734,7 +869,8 @@ class IPDService:
                 )
             ).unique()
         )
-        total_bed_days = max((datetime.now(UTC).date() - admission.admitted_at.date()).days + 1, 1)
+        from app.modules.ipd.bed_charges import daily_charges,unbilled_charges
+        total_bed_days = len(daily_charges(self.db,admission))
         billed_bed_days = sum(
             Decimal(item.quantity or 0)
             for invoice in invoices
@@ -743,12 +879,14 @@ class IPDService:
         )
         unbilled_orders = [
             order for order in admission.orders
-            if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"
+            if billable_order(self.db,order)
         ]
         final_invoice_exists = any(invoice.billing_stage == "ipd_final" for invoice in invoices)
-        billing_done = bool(invoices) and (final_invoice_exists or billed_bed_days >= Decimal(total_bed_days)) and not unbilled_orders and all(Decimal(invoice.due_amount or 0) <= 0 for invoice in invoices)
+        billing_done = bool(invoices) and not unbilled_charges(self.db,admission) and not unbilled_orders and all(Decimal(invoice.due_amount or 0) <= 0 for invoice in invoices)
+        if not invoices and not unbilled_orders and not any(day['rate']>0 for day in daily_charges(self.db,admission)):
+            billing_done=True
         checks = [
-            {"key": "doctor_approval", "label": "Doctor approval", "done": admission.discharge_status in {"approved", "ready", "completed"} or bool(summary_text)},
+            {"key": "doctor_approval", "label": "Doctor approval", "done": admission.discharge_status in {"approved", "ready", "completed"}},
             {"key": "summary", "label": "Discharge summary", "done": not summary_missing},
             {"key": "billing", "label": "Billing clearance", "done": billing_done},
             {"key": "pharmacy", "label": "Pharmacy clearance", "done": not settings.clearance_requirements.get("pharmacy") or admission.pharmacy_clearance_status == "cleared"},
@@ -781,30 +919,25 @@ class IPDService:
                 .order_by(BillingInvoice.created_at.asc())
             ).unique()
         )
-        end_at = admission.discharged_at or datetime.now(UTC)
-        total_bed_days = Decimal(max((end_at.date() - admission.admitted_at.date()).days + 1, 1))
-        billed_bed_days = sum(
-            (
-                Decimal(item.quantity or 0)
-                for invoice in invoices
-                for item in invoice.items
-                if item.source_module == "ipd_bed_charge" or (item.source_module == "ipd" and "bed charge" in (item.source_label or "").lower())
-            ),
-            Decimal("0"),
-        )
+        from app.modules.ipd.bed_charges import daily_charges,unbilled_charges
+        outstanding_bed_charges=unbilled_charges(self.db,admission)
+        total_bed_days=Decimal(len(daily_charges(self.db,admission)))
+        bed_items=[item for invoice in invoices for item in invoice.items if item.source_module=='ipd_bed_charge' or (item.source_module=='ipd' and 'bed charge' in (item.source_label or '').lower())]
+        billed_bed_days=Decimal(len({item.bed_charge_date for item in bed_items if item.bed_charge_date}))+sum((item.quantity for item in bed_items if not item.bed_charge_date),Decimal(0))
         unbilled_orders = [
             order for order in admission.orders
-            if order.status not in {"cancelled", "discontinued"} and order.billing_status != "billed"
+            if billable_order(self.db,order)
         ]
         all_invoices_paid = bool(invoices) and all(Decimal(invoice.due_amount or 0) <= 0 for invoice in invoices)
         final_invoice_exists = any(invoice.billing_stage == "ipd_final" for invoice in invoices)
-        reconciled = all_invoices_paid and final_invoice_exists and not unbilled_orders
+        free_stay=not invoices and not any(day['rate']>0 for day in daily_charges(self.db,admission))
+        reconciled = (free_stay or (all_invoices_paid and final_invoice_exists)) and not unbilled_orders and not outstanding_bed_charges
         return IPDBillingSummary(
             admission_id=admission.id,
             billing_status="cleared" if reconciled else admission.billing_status,
             total_bed_days=total_bed_days,
             billed_bed_days=billed_bed_days,
-            unbilled_bed_days=Decimal("0") if final_invoice_exists else max(total_bed_days - billed_bed_days, Decimal("0")),
+            unbilled_bed_days=Decimal(len(outstanding_bed_charges)),
             unbilled_order_count=len(unbilled_orders),
             invoice_count=len(invoices),
             interim_invoice_count=sum(1 for invoice in invoices if invoice.billing_stage == "ipd_interim"),
@@ -860,6 +993,7 @@ class IPDService:
         )
 
     def create_bed(self, payload: IPDBedCreate, actor: User, context: dict[str, str | None]) -> IPDBed:
+        self.db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),{"key":f"ipd-bed:{actor.branch_id}:{payload.ward_name.casefold()}:{payload.bed_number.casefold()}"})
         settings = self._settings(actor)
         if settings.bed_types and payload.bed_type not in settings.bed_types:
             raise AppException(422, "ipd_invalid_bed_type", "Bed type is not enabled in IPD settings")
@@ -885,6 +1019,22 @@ class IPDService:
         )
         self.db.commit()
         self.db.refresh(bed)
+        return bed
+
+    def update_bed_status(self, bed_id, payload: IPDBedStatusUpdate, actor: User, context: dict) -> IPDBed:
+        bed=self.repository.get_bed(bed_id)
+        if not bed or not bed.is_active:
+            raise AppException(404,"ipd_bed_not_found","Bed not found")
+        if bed not in self.list_beds(actor):
+            raise AppException(403,"ipd_bed_scope","This bed is outside your assigned wards")
+        self.db.refresh(bed,with_for_update={"of":IPDBed})
+        active=self.db.scalar(select(IPDAdmission.id).where(IPDAdmission.bed_id==bed.id,IPDAdmission.is_active.is_(True),IPDAdmission.status.notin_(["discharged","cancelled"])))
+        if active or bed.status=="occupied":
+            raise AppException(409,"ipd_bed_occupied","Transfer or discharge the patient before changing this bed's availability")
+        before=bed.status
+        bed.status=payload.status;bed.updated_by=actor.id
+        AuditService(self.db).log(user_id=actor.id,action="ipd.bed.status.update",module="ipd",entity_type="ipd_bed",entity_id=str(bed.id),detail={"before":before,"after":bed.status,"reason":payload.reason},context=context)
+        self.db.commit();self.db.refresh(bed)
         return bed
 
     def _timeline(self, admission: IPDAdmission, actor: User, event_type: str, title: str, detail: str | None, source_type: str | None, source_id) -> None:
@@ -937,7 +1087,7 @@ class IPDService:
                 branch_id=admission.branch_id or actor.branch_id,
                 patient_id=admission.patient_id,
                 admission_id=admission.id,
-                order_number=f"LAB-IPD-{datetime.now(UTC).strftime('%y%m%d%H%M%S')}",
+                order_number=f"LAB-IPD-{datetime.now(UTC).strftime('%y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                 status="pending",
                 priority=order.priority,
                 note=order.instructions,
@@ -963,7 +1113,7 @@ class IPDService:
                 branch_id=admission.branch_id or actor.branch_id,
                 patient_id=admission.patient_id,
                 admission_id=admission.id,
-                order_number=f"RAD-IPD-{datetime.now(UTC).strftime('%y%m%d%H%M%S')}",
+                order_number=f"RAD-IPD-{datetime.now(UTC).strftime('%y%m%d%H%M%S')}-{uuid4().hex[:8].upper()}",
                 study_description=order.item_name,
                 status="pending_study",
                 priority=order.priority,
@@ -1167,6 +1317,13 @@ class IPDService:
             warnings=warnings,
         )
 
+    def _active_admission(self, admission_id, actor: User) -> IPDAdmission:
+        admission = self.get_admission(admission_id, actor)
+        self.db.refresh(admission, with_for_update={"of": IPDAdmission})
+        if admission.status in {"discharged", "cancelled"}:
+            raise AppException(409, "ipd_admission_closed", "This admission is closed; new care records cannot be added")
+        return admission
+
     def _settings(self, actor: User) -> IPDSettingsRead:
         profile = self._get_or_create_settings_profile(actor)
         return IPDSettingsRead(id=profile.id, updated_at=profile.updated_at, **self._settings_payload(profile))
@@ -1364,9 +1521,8 @@ class IPDService:
     def _generate_admission_number(self, branch_id, number_format: str) -> str:
         now = datetime.now(UTC)
         day_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+        self.db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"ipd-admission-number:{now.date()}"))))
         count = self.db.scalar(select(func.count(IPDAdmission.id)).where(IPDAdmission.created_at >= day_start)) or 0
-        if branch_id:
-            count = self.db.scalar(select(func.count(IPDAdmission.id)).where(IPDAdmission.branch_id == branch_id, IPDAdmission.created_at >= day_start)) or 0
         sequence = int(count) + 1
         return (
             number_format.replace("{YYYY}", now.strftime("%Y"))

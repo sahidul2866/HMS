@@ -19,7 +19,7 @@ class QueueRuleTestCase(unittest.TestCase):
 
         token = service._format_token("opd", "Medicine", "consultation", 7, doctor_id, uuid4())
 
-        self.assertEqual(token, "RAHMAN-007")
+        self.assertEqual(token, f"RAHMAN-{doctor_id.hex[:8].upper()}-007")
 
     def test_completed_is_only_allowed_after_consultation_started(self) -> None:
         self.assertNotIn("completed", TOKEN_TRANSITIONS["waiting"])

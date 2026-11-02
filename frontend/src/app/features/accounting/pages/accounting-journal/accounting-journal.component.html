@@ -93,7 +93,7 @@
         @for (line of ledger; track line.id) {
           <tr><td>{{ line.journal_date }}</td><td><strong>{{ line.journal_number }}</strong></td><td>{{ line.account_code }} {{ line.account_name }}</td><td>{{ line.description }}</td><td>{{ money(line.debit_amount) }}</td><td>{{ money(line.credit_amount) }}</td><td>{{ money(line.balance) }}</td><td>{{ line.source_module || '-' }}</td></tr>
         }
-        @if (!ledger.length) { <tr><td colspan="8"><div class="empty">No posted ledger entries yet.</div></td></tr> }
+        @if (!ledger.length) { <tr><td colspan="8"><div class="empty">No posted ledger entries yet.<span class="app-state-guidance">Entries appear after vouchers are posted. Review vouchers to continue.</span></div></td></tr> }
       </tbody></table></div>
     </section>
   }
@@ -112,7 +112,7 @@
         @for (record of recordsForTab(); track record.id) {
           <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td><td><button class="tiny-btn" type="button" (click)="approveRecord(record, recordKind())" *ngIf="record.status === 'pending'">Approve</button></td></tr>
         }
-        @if (!recordsForTab().length) { <tr><td colspan="8"><div class="empty">No records yet.</div></td></tr> }
+        @if (!recordsForTab().length) { <tr><td colspan="8"><div class="empty">No records yet.<span class="app-state-guidance">Use the form in this section to add your first record.</span></div></td></tr> }
       </tbody></table></div>
     </section>
   }
@@ -124,7 +124,7 @@
         @for (entry of workspace.journal_entries; track entry.id) {
           <tr><td><strong>{{ entry.journal_number }}</strong></td><td>{{ entry.journal_date }}</td><td>{{ entry.narration }}</td><td>{{ money(entry.total_debit) }}</td><td>{{ money(entry.total_credit) }}</td><td>{{ entry.source_module || 'manual' }}</td><td><span [class]="statusClass(entry.status)">{{ entry.status }}</span></td><td><button class="tiny-btn" type="button" (click)="voucherAction(entry, 'approve')" *ngIf="entry.status === 'draft' || entry.status === 'submitted'">Approve</button><button class="tiny-btn" type="button" (click)="voucherAction(entry, 'post')" *ngIf="entry.status !== 'posted' && entry.status !== 'reversed' && entry.status !== 'cancelled'">Post</button><button class="tiny-btn danger" type="button" (click)="voucherAction(entry, 'reverse')" *ngIf="entry.status === 'posted'">Reverse</button></td></tr>
         }
-        @if (!workspace.journal_entries.length) { <tr><td colspan="8"><div class="empty">No vouchers yet.</div></td></tr> }
+        @if (!workspace.journal_entries.length) { <tr><td colspan="8"><div class="empty">No vouchers yet.<span class="app-state-guidance">Create a voucher using the journal entry form to begin.</span></div></td></tr> }
       </tbody></table></div>
     </section>
   }

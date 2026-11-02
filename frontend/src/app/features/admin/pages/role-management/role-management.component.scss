@@ -368,3 +368,5 @@
     justify-content: stretch;
   }
 }
+
+.role-workspace,.role-layout,.permission-editor,.module-grid,.module-panel{min-width:0;}.module-grid{grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));}.module-panel>summary{cursor:pointer;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.6rem;padding:.8rem;}.module-panel>summary span{font-size:.8rem;color:var(--text-muted);}.scope-editor>summary{cursor:pointer;font-weight:650;padding:.8rem;}.permission-search{margin:1rem 0;}.module-panel:not([open]){align-self:start;}.permission-card strong{overflow-wrap:anywhere;}

@@ -312,3 +312,32 @@
     grid-template-columns: 1fr;
   }
 }
+
+.payment-panel > summary { cursor:pointer; font-weight:700; padding:.35rem 0; }
+.billing-detail-modal .payment-grid { grid-template-columns:minmax(0,1fr); }
+.billing-detail-modal details { min-width:0; }
+.billing-detail-modal .table { overflow-wrap:anywhere; }
+// Amounts must stay whole and visible: only the service name wraps, numeric columns never break mid-value.
+.billing-detail-modal .invoice-line-items {
+  th, td { padding: 0.45rem 0.35rem; }
+  th:not(:first-child), td:not(:first-child) { white-space: nowrap; overflow-wrap: normal; text-align: right; font-variant-numeric: tabular-nums; }
+  // Narrow screens: one stacked entry per line so every amount stays visible without sideways scrolling.
+  @media (max-width: 480px) {
+    display: block; min-width: 0; width: 100%;
+    thead { display: none; }
+    tbody { display: block; }
+    tr { display: grid; grid-template-columns: 3rem minmax(0, 1fr) minmax(0, 1fr); gap: 0.15rem 0.5rem; padding: 0.5rem 0.35rem; border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.08)); }
+    td, td:not(:first-child) { display: block; padding: 0; border: 0; text-align: left; white-space: normal; }
+    td:last-child { text-align: right; }
+    td:first-child { grid-column: 1 / -1; font-weight: 600; }
+    td:not(:first-child)::before { content: attr(data-label); display: block; font-size: 0.68rem; font-weight: 500; opacity: 0.65; }
+  }
+}
+
+.billing-filter-bar{display:grid;grid-template-columns:minmax(220px,2fr) minmax(160px,1fr);gap:.8rem;padding:1rem 1.25rem;}.billing-more-filters{grid-column:1/-1;}.billing-more-filters>summary{cursor:pointer;color:var(--text-muted);padding:.4rem 0;font-size:.85rem;}.billing-more-filters[open]>.form-grid{margin-top:.8rem;}.invoice-records{min-width:760px;}.invoice-records td:first-child{max-width:220px;}.invoice-records td:nth-child(2){max-width:230px;min-width:150px;}.invoice-records td{overflow-wrap:normal;}.invoice-records small{display:block;color:var(--text-muted);margin-top:.3rem;}.invoice-records .record-reference{display:block;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.invoice-records .money-cell{white-space:nowrap;font-variant-numeric:tabular-nums;}.invoice-records th:nth-child(4),.invoice-records th:nth-child(5),.invoice-records .money-cell{text-align:right;}@media(max-width:640px){.billing-filter-bar{grid-template-columns:minmax(0,1fr);padding:.8rem;}}
+
+.billing-detail-modal{width:min(960px,calc(100vw - 2rem));}.invoice-tabs{display:flex;gap:.4rem;padding:1rem;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:1rem;}.invoice-tabs button{width:auto;padding:.6rem .9rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-muted);cursor:pointer;}.invoice-tabs button.active{color:var(--primary);border-color:var(--primary);font-weight:700;}.invoice-standing{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;padding:1rem;}.invoice-standing>div{display:grid;gap:.35rem;}.invoice-standing span{font-size:.8rem;color:var(--text-muted);}.invoice-standing strong{font-size:1.1rem;font-variant-numeric:tabular-nums;}.financial-breakdown>summary{cursor:pointer;padding:1rem;color:var(--text-muted);}.invoice-line-items{min-width:430px;}.invoice-line-items td:nth-child(n+2){white-space:nowrap;}.billing-detail-modal .panel-head{padding:.8rem;}.billing-detail-modal>.invoice-summary-grid{padding:.8rem;}.billing-detail-modal>.soft-panel{margin:.6rem;}@media(max-width:600px){.invoice-tabs{gap:.3rem;padding:.7rem;}.invoice-tabs button{padding:.55rem .6rem;font-size:.8rem;}.invoice-standing{gap:.4rem;padding:.8rem;}.invoice-standing strong{font-size:.9rem;}}
+
+.invoice-more-actions{position:relative;}.invoice-more-actions>summary{cursor:pointer;padding:.55rem .7rem;font-size:.85rem;white-space:nowrap;}.invoice-more-actions>div{position:absolute;right:0;top:100%;z-index:10;min-width:180px;padding:.6rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-soft);display:grid;gap:.5rem;}
+
+.invoice-credit-note{padding:.8rem 1rem;background:var(--surface-soft);border-left:3px solid var(--primary);margin:.8rem;}

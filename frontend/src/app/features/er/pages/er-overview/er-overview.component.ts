@@ -135,7 +135,7 @@ type TriageDraft = {
         </div>
 
         <ng-template #emptyBoard>
-          <div class="table-empty">No emergency patients match the selected filters.</div>
+          <div class="table-empty">No emergency patients match the selected filters.<span class="app-state-guidance">Check the spelling, try a shorter name or reference number, or broaden your filters and search again.</span></div>
         </ng-template>
       </section>
 

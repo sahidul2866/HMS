@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -301,6 +301,7 @@ class PharmacyDispense(Base, BaseModelMixin):
     total_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="dispensed")
     return_note: Mapped[str | None] = mapped_column(Text)
+    return_history: Mapped[list | None] = mapped_column(JSON)
     note: Mapped[str | None] = mapped_column(Text)
     dispensed_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
@@ -311,3 +312,20 @@ class PharmacyDispense(Base, BaseModelMixin):
     source_visit = relationship("OPDVisit")
     source_visit_order = relationship("OPDVisitOrder")
     dispensed_by = relationship("User")
+
+
+class PharmacyStockReview(Base, BaseModelMixin):
+    """Immutable submitted evidence with a separate review decision."""
+    __tablename__ = 'pharmacy_stock_reviews'
+
+    branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey('branches.id'), index=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default='submitted')
+    details: Mapped[dict] = mapped_column(JSON, nullable=False)
+    submitted_by_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    reviewed_by_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey('users.id'))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[str | None] = mapped_column(String(40))
+
+    submitted_by = relationship('User', foreign_keys=[submitted_by_id])
+    reviewed_by = relationship('User', foreign_keys=[reviewed_by_id])

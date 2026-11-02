@@ -80,6 +80,29 @@ def dashboard(
     return CateringService(db).dashboard(user, {k: v for k, v in locals().items() if k not in {"user", "db"} and v is not None})
 
 
+@router.get('/posting-options', dependencies=[Depends(require_permissions('catering.settings.manage'))])
+def posting_options(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.inventory import InventoryItem, InventoryStore
+    return {'items':[{'id':str(x.id),'name':x.name,'unit':x.unit_of_measurement} for x in db.scalars(select(InventoryItem).where(InventoryItem.branch_id==user.branch_id,InventoryItem.is_active.is_(True)).order_by(InventoryItem.name))], 'stores':[{'id':str(x.id),'name':x.name} for x in db.scalars(select(InventoryStore).where(InventoryStore.branch_id==user.branch_id,InventoryStore.is_active.is_(True)).order_by(InventoryStore.name))]}
+
+@router.get('/staff-options', dependencies=[Depends(require_permissions('catering.staff_meal.manage'))])
+def staff_options(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.hr import HREmployee
+    return [{'id':str(x.id),'full_name':x.full_name,'staff_code':x.staff_code,'department_id':x.department_id} for x in db.scalars(select(HREmployee).where(HREmployee.branch_id==user.branch_id,HREmployee.is_active.is_(True),HREmployee.employment_status=='active').order_by(HREmployee.full_name))]
+
+@router.get('/patient-encounters/{patient_id}', dependencies=[Depends(require_permissions('catering.diet_order.create'))])
+def patient_encounters(patient_id: UUID,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.encounter import IPDAdmission
+    return [{'id':str(x.id),'number':x.admission_number,'ward':x.ward_name,'bed':x.bed_number} for x in db.scalars(select(IPDAdmission).where(IPDAdmission.patient_id==patient_id,IPDAdmission.branch_id==user.branch_id,IPDAdmission.status=='admitted'))]
+
+@router.get('/postings', dependencies=[Depends(require_permissions('catering.report.view'))])
+def catering_postings(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from app.modules.support_posting.service import posting_rows
+    return posting_rows(db,user,['catering','catering_stock','staff_meal'])
+
 @router.get("/diet-types", response_model=list[CateringDietTypeRead], dependencies=[Depends(require_permissions("catering.view"))])
 def list_diet_types(user=Depends(get_current_user), db: Session = Depends(get_db)):
     return CateringService(db).list_diet_types(user)
@@ -155,7 +178,7 @@ def list_meals(
     return [CateringMealTaskRead.model_validate(meal_payload(item)) for item in CateringService(db).list_meals(user, meal_date=meal_date, filters=filters)]
 
 
-@router.patch("/meals/{task_id}/status", response_model=CateringMealTaskRead, dependencies=[Depends(require_any_permissions("catering.meal.prepare", "catering.meal.deliver", "catering.meal.cancel"))])
+@router.patch("/meals/{task_id}/status", response_model=CateringMealTaskRead, dependencies=[Depends(require_any_permissions("catering.meal.prepare", "catering.meal.deliver", "catering.meal.cancel", "catering.diet_order.approve"))])
 def update_meal_status(task_id: UUID, payload: CateringMealStatusUpdate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session = Depends(get_db)):
     item = CateringService(db).update_meal_status(task_id, payload, user, context)
     return CateringMealTaskRead.model_validate(meal_payload(item))

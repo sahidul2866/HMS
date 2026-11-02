@@ -57,9 +57,9 @@
         <div class="panel-head"><h2>Stock Mix</h2><span>By item type</span></div>
         <div class="bar-list">
           @for (item of categoryEntries(); track item.label) {
-            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="(item.value / maxCategory()) * 100"></i><b>{{ item.value }}</b></div>
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="barPercent(item.value, maxCategory())"></i><b>{{ item.value }}</b></div>
           }
-          @if (!categoryEntries().length) { <div class="empty">No inventory categories yet.</div> }
+          @if (!categoryEntries().length) { <div class="empty">No inventory categories yet.<span class="app-state-guidance">Add a category in inventory setup to organize your stock.</span></div> }
         </div>
       </article>
       <article class="page-card">
@@ -76,24 +76,25 @@
           @for (request of requests.slice(0, 6); track request.id) {
             <div><span>{{ request.item_name || 'Item' }}</span><b>{{ request.status }}</b></div>
           }
-          @if (!requests.length) { <div class="empty">No open requests.</div> }
+          @if (!requests.length) { <div class="empty">No open requests.<span class="app-state-guidance">New stock requests will appear here when submitted. Use the request form to start one.</span></div> }
         </div>
       </article>
       <article class="page-card span-2">
         <div class="panel-head"><h2>Store Stock Value</h2><span>Main and sub-stores</span></div>
         <div class="bar-list">
           @for (item of storeValueEntries(); track item.label) {
-            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="item.value ? (item.value / storeValueEntries()[0].value) * 100 : 0"></i><b>{{ formatMoney(item.value) }}</b></div>
+            <div class="bar-row"><span>{{ item.label }}</span><i [style.width.%]="barPercent(item.value, maxStoreValue())"></i><b>{{ formatMoney(item.value) }}</b></div>
           }
-          @if (!storeValueEntries().length) { <div class="empty">No store balances yet.</div> }
+          @if (!storeValueEntries().length) { <div class="empty">No store balances yet.<span class="app-state-guidance">Balances appear after stock is received or transferred to a store.</span></div> }
         </div>
       </article>
     </section>
   }
 
+  @if(scannedItem){<section class="page-card" role="status"><strong>Scanned item: {{scannedItem.name}}</strong><p>Showing the exact stock item from the barcode.</p>@if(scannedBatch){<p>Batch {{scannedBatch.batch_no || 'Unnumbered'}} · Quantity {{scannedBatch.quantity}} · Expiry {{scannedBatch.expiry_date || 'Not recorded'}}</p>}<button class="secondary-btn" type="button" (click)="scannedItem=null;scannedBatch=null">Show all items</button></section>}
   @if (tab() === 'items' || tab() === 'dashboard') {
     <section class="page-card">
-      <div class="list-toolbar">
+      <div class="list-toolbar"><button type="button" *ngIf="access.hasPermission('inventory.item.create')" (click)="openItemEditor()">Add stock item</button>
         <input [(ngModel)]="query" (input)="load()" placeholder="Search item, code, supplier" />
         <label><input type="checkbox" [(ngModel)]="lowStockOnly" (change)="load()" /> Low stock</label>
       </div>
@@ -101,7 +102,7 @@
         <table>
           <thead><tr><th>Item</th><th>Type</th><th>Stock</th><th>Reorder</th><th>Value</th><th>Location</th><th>Supplier</th></tr></thead>
           <tbody>
-            @for (item of items; track item.id) {
+            @for (item of scannedItem ? [scannedItem] : items; track item.id) {
               <tr [class]="stockClass(item)">
                 <td><strong>{{ item.name }}</strong><small>{{ item.item_code || item.barcode || '-' }}</small></td>
                 <td>{{ item.item_type }}</td>
@@ -187,17 +188,17 @@
     <section class="page-card">
       <div class="panel-head"><h2>{{ tab() | titlecase }}</h2><span>Store-aware inventory action</span></div>
       <div class="form-grid movement-form">
-        <select [(ngModel)]="movementForm.item_id"><option value="">Select item</option>@for (item of items; track item.id) { <option [value]="item.id">{{ item.name }}</option> }</select>
+        <select [(ngModel)]="movementForm.item_id"><option value="">Select item</option>@for (item of scannedItem ? [scannedItem] : items; track item.id) { <option [value]="item.id">{{ item.name }}</option> }</select>
         @if (tab() === 'transfers' || tab() === 'requisitions') {
           <select [(ngModel)]="movementForm.source_store_id"><option value="">Source store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
           <select [(ngModel)]="movementForm.destination_store_id"><option value="">Destination store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
         } @else {
           <select [(ngModel)]="movementForm.store_id"><option value="">Select store</option>@for (store of stores; track store.id) { <option [value]="store.id">{{ store.name }}</option> }</select>
         }
-        <input type="number" [(ngModel)]="movementForm.quantity" placeholder="Quantity" />
+        <input type="number" min="0.01" step="0.01" [(ngModel)]="movementForm.quantity" placeholder="Quantity" />
         @if (tab() === 'receive') {
           <select [(ngModel)]="movementForm.supplier_id"><option value="">Supplier</option>@for (supplier of suppliers; track supplier.id) { <option [value]="supplier.id">{{ supplier.name }}</option> }</select>
-          <input type="number" [(ngModel)]="movementForm.unit_cost" placeholder="Unit cost" />
+          <input type="number" min="0" step="0.01" [(ngModel)]="movementForm.unit_cost" placeholder="Unit cost" />
           <input [(ngModel)]="movementForm.batch_no" placeholder="Batch number" />
           <input type="date" [(ngModel)]="movementForm.expiry_date" />
         }
@@ -215,7 +216,7 @@
         }
         <input class="span-input" [(ngModel)]="movementForm.note" placeholder="Remarks" />
       </div>
-      @if (tab() === 'receive') { <button class="primary-btn" type="button" (click)="createReceiving()">Receive Stock</button> }
+      @if (tab() === 'receive') { <button class="primary-btn" type="button" [disabled]="savingMovement" (click)="createReceiving()">{{savingMovement ? 'Receiving…' : 'Receive Stock'}}</button> }
       @if (tab() === 'issue') { <button class="primary-btn" type="button" (click)="createIssue()">Issue Stock</button> }
       @if (tab() === 'transfers') { <button class="primary-btn" type="button" (click)="createTransfer()">Transfer Stock</button> }
       @if (tab() === 'requisitions') { <button class="primary-btn" type="button" (click)="createRequisition()">Create Requisition</button> }
@@ -324,3 +325,5 @@
     </section>
   }
 </section>
+
+@if(showItemEditor) {<div class="modal-backdrop"><form class="modal-card" appDialog (appDialogClose)="showItemEditor=false" (ngSubmit)="createItem()"><header class="modal-header"><h2>Stock item</h2><button type="button" (click)="showItemEditor=false">Close</button></header><p role="alert" *ngIf="error">{{error}}</p><div class="form-grid"><label>Name<input name="stock_name" [(ngModel)]="itemForm['name']" required /></label><label>Code<input name="stock_code" [(ngModel)]="itemForm['item_code']" /></label><label>Unit<input name="stock_unit" [(ngModel)]="itemForm['unit_of_measurement']" required /></label><label><input type="checkbox" name="stock_batch" [(ngModel)]="itemForm['is_batch_tracked']" /> Track batches and expiry</label></div><p>Receive stock into its store after creating the item.</p><button type="submit" class="primary-btn" [disabled]="itemSaving">Create stock item</button></form></div>}

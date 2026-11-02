@@ -20,6 +20,11 @@ class PatientPortalService:
     def get_overview(self, actor: User) -> PatientPortalOverviewRead:
         patient_id = self._require_patient_account(actor)
         history = self.patients.get_clinical_history(patient_id, actor)
+        # Preliminary findings are clinical working data, not released patient reports.
+        for visit in history.opd_visits:
+            for order in visit.orders:
+                if order.order_type=='investigation' and order.status not in {'verified','approved'}:
+                    order.result_text=None
         appointments = self.list_appointments(actor)
         doctors = [UserRead.model_validate(item, from_attributes=True) for item in self.users.list_doctors()]
         return PatientPortalOverviewRead(patient=history, appointments=appointments, doctors=doctors)

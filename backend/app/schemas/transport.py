@@ -164,8 +164,8 @@ class TransportTripStatusUpdate(BaseModel):
     status: str
     start_time: datetime | None = None
     end_time: datetime | None = None
-    distance_km: Decimal | None = None
-    waiting_minutes: int | None = None
+    distance_km: Decimal | None = Field(default=None, ge=0)
+    waiting_minutes: int | None = Field(default=None, ge=0)
     charges: dict[str, Any] | None = None
     billing_status: str | None = None
     remarks: str | None = None

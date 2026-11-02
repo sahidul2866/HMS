@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user
+from app.models.user import User
+from app.schemas.hr import HRPayrollAdjustmentCreate
 from app.dependencies.permissions import require_permissions
 from app.modules.hr.service import HRService, serialize_attendance, serialize_document, serialize_employee, serialize_leave, serialize_roster, serialize_salary
 from app.schemas.hr import (
@@ -93,6 +95,12 @@ def dashboard(user=Depends(get_current_user), db: Session = Depends(get_db)) -> 
     return HRService(db).dashboard(user)
 
 
+@router.get("/account-options", dependencies=[Depends(require_permissions("hr.employee.manage"))])
+def employee_account_options(actor: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from sqlalchemy import select
+    return [{"id": str(user.id), "full_name": user.full_name, "username": user.username} for user in db.scalars(select(User).where(User.branch_id == actor.branch_id, User.is_active.is_(True)).order_by(User.full_name))]
+
+
 @router.get("/employees", response_model=PaginatedResponse, dependencies=[Depends(require_permissions("hr.view"))])
 def list_employees(
     q: str | None = None,
@@ -103,19 +111,19 @@ def list_employees(
     db: Session = Depends(get_db),
 ) -> PaginatedResponse:
     items, total = HRService(db).list_employees(user, page=page, page_size=page_size, q=q, status=status)
-    return PaginatedResponse(items=[HREmployeeRead.model_validate(serialize_employee(item)) for item in items], total=total, page=page, page_size=page_size)
+    return PaginatedResponse(items=[HREmployeeRead.model_validate(serialize_employee(item, user)) for item in items], total=total, page=page, page_size=page_size)
 
 
 @router.post("/employees", response_model=HREmployeeRead, dependencies=[Depends(require_permissions("hr.employee.manage"))])
 def create_employee(payload: HREmployeeCreate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> HREmployeeRead:
     employee = HRService(db).create_employee(payload, user)
-    return HREmployeeRead.model_validate(serialize_employee(employee))
+    return HREmployeeRead.model_validate(serialize_employee(employee, user))
 
 
 @router.put("/employees/{employee_id}", response_model=HREmployeeRead, dependencies=[Depends(require_permissions("hr.employee.manage"))])
 def update_employee(employee_id: UUID, payload: HREmployeeCreate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> HREmployeeRead:
     employee = HRService(db).update_employee(employee_id, payload, user)
-    return HREmployeeRead.model_validate(serialize_employee(employee))
+    return HREmployeeRead.model_validate(serialize_employee(employee, user))
 
 
 @router.get("/designations", response_model=list[HRDesignationRead], dependencies=[Depends(require_permissions("hr.view"))])
@@ -190,7 +198,7 @@ def list_leave_types(user=Depends(get_current_user), db: Session = Depends(get_d
     return [HRLeaveTypeRead.model_validate(item) for item in HRService(db).list_leave_types(user)]
 
 
-@router.post("/leave-types", response_model=HRLeaveTypeRead, dependencies=[Depends(require_permissions("hr.leave.manage"))])
+@router.post("/leave-types", response_model=HRLeaveTypeRead, dependencies=[Depends(require_permissions("hr.settings.manage"))])
 def create_leave_type(payload: HRLeaveTypeCreate, user=Depends(get_current_user), db: Session = Depends(get_db)) -> HRLeaveTypeRead:
     return HRLeaveTypeRead.model_validate(HRService(db).create_leave_type(payload, user))
 
@@ -239,6 +247,11 @@ def list_overtime(user=Depends(get_current_user), db: Session = Depends(get_db))
     return [HROvertimeRead.model_validate(_named_payload(item)) for item in HRService(db).list_overtime(user)]
 
 
+@router.post("/overtime/{overtime_id}/{status}", response_model=HROvertimeRead, dependencies=[Depends(require_permissions("hr.payroll.approve"))])
+def decide_overtime(overtime_id: UUID, status: str, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    return HROvertimeRead.model_validate(_named_payload(HRService(db).decide_overtime(overtime_id, user, status)))
+
+
 @router.post("/loans", dependencies=[Depends(require_permissions("hr.payroll.manage"))])
 def create_loan(payload: HRLoanCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
     return _named_payload(HRService(db).create_loan(payload, user))
@@ -248,6 +261,29 @@ def create_loan(payload: HRLoanCreate, user=Depends(get_current_user), db: Sessi
 def list_loans(user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[HRLoanRead]:
     return [HRLoanRead.model_validate(_named_payload(item)) for item in HRService(db).list_loans(user)]
 
+
+@router.get('/payroll/postings', dependencies=[Depends(require_permissions('hr.payroll.manage'))])
+def payroll_postings(user=Depends(get_current_user),db: Session=Depends(get_db)):
+    from app.modules.support_posting.service import posting_rows
+    return posting_rows(db,user,['hr_payroll'])
+
+@router.get('/payroll/adjustments', dependencies=[Depends(require_permissions('hr.payroll.manage'))])
+def list_adjustments(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.operational_posting import HRPayrollAdjustment
+    return [_named_payload(item) for item in db.scalars(select(HRPayrollAdjustment).where(HRPayrollAdjustment.branch_id==user.branch_id).order_by(HRPayrollAdjustment.created_at.desc()))]
+
+@router.post('/payroll/adjustments', dependencies=[Depends(require_permissions('hr.payroll.manage'))])
+def create_adjustment(payload: HRPayrollAdjustmentCreate,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return _named_payload(HRService(db).create_adjustment(payload,user))
+
+@router.post('/payroll/adjustments/{identity}/{status}', dependencies=[Depends(require_permissions('hr.payroll.approve'))])
+def decide_adjustment(identity: UUID,status: str,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return _named_payload(HRService(db).decide_adjustment(identity,status,user))
+
+@router.post('/payroll/runs/{identity}/recalculate', response_model=HRPayrollRunRead, dependencies=[Depends(require_permissions('hr.payroll.manage'))])
+def recalculate_payroll(identity: UUID,user=Depends(get_current_user),db: Session=Depends(get_db)):
+    return HRService(db).recalculate_payroll(identity,user)
 
 @router.get("/payroll/dashboard", response_model=HRPayrollDashboard, dependencies=[Depends(require_permissions("payroll.view"))])
 def payroll_dashboard(payroll_month: str | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> HRPayrollDashboard:

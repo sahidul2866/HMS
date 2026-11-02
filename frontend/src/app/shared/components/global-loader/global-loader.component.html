@@ -1,17 +1,19 @@
 @if (loadingService.isLoading() > 0) {
-  <div class="global-loader-backdrop">
-    <div class="global-loader-card">
-      <div class="loader-container" aria-hidden="true">
-        <div class="loader">
-          <div class="face"><div class="circle"></div></div>
-          <div class="face"><div class="circle"></div></div>
-        </div>
-        <div class="timer-text">{{ elapsedSeconds() }}</div>
-      </div>
-      <div class="global-loader-copy">
-        <strong>Syncing with server</strong>
-        <span>Please wait while your request is processed.</span>
-      </div>
+  <section class="global-loader-card" role="status" aria-live="polite" aria-label="Loading information">
+    <div class="global-loader-copy">
+      <strong>{{ elapsedSeconds() >= 8 ? 'This is taking longer than usual' : 'Loading information' }}</strong>
+      <span>{{ loadingService.isLoading() }} request(s) pending · {{ elapsedSeconds() }} seconds elapsed</span>
     </div>
-  </div>
+    @if (!connection.lightMode()) {
+      <div class="skeleton-layout" aria-hidden="true">
+        <div class="skeleton heading"></div>
+        <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+      </div>
+    }
+    <progress aria-label="Waiting for server response"></progress>
+    @if (elapsedSeconds() >= 8) {
+      <p>You can keep reviewing loaded information. Wait for confirmation before submitting an action again.</p>
+      <button type="button" (click)="connection.lightMode.set(!connection.lightMode())">{{ connection.lightMode() ? 'Show loading preview' : 'Use lighter view and loaded records' }}</button>
+    }
+  </section>
 }

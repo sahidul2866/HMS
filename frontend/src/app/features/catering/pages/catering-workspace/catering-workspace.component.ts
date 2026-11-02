@@ -1,3 +1,5 @@
+import { SessionService } from '../../../../core/services/session.service';
+import { DialogDirective } from '../../../../shared/directives/dialog.directive';
 import { CommonModule, KeyValue } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -26,11 +28,12 @@ type CateringTab = 'dashboard' | 'diet-orders' | 'kitchen' | 'schedule' | 'deliv
 @Component({
   selector: 'app-catering-workspace',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [DialogDirective, CommonModule, FormsModule, RouterLink],
   templateUrl: './catering-workspace.component.html',
   styleUrls: ['./catering-workspace.component.scss'],
 })
 export class CateringWorkspaceComponent {
+  readonly access = inject(SessionService);
   private readonly cateringService = inject(CateringService);
   private readonly patientService = inject(PatientService);
   private readonly hrService = inject(HRService);
@@ -38,7 +41,7 @@ export class CateringWorkspaceComponent {
   private readonly notifications = inject(NotificationService);
 
   readonly tab = signal<CateringTab>('dashboard');
-  today = new Date().toISOString().slice(0, 10);
+  today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
   filters = { meal_date: this.today, meal_type: '', ward: '', bed: '', diet_type: '', kitchen_status: '', delivery_status: '' };
   reportFilters = { report_type: 'daily', meal_date: this.today, ward: '', diet_type: '', meal_type: '', kitchen_status: '', delivery_status: '' };
 
@@ -51,8 +54,14 @@ export class CateringWorkspaceComponent {
   staffMeals: CateringStaffMeal[] = [];
   settings: CateringSetting[] = [];
   patients: Patient[] = [];
+  stockItems: {id: string; name: string; unit: string}[] = [];
+  stockStores: {id: string; name: string}[] = [];
+  encounters: {id: string; number: string; ward: string; bed: string}[] = [];
+  postings: {id: string; source_type: string; event: string; amount: string; invoice_id: string | null; journal_id: string | null}[] = [];
+  editingDietId: string | null = null;
   employees: HREmployee[] = [];
   report: CateringReport | null = null;
+  saving = false;
   error = '';
   success = '';
   modal: '' | 'diet-order' | 'meal-plan' | 'diet-type' | 'schedule' | 'staff-meal' | 'setting' = '';
@@ -73,16 +82,18 @@ export class CateringWorkspaceComponent {
   }
 
   loadReferenceData(): void {
+    if(this.access.hasPermission('catering.settings.manage')) this.cateringService.postingOptions().subscribe(rows => {this.stockItems = rows.items; this.stockStores = rows.stores;});
+    if(this.access.hasPermission('catering.staff_meal.manage')) this.cateringService.staffOptions().subscribe(rows => this.employees = rows);
     this.cateringService.listDietTypes().subscribe((rows) => (this.dietTypes = rows));
     this.cateringService.listMealPlans().subscribe((rows) => (this.mealPlans = rows));
     this.cateringService.listSchedules().subscribe((rows) => (this.schedules = rows));
-    this.patientService.list().subscribe((rows) => (this.patients = rows));
-    this.hrService.listEmployees({ page_size: 500 }).subscribe((response) => (this.employees = response.items));
+    if (this.access.hasPermission('patient.view')) this.patientService.list().subscribe((rows) => (this.patients = rows));
+
   }
 
   loadCurrentTab(): void {
     this.error = '';
-    this.loadDashboard();
+    if (this.access.hasPermission('catering.dashboard.view')) this.loadDashboard();
     if (this.tab() === 'diet-orders') this.loadDietOrders();
     if (this.tab() === 'kitchen' || this.tab() === 'delivery' || this.tab() === 'inventory') this.loadMeals();
     if (this.tab() === 'schedule') this.loadSchedule();
@@ -117,6 +128,7 @@ export class CateringWorkspaceComponent {
   }
 
   loadReport(): void {
+    this.cateringService.postings().subscribe(rows => this.postings = rows);
     this.cateringService.report(this.reportFilters).subscribe({ next: (report) => (this.report = report), error: (error) => this.showError(error) });
   }
 
@@ -125,9 +137,11 @@ export class CateringWorkspaceComponent {
     this.error = '';
     this.success = '';
     if (name === 'diet-order') {
+      this.editingDietId = null; this.encounters = [];
       this.dietOrderForm = { patient_id: this.patients[0]?.id || '', diet_type_id: this.dietTypes[0]?.id || '', meal_plan_id: '', ward_name: '', bed_number: '', admission_number: '', restrictions: '', allergies: '', special_instructions: '', nutrition_notes: '', start_at: this.localDateTime(), end_at: '' };
+      this.loadEncounters();
     }
-    if (name === 'meal-plan') this.mealPlanForm = { diet_type_id: this.dietTypes[0]?.id || '', name: '', meal_type: 'lunch', ingredients: '', allergens: '', billable_amount: 0, inventory_quantity: 0 };
+    if (name === 'meal-plan') this.mealPlanForm = { diet_type_id: this.dietTypes[0]?.id || '', name: '', meal_type: 'lunch', ingredients: '', allergens: '', billable_amount: 0, inventory_quantity: 0, inventory_item_id: '', inventory_store_id: '' };
     if (name === 'diet-type') this.dietTypeForm = { code: '', name: '', description: '', is_npo: false, requires_approval: false, default_restrictions: '' };
     if (name === 'schedule') this.scheduleForm = { meal_type: 'custom', display_name: '', serving_time: '12:00', cutoff_minutes: 60, sort_order: this.schedules.length + 1 };
     if (name === 'staff-meal') this.staffMealForm = { employee_id: '', staff_name: '', staff_code: '', meal_date: this.today, meal_type: 'lunch', eligibility_type: 'paid', amount: 0, payroll_deductible: false, remarks: '' };
@@ -139,7 +153,22 @@ export class CateringWorkspaceComponent {
   }
 
   saveDietOrder(): void {
-    this.submit(this.cateringService.createDietOrder(this.clean(this.dietOrderForm)), 'Diet order saved');
+    this.submit(this.editingDietId ? this.cateringService.updateDietOrder(this.editingDietId,this.clean(this.dietOrderForm)) : this.cateringService.createDietOrder(this.clean(this.dietOrderForm)), 'Diet order saved; required approval is renewed');
+  }
+
+  editDiet(order: CateringDietOrder): void {
+    this.openModal('diet-order'); this.editingDietId = order.id;
+    const local = (value: string | null | undefined) => { if(!value) return ''; const d=new Date(value); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
+    this.dietOrderForm = {...order,start_at:local(order.start_at),end_at:local(order.end_at)};
+    this.loadEncounters();
+  }
+  loadEncounters(): void {
+    const id=String(this.dietOrderForm['patient_id'] || '');
+    if(id) this.cateringService.encounters(id).subscribe(rows => this.encounters = rows);
+  }
+  selectEncounter(): void {
+    const row=this.encounters.find(x => x.id===this.dietOrderForm['ipd_admission_id']);
+    if(row) {this.dietOrderForm['ward_name']=row.ward;this.dietOrderForm['bed_number']=row.bed;this.dietOrderForm['admission_number']=row.number;}
   }
 
   approveDietOrder(order: CateringDietOrder): void {
@@ -162,11 +191,21 @@ export class CateringWorkspaceComponent {
     this.submit(this.cateringService.generateMeals(this.filters.meal_date), 'Daily meal tasks generated');
   }
 
+  cancelMeal(task: CateringMealTask): void {
+    const reason=window.prompt('Why is this meal cancelled? Prepared food remains consumed/waste.');
+    if(reason?.trim()) this.submit(this.cateringService.updateMealStatus(task.id,{delivery_status:'cancelled',remarks:reason.trim()}),'Meal cancelled; consumed stock is not automatically returned');
+  }
+
+  authorizeMeal(task: CateringMealTask): void {
+    const reason = window.prompt('Document the reviewed safety exception and authorized instructions');
+    if (reason?.trim()) this.submit(this.cateringService.updateMealStatus(task.id, {override_reason: reason.trim()}), 'Safety exception recorded for this meal');
+  }
+
   setMealStatus(task: CateringMealTask, preparationStatus?: string, deliveryStatus?: string): void {
     const payload: Record<string, unknown> = {};
     if (preparationStatus) payload['preparation_status'] = preparationStatus;
     if (deliveryStatus) payload['delivery_status'] = deliveryStatus;
-    if (task.safety_warnings.length && ['preparing', 'ready'].includes(preparationStatus || '')) {
+    if (task.safety_warnings.length && !task.override_reason && ['preparing', 'ready'].includes(preparationStatus || '')) {
       const reason = window.prompt('Safety warning override reason');
       if (!reason) return;
       payload['override_reason'] = reason;
@@ -231,24 +270,27 @@ export class CateringWorkspaceComponent {
   }
 
   private submit<T>(request$: import('rxjs').Observable<T>, message: string): void {
+    if (this.saving) return;
+    this.saving = true;
     request$.subscribe({
       next: () => {
+        this.saving = false;
         this.success = message;
         this.closeModal();
         this.loadReferenceData();
         this.loadCurrentTab();
       },
-      error: (error) => this.showError(error),
+      error: (error) => { this.saving = false; this.showError(error); },
     });
   }
 
   private clean(source: Record<string, unknown>): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, value === '' ? null : value]));
+    return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, value === '' ? null : ['required_at','scheduled_at','start_at','end_at'].includes(key) && typeof value === 'string' ? new Date(value).toISOString() : value]));
   }
 
   private showError(error: unknown): void {
-    const anyError = error as { error?: { message?: string; detail?: string }; message?: string };
-    this.error = anyError.error?.message || anyError.error?.detail || anyError.message || 'Could not complete catering action.';
+    const anyError = error as { error?: { message?: string; detail?: string; error?: {message?: string} }; message?: string };
+    this.error = anyError.error?.error?.message || anyError.error?.message || anyError.error?.detail || anyError.message || 'Could not complete catering action.';
   }
 
   private localDateTime(): string {

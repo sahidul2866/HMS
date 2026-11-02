@@ -80,6 +80,18 @@ export class BillingCreateComponent {
   medicines: PharmacyMedicine[] = [];
   investigationSettings: PharmacyInvestigationSetting[] = [];
   internalReferralDoctors: User[] = [];
+  billingStep:'patient'|'items'|'payment'='patient';
+  changeBillingStep(step:'patient'|'items'|'payment'):void {
+    const patient=this.form.getRawValue();
+    if(step!=='patient'&&!(patient.patient_id||(patient.first_name?.trim()&&patient.last_name?.trim()))){this.notificationService.warning('Select a patient or enter their first and last names.');return;}
+    if(step==='payment'&&!this.selectedItemCount){this.notificationService.warning('Select at least one billable item before reviewing payment.');return;}
+    if(step==='payment'){this.activeItemSearchIndex=null;this.recalculatePreview();}
+    this.billingStep=step;
+    requestAnimationFrame(()=>{document.querySelector('.billing-flow-heading')?.scrollIntoView({block:'start',behavior:'smooth'});});
+  }
+  onBillingSubmit():void {if(this.billingStep==='payment')this.submit();else this.changeBillingStep(this.billingStep==='patient'?'items':'payment');}
+
+  billingTypes: {id:string;name:string;department:string}[] = [];
   billingSettings: BillingSettings | null = null;
   preview: BillingInvoicePreview | null = null;
   draft: BillingDraft | null = null;
@@ -105,16 +117,22 @@ export class BillingCreateComponent {
     gender: [''],
     date_of_birth: [''],
     address: [''],
+    billing_type_id: [''],
+    discount_reason: [''],
     internal_referral_user_id: [''],
     discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
+    discount_amount: [0, [Validators.min(0)]],
     payment_amount: [0, [Validators.min(0)]],
     payment_method: ['cash'],
+    payment_provider: ['bkash'],
+    payment_reference: [''],
     payment_note: [''],
     note: [''],
     items: this.fb.array([]),
   });
 
   constructor() {
+    this.billingService.listTypes().subscribe(types => this.billingTypes = types);
     this.restoreState();
     if (!this.items.length) {
       this.addItem();
@@ -170,6 +188,8 @@ export class BillingCreateComponent {
     if (this.sourceAdmission) {
       return `IPD ${this.sourceAdmission.admission_number}`;
     }
+    if (this.draft?.source_opd_visit_id) return 'Linked OPD bill';
+    if (this.draft?.source_ipd_admission_id) return 'Linked IPD bill';
     return 'Direct bill';
   }
 
@@ -288,11 +308,14 @@ export class BillingCreateComponent {
         source_item_id: [''],
         quantity: [1, [Validators.required, Validators.min(0.01)]],
         discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
+        discount_amount: [0, [Validators.min(0)]],
         source_opd_visit_order_id: [''],
         source_label: [''],
         source_module: [''],
         source_record_type: [''],
         source_record_id: [''],
+        bed_charge_date: [''],
+        carry_forward_item_id: [''],
       })
     );
     this.persistState();
@@ -314,9 +337,14 @@ export class BillingCreateComponent {
     });
   }
 
+  private normalizeItemNames():void {
+    this.items.controls.forEach((item,index)=>{const option=this.getSelectedCatalogOption(index);if(option&&this.activeItemSearchIndex!==index)item.get('catalog_search')?.setValue(option.name,{emitEvent:false});});
+  }
+
   loadServices(): void {
     this.billingService.listServices().subscribe((services) => {
       this.billingServices = services;
+      this.normalizeItemNames();
       if (this.sourceVisit) {
         this.applyVisitServiceSuggestion(this.sourceVisit);
       }
@@ -329,6 +357,7 @@ export class BillingCreateComponent {
       this.pharmacyService.listMedicines({ page: 1, page_size: 500, is_active: true }).subscribe({
         next: (response) => {
           this.medicines = response.items;
+          this.normalizeItemNames();
           this.recalculatePreview();
         },
         error: () => {
@@ -342,6 +371,7 @@ export class BillingCreateComponent {
       this.pharmacyService.listInvestigationSettings({ page: 1, page_size: 500, is_active: 'true' }).subscribe({
         next: (response) => {
           this.investigationSettings = response.items;
+          this.normalizeItemNames();
           this.recalculatePreview();
         },
         error: () => {
@@ -488,10 +518,12 @@ export class BillingCreateComponent {
     );
     this.patientLookupControl.setValue(`${result.patient_number} - ${result.full_name}`, { emitEvent: false });
     this.closePatientSearch();
+    this.billingStep='items';
     this.persistState();
   }
 
   clearPatientSelection(): void {
+    this.billingStep='patient';
     this.selectedPatient = null;
     this.patientLookupControl.setValue('', { emitEvent: false });
     this.form.patchValue(
@@ -598,7 +630,7 @@ export class BillingCreateComponent {
       return;
     }
     item.patchValue({
-      catalog_search: `${option.group} - ${option.name}`,
+      catalog_search: option.name,
       billing_service_id: option.type === 'billing_service' ? option.id : '',
       source_item_type: option.type,
       source_item_id: option.id,
@@ -652,7 +684,6 @@ export class BillingCreateComponent {
   }
 
   recalculatePreview(): void {
-    const discount = Number(this.form.getRawValue().discount_percentage ?? 0);
     const discountViolation = this.getDiscountLimitViolation();
     if (discountViolation) {
       this.preview = null;
@@ -670,14 +701,14 @@ export class BillingCreateComponent {
       if (!option) {
         return;
       }
-      const raw = this.items.at(index).getRawValue() as { quantity?: number; discount_percentage?: number };
+      const raw = this.items.at(index).getRawValue() as { quantity?: number; discount_percentage?: number; discount_amount?: number };
       const quantity = Number(raw.quantity || 0);
       if (quantity <= 0) {
         return;
       }
       selectedLineCount += 1;
       const lineGross = Number(option.unitPrice || 0) * quantity;
-      const lineDiscount = (lineGross * Number(raw.discount_percentage || 0)) / 100;
+      const lineDiscount = this.discountOf(lineGross, raw.discount_percentage, raw.discount_amount);
       const lineNet = Math.max(0, lineGross - lineDiscount);
       subTotal += lineNet;
       itemDiscountAmount += lineDiscount;
@@ -690,7 +721,9 @@ export class BillingCreateComponent {
       return;
     }
 
-    const invoiceDiscountAmount = (subTotal * discount) / 100;
+    const rawInvoice = this.form.getRawValue();
+    const invoiceDiscountAmount = this.discountOf(subTotal, rawInvoice.discount_percentage, rawInvoice.discount_amount);
+    const discount = subTotal > 0 ? (invoiceDiscountAmount * 100) / subTotal : 0;
     const totalAmount = Math.max(0, subTotal - invoiceDiscountAmount);
     this.preview = {
       sub_total: this.toMoney(subTotal),
@@ -718,6 +751,7 @@ export class BillingCreateComponent {
   }
 
   resetInvoiceDraft(): void {
+    this.billingStep='patient';
     this.sourceVisit = null;
     this.sourceAdmission = null;
     this.draft = null;
@@ -733,10 +767,15 @@ export class BillingCreateComponent {
       gender: '',
       date_of_birth: '',
       address: '',
+      billing_type_id: '',
+      discount_reason: '',
       internal_referral_user_id: '',
       discount_percentage: 0,
+      discount_amount: 0,
       payment_amount: 0,
       payment_method: 'cash',
+      payment_provider: 'bkash',
+      payment_reference: '',
       payment_note: '',
       note: '',
     });
@@ -757,6 +796,14 @@ export class BillingCreateComponent {
 
     const value = this.form.getRawValue();
     const items = this.getInvoiceItemsPayload();
+    if ((Number(value.discount_percentage)>0 || Number(value.discount_amount)>0 || items.some(item=>Number(item.discount_percentage)>0 || Number(item.discount_amount)>0)) && (value.discount_reason||'').trim().length<3) {
+      this.form.controls.discount_reason.setErrors({reasonRequired:true});
+      this.form.controls.discount_reason.markAsTouched();
+      const details=document.querySelector<HTMLDetailsElement>('.discount-settings');if(details)details.open=true;
+      requestAnimationFrame(()=>document.querySelector<HTMLInputElement>('[formcontrolname=discount_reason]')?.focus());
+      this.notificationService.warning('Enter the discount reason or approval reference (at least 3 characters).');
+      return;
+    }
     if (!items.length) {
       this.notificationService.warning('Add at least one billing item before posting the invoice.');
       return;
@@ -780,12 +827,15 @@ export class BillingCreateComponent {
     const createInvoice = (patientId: string) => {
       const payload: CreateBillingInvoicePayload = {
         patient_id: patientId,
+        billing_type_id: value.billing_type_id || null,
+        discount_reason: value.discount_reason || null,
         source_opd_visit_id: this.draft?.source_opd_visit_id || this.sourceVisit?.id || null,
         source_ipd_admission_id: this.draft?.source_ipd_admission_id || this.sourceAdmission?.id || null,
         source_module: this.draft?.source_module || (this.sourceVisit ? 'opd' : this.sourceAdmission ? 'ipd' : null),
         billing_stage: this.draft?.billing_stage || (this.sourceVisit ? 'opd' : this.sourceAdmission ? 'ipd_interim' : null),
         internal_referral_user_id: value.internal_referral_user_id || null,
         discount_percentage: Number(value.discount_percentage ?? 0),
+        discount_amount: Number(value.discount_amount ?? 0) > 0 ? Number(value.discount_amount) : null,
         note: value.note || null,
         items,
       };
@@ -798,11 +848,12 @@ export class BillingCreateComponent {
             this.completed = true;
             this.form.markAsPristine();
             this.patientLookupControl.markAsPristine();
+            const finalAdmissionId = this.draft?.billing_stage === 'ipd_final' ? this.sourceAdmission?.id : null;
             this.clearDraftKeepContext();
             this.printInvestigationStickers(postedInvoice);
             this.notificationService.success(`Invoice ${postedInvoice.invoice_number} created successfully.`);
             const hasDue = Number(postedInvoice.due_amount || 0) > 0;
-            if (!hasDue && this.draft?.billing_stage === 'ipd_final' && this.sourceAdmission) {
+            if (!hasDue && finalAdmissionId && this.sourceAdmission) {
               void this.router.navigate(['/ipd/admissions', this.sourceAdmission.id]);
               return;
             }
@@ -820,29 +871,23 @@ export class BillingCreateComponent {
             this.billingService.collectPayment(invoice.id, {
               amount: paymentAmount,
               payment_method: (this.form.getRawValue().payment_method || 'cash') as 'cash' | 'card' | 'mobile_banking' | 'bank_transfer',
+              payment_provider: this.form.getRawValue().payment_method === 'mobile_banking' ? this.form.getRawValue().payment_provider || null : null,
+              reference_number: this.form.getRawValue().payment_method === 'cash' ? null : (this.form.getRawValue().payment_reference || '').trim() || null,
               note: this.form.getRawValue().payment_note || null,
             }).subscribe({
               next: (paidInvoice) => finalizeNavigation(paidInvoice),
               error: () => {
                 this.saving = false;
+                this.completed = true;
+                this.form.markAsPristine();
+                this.patientLookupControl.markAsPristine();
                 this.notificationService.warning(`Invoice ${invoice.invoice_number} posted, but payment collection failed. Collect it from due payments.`);
+                void this.router.navigate(['/billing/due-payments'], { queryParams: { invoiceId: invoice.id } });
               },
             });
           };
 
-          if (this.sourceVisit) {
-            this.opdService.updateStatus(this.sourceVisit.id, 'billed').subscribe({
-              next: () => {
-                this.prefillMessage = `${this.sourceVisit?.visit_number} billed and synced back to OPD.`;
-                collectInitialPayment();
-              },
-              error: () => {
-                this.saving = false;
-                this.notificationService.warning(`Invoice ${invoice.invoice_number} posted, but OPD status was not updated.`);
-              },
-            });
-            return;
-          }
+          // Billing/payment state is synchronized on the server; clinical status stays independent.
 
           collectInitialPayment();
         },
@@ -916,6 +961,21 @@ export class BillingCreateComponent {
     return this.formatCurrency(this.getSelectedCatalogOption(index)?.unitPrice ?? 0);
   }
 
+  /** Discount in Taka from either a flat amount or a percentage of the gross; a flat amount wins and never exceeds the gross. */
+  private discountOf(gross: number, percentage: unknown, amount: unknown): number {
+    const flat = Number(amount || 0);
+    return flat > 0 ? Math.min(flat, gross) : (gross * Number(percentage || 0)) / 100;
+  }
+
+  /** Entering one kind of discount clears the other so the two are never combined on one line. */
+  chooseDiscount(group: { get(name: string): { setValue(value: number): void } | null }, kind: 'percentage' | 'amount'): void {
+    group.get(kind === 'percentage' ? 'discount_amount' : 'discount_percentage')?.setValue(0);
+  }
+
+  get showPaymentReference(): boolean {
+    return this.form.controls.payment_method.value !== 'cash';
+  }
+
   getItemDiscountAmount(serviceId: string, quantity: number, discountPercentage: number): string {
     const unitPrice = this.billingServices.find((item) => item.id === serviceId)?.unit_price;
     if (!unitPrice) {
@@ -937,12 +997,12 @@ export class BillingCreateComponent {
 
   getCatalogDiscountAmount(index: number, quantity: number, discountPercentage: number): string {
     const gross = Number(this.getSelectedCatalogOption(index)?.unitPrice ?? 0) * Number(quantity || 0);
-    return this.formatCurrency((gross * Number(discountPercentage || 0)) / 100);
+    return this.formatCurrency(this.discountOf(gross, discountPercentage, this.items.at(index)?.get('discount_amount')?.value));
   }
 
   getCatalogAmount(index: number, quantity: number, discountPercentage = 0): string {
     const gross = Number(this.getSelectedCatalogOption(index)?.unitPrice ?? 0) * Number(quantity || 0);
-    const discount = (gross * Number(discountPercentage || 0)) / 100;
+    const discount = this.discountOf(gross, discountPercentage, this.items.at(index)?.get('discount_amount')?.value);
     return this.formatCurrency(gross - discount);
   }
 
@@ -983,11 +1043,14 @@ export class BillingCreateComponent {
       source_item_id?: string;
       quantity?: number;
       discount_percentage?: number;
+      discount_amount?: number;
       source_opd_visit_order_id?: string;
       source_label?: string;
       source_module?: string;
       source_record_type?: string;
       source_record_id?: string;
+      bed_charge_date?: string;
+      carry_forward_item_id?: string;
     }[];
     return rawItems
       .filter((item) => (item.billing_service_id || item.source_item_id) && Number(item.quantity) > 0)
@@ -995,6 +1058,7 @@ export class BillingCreateComponent {
         billing_service_id: item.billing_service_id || null,
         quantity: Number(item.quantity),
         discount_percentage: Number(item.discount_percentage ?? 0),
+        discount_amount: Number(item.discount_amount ?? 0) > 0 ? Number(item.discount_amount) : null,
         source_opd_visit_order_id: item.source_opd_visit_order_id || null,
         source_label: item.source_label || null,
         source_module: item.source_module || null,
@@ -1002,6 +1066,8 @@ export class BillingCreateComponent {
         source_item_id: item.source_item_id || item.billing_service_id || null,
         source_record_type: item.source_record_type || null,
         source_record_id: item.source_record_id || null,
+        bed_charge_date: item.bed_charge_date || null,
+        carry_forward_item_id: item.carry_forward_item_id || null,
       }));
   }
 
@@ -1013,9 +1079,9 @@ export class BillingCreateComponent {
   }
 
   private getDiscountLimitViolation(): string | null {
-    const invoiceDiscount = Number(this.form.getRawValue().discount_percentage ?? 0);
-    if (invoiceDiscount > this.maxInvoiceDiscountPercentage) {
-      return `Invoice discount cannot exceed ${this.maxInvoiceDiscountPercentage}%.`;
+    const rawInvoice = this.form.getRawValue();
+    if (Number(rawInvoice.discount_percentage ?? 0) > 0 && Number(rawInvoice.discount_amount ?? 0) > 0) {
+      return 'Give the invoice discount as a percentage or as a Taka amount, not both.';
     }
     const subtotal = this.items.controls.reduce((total, item, index) => {
       const option = this.getSelectedCatalogOption(index);
@@ -1023,16 +1089,27 @@ export class BillingCreateComponent {
         return total;
       }
       const quantity = Number(item.get('quantity')?.value ?? 0);
-      const discount = Number(item.get('discount_percentage')?.value ?? 0);
       const gross = Number(option.unitPrice || 0) * quantity;
-      return total + Math.max(0, gross - (gross * discount) / 100);
+      return total + Math.max(0, gross - this.discountOf(gross, item.get('discount_percentage')?.value, item.get('discount_amount')?.value));
     }, 0);
-    const invoiceDiscountAmount = (subtotal * invoiceDiscount) / 100;
+    const invoiceDiscountAmount = this.discountOf(subtotal, rawInvoice.discount_percentage, rawInvoice.discount_amount);
+    if (subtotal > 0 && invoiceDiscountAmount * 100 / subtotal > this.maxInvoiceDiscountPercentage) {
+      return `Invoice discount cannot exceed ${this.maxInvoiceDiscountPercentage}%.`;
+    }
     const invoiceAmountCap = this.billingSettings?.max_invoice_discount_amount;
     if (invoiceAmountCap !== null && invoiceAmountCap !== undefined && invoiceAmountCap !== '' && invoiceDiscountAmount > Number(invoiceAmountCap)) {
       return `Invoice discount amount cannot exceed ${this.formatCurrency(invoiceAmountCap)}.`;
     }
-    const itemOverLimitIndex = this.items.controls.findIndex((item, index) => Number(item.get('discount_percentage')?.value ?? 0) > this.getItemMaxDiscountPercentage(index));
+    const itemBothIndex = this.items.controls.findIndex((item) => Number(item.get('discount_percentage')?.value ?? 0) > 0 && Number(item.get('discount_amount')?.value ?? 0) > 0);
+    if (itemBothIndex >= 0) {
+      return 'Give each item discount as a percentage or as a Taka amount, not both.';
+    }
+    const itemOverLimitIndex = this.items.controls.findIndex((item, index) => {
+      const option = this.getSelectedCatalogOption(index);
+      const gross = Number(option?.unitPrice || 0) * Number(item.get('quantity')?.value ?? 0);
+      const effective = gross > 0 ? (this.discountOf(gross, item.get('discount_percentage')?.value, item.get('discount_amount')?.value) * 100) / gross : Number(item.get('discount_percentage')?.value ?? 0);
+      return effective > this.getItemMaxDiscountPercentage(index);
+    });
     if (itemOverLimitIndex >= 0) {
       return `Item discount cannot exceed ${this.getItemMaxDiscountPercentage(itemOverLimitIndex)}%.`;
     }
@@ -1043,7 +1120,7 @@ export class BillingCreateComponent {
         return false;
       }
       const gross = Number(option.unitPrice || 0) * Number(item.get('quantity')?.value ?? 0);
-      const discountAmount = (gross * Number(item.get('discount_percentage')?.value ?? 0)) / 100;
+      const discountAmount = this.discountOf(gross, item.get('discount_percentage')?.value, item.get('discount_amount')?.value);
       return discountAmount > cap;
     });
     if (itemAmountOverLimitIndex >= 0) {
@@ -1059,6 +1136,10 @@ export class BillingCreateComponent {
     }
     if (this.preview && paymentAmount > Number(this.preview.total_amount)) {
       return `Payment amount cannot exceed ${this.formatCurrency(this.preview.total_amount)}.`;
+    }
+    const raw = this.form.getRawValue();
+    if (paymentAmount > 0 && raw.payment_method !== 'cash' && !(raw.payment_reference || '').trim()) {
+      return raw.payment_method === 'mobile_banking' ? 'Enter the mobile banking transaction ID (TrxID).' : raw.payment_method === 'card' ? 'Enter the card approval code.' : 'Enter the transfer or cheque number.';
     }
     return null;
   }
@@ -1104,8 +1185,11 @@ export class BillingCreateComponent {
       gender?: string;
       date_of_birth?: string;
       address?: string;
+      billing_type_id?: string;
+      discount_reason?: string;
       internal_referral_user_id?: string;
       discount_percentage?: number;
+      discount_amount?: number;
       payment_amount?: number;
       payment_method?: string;
       payment_note?: string;
@@ -1126,8 +1210,11 @@ export class BillingCreateComponent {
       gender: state.gender ?? '',
       date_of_birth: state.date_of_birth ?? '',
       address: state.address ?? '',
+      billing_type_id: state.billing_type_id ?? '',
+      discount_reason: state.discount_reason ?? '',
       internal_referral_user_id: state.internal_referral_user_id ?? '',
       discount_percentage: state.discount_percentage ?? 0,
+      discount_amount: state.discount_amount ?? 0,
       payment_amount: state.payment_amount ?? 0,
       payment_method: state.payment_method ?? 'cash',
       payment_note: state.payment_note ?? '',
@@ -1144,11 +1231,14 @@ export class BillingCreateComponent {
             source_item_id: [item.source_item_id || item.billing_service_id || ''],
             quantity: [item.quantity, [Validators.required, Validators.min(0.01)]],
             discount_percentage: [item.discount_percentage ?? 0, [Validators.min(0), Validators.max(100)]],
+            discount_amount: [item.discount_amount ?? 0, [Validators.min(0)]],
             source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
             source_label: [item.source_label || ''],
             source_module: [item.source_module || ''],
             source_record_type: [item.source_record_type || ''],
             source_record_id: [item.source_record_id || ''],
+            bed_charge_date: [item.bed_charge_date || ''],
+            carry_forward_item_id: [item.carry_forward_item_id || ''],
           })
         );
     }
@@ -1165,8 +1255,11 @@ export class BillingCreateComponent {
       gender: value.gender ?? '',
       date_of_birth: value.date_of_birth ?? '',
       address: value.address ?? '',
+      billing_type_id: value.billing_type_id ?? '',
+      discount_reason: value.discount_reason ?? '',
       internal_referral_user_id: value.internal_referral_user_id ?? '',
       discount_percentage: Number(value.discount_percentage ?? 0),
+      discount_amount: Number(value.discount_amount ?? 0),
       payment_amount: Number(value.payment_amount ?? 0),
       payment_method: value.payment_method ?? 'cash',
       payment_note: value.payment_note ?? '',
@@ -1224,6 +1317,7 @@ export class BillingCreateComponent {
       },
       { emitEvent: false }
     );
+    if(!this.selectedPatient&&this.billingStep==='patient')this.billingStep='items';
     this.selectedPatient = patient;
     this.patientLookupControl.setValue(`${patient.patient_number} - ${patient.first_name} ${patient.last_name}`, {
       emitEvent: false,
@@ -1231,58 +1325,28 @@ export class BillingCreateComponent {
   }
 
   private loadVisitPrefill(visitId: string): void {
-    this.opdService.getVisit(visitId).subscribe((visit) => {
-      this.sourceVisit = visit;
-      this.sourceAdmission = null;
-      this.draft = null;
-      this.patchPatientDetails(visit.patient);
-
-      const referralDoctor = visit.consulting_doctor_user_id
-        ? this.internalReferralDoctors.find((item) => item.id === visit.consulting_doctor_user_id)
-        : null;
-      if (referralDoctor) {
-        this.form.patchValue({ internal_referral_user_id: referralDoctor.id });
-      }
-
-      this.billingService.getOpdDraft(visitId).subscribe({
-        next: (draft) => {
-          this.applyDraft(draft);
-        },
-        error: () => {
-          this.form.patchValue({ note: this.buildVisitNote(visit) });
-          this.applyVisitServiceSuggestion(visit);
-          this.recalculatePreview();
-          this.persistState();
-        },
-      });
+    this.sourceVisit = null;
+    this.sourceAdmission = null;
+    this.billingService.getOpdDraft(visitId).subscribe({
+      next: draft => this.loadFinancialDraft(draft),
+      error: () => this.notificationService.error('Could not load the OPD billing draft. Refresh and retry before posting.'),
     });
   }
 
   private loadAdmissionPrefill(admissionId: string, stage: 'interim' | 'final'): void {
-    this.ipdService.getAdmission(admissionId).subscribe((admission) => {
-      this.sourceAdmission = admission;
-      this.sourceVisit = null;
-      this.draft = null;
-      this.patchPatientDetails(admission.patient);
+    this.sourceVisit = null;
+    this.sourceAdmission = null;
+    this.billingService.getIpdDraft(admissionId, stage).subscribe({
+      next: draft => this.loadFinancialDraft(draft),
+      error: () => this.notificationService.error('Could not load the IPD billing draft. Refresh and retry before posting.'),
+    });
+  }
 
-      const referralDoctor = admission.attending_doctor_user_id
-        ? this.internalReferralDoctors.find((item) => item.id === admission.attending_doctor_user_id)
-        : null;
-      if (referralDoctor) {
-        this.form.patchValue({ internal_referral_user_id: referralDoctor.id });
-      }
-
-      this.billingService.getIpdDraft(admissionId, stage).subscribe({
-        next: (draft) => {
-          this.applyDraft(draft);
-        },
-        error: () => {
-          this.form.patchValue({ note: this.buildAdmissionNote(admission) });
-          this.prefillMessage = `Loaded ${admission.admission_number} for ${stage} billing handoff.`;
-          this.recalculatePreview();
-          this.persistState();
-        },
-      });
+  private loadFinancialDraft(draft: BillingDraft): void {
+    this.patientService.list().subscribe(patients => {
+      const patient = patients.find(item => item.id === draft.patient_id);
+      if (patient) this.patchPatientDetails(patient);
+      this.applyDraft(draft);
     });
   }
 
@@ -1344,6 +1408,7 @@ export class BillingCreateComponent {
           source_item_id: [matchedService.id],
           quantity: [1, [Validators.required, Validators.min(0.01)]],
           discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
+          discount_amount: [0, [Validators.min(0)]],
           source_opd_visit_order_id: [''],
           source_label: [`Billing Service · ${matchedService.name}`],
           source_module: ['billing'],
@@ -1363,16 +1428,19 @@ export class BillingCreateComponent {
       this.items.push(
         this.fb.group({
           billing_service_id: [item.billing_service_id || ''],
-          catalog_search: [item.source_label || item.billing_service_name || ''],
+          catalog_search: [item.billing_service_name || item.source_label || ''],
           source_item_type: [item.source_item_type || 'billing_service'],
           source_item_id: [item.source_item_id || item.billing_service_id || ''],
           quantity: [Number(item.quantity), [Validators.required, Validators.min(0.01)]],
           discount_percentage: [Number(item.discount_percentage || 0), [Validators.min(0), Validators.max(100)]],
+          discount_amount: [0, [Validators.min(0)]],
           source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
           source_label: [item.source_label || ''],
           source_module: [item.source_module || ''],
           source_record_type: [item.source_record_type || ''],
           source_record_id: [item.source_record_id || ''],
+            bed_charge_date: [item.bed_charge_date || ''],
+            carry_forward_item_id: [item.carry_forward_item_id || ''],
         })
       );
     }
@@ -1384,6 +1452,7 @@ export class BillingCreateComponent {
       internal_referral_user_id: draft.internal_referral_user_id || this.form.getRawValue().internal_referral_user_id,
       note: draft.note || this.form.getRawValue().note,
     });
+    this.billingService.refreshServices().subscribe(services=>{this.billingServices=services;this.recalculatePreview();});
     this.prefillMessage = draft.message || 'Draft applied.';
     this.recalculatePreview();
     if (draft.billing_stage === 'ipd_final') {

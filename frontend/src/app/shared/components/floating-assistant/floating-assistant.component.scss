@@ -1,8 +1,6 @@
 :host {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 9999;
+  display: block;
+  flex: 0 0 auto;
   font-family: inherit;
 }
 
@@ -15,12 +13,13 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  min-height: 36px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.5);
   background: rgba(15, 23, 42, 0.92);
   color: #f8fafc;
-  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.35);
+  box-shadow: var(--shadow-soft);
   cursor: pointer;
 }
 
@@ -49,8 +48,12 @@
 }
 
 .assistant-panel {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 9999;
   width: min(380px, calc(100vw - 24px));
-  height: min(540px, calc(100vh - 24px));
+  height: min(540px, calc(100dvh - 9rem));
   margin-top: 10px;
   border-radius: 16px;
   overflow: hidden;
@@ -657,12 +660,8 @@
 }
 
 @media (max-width: 640px) {
-  :host {
-    right: 0.65rem;
-    bottom: 0.65rem;
-  }
-
   .assistant-panel {
+    right: 0.65rem;
     width: calc(100vw - 1.3rem);
     height: min(76dvh, 620px);
     border-radius: 12px;

@@ -255,6 +255,9 @@ class HRPayrollItem(Base, BaseModelMixin):
     net_salary: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     payment_status: Mapped[str] = mapped_column(String(40), nullable=False, default="unpaid")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    adjustment_earnings: Mapped[Decimal] = mapped_column(Numeric(12,2), nullable=False, default=0, server_default='0')
+    adjustment_deductions: Mapped[Decimal] = mapped_column(Numeric(12,2), nullable=False, default=0, server_default='0')
+    staff_meal_deduction: Mapped[Decimal] = mapped_column(Numeric(12,2), nullable=False, default=0, server_default='0')
     calculation_note: Mapped[str | None] = mapped_column(Text)
 
     payroll_run = relationship("HRPayrollRun", back_populates="items")

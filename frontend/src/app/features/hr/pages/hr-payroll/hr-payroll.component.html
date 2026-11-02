@@ -6,10 +6,10 @@
         <h1 class="page-title">Hospital Workforce Desk</h1>
         <div class="page-subtitle">Employees, attendance, shifts, leave and payroll in one place.</div>
       </div>
-      <div class="toolbar-row top-actions">
-        <button class="primary-btn" type="button" (click)="openModal('employee')">Add Employee</button>
-        <button class="secondary-btn" type="button" (click)="openModal('attendance')">Mark Attendance</button>
-        <button class="secondary-btn" type="button" (click)="openModal('payroll')">Run Payroll</button>
+      <div class="toolbar-row top-actions" *ngIf="tab() === 'dashboard'">
+        <button *ngIf="access.hasPermission('hr.employee.manage')" class="primary-btn" type="button" (click)="openModal('employee')">Add Employee</button>
+        <button *ngIf="access.hasPermission('hr.attendance.manage')" class="secondary-btn" type="button" (click)="openModal('attendance')">Mark Attendance</button>
+        <button *ngIf="access.hasPermission('hr.payroll.manage')" class="secondary-btn" type="button" (click)="openModal('payroll')">Run Payroll</button>
       </div>
     </div>
   </section>
@@ -33,7 +33,7 @@
       <div class="panel wide">
         <div class="panel-head">
           <h2>Today</h2>
-          <button type="button" (click)="openModal('attendance')">Mark</button>
+          <button *ngIf="access.hasPermission('hr.attendance.manage')" type="button" (click)="openModal('attendance')">Mark</button>
         </div>
         <div class="attendance-badges">
           <span class="status status-present">Present {{ summary?.attendance?.['present'] || 0 }}</span>
@@ -77,7 +77,7 @@
           <option value="terminated">Terminated</option>
         </select>
         <button type="button" (click)="exportEmployees()">Export</button>
-        <button type="button" (click)="openModal('employee')">Add</button>
+        <button *ngIf="access.hasPermission('hr.employee.manage')" type="button" (click)="openModal('employee')">Add Employee</button>
       </div>
       <div class="responsive-table">
         <table>
@@ -92,10 +92,10 @@
                 <td>{{ formatMoney(employee.salary_gross) }}</td>
                 <td><span [class]="statusClass(employee.employment_status)">{{ employee.employment_status }}</span></td>
                 <td class="actions">
-                  <button type="button" (click)="openModal('employee', employee)">Edit</button>
-                  <button type="button" (click)="openModal('document', employee)">Docs {{ employee.document_count || 0 }}</button>
-                  <button type="button" (click)="openModal('salary', employee)">Salary</button>
-                  <button type="button" (click)="openModal('leave', employee)">Leave</button>
+                  <button *ngIf="access.hasPermission('hr.employee.manage')" type="button" (click)="openModal('employee', employee)">Edit</button>
+                  <button *ngIf="access.hasPermission('hr.documents.manage')" type="button" (click)="openModal('document', employee)">Docs {{ employee.document_count || 0 }}</button>
+                  <button *ngIf="access.hasPermission('hr.payroll.manage')" type="button" (click)="openModal('salary', employee)">Salary</button>
+                  <button *ngIf="access.hasPermission('hr.leave.manage')" type="button" (click)="openModal('leave', employee)">Leave</button>
                 </td>
               </tr>
             }
@@ -117,7 +117,7 @@
           <option value="half_day">Half day</option>
           <option value="on_leave">On leave</option>
         </select>
-        <button type="button" (click)="openModal('attendance')">Mark Attendance</button>
+        <button *ngIf="access.hasPermission('hr.attendance.manage')" type="button" (click)="openModal('attendance')">Mark Attendance</button>
         <span class="status status-present">Present {{ attendanceTotal('present') }}</span>
         <span class="status status-late">Late {{ attendanceTotal('late') }}</span>
         <span class="status status-absent">Absent {{ attendanceTotal('absent') }}</span>
@@ -154,7 +154,7 @@
 
   @if (tab() === 'leave') {
     <section class="panel">
-      <div class="list-toolbar"><button type="button" (click)="openModal('leave')">Apply Leave</button></div>
+      <div class="list-toolbar"><button *ngIf="access.hasPermission('hr.leave.manage')" type="button" (click)="openModal('leave')">Apply Leave</button></div>
       <div class="responsive-table">
         <table>
           <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
@@ -178,7 +178,7 @@
   @if (tab() === 'documents') {
     <section class="panel">
       <div class="list-toolbar">
-        <button type="button" (click)="openModal('document')">Add Document</button>
+        <button *ngIf="access.hasPermission('hr.documents.manage')" type="button" (click)="openModal('document')">Add Document</button>
         <span class="status status-expiring">Expiring {{ documentTotal('expiring') }}</span>
         <span class="status status-expired">Expired {{ documentTotal('expired') }}</span>
       </div>
@@ -206,27 +206,29 @@
     <section class="payroll-layout">
       <div class="panel">
         <div class="list-toolbar">
-          <input type="month" [(ngModel)]="payrollMonth" (change)="loadPayroll()" />
-          <button type="button" (click)="openModal('payroll')">Run Payroll</button>
+          <input aria-label="Summary month" type="month" [(ngModel)]="payrollMonth" (change)="loadPayroll()" />
+          <button *ngIf="access.hasPermission('hr.payroll.manage')" type="button" (click)="openModal('payroll')">Run Payroll</button>
           <button type="button" (click)="openModal('overtime')">Overtime</button>
-          <button type="button" (click)="openModal('loan')">Loan/Advance</button>
+          <button type="button" (click)="openModal('loan')">Loan/Advance</button><button type="button" (click)="openModal('adjustment')">Adjustment</button>
         </div>
         @if (payrollSummary) {
           <div class="payroll-summary-grid">
             <div><span>Status</span><strong>{{ payrollSummary.status || 'not run' }}</strong></div>
-            <div><span>Payable</span><strong>{{ formatMoney(payrollSummary.total_salary_payable) }}</strong></div>
+            <div><span>Net total</span><strong>{{ formatMoney(payrollSummary.total_salary_payable) }}</strong></div>
             <div><span>OT</span><strong>{{ formatMoney(payrollSummary.overtime_cost) }}</strong></div>
             <div><span>Deductions</span><strong>{{ formatMoney(payrollSummary.deduction_total) }}</strong></div>
           </div>
         }
+        <h3>Recent payroll runs</h3>
         @for (run of payrollRuns; track run.id) {
           <div class="payroll-row" (click)="viewPayslip(run)">
             <div><strong>{{ run.payroll_month }}</strong><small>{{ run.total_employees }} employees · {{ run.status }}</small></div>
             <b>{{ formatMoney(run.total_net_salary) }}</b>
             <div class="actions">
+              @if (access.hasPermission('hr.payroll.manage') && ['calculated','reviewed'].includes(run.status)) {<button type="button" (click)="recalculatePayroll(run); $event.stopPropagation()">Recalculate</button>}
               @if (canApprove(run)) { <button type="button" (click)="decidePayroll(run, 'approved'); $event.stopPropagation()">Approve</button> }
               @if (canPay(run)) { <button type="button" (click)="decidePayroll(run, 'paid'); $event.stopPropagation()">Paid</button> }
-              @if (run.status === 'paid') { <button type="button" (click)="decidePayroll(run, 'locked'); $event.stopPropagation()">Lock</button> }
+              @if (access.hasPermission('hr.payroll.approve') && run.status === 'paid') { <button type="button" (click)="decidePayroll(run, 'locked'); $event.stopPropagation()">Lock</button> }
             </div>
           </div>
         }
@@ -234,6 +236,24 @@
           <h3>Salary Structures</h3>
           @for (salary of salaries.slice(0, 8); track salary.id) {
             <div class="mini-row"><span>{{ salary.employee_name }}</span><b>{{ formatMoney(salary.net_salary) }}</b></div>
+          }
+        </div>
+        <details class="subsection adjustment-list" open><summary>Payroll adjustments</summary>
+          <p>Approved adjustments enter the target month when payroll is calculated or recalculated. Paid history stays unchanged.</p>
+          @for (item of adjustments; track item.id) {
+            <article class="adjustment-card" [attr.data-adjustment-id]="item.id"><strong>{{ item.employee_name }} · {{ item.target_month }}</strong><span>{{ item.kind }} · {{ formatMoney(item.amount) }} · {{ item.status }}</span><p>{{ item.reason }}</p>
+              @if (access.hasPermission('hr.payroll.approve') && item.status === 'pending' && item.created_by !== access.snapshot.user?.id) {<div class="actions"><button type="button" (click)="decideAdjustment(item, 'approved')">Approve adjustment</button><button type="button" (click)="decideAdjustment(item, 'rejected')">Reject adjustment</button></div>}
+            </article>
+          } @empty {<p>No adjustments. Create one for reviewed arrears or corrections.</p>}
+        </details>
+        <div class="subsection"><h3>Overtime review</h3>
+          @for (item of overtime; track item.id) {
+            <div class="mini-row"><span>{{ item.employee_name }} · {{ item.overtime_date }} · {{ item.overtime_hours }} hours · {{ item.status }}</span>
+              @if (access.hasPermission('hr.payroll.approve') && item.status === 'pending') {
+                <button type="button" (click)="decideOvertime(item, 'approved')">Approve overtime</button>
+                <button type="button" (click)="decideOvertime(item, 'rejected')">Reject overtime</button>
+              }
+            </div>
           }
         </div>
         <div class="subsection">
@@ -254,7 +274,7 @@
                 <dt>Gross</dt><dd>{{ formatMoney(item.gross_salary) }}</dd>
                 <dt>Allowances</dt><dd>{{ formatMoney(item.total_allowances) }}</dd>
                 <dt>Overtime</dt><dd>{{ formatMoney(item.overtime_amount) }}</dd>
-                <dt>Loan</dt><dd>{{ formatMoney(item.loan_deduction) }}</dd>
+                <dt>Staff meals</dt><dd>{{ formatMoney(item.staff_meal_deduction) }}</dd><dt>Adjustment earnings</dt><dd>{{ formatMoney(item.adjustment_earnings) }}</dd><dt>Adjustment deductions</dt><dd>{{ formatMoney(item.adjustment_deductions) }}</dd><dt>Loan</dt><dd>{{ formatMoney(item.loan_deduction) }}</dd>
                 <dt>Attendance Deduction</dt><dd>{{ formatMoney(item.attendance_deduction) }}</dd>
                 <dt>Deductions</dt><dd>{{ formatMoney(item.total_deductions) }}</dd>
                 <dt>Net Payable</dt><dd>{{ formatMoney(item.net_salary) }}</dd>
@@ -273,7 +293,7 @@
     <section class="quick-grid">
       <button type="button" (click)="openModal('job')"><strong>Job Opening</strong><span>Create department vacancy</span></button>
       <button type="button" (click)="openModal('candidate')"><strong>Candidate</strong><span>Track application and interview</span></button>
-      <button type="button" (click)="openModal('employee')"><strong>Hire</strong><span>Convert selected candidate to employee</span></button>
+      <button *ngIf="access.hasPermission('hr.employee.manage')" type="button" (click)="openModal('employee')"><strong>Hire</strong><span>Convert selected candidate to employee</span></button>
     </section>
   }
 
@@ -281,7 +301,7 @@
     <section class="quick-grid">
       <button type="button" (click)="openModal('performance')"><strong>Appraisal</strong><span>KPI, rating, feedback</span></button>
       <button type="button" (click)="openModal('resignation')"><strong>Exit</strong><span>Resignation and clearance</span></button>
-      <button type="button" (click)="openModal('employee')"><strong>Promotion</strong><span>Update designation and salary</span></button>
+      <button *ngIf="access.hasPermission('hr.employee.manage')" type="button" (click)="openModal('employee')"><strong>Promotion</strong><span>Update designation and salary</span></button>
     </section>
   }
 
@@ -313,7 +333,7 @@
 
 @if (modal) {
   <div class="modal-backdrop" (click)="closeModal()">
-    <form class="modal-card" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
+    <form class="modal-card" appDialog (appDialogClose)="closeModal()" (click)="$event.stopPropagation()" (submit)="$event.preventDefault()">
       <div class="modal-head">
         <h2>{{ modal | titlecase }}</h2>
         <button type="button" (click)="closeModal()">Close</button>
@@ -321,6 +341,7 @@
 
       @if (modal === 'employee') {
         <div class="form-grid">
+          <label>Login account<select [(ngModel)]="employeeForm.user_id" name="user_id"><option [ngValue]="null">No linked login</option>@for (account of accounts; track account.id) {<option [value]="account.id">{{ account.full_name }} ({{ account.username }})</option>}</select></label>
           <label>Name<input [(ngModel)]="employeeForm.full_name" name="full_name" required /></label>
           <label>Phone<input [(ngModel)]="employeeForm.phone" name="phone" /></label>
           <label>Email<input [(ngModel)]="employeeForm.email" name="email" type="email" /></label>
@@ -397,12 +418,20 @@
 
       @if (modal === 'salary') {
         <div class="form-grid">
-          <label>Basic<input type="number" [(ngModel)]="salaryForm['basic_salary']" name="basic" /></label>
-          <label>House Rent<input type="number" [(ngModel)]="salaryForm['house_rent_allowance']" name="hra" /></label>
-          <label>Medical<input type="number" [(ngModel)]="salaryForm['medical_allowance']" name="medical" /></label>
-          <label>Transport<input type="number" [(ngModel)]="salaryForm['transport_allowance']" name="transport" /></label>
-          <label>OT Rate<input type="number" [(ngModel)]="salaryForm['overtime_hourly_rate']" name="ot" /></label>
-          <label>PF<input type="number" [(ngModel)]="salaryForm['provident_fund_deduction']" name="pf" /></label>
+          <label>Effective from<input type="date" [(ngModel)]="salaryForm['effective_from']" name="effective" /></label>
+          <label>Basic<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['basic_salary']" name="basic" /></label>
+          <label>House Rent<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['house_rent_allowance']" name="hra" /></label>
+          <label>Medical<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['medical_allowance']" name="medical" /></label>
+          <label>Transport<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['transport_allowance']" name="transport" /></label>
+          <label>OT Rate<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['overtime_hourly_rate']" name="ot" /></label>
+          <label>PF<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['provident_fund_deduction']" name="pf" /></label>
+          <label>Food<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['food_allowance']" name="food_allowance" /></label>
+          <label>Night duty<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['night_duty_allowance']" name="night_duty_allowance" /></label>
+          <label>On-call<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['on_call_allowance']" name="on_call_allowance" /></label>
+          <label>Emergency duty<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['emergency_duty_allowance']" name="emergency_duty_allowance" /></label>
+          <label>Bonus<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['bonus_incentive']" name="bonus_incentive" /></label>
+          <label>Tax<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['tax_deduction']" name="tax_deduction" /></label>
+          <label>Other deductions<input type="number" min="0" step="0.01" [(ngModel)]="salaryForm['other_deductions']" name="other_deductions" /></label>
         </div>
         <button class="primary" type="button" (click)="saveSalary()">Save Salary</button>
       }
@@ -430,6 +459,17 @@
         <button class="primary" type="button" (click)="saveLoan()">Save Loan/Advance</button>
       }
 
+      @if (modal === 'adjustment') {
+        <p>Record a positive earning or deduction for a target month. An independent reviewer must approve it.</p>
+        <div class="form-grid">
+          <label>Employee<select name="adjust_employee" [(ngModel)]="adjustmentForm['employee_id']">@for (employee of employees; track employee.id) {<option [value]="employee.id">{{ employee.full_name }}</option>}</select></label>
+          <label>Target month<input type="month" name="adjust_month" [(ngModel)]="adjustmentForm['target_month']" /></label>
+          <label>Correction source<select name="adjust_source" [(ngModel)]="adjustmentForm['source_payroll_item_id']"><option value="">New earning / deduction</option>@for (run of adjustmentSources(); track run.id) {@for (item of run.items; track item.id) {@if (item.employee_id === adjustmentForm['employee_id']) {<option [value]="item.id">{{ run.payroll_month }} · {{ item.employee_name }} · paid history</option>}}}</select></label>
+          <label>Adjustment type<select name="adjust_kind" [(ngModel)]="adjustmentForm['kind']"><option value="earning">Earning</option><option value="deduction">Deduction</option></select></label>
+          <label>Amount<input type="number" min="0.01" step="0.01" name="adjust_amount" [(ngModel)]="adjustmentForm['amount']" /></label>
+          <label class="wide no-smart-input">Reason<textarea name="adjust_reason" [(ngModel)]="adjustmentForm['reason']"></textarea></label>
+        </div><button type="button" class="primary" [disabled]="saving" (click)="saveAdjustment()">Request adjustment</button>
+      }
       @if (modal === 'payroll') {
         <div class="form-grid"><label>Month<input type="month" [(ngModel)]="payrollForm.payroll_month" name="pay_month" /></label><label class="wide">Note<input [(ngModel)]="payrollForm.note" name="pay_note" /></label></div>
         <button class="primary" type="button" (click)="savePayroll()">Generate Preview</button>
@@ -441,7 +481,8 @@
       }
 
       @if (modal === 'candidate') {
-        <div class="form-grid"><label>Name<input [(ngModel)]="candidateForm['full_name']" name="cand_name" /></label><label>Phone<input [(ngModel)]="candidateForm['phone']" name="cand_phone" /></label><label>Email<input [(ngModel)]="candidateForm['email']" name="cand_email" /></label><label>Status<select [(ngModel)]="candidateForm['status']" name="cand_status"><option>applied</option><option>shortlisted</option><option>interviewed</option><option>selected</option><option>rejected</option><option>hired</option></select></label></div>
+        <div class="form-grid"><label>Login account<select [(ngModel)]="employeeForm.user_id" name="user_id"><option [ngValue]="null">No linked login</option>@for (account of accounts; track account.id) {<option [value]="account.id">{{ account.full_name }} ({{ account.username }})</option>}</select></label>
+          <label>Name<input [(ngModel)]="candidateForm['full_name']" name="cand_name" /></label><label>Phone<input [(ngModel)]="candidateForm['phone']" name="cand_phone" /></label><label>Email<input [(ngModel)]="candidateForm['email']" name="cand_email" /></label><label>Status<select [(ngModel)]="candidateForm['status']" name="cand_status"><option>applied</option><option>shortlisted</option><option>interviewed</option><option>selected</option><option>rejected</option><option>hired</option></select></label></div>
         <button class="primary" type="button" (click)="saveCandidate()">Save Candidate</button>
       }
 

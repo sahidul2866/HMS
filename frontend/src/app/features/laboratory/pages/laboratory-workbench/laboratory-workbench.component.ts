@@ -46,7 +46,7 @@ export class LaboratoryWorkbenchComponent {
   }
 
   submitResult(): void {
-    if (!this.selectedItem) {
+    if (!this.selectedItem || !this.canSaveResult) {
       return;
     }
     this.laboratoryService.updateResult(this.selectedItem.order_id, this.resultForm.getRawValue() as never).subscribe((item) => {
@@ -58,6 +58,16 @@ export class LaboratoryWorkbenchComponent {
       });
       this.notificationService.success(`Laboratory work item ${item.visit_number} updated.`);
     });
+  }
+
+  get canEnterResult(): boolean { return this.sessionService.hasPermission('laboratory.result.enter'); }
+  get canVerifyResult(): boolean { return this.sessionService.hasPermission('laboratory.verify_result'); }
+  get canEditResult(): boolean {
+    return !!this.selectedItem && this.selectedItem.status !== 'cancelled' &&
+      (this.canEnterResult || this.canVerifyResult) && (this.selectedItem.status !== 'verified' || this.canVerifyResult);
+  }
+  get canSaveResult(): boolean {
+    return this.canEditResult && (this.resultForm.controls.status.value === 'verified' ? this.canVerifyResult : this.canEnterResult);
   }
 
   applyStatus(status: string): void {

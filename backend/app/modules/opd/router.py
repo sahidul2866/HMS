@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user, get_request_context
-from app.dependencies.permissions import require_permissions
+from app.dependencies.permissions import require_any_permissions, require_permissions
 from app.modules.opd.service import OPDService
 from app.schemas.encounter import (
     IPDAdmissionRead,
@@ -140,10 +140,22 @@ def update_opd_consultation(
     return OPDVisitRead.model_validate(visit, from_attributes=True)
 
 
+@router.post("/visits/{visit_id}/finalize", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.prescribe"))])
+def finalize_opd_prescription(
+    visit_id: UUID,
+    payload: OPDVisitConsultationUpdate,
+    context=Depends(get_request_context),
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OPDVisitRead:
+    visit = OPDService(db).finalize_prescription(visit_id, payload, user, context)
+    return OPDVisitRead.model_validate(visit, from_attributes=True)
+
+
 @router.post(
     "/visits/{visit_id}/convert-to-ipd",
     response_model=IPDAdmissionRead,
-    dependencies=[Depends(require_permissions("ipd.admission.manage"))],
+    dependencies=[Depends(require_any_permissions("ipd.admit", "ipd.admission.manage"))],
 )
 def convert_opd_to_ipd(
     visit_id: UUID,

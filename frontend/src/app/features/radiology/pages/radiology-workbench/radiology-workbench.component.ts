@@ -45,7 +45,7 @@ export class RadiologyWorkbenchComponent {
   }
 
   submitResult(): void {
-    if (!this.selectedItem) {
+    if (!this.selectedItem || !this.canSaveResult) {
       return;
     }
     this.radiologyService.updateResult(this.selectedItem.order_id, this.resultForm.getRawValue() as never).subscribe((item) => {
@@ -57,6 +57,16 @@ export class RadiologyWorkbenchComponent {
       });
       this.notificationService.success(`Radiology work item ${item.visit_number} updated.`);
     });
+  }
+
+  get canEnterResult(): boolean { return this.sessionService.hasPermission('radiology.upload_report'); }
+  get canVerifyResult(): boolean { return this.sessionService.hasPermission('radiology.verify_result'); }
+  get canEditResult(): boolean {
+    return !!this.selectedItem && this.selectedItem.status !== 'cancelled' &&
+      (this.canEnterResult || this.canVerifyResult) && (this.selectedItem.status !== 'verified' || this.canVerifyResult);
+  }
+  get canSaveResult(): boolean {
+    return this.canEditResult && (this.resultForm.controls.status.value === 'verified' ? this.canVerifyResult : this.canEnterResult);
   }
 
   applyStatus(status: string): void {

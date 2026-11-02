@@ -440,6 +440,7 @@ export interface IPDTimelineEvent {
 }
 
 export interface IPDPatientWorkspace {
+  bed_stays?:{id:string;ward_name:string;bed_number:string;daily_rate:string;started_at:string;ended_at?:string|null;estimated:boolean}[];
   admission: IPDAdmission;
   assignments: IPDStaffAssignment[];
   clinical_notes: IPDClinicalNote[];

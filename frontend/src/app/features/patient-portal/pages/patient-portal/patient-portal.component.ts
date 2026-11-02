@@ -108,6 +108,7 @@ export class PatientPortalComponent {
   doctors: User[] = [];
   activeTab: PortalTab = 'home';
   loading = true;
+  portalLoadFailed = false;
   portalMessage = '';
   doctorSearch = '';
   doctorDepartmentFilter = '';
@@ -221,8 +222,14 @@ export class PatientPortalComponent {
     this.loadBotSettings();
   }
 
+  retryPortal(): void {
+    this.portalService.clearCache();
+    this.loadPortal();
+  }
+
   loadPortal(): void {
     this.loading = true;
+    this.portalLoadFailed = false;
     this.portalService.getOverview().subscribe({
       next: (overview) => {
         this.history = overview.patient;
@@ -234,7 +241,9 @@ export class PatientPortalComponent {
         }
         this.loading = false;
       },
-      error: () => {
+      error: (error: { status?: number }) => {
+        // A staff account without a linked patient profile is refused by design; the page explains that instead of a toast.
+        this.portalLoadFailed = error.status !== 403;
         this.loading = false;
       },
     });
@@ -575,7 +584,7 @@ export class PatientPortalComponent {
   get completedLabReports(): ReportRecord[] {
     return (this.history?.opd_visits ?? []).flatMap((visit) =>
       visit.orders
-        .filter((order) => order.service_area === 'laboratory' && ['completed', 'verified', 'approved'].includes(order.status))
+        .filter((order) => order.service_area === 'laboratory' && ['verified', 'approved'].includes(order.status))
         .map((order) => this.toReportRecord(order, visit))
     );
   }
@@ -583,7 +592,7 @@ export class PatientPortalComponent {
   get completedRadiologyReports(): ReportRecord[] {
     return (this.history?.opd_visits ?? []).flatMap((visit) =>
       visit.orders
-        .filter((order) => order.service_area === 'radiology' && ['completed', 'verified', 'approved'].includes(order.status))
+        .filter((order) => order.service_area === 'radiology' && ['verified', 'approved'].includes(order.status))
         .map((order) => this.toReportRecord(order, visit))
     );
   }

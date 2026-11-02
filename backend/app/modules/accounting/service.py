@@ -33,7 +33,7 @@ from app.models.accounting import (
 from app.models.billing import BillingInvoice, BillingPayment, BillingRefund
 from app.models.hr import HRPayrollRun
 from app.models.inventory import InventoryItem
-from app.models.ot import OTBillingItem
+from app.models.ot import OTBillingItem, OTBooking, SurgerySchedule
 from app.models.pharmacy import PharmacySale
 from app.models.user import User
 from app.modules.accounting.repository import AccountingRepository
@@ -94,30 +94,37 @@ class AccountingService:
         today_start = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
 
         collection_today = self._sum(BillingPayment.amount, BillingPayment.received_at >= today_start, BillingPayment.branch_id == branch_id)
-        monthly_revenue = self._sum(BillingInvoice.total_amount, BillingInvoice.created_at >= month_start, BillingInvoice.branch_id == branch_id, BillingInvoice.status != "void")
+        # Book revenue excludes carried-forward charges, which were accrued earlier.
+        monthly_revenue=self.db.scalar(select(func.coalesce(func.sum(JournalEntryLine.credit_amount-JournalEntryLine.debit_amount),0)).join(JournalEntryLine.journal_entry).where(JournalEntry.branch_id==branch_id,JournalEntry.status=='posted',JournalEntry.journal_date>=month_start,JournalEntryLine.account_code.in_(['4000','4100','4200','4300','4400']))) or Decimal(0)
+        from app.models.hr import HRPayrollRun
         expenses = self._sum(Expense.amount, Expense.expense_date >= month_start, Expense.branch_id == branch_id, Expense.status.in_(["approved", "paid"]))
+        automatic_expenses=self.db.scalar(select(func.coalesce(func.sum(JournalEntryLine.debit_amount-JournalEntryLine.credit_amount),0)).join(JournalEntryLine.journal_entry).where(JournalEntry.branch_id==branch_id,JournalEntry.status=='posted',JournalEntry.journal_date>=month_start,JournalEntry.source_module.in_(['hr_payroll','catering_stock','transport_fuel','transport_maintenance']),JournalEntryLine.account_code.in_(['5100','5200','5300','5310']))) or Decimal(0)
+        expenses+=automatic_expenses
         pending_due = self._sum(BillingInvoice.due_amount, BillingInvoice.branch_id == branch_id, BillingInvoice.payment_status.in_(["unpaid", "partial"]))
         discounts = self._sum(BillingInvoice.discount_amount, BillingInvoice.created_at >= month_start, BillingInvoice.branch_id == branch_id)
         refunds_today = self._sum(BillingRefund.amount, BillingRefund.refunded_at >= today_start, BillingRefund.branch_id == branch_id)
         insurance_due = self._sum(InsuranceClaim.claim_amount - InsuranceClaim.paid_amount, InsuranceClaim.branch_id == branch_id, InsuranceClaim.status != "paid")
         supplier_due = self._sum(SupplierInvoice.due_amount, SupplierInvoice.branch_id == branch_id, SupplierInvoice.status != "paid")
         payroll_due = self._sum(PayrollAccounting.net_salary_payable - PayrollAccounting.paid_amount, PayrollAccounting.branch_id == branch_id, PayrollAccounting.status != "paid")
+        payroll_due+=self._sum(HRPayrollRun.total_net_salary,HRPayrollRun.branch_id==branch_id,HRPayrollRun.status.in_(['approved','finalized']))
         corporate_due = self._sum(CorporateBill.due_amount, CorporateBill.branch_id == branch_id, CorporateBill.status != "paid")
         inventory_value = self._sum(InventoryItem.stock_value, InventoryItem.branch_id == branch_id, InventoryItem.is_active.is_(True))
         pharmacy_revenue = self._sum(PharmacySale.net_payable, PharmacySale.branch_id == branch_id, PharmacySale.created_at >= month_start)
-        ot_revenue = self._sum(OTBillingItem.amount, OTBillingItem.created_at >= month_start)
+        ot_revenue=self.db.scalar(select(func.coalesce(func.sum(OTBillingItem.amount),0)).join(SurgerySchedule,SurgerySchedule.id==OTBillingItem.schedule_id).join(OTBooking,OTBooking.id==SurgerySchedule.booking_id).where(OTBooking.branch_id==branch_id,OTBillingItem.created_at>=month_start,OTBillingItem.is_active.is_(True))) or Decimal(0)
 
         cash_balance = collection_today - refunds_today - self._sum(Expense.amount, Expense.expense_date == today, Expense.payment_method == "cash", Expense.branch_id == branch_id)
+        settlement=self.db.scalar(select(Account.current_balance).where(Account.branch_id==branch_id,Account.account_code=='1001'))
+        if settlement is not None:cash_balance=Decimal(settlement)
         bank_balance = self._sum(BankAccount.current_balance, BankAccount.branch_id == branch_id)
         net_profit = monthly_revenue - expenses
 
         return AccountingDashboardRead(
             kpis=[
                 AccountingKPI(label="Today's Collection", value=collection_today, tone="good"),
-                AccountingKPI(label="Monthly Revenue", value=monthly_revenue, tone="info"),
+                AccountingKPI(label="Monthly Revenue (book)", value=monthly_revenue, tone="info"),
                 AccountingKPI(label="Total Expenses", value=expenses, tone="warn"),
                 AccountingKPI(label="Net Profit / Loss", value=net_profit, tone="good" if net_profit >= 0 else "danger"),
-                AccountingKPI(label="Cash in Hand", value=cash_balance, tone="info"),
+                AccountingKPI(label="Cash / Bank book", value=cash_balance, tone="info"),
                 AccountingKPI(label="Bank Balance", value=bank_balance, tone="info"),
                 AccountingKPI(label="Pending Patient Dues", value=pending_due, tone="danger" if pending_due else "good"),
                 AccountingKPI(label="Insurance Claims", value=insurance_due, tone="warn"),
@@ -445,7 +452,7 @@ class AccountingService:
                 [("1001", "Cash / Bank", payment.amount, 0), ("1100", "Patient Receivable", 0, payment.amount)],
             )
             created += 1
-        for refund in self.db.scalars(select(BillingRefund).where(BillingRefund.branch_id == branch_id).order_by(BillingRefund.created_at.desc()).limit(50)):
+        for refund in self.db.scalars(select(BillingRefund).where(BillingRefund.branch_id == branch_id,BillingRefund.amount>0).order_by(BillingRefund.created_at.desc()).limit(50)):
             if self._source_entry_exists(branch_id, "billing_refund", refund.refund_number):
                 skipped += 1
                 continue
@@ -524,6 +531,9 @@ class AccountingService:
         return None
 
     def _apply_posting(self, entry: JournalEntry, actor: User) -> None:
+        if actor.branch_id:
+            from app.modules.support_posting.service import lock_branch
+            lock_branch(self.db,actor)
         if entry.total_debit != entry.total_credit or entry.total_debit <= 0:
             raise AppException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unbalanced_voucher", "Debit and credit totals must balance before posting.")
         for line in entry.lines:
@@ -597,9 +607,13 @@ class AccountingService:
         return Decimal(self.db.scalar(stmt) or 0)
 
     def _department_revenue(self, branch_id) -> list[AccountingChartPoint]:
-        stmt = select(func.coalesce(BillingInvoice.source_module, "billing"), func.coalesce(func.sum(BillingInvoice.total_amount), 0)).where(BillingInvoice.branch_id == branch_id, BillingInvoice.status != "void").group_by(BillingInvoice.source_module).limit(8)
-        rows = self.db.execute(stmt).all()
-        return [AccountingChartPoint(label=row[0] or "billing", value=Decimal(row[1] or 0)) for row in rows]
+        totals={}
+        for invoice in self.db.scalars(select(BillingInvoice).where(BillingInvoice.branch_id==branch_id,BillingInvoice.status=='posted',BillingInvoice.is_active.is_(True))):
+            for item in invoice.items:
+                department=item.billing_department or invoice.billing_department or item.source_module or 'billing'
+                credit=sum((Decimal(line.get('return_amount',0)) for refund in invoice.refunds if refund.refund_type=='return' for line in refund.return_items or [] if line.get('invoice_item_id')==str(item.id)),Decimal(0))
+                totals[department]=totals.get(department,Decimal(0))+max(Decimal(0),item.net_amount-credit)
+        return [AccountingChartPoint(label=key,value=value) for key,value in sorted(totals.items())]
 
     def _payment_methods(self, branch_id, month_start: date) -> list[AccountingChartPoint]:
         stmt = select(BillingPayment.payment_method, func.coalesce(func.sum(BillingPayment.amount), 0)).where(BillingPayment.branch_id == branch_id, BillingPayment.received_at >= month_start).group_by(BillingPayment.payment_method)

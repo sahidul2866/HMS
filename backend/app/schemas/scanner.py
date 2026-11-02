@@ -21,6 +21,7 @@ class ScanResolvedRecord(BaseModel):
     display: str
     status: str | None = None
     route: str | None = None
+    query_params: dict[str, str] = {}
     module: str
     permission: str
     safety: dict[str, Any] = {}
@@ -37,10 +38,10 @@ class ScanResolveResponse(BaseModel):
 
 
 class ScanCodeCreate(BaseModel):
-    record_type: str
+    record_type: str = Field(min_length=1, max_length=60, pattern="^[a-z_]+$")
     record_id: UUID
-    purpose: str
-    code_type: str = "qr"
+    purpose: str = Field(min_length=1, max_length=50, pattern="^[A-Za-z0-9_-]+$")
+    code_type: str = Field(default="qr", pattern="^(qr|code128|code39|CODE128|CODE39)$")
     display_value: str | None = None
     expires_at: datetime | None = None
     meta: dict[str, Any] | None = None

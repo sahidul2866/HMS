@@ -1,8 +1,11 @@
+import { PatientService } from '../../../patients/services/patient.service';
+import { Patient } from '../../../patients/models/patient.models';
+import { SessionService } from '../../../../core/services/session.service';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Observable } from 'rxjs';
+import { Observable, forkJoin, of } from 'rxjs';
 
 import { HasPermissionDirective } from '../../../../shared/directives/has-permission.directive';
 import { QueueToken } from '../../../queue/models/queue.models';
@@ -20,6 +23,10 @@ type TabKey = 'dashboard' | 'queue' | 'donors' | 'screening' | 'collection' | 't
   styleUrls: ['./blood-bank-workspace.component.scss'],
 })
 export class BloodBankWorkspaceComponent {
+  readonly access = inject(SessionService);
+  private readonly patientService=inject(PatientService);
+  patients:Patient[]=[];
+  issues:Array<{id:string;issue_number:string;unit_number:string;patient_name:string;returned:boolean;transfusion_status:string|null;unit_status:string}>=[];
   private readonly bloodBank = inject(BloodBankService);
   private readonly queueService = inject(QueueService);
   private readonly route = inject(ActivatedRoute);
@@ -57,20 +64,22 @@ export class BloodBankWorkspaceComponent {
   queueTokens: QueueToken[] = [];
   locations: StorageLocation[] = [];
   report: BloodBankReport | null = null;
+  reportLoading=false;
   loading = false;
+  saving = false;
   message = '';
 
   filters = { q: '', blood_group: '', component_type: '', status_value: '', request_status: '', urgency: '', storage_location_id: '' };
   donorForm = { name: '', age: null as number | null, gender: '', blood_group: '', phone: '', address: '', remarks: '' };
   screeningForm = { donor_id: '', weight: null as number | null, hemoglobin_level: null as number | null, blood_pressure: '', temperature: null as number | null, pulse: null as number | null, eligibility_result: 'eligible', deferral_reason: '', next_eligible_date: '', recent_illness: '', medication_history: '', travel_history: '', remarks: '' };
-  collectionForm = { donor_id: '', blood_group: '', collection_volume_ml: 450, bag_type: 'Single bag', anticoagulant_type: 'CPDA-1', collection_location: 'Blood Bank', remarks: '' };
-  testForm = { unit_id: '', test_name: 'TTI Screening', test_code: 'TTI', status: 'completed', result: 'negative', result_value: '', verified: true, remarks: '' };
+  collectionForm = { expiry_date: '', donor_id: '', blood_group: '', collection_volume_ml: 450, bag_type: 'Single bag', anticoagulant_type: 'CPDA-1', collection_location: 'Blood Bank', remarks: '' };
+  testForm = { unit_id: '', test_name: 'TTI Screening', test_code: 'TTI', status: 'completed', result: 'negative', result_value: '', verified: false, remarks: '' };
   componentForm = { source_unit_id: '', component_type: 'Packed Red Blood Cells', expiry_date: '', volume_ml: null as number | null, storage_location_id: '', remarks: '' };
   requestForm = { patient_id: '', blood_group: '', component_type: 'Packed Red Blood Cells', quantity_units: 1, urgency: 'routine', department_name: '', indication: '', diagnosis: '', remarks: '' };
   crossmatchForm = { request_id: '', unit_id: '', patient_blood_group: '', result: 'compatible', compatibility_status: 'compatible', emergency_override: false, override_reason: '', remarks: '' };
   issueForm = { request_id: '', unit_id: '', crossmatch_id: '', received_by: '', destination: '', transport_condition: '2-6 C maintained', emergency_override: false, override_reason: '', remarks: '' };
   transfusionForm = { issue_id: '', status: 'started', reaction_observed: false, reaction_details: '', vitals: '', remarks: '' };
-  returnForm = { issue_id: '', returned_by: '', condition_on_return: 'Seal intact', minutes_outside_bank: 0, reason: '', decision: 'accept', remarks: '' };
+  returnForm = { issue_id: '', returned_by: '', condition_on_return: '', minutes_outside_bank: null as number|null, reason: '', decision: 'quarantine', remarks: '' };
   discardForm = { unit_id: '', reason: 'Expired', details: '' };
   locationForm = { code: '', name: '', location_type: 'refrigerator', temperature_min: 2, temperature_max: 6, current_temperature: null as number | null, remarks: '' };
   moveForm = { unit_id: '', storage_location_id: '', remarks: '' };
@@ -89,15 +98,16 @@ export class BloodBankWorkspaceComponent {
 
   reload(): void {
     this.loading = true;
-    this.bloodBank.getDashboard().subscribe((data) => (this.dashboard = data));
-    this.bloodBank.listDonors({ page_size: 50, q: this.filters.q, blood_group: this.filters.blood_group }).subscribe((data) => (this.donors = data.items));
-    this.bloodBank.listUnits({ page_size: 50, blood_group: this.filters.blood_group, component_type: this.filters.component_type, status_value: this.filters.status_value, storage_location_id: this.filters.storage_location_id }).subscribe((data) => {
-      this.units = data.items;
-      this.loading = false;
-    });
-    this.bloodBank.listRequests({ page_size: 50, status_value: this.filters.request_status, urgency: this.filters.urgency }).subscribe((data) => (this.requests = data.items));
-    this.bloodBank.listLocations().subscribe((data) => (this.locations = data));
-    this.loadQueue();
+    forkJoin({
+      dashboard:this.access.hasPermission('blood_bank.dashboard.view')?this.bloodBank.getDashboard():of(null),
+      donors:this.bloodBank.listDonors({page_size:100,q:this.filters.q,blood_group:this.filters.blood_group}),
+      units:this.access.hasPermission('blood_bank.stock.view')?this.bloodBank.listUnits({page_size:100,blood_group:this.filters.blood_group,component_type:this.filters.component_type,status_value:this.filters.status_value,storage_location_id:this.filters.storage_location_id}):of({items:[]}),
+      requests:this.bloodBank.listRequests({page_size:100,status_value:this.filters.request_status,urgency:this.filters.urgency}),
+      patients:this.access.hasPermission('patient.view')?this.patientService.list():of([]),
+      issues:this.bloodBank.listIssues(),
+      locations:this.access.hasPermission('blood_bank.stock.view')?this.bloodBank.listLocations():of([]),
+    }).subscribe({next:r=>{this.patients=r.patients;this.issues=r.issues;this.dashboard=r.dashboard;this.donors=r.donors.items;this.units=r.units.items;this.requests=r.requests.items;this.locations=r.locations;this.loading=false;},error:()=>{this.loading=false;this.message='Could not load blood bank records. Check your connection and refresh.';}});
+    if(this.access.hasPermission('blood_bank.queue.manage'))this.loadQueue();
   }
 
   loadQueue(): void {
@@ -200,8 +210,11 @@ export class BloodBankWorkspaceComponent {
     this.run(() => this.bloodBank.moveUnit(this.moveForm.unit_id, this.moveForm.storage_location_id, this.moveForm.remarks), 'Unit location updated');
   }
 
+  get reportColumns():string[]{return Array.from(new Set((this.report?.rows||[]).flatMap(row=>Object.keys(row)))).filter(key=>!key.endsWith('_id'));}
+  reportValue(row:Record<string,unknown>,key:string):string{const value=row[key];if(value==null)return '—';if(key.endsWith('_at'))return new Date(String(value)).toLocaleString();if(typeof value==='boolean')return value?'Yes':'No';return String(value).replaceAll('_',' ');}
   loadReport(): void {
-    this.bloodBank.report(this.cleanPayload(this.reportFilters)).subscribe((data) => (this.report = data));
+    this.reportLoading=true;
+    this.bloodBank.report(this.cleanPayload(this.reportFilters)).subscribe({next:data=>{this.report=data;this.reportLoading=false;},error:()=>{this.reportLoading=false;this.message='Could not load that report. Check the dates and retry.';}});
   }
 
   statusTone(status: string | null | undefined): string {
@@ -229,15 +242,18 @@ export class BloodBankWorkspaceComponent {
   }
 
   private run(factory: () => Observable<unknown>, success: string): void {
-    this.loading = true;
+    if(this.saving)return;
+    this.saving=true;
     this.message = '';
     factory().subscribe({
       next: () => {
+        this.saving=false;
         this.message = success;
         this.reload();
       },
       error: (error: any) => {
         this.loading = false;
+        this.saving=false;
         this.message = error?.error?.message || 'Action failed';
       },
     });

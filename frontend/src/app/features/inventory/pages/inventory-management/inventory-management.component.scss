@@ -96,7 +96,7 @@ button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):no
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(96px, 1fr) 2fr 40px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(40px, max-content);
 }
 
 .bar-row span,
@@ -115,6 +115,8 @@ button:not(.primary-btn):not(.secondary-btn):not(.danger-btn):not(.ghost-btn):no
 .compact-list b {
   color: var(--text);
   text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .smart-alert {
@@ -271,3 +273,5 @@ td small {
     grid-column: span 1;
   }
 }
+
+.inventory-shell,.dashboard-grid,.split-grid,.dashboard-grid>*,.split-grid>*{min-width:0;}.dashboard-grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);}.split-grid{grid-template-columns:minmax(0,.85fr) minmax(0,1.4fr);}@media(max-width:1000px){.dashboard-grid,.split-grid{grid-template-columns:minmax(0,1fr);}.dashboard-grid>.span-2{grid-column:auto;}}

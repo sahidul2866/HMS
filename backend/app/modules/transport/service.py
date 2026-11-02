@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,6 +23,8 @@ from app.models.transport import (
 )
 from app.models.user import User
 from app.modules.audit.service import AuditService
+from app.modules.auth.service import AuthService
+from app.modules.support_posting.service import lock_branch
 from app.schemas.transport import (
     TransportDashboardRead,
     TransportDispatchRequest,
@@ -57,7 +60,7 @@ class TransportService:
         today = date.today()
         fuel_total = self.db.scalar(select(func.coalesce(func.sum(TransportFuelLog.fuel_cost), 0)).where(TransportFuelLog.fuel_date == today)) or Decimal("0")
         if actor.branch_id:
-            fuel_total = self.db.scalar(select(func.coalesce(func.sum(TransportFuelLog.fuel_cost), 0)).where(TransportFuelLog.fuel_date == today, or_(TransportFuelLog.branch_id == actor.branch_id, TransportFuelLog.branch_id.is_(None)))) or Decimal("0")
+            fuel_total = self.db.scalar(select(func.coalesce(func.sum(TransportFuelLog.fuel_cost), 0)).where(TransportFuelLog.fuel_date == today, TransportFuelLog.branch_id == actor.branch_id)) or Decimal("0")
         by_vehicle_type: dict[str, int] = {}
         by_trip_status: dict[str, int] = {}
         by_priority: dict[str, int] = {}
@@ -89,7 +92,7 @@ class TransportService:
         filters = filters or {}
         stmt = select(TransportVehicle).options(joinedload(TransportVehicle.assigned_driver)).where(TransportVehicle.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportVehicle.branch_id == actor.branch_id, TransportVehicle.branch_id.is_(None)))
+            stmt = stmt.where(TransportVehicle.branch_id == actor.branch_id)
         if filters.get("vehicle_type"):
             stmt = stmt.where(TransportVehicle.vehicle_type == filters["vehicle_type"])
         if filters.get("status"):
@@ -104,13 +107,13 @@ class TransportService:
         self._refresh_readiness(vehicle)
         self.db.add(vehicle)
         if payload.assigned_driver_id:
-            driver = self._get_driver(payload.assigned_driver_id)
+            driver = self._get_driver(payload.assigned_driver_id, actor)
             driver.assigned_vehicle = vehicle
         self._audit(actor, "transport.vehicle.create", "transport_vehicle", vehicle, data, context)
         return vehicle
 
     def update_vehicle(self, vehicle_id: UUID, payload: TransportVehicleCreate, actor: User, context: dict[str, str | None]) -> TransportVehicle:
-        vehicle = self._get_vehicle(vehicle_id)
+        vehicle = self._get_vehicle(vehicle_id, actor)
         for key, value in payload.model_dump().items():
             setattr(vehicle, key, value)
         vehicle.updated_by = actor.id
@@ -122,7 +125,7 @@ class TransportService:
         filters = filters or {}
         stmt = select(TransportDriver).options(joinedload(TransportDriver.assigned_vehicle), joinedload(TransportDriver.employee)).where(TransportDriver.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportDriver.branch_id == actor.branch_id, TransportDriver.branch_id.is_(None)))
+            stmt = stmt.where(TransportDriver.branch_id == actor.branch_id)
         if filters.get("driver_id"):
             stmt = stmt.where(TransportDriver.id == filters["driver_id"])
         if filters.get("status"):
@@ -135,19 +138,21 @@ class TransportService:
         data = payload.model_dump()
         if payload.employee_id:
             employee = self.db.get(HREmployee, payload.employee_id)
-            if employee and not payload.driver_name:
+            if not employee or employee.branch_id != actor.branch_id:
+                raise AppException(404, "employee_not_found", "Employee not found")
+            if not payload.driver_name:
                 data["driver_name"] = employee.full_name
         driver = TransportDriver(branch_id=actor.branch_id, **data, created_by=actor.id, updated_by=actor.id)
         driver.qr_code = f"transport:driver:{payload.license_number}"
         self.db.add(driver)
         if payload.assigned_vehicle_id:
-            vehicle = self._get_vehicle(payload.assigned_vehicle_id)
+            vehicle = self._get_vehicle(payload.assigned_vehicle_id, actor)
             vehicle.assigned_driver = driver
         self._audit(actor, "transport.driver.create", "transport_driver", driver, data, context)
         return driver
 
     def update_driver(self, driver_id: UUID, payload: TransportDriverCreate, actor: User, context: dict[str, str | None]) -> TransportDriver:
-        driver = self._get_driver(driver_id)
+        driver = self._get_driver(driver_id, actor)
         for key, value in payload.model_dump().items():
             setattr(driver, key, value)
         driver.updated_by = actor.id
@@ -174,6 +179,14 @@ class TransportService:
         return list(self.db.scalars(stmt.order_by((TransportRequest.priority.in_(["emergency", "critical"])).desc(), TransportRequest.required_at.asc())).unique())
 
     def create_request(self, payload: TransportRequestCreate, actor: User, context: dict[str, str | None], *, quick_emergency: bool = False) -> TransportRequest:
+        if payload.patient_id:
+            patient = self.db.get(Patient, payload.patient_id)
+            if not patient or patient.branch_id != actor.branch_id:
+                raise AppException(404, "patient_not_found", "Patient not found")
+        if payload.staff_employee_id:
+            employee = self.db.get(HREmployee, payload.staff_employee_id)
+            if not employee or employee.branch_id != actor.branch_id:
+                raise AppException(404, "employee_not_found", "Employee not found")
         required_at = payload.required_at or datetime.now(UTC)
         priority = "emergency" if quick_emergency else payload.priority
         urgency = "emergency" if quick_emergency else payload.urgency
@@ -195,9 +208,16 @@ class TransportService:
         return item
 
     def dispatch(self, request_id: UUID, payload: TransportDispatchRequest, actor: User, context: dict[str, str | None]) -> TransportTrip:
-        request = self._get_request(request_id)
-        vehicle = self._get_vehicle(payload.vehicle_id)
-        driver = self._get_driver(payload.driver_id)
+        lock_branch(self.db,actor)
+        request = self._get_request(request_id, actor)
+        vehicle = self._get_vehicle(payload.vehicle_id, actor)
+        driver = self._get_driver(payload.driver_id, actor)
+        self.db.scalar(select(TransportVehicle).where(TransportVehicle.id == vehicle.id).with_for_update().execution_options(populate_existing=True))
+        self.db.scalar(select(TransportDriver).where(TransportDriver.id == driver.id).with_for_update().execution_options(populate_existing=True))
+        self.db.refresh(request)
+        if request.status not in {"requested", "pending_assignment"} or self.db.scalar(select(TransportTrip.id).where(TransportTrip.request_id == request.id)):
+            raise AppException(409, "transport_request_assigned", "This request already has a trip; create a new request for another journey")
+        self._refresh_readiness(vehicle)
         self._assert_assignable(vehicle, driver, payload.override, payload.override_reason)
         self._assert_not_double_booked(vehicle.id, driver.id, payload.override, payload.override_reason)
         trip = TransportTrip(
@@ -241,7 +261,9 @@ class TransportService:
             .where(TransportTrip.is_active.is_(True))
         )
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportTrip.branch_id == actor.branch_id, TransportTrip.branch_id.is_(None)))
+            stmt = stmt.where(TransportTrip.branch_id == actor.branch_id)
+        if "transport.dispatch" not in AuthService(self.db).get_effective_permissions(actor):
+            stmt = stmt.join(TransportTrip.driver).join(TransportDriver.employee).where(HREmployee.user_id == actor.id)
         if filters.get("status"):
             stmt = stmt.where(TransportTrip.status == filters["status"])
         if filters.get("trip_type"):
@@ -253,7 +275,21 @@ class TransportService:
         return list(self.db.scalars(stmt.order_by(TransportTrip.created_at.desc())).unique())
 
     def update_trip_status(self, trip_id: UUID, payload: TransportTripStatusUpdate, actor: User, context: dict[str, str | None]) -> TransportTrip:
-        trip = self._get_trip(trip_id)
+        lock_branch(self.db,actor)
+        trip = self._get_trip(trip_id, actor)
+        permissions = set(AuthService(self.db).get_effective_permissions(actor))
+        required = "transport.trip.complete" if payload.status == "completed" else "transport.trip.cancel" if payload.status == "cancelled" else "transport.trip.update"
+        if required not in permissions:
+            raise AppException(403, "forbidden", "Missing permission: " + required)
+        if (payload.charges is not None or payload.billing_status is not None) and "transport.billing.manage" not in permissions:
+            raise AppException(403, "forbidden", "Only transport billing staff can change charges or billing status")
+        if trip.status == payload.status:
+            return trip
+        transitions = {"vehicle_assigned": {"driver_assigned", "dispatched", "cancelled"}, "driver_assigned": {"dispatched", "cancelled"}, "dispatched": {"arrived_at_pickup", "delayed", "cancelled"}, "arrived_at_pickup": {"patient_picked_up", "delayed", "cancelled"}, "patient_picked_up": {"in_transit", "delayed"}, "in_transit": {"arrived_at_destination", "delayed"}, "delayed": {"dispatched", "arrived_at_pickup", "patient_picked_up", "in_transit", "arrived_at_destination", "cancelled"}, "arrived_at_destination": {"completed"}}
+        if payload.status not in transitions.get(trip.status, set()):
+            raise AppException(409, "transport_trip_transition", "Follow the trip stages in order; closed trips cannot be reopened")
+        if trip.posting_policy=='automatic' and (payload.charges is not None or payload.billing_status is not None):
+            raise AppException(422,'transport_billing_control','Set the fare through the fare editor; payment status follows the cashier invoice')
         now = datetime.now(UTC)
         previous = trip.status
         trip.status = payload.status
@@ -281,12 +317,22 @@ class TransportService:
             value = getattr(payload, key)
             if value is not None:
                 setattr(trip, key, value)
+        if payload.status == 'completed' and trip.request and trip.request.billing_required and trip.posting_policy == 'automatic':
+            from app.modules.support_posting.service import patient_charge
+            if not trip.patient_id:
+                raise AppException(422,'transport_billing_patient','Link a registered patient before completing a billable trip')
+            amount=Decimal(str((trip.charges or {}).get('total',0)))
+            if amount<=0:raise AppException(422,'transport_fare_required','The transport manager must configure a positive fare before trip completion')
+            patient_charge(self.db,actor,'transport',trip,trip.patient_id,amount,'Transport '+trip.trip_number,context)
+            trip.billing_status='invoiced';trip.request.billing_status='invoiced'
         trip.updated_by = actor.id
         self._audit(actor, "transport.trip.status", "transport_trip", trip, {"from": previous, "to": payload.status}, context)
         return trip
 
     def update_location(self, trip_id: UUID, payload: TransportLocationUpdate, actor: User, context: dict[str, str | None]) -> TransportTrip:
-        trip = self._get_trip(trip_id)
+        trip = self._get_trip(trip_id, actor)
+        if trip.status not in ACTIVE_TRIP_STATUSES:
+            raise AppException(409, "transport_trip_closed", "Location updates require an active trip")
         recorded_at = payload.recorded_at or datetime.now(UTC)
         update = payload.model_dump(mode="json")
         update["recorded_at"] = recorded_at.isoformat()
@@ -300,10 +346,16 @@ class TransportService:
     def list_schedules(self, actor: User) -> list[TransportSchedule]:
         stmt = select(TransportSchedule).options(joinedload(TransportSchedule.vehicle), joinedload(TransportSchedule.driver)).where(TransportSchedule.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportSchedule.branch_id == actor.branch_id, TransportSchedule.branch_id.is_(None)))
+            stmt = stmt.where(TransportSchedule.branch_id == actor.branch_id)
         return list(self.db.scalars(stmt.order_by(TransportSchedule.start_at.asc())).unique())
 
     def create_schedule(self, payload: TransportScheduleCreate, actor: User, context: dict[str, str | None]) -> TransportSchedule:
+        if payload.end_at <= payload.start_at:
+            raise AppException(422, "transport_schedule_dates", "End time must be after start time")
+        if payload.vehicle_id:
+            self._get_vehicle(payload.vehicle_id, actor)
+        if payload.driver_id:
+            self._get_driver(payload.driver_id, actor)
         if payload.vehicle_id or payload.driver_id:
             self._assert_schedule_available(payload.vehicle_id, payload.driver_id, payload.start_at, payload.end_at)
         item = TransportSchedule(branch_id=actor.branch_id, **payload.model_dump(), created_by=actor.id, updated_by=actor.id)
@@ -314,28 +366,60 @@ class TransportService:
     def list_maintenance(self, actor: User) -> list[TransportMaintenance]:
         stmt = select(TransportMaintenance).options(joinedload(TransportMaintenance.vehicle)).where(TransportMaintenance.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportMaintenance.branch_id == actor.branch_id, TransportMaintenance.branch_id.is_(None)))
+            stmt = stmt.where(TransportMaintenance.branch_id == actor.branch_id)
         return list(self.db.scalars(stmt.order_by(TransportMaintenance.service_date.desc())).unique())
 
     def create_maintenance(self, payload: TransportMaintenanceCreate, actor: User, context: dict[str, str | None]) -> TransportMaintenance:
-        vehicle = self._get_vehicle(payload.vehicle_id)
+        lock_branch(self.db,actor)
+        vehicle = self._get_vehicle(payload.vehicle_id, actor)
         item = TransportMaintenance(branch_id=actor.branch_id or vehicle.branch_id, **payload.model_dump(), created_by=actor.id, updated_by=actor.id)
+        if vehicle.current_status in {"assigned", "on_trip"}:
+            raise AppException(409, "transport_vehicle_busy", "Complete or cancel the active trip before maintenance")
         if payload.status in {"scheduled", "in_progress"}:
             vehicle.current_status = "under_maintenance"
         self.db.add(item)
+        if item.status=='completed':
+            self.db.flush()
+            from app.modules.support_posting.service import journal,ZERO
+            journal(self.db,actor,'transport_maintenance',item.id,'expense',[('5310',item.cost,ZERO),('2450',ZERO,item.cost)])
         self._audit(actor, "transport.maintenance.create", "transport_maintenance", item, payload.model_dump(mode="json"), context)
+        return item
+
+    def complete_maintenance(self, maintenance_id, actor: User, context: dict) -> TransportMaintenance:
+        lock_branch(self.db,actor)
+        item = self.db.scalar(select(TransportMaintenance).where(TransportMaintenance.id == maintenance_id).with_for_update())
+        if not item or item.branch_id != actor.branch_id:
+            raise AppException(404, "maintenance_not_found", "Maintenance record not found")
+        if item.status == "completed":
+            return item
+        if item.status not in {"scheduled", "in_progress"}:
+            raise AppException(409, "maintenance_closed", "This maintenance record is closed")
+        vehicle = self._get_vehicle(item.vehicle_id, actor)
+        item.status = "completed"
+        item.updated_by = actor.id
+        self.db.flush()
+        pending = self.db.scalar(select(TransportMaintenance.id).where(TransportMaintenance.vehicle_id == vehicle.id, TransportMaintenance.status.in_(["scheduled", "in_progress"])))
+        if not pending and vehicle.current_status == "under_maintenance":
+            vehicle.current_status = "available"
+        from app.modules.support_posting.service import journal,ZERO
+        journal(self.db,actor,'transport_maintenance',item.id,'expense',[('5310',item.cost,ZERO),('2450',ZERO,item.cost)])
+        self._audit(actor, "transport.maintenance.complete", "transport_maintenance", item, {"status": "completed"}, context)
         return item
 
     def list_fuel_logs(self, actor: User) -> list[TransportFuelLog]:
         stmt = select(TransportFuelLog).options(joinedload(TransportFuelLog.vehicle)).where(TransportFuelLog.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportFuelLog.branch_id == actor.branch_id, TransportFuelLog.branch_id.is_(None)))
+            stmt = stmt.where(TransportFuelLog.branch_id == actor.branch_id)
         return list(self.db.scalars(stmt.order_by(TransportFuelLog.fuel_date.desc())).unique())
 
     def create_fuel_log(self, payload: TransportFuelLogCreate, actor: User, context: dict[str, str | None]) -> TransportFuelLog:
-        vehicle = self._get_vehicle(payload.vehicle_id)
+        lock_branch(self.db,actor)
+        vehicle = self._get_vehicle(payload.vehicle_id, actor)
         item = TransportFuelLog(branch_id=actor.branch_id or vehicle.branch_id, **payload.model_dump(), created_by=actor.id, updated_by=actor.id)
         self.db.add(item)
+        from app.modules.support_posting.service import journal,ZERO
+        self.db.flush()
+        journal(self.db,actor,'transport_fuel',item.id,'expense',[('5300',item.fuel_cost,ZERO),('2450',ZERO,item.fuel_cost)])
         self._audit(actor, "transport.fuel.create", "transport_fuel_log", item, payload.model_dump(mode="json"), context)
         return item
 
@@ -365,7 +449,7 @@ class TransportService:
             vehicles = self.list_vehicles(actor, filters)
             rows = [{"vehicle_number": v.vehicle_number, "type": v.vehicle_type, "status": v.current_status, "readiness": v.readiness_status, "driver": v.assigned_driver.driver_name if v.assigned_driver else None} for v in vehicles]
             totals = {"vehicles": len(rows), "available": len([r for r in rows if r["status"] == "available"])}
-        elif report_type in {"driver_availability", "driver_trip"}:
+        elif report_type == "driver_availability":
             drivers = self.list_drivers(actor, filters)
             rows = [{"driver": d.driver_name, "contact": d.contact_number, "status": d.availability_status, "license_expiry": d.license_expiry_date.isoformat() if d.license_expiry_date else None} for d in drivers]
             totals = {"drivers": len(rows), "available": len([r for r in rows if r["status"] == "available"])}
@@ -386,7 +470,9 @@ class TransportService:
     def _request_query(self, actor: User):
         stmt = select(TransportRequest).options(joinedload(TransportRequest.patient), joinedload(TransportRequest.staff_employee), joinedload(TransportRequest.requested_by), joinedload(TransportRequest.assigned_vehicle), joinedload(TransportRequest.assigned_driver)).where(TransportRequest.is_active.is_(True))
         if actor.branch_id:
-            stmt = stmt.where(or_(TransportRequest.branch_id == actor.branch_id, TransportRequest.branch_id.is_(None)))
+            stmt = stmt.where(TransportRequest.branch_id == actor.branch_id)
+        if "transport.dispatch" not in AuthService(self.db).get_effective_permissions(actor):
+            stmt = stmt.join(TransportRequest.assigned_driver).join(TransportDriver.employee).where(HREmployee.user_id == actor.id)
         return stmt
 
     def _assert_assignable(self, vehicle: TransportVehicle, driver: TransportDriver, override: bool, reason: str | None) -> None:
@@ -395,6 +481,8 @@ class TransportService:
             problems.append(f"Vehicle is {vehicle.current_status}")
         if driver.availability_status in UNAVAILABLE_DRIVER_STATUSES:
             problems.append(f"Driver is {driver.availability_status}")
+        if driver.license_expiry_date and driver.license_expiry_date < date.today():
+            problems.append("Driver license has expired")
         if vehicle.readiness_status == "not_ready":
             problems.append("Ambulance readiness failed")
         if problems and not (override and reason):
@@ -402,7 +490,7 @@ class TransportService:
 
     def _assert_not_double_booked(self, vehicle_id: UUID, driver_id: UUID, override: bool, reason: str | None) -> None:
         active = self.db.scalar(select(TransportTrip).where(TransportTrip.status.in_(list(ACTIVE_TRIP_STATUSES)), or_(TransportTrip.vehicle_id == vehicle_id, TransportTrip.driver_id == driver_id)))
-        if active and not (override and reason):
+        if active:
             raise AppException(409, "transport_double_booking", "Vehicle or driver already has an active trip")
 
     def _assert_schedule_available(self, vehicle_id: UUID | None, driver_id: UUID | None, start_at: datetime, end_at: datetime) -> None:
@@ -431,9 +519,7 @@ class TransportService:
         vehicle.readiness_status = "not_ready" if alerts else "ready"
 
     def _next_number(self, prefix: str, column) -> str:
-        today = date.today().strftime("%Y%m%d")
-        count = self.db.scalar(select(func.count()).select_from(column.class_).where(column.ilike(f"{prefix}-{today}-%"))) or 0
-        return f"{prefix}-{today}-{int(count) + 1:04d}"
+        return f"{prefix}-{date.today():%Y%m%d}-{uuid4().hex[:10].upper()}"
 
     def _is_ambulance(self, vehicle_type: str | None) -> bool:
         return (vehicle_type or "").lower().replace(" ", "_") in AMBULANCE_TYPES
@@ -445,29 +531,32 @@ class TransportService:
         if self.db.scalar(select(TransportVehicle).where(or_(*clauses))):
             raise AppException(409, "vehicle_exists", "Vehicle number or registration already exists")
 
-    def _get_vehicle(self, vehicle_id: UUID) -> TransportVehicle:
+    def _get_vehicle(self, vehicle_id: UUID, actor: User) -> TransportVehicle:
         vehicle = self.db.get(TransportVehicle, vehicle_id)
-        if not vehicle:
+        if not vehicle or vehicle.branch_id != actor.branch_id:
             raise AppException(404, "vehicle_not_found", "Vehicle not found")
         return vehicle
 
-    def _get_driver(self, driver_id: UUID) -> TransportDriver:
+    def _get_driver(self, driver_id: UUID, actor: User) -> TransportDriver:
         driver = self.db.get(TransportDriver, driver_id)
-        if not driver:
+        if not driver or driver.branch_id != actor.branch_id:
             raise AppException(404, "driver_not_found", "Driver not found")
         return driver
 
-    def _get_request(self, request_id: UUID) -> TransportRequest:
-        request = self.db.get(TransportRequest, request_id)
-        if not request:
+    def _get_request(self, request_id: UUID, actor: User) -> TransportRequest:
+        request = self.db.scalar(select(TransportRequest).where(TransportRequest.id == request_id).with_for_update().execution_options(populate_existing=True))
+        if not request or request.branch_id != actor.branch_id:
             raise AppException(404, "transport_request_not_found", "Transport request not found")
         return request
 
-    def _get_trip(self, trip_id: UUID) -> TransportTrip:
-        trip = self.db.scalar(select(TransportTrip).options(joinedload(TransportTrip.vehicle), joinedload(TransportTrip.driver), joinedload(TransportTrip.request)).where(TransportTrip.id == trip_id))
-        if not trip:
+    def _get_trip(self, trip_id: UUID, actor: User) -> TransportTrip:
+        trip = self.db.scalar(select(TransportTrip).options(joinedload(TransportTrip.vehicle), joinedload(TransportTrip.driver), joinedload(TransportTrip.request)).where(TransportTrip.id == trip_id).with_for_update(of=TransportTrip).execution_options(populate_existing=True))
+        if not trip or trip.branch_id != actor.branch_id:
             raise AppException(404, "transport_trip_not_found", "Transport trip not found")
+        if "transport.dispatch" not in AuthService(self.db).get_effective_permissions(actor):
+            if not trip.driver or not trip.driver.employee or trip.driver.employee.user_id != actor.id:
+                raise AppException(404, "transport_trip_not_found", "Transport trip not found")
         return trip
 
     def _audit(self, actor: User, action: str, entity_type: str, entity, detail: dict | None, context: dict[str, str | None]) -> None:
-        AuditService(self.db).log(actor.id, action, "transport", entity_type, str(getattr(entity, "id", "")), detail or {}, context)
+        AuditService(self.db).log(actor.id, action, "transport", entity_type, str(getattr(entity, "id", "")), jsonable_encoder(detail or {}), context)

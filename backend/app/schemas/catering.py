@@ -46,9 +46,10 @@ class CateringMealPlanCreate(BaseModel):
     allergens: str | None = None
     calories: int | None = None
     protein_grams: Decimal | None = None
-    billable_amount: Decimal = Decimal("0")
+    billable_amount: Decimal = Field(default=Decimal("0"), ge=0)
     inventory_item_id: UUID | None = None
-    inventory_quantity: Decimal = Decimal("0")
+    inventory_store_id: UUID | None = None
+    inventory_quantity: Decimal = Field(default=Decimal("0"), ge=0)
 
 
 class CateringMealPlanRead(CateringMealPlanCreate):
@@ -164,6 +165,8 @@ class CateringMealTaskRead(BaseModel):
     refusal_reason: str | None = None
     remarks: str | None = None
     billable_amount: Decimal
+    posting_policy: str = "manual_review"
+    billing_invoice_id: UUID | None = None
     inventory_status: str | None = None
     ticket_code: str | None = None
     is_active: bool
@@ -184,6 +187,8 @@ class CateringStaffMealCreate(BaseModel):
 
 
 class CateringStaffMealRead(CateringStaffMealCreate):
+    deduction_state: str = "manual_review"
+    payroll_item_id: UUID | None = None
     id: UUID
     status: str
     department_name: str | None = None

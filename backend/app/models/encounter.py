@@ -482,3 +482,15 @@ class DoctorSlotBooking(Base, BaseModelMixin):
     patient = relationship("Patient")
     appointment = relationship("Appointment")
     opd_visit = relationship("OPDVisit")
+
+
+class IPDBedStay(Base, BaseModelMixin):
+    __tablename__ = 'ipd_bed_stays'
+    admission_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),ForeignKey('ipd_admissions.id'),nullable=False,index=True)
+    bed_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey('ipd_beds.id'))
+    ward_name: Mapped[str] = mapped_column(String(120),nullable=False)
+    bed_number: Mapped[str] = mapped_column(String(60),nullable=False)
+    daily_rate: Mapped[Decimal] = mapped_column(Numeric(12,2),nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    estimated: Mapped[bool] = mapped_column(Boolean,nullable=False,default=False)

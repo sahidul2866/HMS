@@ -1,7 +1,8 @@
 from calendar import monthrange
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from uuid import UUID
+from uuid import UUID, uuid4
+from types import SimpleNamespace
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -30,6 +31,10 @@ from app.models.hr import (
     HRShift,
 )
 from app.models.user import User
+from app.modules.auth.service import AuthService
+from app.models.operational_posting import HRSalaryRevision, HRPayrollAdjustment
+from app.models.catering import CateringStaffMealOrder
+from app.modules.support_posting.service import journal, ZERO, lock_branch
 from app.schemas.hr import (
     HRAttendanceCreate,
     HRCandidateCreate,
@@ -61,10 +66,21 @@ class HRService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _employee_scope(self, actor: User, *, directory: bool = False):
+        permissions = set(AuthService(self.db).get_effective_permissions(actor))
+        if permissions & {"hr.employee.manage", "hr.payroll.manage"} or (directory and "transport.driver.manage" in permissions):
+            return HREmployee.branch_id == actor.branch_id
+        if "hr.leave.approve" in permissions and actor.department_id:
+            return (HREmployee.branch_id == actor.branch_id) & (HREmployee.department_id == actor.department_id)
+        return (HREmployee.branch_id == actor.branch_id) & (HREmployee.user_id == actor.id)
+
     def dashboard(self, actor: User) -> HRDashboardSummary:
         today = date.today()
         month_prefix = today.strftime("%Y-%m")
         employees = self.list_employees(actor, page=1, page_size=10000)[0]
+        permissions = set(AuthService(self.db).get_effective_permissions(actor))
+        if "transport.driver.manage" in permissions and not permissions & {"hr.employee.manage", "hr.payroll.manage"}:
+            employees = [employee for employee in employees if employee.user_id == actor.id]
         active = [item for item in employees if item.employment_status == "active" and item.is_active]
         attendance_rows = self.list_attendance(actor, attendance_date=today)
         payroll_due = self.db.scalar(
@@ -97,6 +113,10 @@ class HRService:
                 if document.expiry_date and 0 <= (document.expiry_date - today).days <= 45:
                     expiring_document_count += 1
                     alerts.append(f"{employee.full_name} {document.document_type} expires on {document.expiry_date}")
+        can_payroll = "hr.payroll.manage" in AuthService(self.db).get_effective_permissions(actor)
+        if not can_payroll:
+            payroll_due = overtime_cost = deduction_total = Decimal("0")
+            current_run = None
         return HRDashboardSummary(
             total_employees=len(employees),
             active_employees=len(active),
@@ -112,8 +132,8 @@ class HRService:
             },
             department_counts=department_counts,
             category_counts=category_counts,
-            pending_leave_requests=self.db.scalar(select(func.count(HRLeaveRequest.id)).where(HRLeaveRequest.branch_id == actor.branch_id, HRLeaveRequest.status == "pending")) or 0,
-            pending_payroll_approvals=self.db.scalar(select(func.count(HRPayrollRun.id)).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.status == "draft")) or 0,
+            pending_leave_requests=len([row for row in self.list_leave_requests(actor) if row.status == "pending"]),
+            pending_payroll_approvals=(self.db.scalar(select(func.count(HRPayrollRun.id)).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.status.in_(["draft", "calculated", "reviewed"]))) or 0) if can_payroll else 0,
             monthly_salary_payable=self._money(Decimal(payroll_due or 0)),
             employees_on_leave=len([item for item in attendance_rows if item.status == "on_leave"]),
             expiring_documents=expiring_document_count,
@@ -133,7 +153,7 @@ class HRService:
                 selectinload(HREmployee.documents),
                 selectinload(HREmployee.salary_structure),
             )
-            .where(HREmployee.branch_id == actor.branch_id)
+            .where(self._employee_scope(actor, directory=True))
             .order_by(HREmployee.created_at.desc())
         )
         if q:
@@ -144,6 +164,7 @@ class HRService:
         return self._paginate(stmt, page, page_size)
 
     def create_employee(self, payload: HREmployeeCreate, actor: User) -> HREmployee:
+        self._validate_employee_references(payload, actor)
         employee = HREmployee(
             **payload.model_dump(),
             branch_id=actor.branch_id,
@@ -159,6 +180,7 @@ class HRService:
 
     def update_employee(self, employee_id: UUID, payload: HREmployeeCreate, actor: User) -> HREmployee:
         employee = self._get_employee(employee_id, actor)
+        self._validate_employee_references(payload, actor, employee_id)
         if employee.employment_status in {"terminated", "resigned"} and payload.employment_status == "active":
             raise AppException(409, "hr_employee_reactivation_blocked", "Use a formal rehire workflow before reactivating resigned or terminated employees")
         for key, value in payload.model_dump().items():
@@ -174,7 +196,7 @@ class HRService:
             select(HREmployeeDocument)
             .options(selectinload(HREmployeeDocument.employee))
             .join(HREmployeeDocument.employee)
-            .where(HREmployee.branch_id == actor.branch_id, HREmployeeDocument.is_active.is_(True))
+            .where(self._employee_scope(actor), HREmployeeDocument.is_active.is_(True))
             .order_by(HREmployeeDocument.expiry_date.asc().nulls_last(), HREmployeeDocument.created_at.desc())
         )
         if employee_id:
@@ -215,7 +237,7 @@ class HRService:
         return entity
 
     def list_attendance(self, actor: User, *, attendance_date: date | None = None, employee_id: UUID | None = None, status: str | None = None) -> list[HRAttendance]:
-        stmt = select(HRAttendance).options(selectinload(HRAttendance.employee).selectinload(HREmployee.department)).where(HRAttendance.branch_id == actor.branch_id).order_by(HRAttendance.attendance_date.desc())
+        stmt = select(HRAttendance).options(selectinload(HRAttendance.employee).selectinload(HREmployee.department)).where(HRAttendance.branch_id == actor.branch_id, HRAttendance.employee_id.in_(select(HREmployee.id).where(self._employee_scope(actor)))).order_by(HRAttendance.attendance_date.desc())
         if attendance_date:
             stmt = stmt.where(HRAttendance.attendance_date == attendance_date)
         if employee_id:
@@ -225,6 +247,7 @@ class HRService:
         return list(self.db.scalars(stmt))
 
     def mark_attendance(self, payload: HRAttendanceCreate, actor: User) -> HRAttendance:
+        self._get_employee(payload.employee_id, actor)
         existing = self.db.scalar(select(HRAttendance).where(HRAttendance.employee_id == payload.employee_id, HRAttendance.attendance_date == payload.attendance_date))
         if existing:
             for key, value in payload.model_dump().items():
@@ -251,9 +274,13 @@ class HRService:
         return shift
 
     def list_roster(self, actor: User) -> list[HRDutyRoster]:
-        return list(self.db.scalars(select(HRDutyRoster).options(selectinload(HRDutyRoster.employee), selectinload(HRDutyRoster.shift)).where(HRDutyRoster.branch_id == actor.branch_id).order_by(HRDutyRoster.roster_date.desc())))
+        return list(self.db.scalars(select(HRDutyRoster).options(selectinload(HRDutyRoster.employee), selectinload(HRDutyRoster.shift)).where(HRDutyRoster.branch_id == actor.branch_id, HRDutyRoster.employee_id.in_(select(HREmployee.id).where(self._employee_scope(actor)))).order_by(HRDutyRoster.roster_date.desc())))
 
     def create_roster(self, payload: HRDutyRosterCreate, actor: User) -> HRDutyRoster:
+        self._get_employee(payload.employee_id, actor)
+        shift = self.db.get(HRShift, payload.shift_id)
+        if not shift or shift.branch_id != actor.branch_id:
+            raise AppException(404, "hr_shift_not_found", "Shift not found")
         conflict = self.db.scalar(select(HRDutyRoster).where(HRDutyRoster.employee_id == payload.employee_id, HRDutyRoster.roster_date == payload.roster_date, HRDutyRoster.shift_id == payload.shift_id))
         if conflict:
             raise AppException(409, "hr_roster_conflict", "Employee already has this shift on the selected date")
@@ -275,12 +302,20 @@ class HRService:
         return leave_type
 
     def list_leave_requests(self, actor: User) -> list[HRLeaveRequest]:
-        return list(self.db.scalars(select(HRLeaveRequest).options(selectinload(HRLeaveRequest.employee), selectinload(HRLeaveRequest.leave_type)).where(HRLeaveRequest.branch_id == actor.branch_id).order_by(HRLeaveRequest.created_at.desc())))
+        return list(self.db.scalars(select(HRLeaveRequest).options(selectinload(HRLeaveRequest.employee), selectinload(HRLeaveRequest.leave_type)).where(HRLeaveRequest.branch_id == actor.branch_id, HRLeaveRequest.employee_id.in_(select(HREmployee.id).where(self._employee_scope(actor)))).order_by(HRLeaveRequest.created_at.desc())))
 
     def request_leave(self, payload: HRLeaveRequestCreate, actor: User) -> HRLeaveRequest:
         if payload.end_date < payload.start_date:
             raise AppException(422, "hr_leave_invalid_dates", "Leave end date cannot be before start date")
-        request = HRLeaveRequest(**payload.model_dump(), branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
+        self._get_employee(payload.employee_id, actor)
+        leave_type = self.db.get(HRLeaveType, payload.leave_type_id)
+        if not leave_type or leave_type.branch_id != actor.branch_id or not leave_type.is_active:
+            raise AppException(404, "hr_leave_type_not_found", "Leave type not found")
+        if Decimal(payload.number_of_days) != Decimal((payload.end_date - payload.start_date).days + 1):
+            raise AppException(422, "hr_leave_days", "Days must match the inclusive date range")
+        if self.db.scalar(select(HRLeaveRequest.id).where(HRLeaveRequest.employee_id == payload.employee_id, HRLeaveRequest.status.in_(["pending", "approved"]), HRLeaveRequest.start_date <= payload.end_date, HRLeaveRequest.end_date >= payload.start_date)):
+            raise AppException(409, "hr_leave_overlap", "A leave request already covers these dates")
+        request = HRLeaveRequest(**payload.model_dump(exclude={"status"}), status="pending", branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
         self.db.add(request)
         self._audit(actor, "leave.request", "hr_leave_request", None, str(payload.number_of_days))
         self.db.commit()
@@ -291,6 +326,11 @@ class HRService:
         request = self.db.get(HRLeaveRequest, request_id)
         if not request or request.branch_id != actor.branch_id:
             raise AppException(404, "hr_leave_not_found", "Leave request not found")
+        employee = self._get_employee(request.employee_id, actor)
+        if employee.user_id == actor.id or request.created_by == actor.id:
+            raise AppException(409, "hr_leave_self_approval", "Another authorized reviewer must decide this leave")
+        if request.status != "pending" or status not in {"approved", "rejected"}:
+            raise AppException(409, "hr_leave_closed", "Only pending leave can be approved or rejected")
         request.status = status
         request.approved_by_user_id = actor.id
         request.approval_remarks = remarks
@@ -302,18 +342,24 @@ class HRService:
 
     def upsert_salary(self, payload: HRSalaryStructureCreate, actor: User) -> HRSalaryStructure:
         employee = self._get_employee(payload.employee_id, actor)
-        locked_run = self.db.scalar(
-            select(HRPayrollRun.id)
-            .join(HRPayrollRun.items)
-            .where(HRPayrollItem.employee_id == employee.id, HRPayrollRun.status.in_(["paid", "locked"]))
-            .limit(1)
-        )
-        if locked_run:
-            raise AppException(409, "salary_locked_by_payroll", "Salary structure cannot be changed after a locked or paid payroll run without an adjustment workflow")
+        lock_branch(self.db,actor)
+        if payload.effective_from.day != 1:
+            raise AppException(422,'salary_month_boundary','Use the first day of the effective payroll month')
+        protected=self.db.scalar(select(HRPayrollRun.payroll_month).join(HRPayrollRun.items).where(HRPayrollItem.employee_id==employee.id,HRPayrollRun.status!='cancelled').order_by(HRPayrollRun.payroll_month.desc()).limit(1))
+        if protected and payload.effective_from.strftime('%Y-%m') <= protected:
+            raise AppException(409,'salary_locked_by_payroll','Use a reviewed payroll adjustment for calculated or paid months; salary revisions must start in a later month')
         salary = self.db.scalar(select(HRSalaryStructure).where(HRSalaryStructure.employee_id == payload.employee_id))
         if not salary:
             salary = HRSalaryStructure(employee_id=payload.employee_id, branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
             self.db.add(salary)
+        if salary.id and salary.effective_from != payload.effective_from and not self.db.scalar(select(HRSalaryRevision.id).where(HRSalaryRevision.employee_id==employee.id,HRSalaryRevision.effective_from==salary.effective_from)):
+            self.db.add(HRSalaryRevision(branch_id=actor.branch_id,employee_id=employee.id,effective_from=salary.effective_from,components={key:str(getattr(salary,key)) for key in HRSalaryStructureCreate.model_fields if key not in {'employee_id','effective_from'}},created_by=actor.id,updated_by=actor.id))
+        if salary.id and payload.effective_from < salary.effective_from:
+            raise AppException(409,'salary_revision_order','Append salary revisions in date order; use a reviewed payroll adjustment for earlier periods')
+        revision=self.db.scalar(select(HRSalaryRevision).where(HRSalaryRevision.employee_id==employee.id,HRSalaryRevision.effective_from==payload.effective_from))
+        if revision:
+            self.db.delete(revision);self.db.flush()
+        self.db.add(HRSalaryRevision(branch_id=actor.branch_id,employee_id=employee.id,effective_from=payload.effective_from,components=payload.model_dump(mode='json',exclude={'employee_id','effective_from'}),created_by=actor.id,updated_by=actor.id))
         for key, value in payload.model_dump().items():
             setattr(salary, key, value)
         salary.updated_by = actor.id
@@ -341,6 +387,25 @@ class HRService:
         self.db.refresh(entity)
         return entity
 
+    def decide_overtime(self, overtime_id, actor, status):
+        item = self.db.scalar(select(HROvertimeRequest).where(HROvertimeRequest.id == overtime_id).with_for_update())
+        if not item or item.branch_id != actor.branch_id:
+            raise AppException(404, "hr_overtime_not_found", "Overtime request not found")
+        self._get_employee(item.employee_id, actor)
+        if item.created_by == actor.id:
+            raise AppException(409, "hr_overtime_self_approval", "Another reviewer must approve overtime")
+        if item.status != "pending" or status not in {"approved", "rejected"}:
+            raise AppException(409, "hr_overtime_closed", "Only pending overtime can be decided")
+        month = item.overtime_date.strftime("%Y-%m")
+        if self.db.scalar(select(HRPayrollItem.id).join(HRPayrollRun).where(HRPayrollItem.employee_id == item.employee_id, HRPayrollItem.payroll_month == month, HRPayrollRun.status != "cancelled")):
+            raise AppException(409, "hr_overtime_payroll_exists", "Payroll already calculated; use an adjustment before approving overtime")
+        item.status = status
+        item.approved_by_user_id = actor.id
+        item.updated_by = actor.id
+        self._audit(actor, "overtime." + status, "hr_overtime_request", str(item.id), None)
+        self.db.commit()
+        return item
+
     def list_overtime(self, actor: User) -> list[HROvertimeRequest]:
         return list(self.db.scalars(select(HROvertimeRequest).options(selectinload(HROvertimeRequest.employee)).where(HROvertimeRequest.branch_id == actor.branch_id).order_by(HROvertimeRequest.overtime_date.desc())))
 
@@ -360,24 +425,39 @@ class HRService:
         return list(self.db.scalars(select(HRPayrollRun).options(selectinload(HRPayrollRun.items).selectinload(HRPayrollItem.employee)).where(HRPayrollRun.branch_id == actor.branch_id).order_by(HRPayrollRun.created_at.desc())))
 
     def process_payroll(self, payload: HRPayrollRunCreate, actor: User) -> HRPayrollRun:
-        existing = self.db.scalar(select(HRPayrollRun).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.payroll_month == payload.payroll_month, HRPayrollRun.department_id == payload.department_id))
+        try:
+            date.fromisoformat(payload.payroll_month + "-01")
+        except ValueError:
+            raise AppException(422, "hr_payroll_month", "Use a valid payroll month (YYYY-MM)")
+        # Serialize branch payroll calculations, including department/whole-branch overlap.
+        from app.models.branch import Branch
+        self.db.scalar(select(Branch).where(Branch.id == actor.branch_id).with_for_update())
+        existing = self.db.scalar(select(HRPayrollRun).where(HRPayrollRun.branch_id == actor.branch_id, HRPayrollRun.payroll_month == payload.payroll_month, or_(HRPayrollRun.department_id == payload.department_id, HRPayrollRun.department_id.is_(None)) if payload.department_id else True))
         if existing:
             raise AppException(409, "hr_payroll_duplicate", "Payroll already exists for this month and department")
         employees, _ = self.list_employees(actor, page=1, page_size=10000, status="active")
         if payload.department_id:
             employees = [item for item in employees if item.department_id == payload.department_id]
+        employee_ids = [employee.id for employee in employees]
+        if employee_ids and self.db.scalar(select(HRPayrollItem.id).join(HRPayrollRun).where(HRPayrollItem.employee_id.in_(employee_ids), HRPayrollItem.payroll_month == payload.payroll_month, HRPayrollRun.status != "cancelled")):
+            raise AppException(409, "hr_payroll_employee_duplicate", "An employee already belongs to payroll for this month")
         run = HRPayrollRun(payroll_month=payload.payroll_month, department_id=payload.department_id, branch_id=actor.branch_id, status="calculated", note=payload.note, created_by=actor.id, updated_by=actor.id)
         self.db.add(run)
         totals = Decimal("0")
         deductions = Decimal("0")
         for employee in employees:
-            salary = employee.salary_structure
-            if not salary:
+            salary = self._salary_for_month(employee,payload.payroll_month)
+            period_end = date.fromisoformat(payload.payroll_month + "-01").replace(day=monthrange(*[int(x) for x in payload.payroll_month.split("-")])[1])
+            if not salary or salary.effective_from > period_end or employee.joining_date > period_end:
                 continue
             item = self._build_payroll_item(run, employee, salary, payload.payroll_month, actor)
             run.items.append(item)
+            self.db.flush()
+            self._augment_payroll_item(item,actor)
             totals += item.gross_salary
             deductions += item.total_deductions
+        if not run.items:
+            raise AppException(422, "hr_payroll_empty", "No active employees with salary structures match this payroll")
         run.total_employees = len(run.items)
         run.total_gross_salary = self._money(totals)
         run.total_deductions = self._money(deductions)
@@ -388,27 +468,40 @@ class HRService:
         return run
 
     def approve_payroll(self, payroll_run_id: UUID, actor: User, *, status: str) -> HRPayrollRun:
-        run = self.db.get(HRPayrollRun, payroll_run_id)
+        lock_branch(self.db,actor)
+        run = self.db.scalar(select(HRPayrollRun).where(HRPayrollRun.id == payroll_run_id).with_for_update())
         if not run or run.branch_id != actor.branch_id:
             raise AppException(404, "hr_payroll_not_found", "Payroll run not found")
         allowed_statuses = {"draft", "calculated", "reviewed", "approved", "paid", "cancelled", "locked", "finalized"}
         if status not in allowed_statuses:
             raise AppException(422, "hr_payroll_invalid_status", "Invalid payroll status")
-        if run.status in {"paid", "locked"} and status not in {"locked"}:
-            raise AppException(409, "hr_payroll_locked", "Paid or locked payroll cannot be edited")
-        if status == "paid" and run.status not in {"approved", "finalized"}:
-            raise AppException(409, "hr_payroll_requires_approval", "Payroll must be approved before payment")
-        if status == "locked" and run.status != "paid":
-            raise AppException(409, "hr_payroll_lock_requires_paid", "Only paid payroll can be locked")
+        if status == run.status:
+            return run
+        transitions = {"draft": {"calculated", "cancelled"}, "calculated": {"reviewed", "approved", "cancelled"}, "reviewed": {"approved", "cancelled"}, "approved": {"finalized", "paid", "cancelled"}, "finalized": {"paid"}, "paid": {"locked"}}
+        if status not in transitions.get(run.status, set()):
+            raise AppException(409, "hr_payroll_transition", "Invalid payroll transition")
+        if status in {"reviewed", "approved"} and run.created_by == actor.id:
+            raise AppException(409, "hr_payroll_self_approval", "A different authorized reviewer must approve payroll")
         run.status = status
-        run.approved_by_user_id = actor.id
+        if status == "approved":
+            run.approved_by_user_id = actor.id
         if status in {"finalized", "paid", "locked"}:
             run.finalized_at = datetime.now(UTC)
+        if status == 'approved':
+            self._post_payroll(run,actor,'accrue')
+        if status == 'cancelled':
+            self._release_payroll_sources(run)
+            self._post_payroll(run,actor,'reverse')
         if status == "paid":
+            self._post_payroll(run,actor,'pay')
             for item in run.items:
                 item.payment_status = "paid"
                 item.paid_at = datetime.now(UTC)
                 self._apply_loan_deductions(item, actor)
+                for meal in self.db.scalars(select(CateringStaffMealOrder).where(CateringStaffMealOrder.payroll_item_id==item.id)):
+                    meal.deduction_state='deducted'
+                for adjustment in self.db.scalars(select(HRPayrollAdjustment).where(HRPayrollAdjustment.payroll_item_id==item.id)):
+                    adjustment.status='applied'
         run.updated_by = actor.id
         self._audit(actor, f"payroll.{status}", "hr_payroll_run", str(run.id), run.payroll_month)
         self.db.commit()
@@ -455,6 +548,8 @@ class HRService:
         loan_outstanding = self.db.scalar(select(func.coalesce(func.sum(HREmployeeLoan.remaining_balance), 0)).where(HREmployeeLoan.branch_id == actor.branch_id, HREmployeeLoan.status == "active")) or Decimal("0")
         today = date.today()
         expiring_documents = len([doc for doc in self.list_documents(actor) if doc.expiry_date and 0 <= (doc.expiry_date - today).days <= 45])
+        if "hr.payroll.manage" not in AuthService(self.db).get_effective_permissions(actor):
+            payroll_net = loan_outstanding = Decimal("0")
         return HRReportSummary(
             employee_count=len(employees),
             attendance_summary={status: len([row for row in attendance if row.status == status]) for status in ["present", "late", "absent", "half_day", "on_leave"]},
@@ -526,6 +621,99 @@ class HRService:
                 self.db.add(HRSetting(branch_id=actor.branch_id, setting_key=key, setting_value=value, description=description, created_by=actor.id, updated_by=actor.id))
         self.db.flush()
 
+    def _salary_for_month(self,employee,month):
+        end=date.fromisoformat(month+'-01').replace(day=monthrange(*map(int,month.split('-')))[1])
+        revision=self.db.scalar(select(HRSalaryRevision).where(HRSalaryRevision.employee_id==employee.id,HRSalaryRevision.effective_from<=end).order_by(HRSalaryRevision.effective_from.desc()).limit(1))
+        if revision:return SimpleNamespace(effective_from=revision.effective_from,**{key:Decimal(value) for key,value in revision.components.items()})
+        return employee.salary_structure if employee.salary_structure and employee.salary_structure.effective_from<=end else None
+
+    def _augment_payroll_item(self,item,actor):
+        end=date.fromisoformat(item.payroll_month+'-01').replace(day=monthrange(*map(int,item.payroll_month.split('-')))[1])
+        meals=list(self.db.scalars(select(CateringStaffMealOrder).where(CateringStaffMealOrder.branch_id==actor.branch_id,CateringStaffMealOrder.employee_id==item.employee_id,CateringStaffMealOrder.payroll_deductible.is_(True),CateringStaffMealOrder.deduction_state=='pending',CateringStaffMealOrder.status=='served',CateringStaffMealOrder.meal_date<=end,CateringStaffMealOrder.payroll_item_id.is_(None)).with_for_update()))
+        adjustments=list(self.db.scalars(select(HRPayrollAdjustment).where(HRPayrollAdjustment.branch_id==actor.branch_id,HRPayrollAdjustment.employee_id==item.employee_id,HRPayrollAdjustment.target_month==item.payroll_month,HRPayrollAdjustment.status=='approved',HRPayrollAdjustment.payroll_item_id.is_(None)).with_for_update()))
+        item.staff_meal_deduction=sum((meal.amount for meal in meals),ZERO)
+        item.adjustment_earnings=sum((a.amount for a in adjustments if a.kind=='earning'),ZERO)
+        item.adjustment_deductions=sum((a.amount for a in adjustments if a.kind=='deduction'),ZERO)
+        item.gross_salary+=item.adjustment_earnings
+        item.total_deductions+=item.staff_meal_deduction+item.adjustment_deductions
+        item.net_salary=item.gross_salary-item.total_deductions
+        if item.net_salary<0:raise AppException(422,'payroll_negative_adjustments','Staff meals and adjustments exceed salary; review the payroll')
+        for meal in meals:meal.payroll_item_id=item.id;meal.deduction_state='reserved'
+        for adjustment in adjustments:adjustment.payroll_item_id=item.id;adjustment.status='reserved'
+
+    def _release_payroll_sources(self,run):
+        ids=[item.id for item in run.items]
+        for meal in self.db.scalars(select(CateringStaffMealOrder).where(CateringStaffMealOrder.payroll_item_id.in_(ids)).with_for_update()):
+            meal.payroll_item_id=None;meal.deduction_state='pending'
+        for adjustment in self.db.scalars(select(HRPayrollAdjustment).where(HRPayrollAdjustment.payroll_item_id.in_(ids)).with_for_update()):
+            adjustment.payroll_item_id=None;adjustment.status='approved'
+        self.db.flush()
+
+    def _post_payroll(self,run,actor,event):
+        from app.modules.support_posting.service import posted
+        gross=Decimal(run.total_gross_salary);net=Decimal(run.total_net_salary)
+        meals=sum((item.staff_meal_deduction or ZERO for item in run.items),ZERO)
+        other=Decimal(run.total_deductions)-meals
+        if event=='accrue':lines=[('5100',gross,ZERO),('2200',ZERO,net),('1150',ZERO,meals),('2300',ZERO,other)]
+        elif event=='pay':
+            if not posted(self.db,'hr_payroll',run.id,'accrue'):
+                # Historic approved runs need an explicit reviewed accrual, not an inferred backfill.
+                raise AppException(409,'payroll_accrual_missing','This payroll predates automatic accounting; reconcile its accrual before payment')
+            lines=[('2200',net,ZERO),('1001',ZERO,net)]
+        else:
+            if not posted(self.db,'hr_payroll',run.id,'accrue'):return
+            lines=[('2200',net,ZERO),('1150',meals,ZERO),('2300',other,ZERO),('5100',ZERO,gross)]
+        record=journal(self.db,actor,'hr_payroll',run.id,event,lines)
+        if record is None and not posted(self.db,'hr_payroll',run.id,event):
+            from app.models.operational_posting import OperationalPosting
+            self.db.add(OperationalPosting(branch_id=actor.branch_id,source_type='hr_payroll',source_id=run.id,event=event,amount=0,details={'zero_payroll':True,'no_cash_movement':True},created_by=actor.id,updated_by=actor.id));self.db.flush()
+
+    def create_adjustment(self,payload,actor):
+        lock_branch(self.db,actor);self._get_employee(payload.employee_id,actor)
+        try:date.fromisoformat(payload.target_month+'-01')
+        except ValueError:raise AppException(422,'adjustment_month','Choose a valid target payroll month')
+        if payload.source_payroll_item_id:
+            source=self.db.get(HRPayrollItem,payload.source_payroll_item_id)
+            if not source or source.employee_id!=payload.employee_id or source.payroll_run.branch_id!=actor.branch_id or source.payroll_run.status not in {'paid','locked'}:
+                raise AppException(422,'adjustment_source','Choose this employee’s paid payroll item as the correction source')
+            if payload.target_month<=source.payroll_month:
+                raise AppException(422,'adjustment_month','Apply corrections in a later payroll month')
+        if self.db.scalar(select(HRPayrollRun.id).join(HRPayrollRun.items).where(HRPayrollItem.employee_id==payload.employee_id,HRPayrollRun.payroll_month==payload.target_month,HRPayrollRun.status.in_(['approved','paid','locked','finalized','cancelled']))):
+            raise AppException(409,'adjustment_month_closed','Choose a future or unapproved payroll month')
+        adjustment=HRPayrollAdjustment(branch_id=actor.branch_id,**payload.model_dump(),created_by=actor.id,updated_by=actor.id)
+        self.db.add(adjustment);self.db.flush();self._audit(actor,'adjustment.request','hr_payroll_adjustment',str(adjustment.id),payload.reason);self.db.commit();return adjustment
+
+    def decide_adjustment(self,identity,status,actor):
+        lock_branch(self.db,actor)
+        adjustment=self.db.scalar(select(HRPayrollAdjustment).where(HRPayrollAdjustment.id==identity).with_for_update())
+        if not adjustment or adjustment.branch_id!=actor.branch_id:raise AppException(404,'adjustment_not_found','Adjustment not found')
+        if adjustment.status!='pending' or status not in {'approved','rejected'}:raise AppException(409,'adjustment_closed','Only pending adjustments can be reviewed')
+        employee=self._get_employee(adjustment.employee_id,actor)
+        if adjustment.created_by==actor.id or employee.user_id==actor.id:raise AppException(409,'adjustment_self_approval','Another authorized reviewer must decide this adjustment')
+        if status=='approved' and self.db.scalar(select(HRPayrollRun.id).join(HRPayrollRun.items).where(HRPayrollItem.employee_id==adjustment.employee_id,HRPayrollRun.payroll_month==adjustment.target_month,HRPayrollRun.status.in_(['approved','paid','locked','finalized','cancelled']))):
+            raise AppException(409,'adjustment_month_closed','This payroll month has closed; request the correction in a later month')
+        adjustment.status=status;adjustment.approved_by_user_id=actor.id;adjustment.updated_by=actor.id
+        self._audit(actor,'adjustment.'+status,'hr_payroll_adjustment',str(adjustment.id),adjustment.reason);self.db.commit();return adjustment
+
+    def recalculate_payroll(self,identity,actor):
+        lock_branch(self.db,actor)
+        run=self.db.scalar(select(HRPayrollRun).where(HRPayrollRun.id==identity).with_for_update())
+        if not run or run.branch_id!=actor.branch_id:raise AppException(404,'hr_payroll_not_found','Payroll run not found')
+        if run.status not in {'calculated','reviewed'}:raise AppException(409,'payroll_recalculate_closed','Only unapproved payroll can be recalculated')
+        before=run.total_net_salary;self._release_payroll_sources(run)
+        run.items.clear();self.db.flush()
+        employees,_=self.list_employees(actor,page=1,page_size=10000,status='active')
+        for employee in employees:
+            if run.department_id and employee.department_id!=run.department_id:continue
+            salary=self._salary_for_month(employee,run.payroll_month)
+            end=date.fromisoformat(run.payroll_month+'-01').replace(day=monthrange(*map(int,run.payroll_month.split('-')))[1])
+            if not salary or employee.joining_date>end:continue
+            item=self._build_payroll_item(run,employee,salary,run.payroll_month,actor);run.items.append(item);self.db.flush();self._augment_payroll_item(item,actor)
+        if not run.items:raise AppException(422,'payroll_empty','No eligible employees for this recalculation')
+        run.total_employees=len(run.items);run.total_gross_salary=sum((i.gross_salary for i in run.items),ZERO);run.total_deductions=sum((i.total_deductions for i in run.items),ZERO);run.total_net_salary=sum((i.net_salary for i in run.items),ZERO)
+        run.status='calculated';run.created_by=actor.id;run.approved_by_user_id=None;run.finalized_at=None;run.updated_by=actor.id
+        self._audit(actor,'payroll.recalculate','hr_payroll_run',str(run.id),f'{before} → {run.total_net_salary}');self.db.commit();return run
+
     def _build_payroll_item(self, run: HRPayrollRun, employee: HREmployee, salary: HRSalaryStructure, payroll_month: str, actor: User) -> HRPayrollItem:
         year, month = [int(part) for part in payroll_month.split("-")]
         start = date(year, month, 1)
@@ -535,19 +723,13 @@ class HRService:
         present = Decimal(len([item for item in attendance if item.status in {"present", "late"}]))
         absent = Decimal(len([item for item in attendance if item.status == "absent"]))
         late = Decimal(len([item for item in attendance if item.status == "late"]))
-        unpaid_leave_attendance = Decimal(len([item for item in attendance if item.status == "on_leave"]))
-        unpaid_leave_requests = self.db.scalar(
-            select(func.coalesce(func.sum(HRLeaveRequest.number_of_days), 0))
-            .join(HRLeaveRequest.leave_type)
-            .where(
-                HRLeaveRequest.employee_id == employee.id,
-                HRLeaveRequest.status == "approved",
-                HRLeaveRequest.start_date <= end,
-                HRLeaveRequest.end_date >= start,
-                HRLeaveType.is_paid.is_(False),
-            )
-        ) or Decimal("0")
-        unpaid_leave = max(unpaid_leave_attendance, Decimal(unpaid_leave_requests))
+        leave_requests = list(self.db.scalars(select(HRLeaveRequest).options(selectinload(HRLeaveRequest.leave_type)).where(HRLeaveRequest.employee_id == employee.id, HRLeaveRequest.status == "approved", HRLeaveRequest.start_date <= end, HRLeaveRequest.end_date >= start)))
+        paid_dates, unpaid_dates = set(), set()
+        for leave in leave_requests:
+            dates = {max(start, leave.start_date) + timedelta(days=i) for i in range((min(end, leave.end_date) - max(start, leave.start_date)).days + 1)}
+            (paid_dates if leave.leave_type.is_paid else unpaid_dates).update(dates)
+        unpaid_dates.update(item.attendance_date for item in attendance if item.status == "on_leave" and item.attendance_date not in paid_dates)
+        unpaid_leave = Decimal(len(unpaid_dates))
         shift_allowance = self.db.scalar(
             select(func.coalesce(func.sum(HRShift.allowance_amount), 0))
             .join(HRDutyRoster, HRDutyRoster.shift_id == HRShift.id)
@@ -557,9 +739,11 @@ class HRService:
         overtime_amount = Decimal(overtime or 0) * salary.overtime_hourly_rate
         per_day = salary.basic_salary / Decimal("26")
         attendance_deduction = (absent + unpaid_leave + (late * Decimal("0.25"))) * per_day
-        loan_deduction = self.db.scalar(select(func.coalesce(func.sum(HREmployeeLoan.monthly_installment), 0)).where(HREmployeeLoan.employee_id == employee.id, HREmployeeLoan.status == "active", HREmployeeLoan.deduction_start_month <= payroll_month))
+        loan_deduction = self.db.scalar(select(func.coalesce(func.sum(func.least(HREmployeeLoan.monthly_installment, HREmployeeLoan.remaining_balance)), 0)).where(HREmployeeLoan.employee_id == employee.id, HREmployeeLoan.status == "active", HREmployeeLoan.deduction_start_month <= payroll_month))
         gross = self._money(salary.basic_salary + base_allowances + overtime_amount + Decimal(shift_allowance or 0))
         total_deduction = self._money(salary.tax_deduction + salary.provident_fund_deduction + salary.other_deductions + Decimal(loan_deduction or 0) + attendance_deduction)
+        if total_deduction > gross:
+            raise AppException(422, "hr_payroll_negative", f"Deductions exceed salary for {employee.full_name}; review deductions before processing")
         return HRPayrollItem(
             employee_id=employee.id,
             payroll_month=payroll_month,
@@ -591,31 +775,48 @@ class HRService:
         loans = list(
             self.db.scalars(
                 select(HREmployeeLoan)
-                .where(HREmployeeLoan.employee_id == item.employee_id, HREmployeeLoan.status == "active", HREmployeeLoan.remaining_balance > 0)
-                .order_by(HREmployeeLoan.deduction_start_month.asc(), HREmployeeLoan.created_at.asc())
+                .where(HREmployeeLoan.employee_id == item.employee_id, HREmployeeLoan.status == "active", HREmployeeLoan.remaining_balance > 0, HREmployeeLoan.deduction_start_month <= item.payroll_month)
+                .order_by(HREmployeeLoan.deduction_start_month.asc(), HREmployeeLoan.created_at.asc()).with_for_update()
             )
         )
         for loan in loans:
             if remaining_to_apply <= 0:
                 break
-            applied = min(Decimal(loan.remaining_balance), remaining_to_apply)
+            applied = min(Decimal(loan.remaining_balance), Decimal(loan.monthly_installment), remaining_to_apply)
             loan.remaining_balance = Decimal(loan.remaining_balance) - applied
             if loan.remaining_balance <= 0:
                 loan.remaining_balance = Decimal("0")
                 loan.status = "closed"
             loan.updated_by = actor.id
             remaining_to_apply -= applied
+        if remaining_to_apply > 0:
+            raise AppException(409, "hr_loan_balance_changed", "Loan balances changed after calculation; review payroll before marking paid")
 
     def _get_employee(self, employee_id: UUID, actor: User) -> HREmployee:
-        employee = self.db.get(HREmployee, employee_id)
+        employee = self.db.scalar(select(HREmployee).where(HREmployee.id == employee_id, self._employee_scope(actor)))
         if not employee or employee.branch_id != actor.branch_id:
             raise AppException(404, "hr_employee_not_found", "Employee not found")
         return employee
 
+    def _validate_employee_references(self, payload, actor, employee_id=None):
+        if payload.email and self.db.scalar(select(HREmployee.id).where(func.lower(HREmployee.email) == payload.email.strip().lower(), HREmployee.id != employee_id if employee_id else True)):
+            raise AppException(409, "hr_employee_email_exists", "An employee already uses this email address")
+        if payload.user_id:
+            user = self.db.scalar(select(User).where(User.id == payload.user_id).with_for_update(of=User))
+            if not user or user.branch_id != actor.branch_id:
+                raise AppException(422, "hr_account_branch", "Choose an account in this branch")
+            if not payload.department_id:
+                payload.department_id = user.department_id
+            existing = self.db.scalar(select(HREmployee.id).where(HREmployee.user_id == payload.user_id, HREmployee.id != employee_id if employee_id else True))
+            if existing:
+                raise AppException(409, "hr_account_linked", "This account is already linked to an employee")
+        for model, identity in ((Department, payload.department_id), (HRDesignation, payload.designation_id), (HREmployee, payload.reporting_manager_id)):
+            entity = self.db.get(model, identity) if identity else None
+            if identity and (not entity or entity.branch_id != actor.branch_id):
+                raise AppException(422, "hr_reference_branch", "Choose employee references in this branch")
+
     def _next_staff_code(self, actor: User) -> str:
-        prefix = "EMP"
-        count = self.db.scalar(select(func.count(HREmployee.id)).where(HREmployee.branch_id == actor.branch_id)) or 0
-        return f"{prefix}-{int(count) + 1001}"
+        return f"EMP-{uuid4().hex[:12].upper()}"
 
     def _paginate(self, stmt, page: int, page_size: int):
         page = max(page, 1)
@@ -641,7 +842,7 @@ class HRService:
         return "valid"
 
 
-def serialize_employee(employee: HREmployee) -> dict:
+def serialize_employee(employee: HREmployee, actor: User | None = None) -> dict:
     data = {column.name: getattr(employee, column.name) for column in employee.__table__.columns}
     data["department_name"] = employee.department.name if employee.department else None
     data["designation_name"] = employee.designation.name if employee.designation else None
@@ -653,6 +854,14 @@ def serialize_employee(employee: HREmployee) -> dict:
     if employee.salary_structure:
         salary = employee.salary_structure
         data["salary_gross"] = salary.basic_salary + salary.house_rent_allowance + salary.medical_allowance + salary.transport_allowance + salary.food_allowance + salary.night_duty_allowance + salary.on_call_allowance + salary.emergency_duty_allowance + salary.bonus_incentive
+    if actor and employee.user_id != actor.id:
+        permissions = {p.code for p in actor.direct_permissions if p.is_active}
+        for role in actor.roles:
+            if role.is_active:
+                permissions.update(p.code for p in role.permissions if p.is_active)
+        if not permissions & {"hr.employee.manage", "hr.payroll.manage"}:
+            for field in ("national_id", "passport_number", "bank_account_number", "bank_account_name", "bank_name", "tax_id", "salary_gross"):
+                data[field] = None
     return data
 
 

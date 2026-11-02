@@ -8,7 +8,7 @@ const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export const mutationSyncInterceptor: HttpInterceptorFn = (request, next) => {
   const dataSync = inject(DataSyncService);
-  if (!MUTATION_METHODS.has(request.method.toUpperCase())) {
+  if (request.url.endsWith('/queue/speech') || !MUTATION_METHODS.has(request.method.toUpperCase())) {
     return next(request);
   }
 

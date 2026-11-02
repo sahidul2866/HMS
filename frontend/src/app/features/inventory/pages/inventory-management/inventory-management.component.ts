@@ -1,6 +1,9 @@
+import { DialogDirective } from '../../../../shared/directives/dialog.directive';
+import { SessionService } from '../../../../core/services/session.service';
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { combineLatest } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 
 import {
@@ -25,11 +28,23 @@ type InventoryTab = 'dashboard' | 'items' | 'stock' | 'stores' | 'requisitions' 
 @Component({
   selector: 'app-inventory-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [DialogDirective, CommonModule, FormsModule],
   templateUrl: './inventory-management.component.html',
   styleUrls: ['./inventory-management.component.scss'],
 })
 export class InventoryManagementComponent {
+  readonly access=inject(SessionService);
+  showItemEditor=false;
+  itemSaving=false;
+  savingMovement=false;
+  itemForm: Record<string,unknown>={};
+  openItemEditor(): void {this.itemForm={name:'',item_code:'',unit_of_measurement:'kg',is_batch_tracked:true};this.showItemEditor=true;}
+  createItem(): void {
+    if(this.itemSaving)return;
+    this.itemSaving=true;
+    this.inventoryService.createItem({...this.itemForm,item_code:this.itemForm['item_code'] || null}).subscribe({next:()=>{this.itemSaving=false;this.showItemEditor=false;this.reloadAfterMutation();},error:error=>{this.itemSaving=false;this.error=error.error?.error?.message || 'Item could not be created';}});
+  }
+
   private readonly inventoryService = inject(InventoryService);
   private readonly route = inject(ActivatedRoute);
 
@@ -44,6 +59,8 @@ export class InventoryManagementComponent {
   dashboard: InventoryDashboardSummary | null = null;
   report: InventoryReport | null = null;
   items: InventoryItem[] = [];
+  scannedItem: InventoryItem | null = null;
+  scannedBatch: {batch_no:string|null;expiry_date:string|null;quantity:string|number}|null=null;
   stores: InventoryStore[] = [];
   stock: InventoryStoreBalance[] = [];
   suppliers: Supplier[] = [];
@@ -84,8 +101,20 @@ export class InventoryManagementComponent {
   };
 
   constructor() {
-    this.route.data.subscribe((data) => {
-      this.tab.set((data['inventoryTab'] as InventoryTab) || 'dashboard');
+    combineLatest([this.route.data, this.route.queryParamMap]).subscribe(([data, params]) => {
+      const id = params.get('itemId');
+      this.scannedItem = null;
+      this.scannedBatch = null;
+      this.tab.set(id ? 'items' : params.has('storeId') ? 'stock' : (data['inventoryTab'] as InventoryTab) || 'dashboard');
+      if (id) {
+        this.movementForm.item_id = id;
+        this.inventoryService.getItem(id).subscribe({next:item=>this.scannedItem=item,error:()=>this.error='Scanned stock item is unavailable. Check your access or scan another label.'});
+      }
+      if (params.get('batchId')) this.inventoryService.getBatch(params.get('batchId')!).subscribe({
+        next: batch => {if(batch.item_id === id) this.scannedBatch = batch; else this.error='The batch does not belong to the selected stock item.';},
+        error: () => this.error='Scanned batch is unavailable. Check your access or scan another label.'
+      });
+      this.storeFilter = params.get('storeId') || '';
       this.load();
     });
   }
@@ -154,6 +183,15 @@ export class InventoryManagementComponent {
     return Object.entries(this.dashboard?.store_stock_value || {}).map(([label, value]) => ({ label, value: this.num(value) }));
   }
 
+  /** Bar length relative to the largest entry, kept inside the track even for empty or negative balances. */
+  barPercent(value: number, largest: number): number {
+    return largest > 0 ? Math.min(100, Math.max(0, (value / largest) * 100)) : 0;
+  }
+
+  maxStoreValue(): number {
+    return Math.max(0, ...this.storeValueEntries().map((item) => item.value));
+  }
+
   setQuickAction(action: 'receive' | 'issue' | 'transfer' | 'requisition' | 'adjustment'): void {
     const tabMap = {
       receive: 'receive',
@@ -174,7 +212,8 @@ export class InventoryManagementComponent {
   }
 
   createReceiving(): void {
-    if (!this.movementForm.item_id || !this.movementForm.store_id || this.movementForm.quantity <= 0) return;
+    if (this.savingMovement || !this.movementForm.item_id || !this.movementForm.store_id || this.movementForm.quantity <= 0) return;
+    this.savingMovement=true;
     const quantity = Number(this.movementForm.quantity);
     const unitCost = Number(this.movementForm.unit_cost || 0);
     this.inventoryService.createReceiving({
@@ -191,7 +230,7 @@ export class InventoryManagementComponent {
       total_cost: quantity * unitCost,
       note: this.movementForm.note || null,
       location: this.selectedStore(this.movementForm.store_id)?.location || null,
-    }).subscribe({ next: () => this.reloadAfterMutation(), error: () => (this.error = 'Stock could not be received.') });
+    }).subscribe({ next: () => {this.savingMovement=false;this.reloadAfterMutation();}, error: error => {this.savingMovement=false;this.error=error.error?.error?.message || 'Stock could not be received.';} });
   }
 
   createIssue(): void {

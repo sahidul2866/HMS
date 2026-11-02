@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
@@ -166,6 +166,7 @@ class NotificationsService:
         return item
 
     def sync_for_user(self, actor: User) -> None:
+        self.db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key":"notification-sync:"+str(actor.id)})
         permissions = set(self.auth.get_effective_permissions(actor))
         now = datetime.now(UTC)
         role_codes = {role.code for role in actor.roles if role.is_active}

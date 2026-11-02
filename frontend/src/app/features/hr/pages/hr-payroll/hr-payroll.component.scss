@@ -18,6 +18,8 @@
 }
 
 .metric {
+  display: block;
+  min-width: 0;
   border-left: 4px solid var(--text-muted);
   padding: 0.75rem 0.85rem;
   text-align: left;
@@ -41,6 +43,11 @@
   font-size: clamp(1.35rem, 2.1vw, 1.8rem);
   margin-top: 4px;
   color: var(--text);
+}
+
+.metric.money strong {
+  font-size: clamp(1.05rem, 2vw, 1.8rem);
+  font-variant-numeric: tabular-nums;
 }
 
 .metric small {
@@ -311,7 +318,8 @@ td small,
 
 .payslip dl {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  column-gap: 1rem;
   margin: 8px 0 0;
 }
 
@@ -420,3 +428,10 @@ label {
     display: block;
   }
 }
+
+.payslip dd { overflow-wrap: anywhere; text-align: right; }
+.payslip dt { overflow-wrap: anywhere; }
+
+.adjustment-card { display:grid; gap:.4rem; border:1px solid var(--border); border-radius:8px; padding:.75rem; margin-top:.6rem; overflow-wrap:anywhere; }
+.adjustment-card p { margin:0; }
+.adjustment-list > summary { cursor:pointer; font-weight:700; }

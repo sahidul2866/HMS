@@ -67,8 +67,7 @@ class RadiologyService:
         new_orders = self.repository.list_orders(actor.branch_id)
         legacy_orders = self.legacy_repository.list_investigation_orders("radiology", actor.branch_id)
         # Exclude legacy orders that are already linked to new orders
-        linked_legacy_ids = {o.radiology_order_id for o in legacy_orders if o.radiology_order_id}
-        legacy_orders = [o for o in legacy_orders if o.id not in linked_legacy_ids]
+        legacy_orders = [o for o in legacy_orders if not o.radiology_order_id]
         new_items = [self._serialize_new(order) for order in new_orders]
         legacy_items = [self._serialize_legacy(order) for order in legacy_orders]
         return sorted(new_items + legacy_items, key=lambda x: (x.visit_date, x.order_id), reverse=True)
@@ -76,8 +75,7 @@ class RadiologyService:
     def get_summary(self, actor: User) -> RadiologySummaryRead:
         new_counts = self.repository.get_summary_counts(actor.branch_id)
         legacy_items = self.legacy_repository.list_investigation_orders("radiology", actor.branch_id)
-        linked_legacy_ids = {o.radiology_order_id for o in legacy_items if o.radiology_order_id}
-        legacy_items = [o for o in legacy_items if o.id not in linked_legacy_ids]
+        legacy_items = [o for o in legacy_items if not o.radiology_order_id]
         return RadiologySummaryRead(
             total_orders=new_counts["total_orders"] + len(legacy_items),
             pending_orders=new_counts["pending_orders"] + len([i for i in legacy_items if i.status == "pending"]),
@@ -87,12 +85,54 @@ class RadiologyService:
             verified_orders=new_counts["verified_orders"] + len([i for i in legacy_items if i.status == "verified"]),
         )
 
+    def _writable_order(self, order_id, actor):
+        self.db.execute(select(RadiologyOrder.id).where(RadiologyOrder.id == order_id).with_for_update())
+        order = self.repository.get_order(order_id)
+        if not order:
+            raise AppException(404, "radiology_order_not_found", "Radiology order not found")
+        if actor and actor.branch_id and order.branch_id and actor.branch_id != order.branch_id:
+            raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
+        if not order.is_active or order.status == "cancelled":
+            raise AppException(409, "clinical_order_cancelled", "This order was cancelled and cannot be processed")
+        if order.status == "verified":
+            from app.modules.auth.service import AuthService
+            if actor is None or "radiology.verify_result" not in AuthService(self.db).get_effective_permissions(actor):
+                raise AppException(403, "clinical_verified_result", "A verified report requires an authorized reviewer to change it")
+        return order
+
     def update_result(self, order_id, payload: ClinicalInvestigationResultUpdate, actor: User, context: dict[str, str | None]) -> ClinicalInvestigationWorkItemRead:
+        from app.modules.auth.service import AuthService
+        permissions = set(AuthService(self.db).get_effective_permissions(actor))
+        required = "radiology.verify_result" if payload.status == "verified" else "radiology.upload_report"
+        if required not in permissions:
+            raise AppException(403, "clinical_result_permission", "Your account cannot perform this result action; ask an authorized department reviewer")
         # Try new table first
+        self.db.execute(select(RadiologyOrder.id).where(RadiologyOrder.id == order_id).with_for_update())
         rad_order = self.repository.get_order(order_id)
         if rad_order:
+            if rad_order.status == "cancelled":
+                raise AppException(409, "clinical_order_cancelled", "This order was cancelled and cannot be processed")
             if actor.branch_id and rad_order.branch_id and actor.branch_id != rad_order.branch_id:
                 raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
+            if rad_order.status == "verified" and "radiology.verify_result" not in permissions:
+                raise AppException(403, "clinical_verified_result", "A verified result requires an authorized reviewer to change it")
+            report = rad_order.reports[0] if rad_order.reports else None
+            result_text = payload.result_text if payload.result_text is not None else (report.overall_findings if report else None)
+            if payload.status == "verified" and not (result_text or "").strip():
+                raise AppException(422, "clinical_result_required", "Enter and review the findings before verifying the report")
+            if payload.sample_note is not None:
+                rad_order.note = payload.sample_note
+            if payload.result_text is not None:
+                if report is None and payload.result_text.strip():
+                    report = RadiologyReport(order_id=rad_order.id, report_number=f"RADR-{uuid4().hex[:24].upper()}", created_by=actor.id)
+                    rad_order.reports.append(report)
+                if report:
+                    report.overall_findings = payload.result_text
+                    report.updated_by = actor.id
+            if report:
+                report.status = "final" if payload.status == "verified" else "draft"
+                report.reviewed_at = datetime.now(UTC) if payload.status == "verified" else None
+                report.reviewed_by_user_id = actor.id if payload.status == "verified" else None
             rad_order.status = payload.status
             if payload.status in {"collected", "in_progress", "completed", "verified"} and not rad_order.performed_at:
                 rad_order.performed_at = datetime.now(UTC)
@@ -109,6 +149,8 @@ class RadiologyService:
             else:
                 rad_order.verified_at = None
                 rad_order.verified_by_user_id = None
+            from app.modules.ipd.diagnostic_sync import sync_diagnostic
+            sync_diagnostic(self.db, rad_order, "radiology", actor)
             rad_order.updated_by = actor.id
             AuditService(self.db).log(
                 user_id=actor.id,
@@ -130,9 +172,15 @@ class RadiologyService:
         if actor.branch_id and order.visit.branch_id and actor.branch_id != order.visit.branch_id:
             raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
 
+        if order.status == "cancelled":
+            raise AppException(409, "clinical_order_cancelled", "This order was cancelled and cannot be processed")
+        if order.status == "verified" and "radiology.verify_result" not in permissions:
+            raise AppException(403, "clinical_verified_result", "A verified result requires an authorized reviewer to change it")
+        if payload.status == "verified" and not (payload.result_text if payload.result_text is not None else order.result_text or "").strip():
+            raise AppException(422, "clinical_result_required", "Enter and review the findings before verifying the report")
         order.status = payload.status
-        order.sample_note = payload.sample_note
-        order.result_text = payload.result_text
+        if payload.sample_note is not None: order.sample_note = payload.sample_note
+        if payload.result_text is not None: order.result_text = payload.result_text
         if payload.status in {"collected", "in_progress", "completed", "verified"} and not order.sample_collected_at:
             order.sample_collected_at = datetime.now(UTC)
             order.sample_collected_by_user_id = actor.id
@@ -193,7 +241,7 @@ class RadiologyService:
 
     def link_pacs_study(self, payload: PACSLinkCreate, actor: User | None, context: dict[str, str | None]) -> PACSUploadResponse:
         resolved_actor = actor or self._resolve_machine_actor()
-        order = self.repository.get_order(payload.order_id)
+        order = self._writable_order(payload.order_id, actor)
         if not order:
             raise AppException(404, "radiology_order_not_found", "Radiology order not found")
         viewer_url = payload.viewer_url or self._build_viewer_url(payload.study_uid, payload.orthanc_study_id)
@@ -226,7 +274,7 @@ class RadiologyService:
         return PACSUploadResponse(order_id=order.id, pacs_link=link)
 
     def upload_dicom(self, order_id: UUID, content: bytes, actor: User | None, context: dict[str, str | None]) -> PACSUploadResponse:
-        order = self.repository.get_order(order_id)
+        order = self._writable_order(order_id, actor)
         if not order:
             raise AppException(404, "radiology_order_not_found", "Radiology order not found")
         pacs = OrthancPACSService()
@@ -250,9 +298,13 @@ class RadiologyService:
         return self.link_pacs_study(payload, actor, context)
 
     def add_report(self, payload: RadiologyReportUpsert, actor: User, context: dict[str, str | None]) -> RadiologyOrderRead:
-        order = self.repository.get_order(payload.order_id)
+        order = self._writable_order(payload.order_id, actor)
         if not order:
             raise AppException(404, "radiology_order_not_found", "Radiology order not found")
+        if actor.branch_id and order.branch_id and actor.branch_id != order.branch_id:
+            raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
+        if order.status == "cancelled":
+            raise AppException(409, "clinical_order_cancelled", "This order was cancelled and cannot be processed")
         report = order.reports[0] if order.reports else None
         if report is None:
             report = RadiologyReport(
@@ -305,10 +357,18 @@ class RadiologyService:
         return RadiologyOrderRead.model_validate(order)
 
     def mark_completed(self, order_id: UUID, actor: User, context: dict[str, str | None]) -> RadiologyOrderRead:
-        order = self.repository.get_order(order_id)
+        order = self._writable_order(order_id, actor)
         if not order:
             raise AppException(404, "radiology_order_not_found", "Radiology order not found")
+        if actor.branch_id and order.branch_id and actor.branch_id != order.branch_id:
+            raise AppException(403, "forbidden", "Radiology order belongs to a different branch")
+        if order.status == "cancelled":
+            raise AppException(409, "clinical_order_cancelled", "This order was cancelled and cannot be processed")
+        if not any((report.overall_findings or "").strip() for report in order.reports):
+            raise AppException(422, "clinical_result_required", "Record and review the findings before verifying the report")
+        from app.modules.ipd.diagnostic_sync import sync_diagnostic
         order.status = "verified"
+        sync_diagnostic(self.db,order,'radiology',actor)
         order.verified_at = datetime.now(UTC)
         order.verified_by_user_id = actor.id
         order.updated_by = actor.id
@@ -434,18 +494,20 @@ class RadiologyService:
 
     def _serialize_new(self, order: RadiologyOrder) -> ClinicalInvestigationWorkItemRead:
         visit = order.visit
+        admission = order.admission if order.admission_id else None
         patient = order.patient
         report = order.reports[0] if order.reports else None
         pacs_link = order.pacs_links[0] if order.pacs_links else None
         return ClinicalInvestigationWorkItemRead(
             order_id=order.id,
+            admission_id=order.admission_id,
             visit_id=visit.id if visit else order.visit_id,
-            visit_number=visit.visit_number if visit else "",
-            visit_date=visit.visit_date if visit else datetime.now(UTC).date(),
+            visit_number=visit.visit_number if visit else (admission.admission_number if admission else ""),
+            visit_date=visit.visit_date if visit else (admission.admitted_at.date() if admission else order.created_at.date()),
             patient_id=patient.id if patient else order.patient_id,
             patient_number=patient.patient_number if patient else "",
             patient_name=f"{patient.first_name} {patient.last_name}" if patient else "",
-            consulting_doctor_name=visit.consulting_doctor_name if visit else "",
+            consulting_doctor_name=visit.consulting_doctor_name if visit else (admission.attending_doctor_name if admission else ""),
             service_area="radiology",
             item_name=order.study_description,
             room_number=None,
@@ -454,7 +516,7 @@ class RadiologyService:
             chief_complaint=visit.chief_complaint if visit else None,
             diagnosis=(visit.final_diagnosis or visit.provisional_diagnosis) if visit else None,
             status=order.status,
-            sample_note=None,
+            sample_note=order.note,
             sample_collected_at=order.performed_at,
             result_text=report.overall_findings if report else None,
             completed_at=order.completed_at,

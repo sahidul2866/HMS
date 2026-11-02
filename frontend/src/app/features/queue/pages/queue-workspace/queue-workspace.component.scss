@@ -7,6 +7,7 @@
 .queue-hero,
 .queue-stats article,
 .queue-controls,
+.pa-controls,
 .token-card,
 .queue-admin article,
 .display-board {
@@ -257,4 +258,21 @@ label {
   .display-board {
     grid-template-columns: 1fr;
   }
+}
+
+.pa-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem;
+}
+.pa-controls button { flex: 0 0 auto; min-height: 2.5rem; padding: .6rem .85rem; }
+.pa-controls label { flex: 0 1 210px; }
+.pa-controls > span { flex: 1 1 280px; min-width: 0; line-height: 1.5; }
+.pa-controls small { flex-basis: 100%; color: var(--text-muted); line-height: 1.5; }
+@media (max-width: 640px) {
+  .pa-controls { align-items: stretch; }
+  .pa-controls label, .pa-controls > span { flex-basis: 100%; }
+  .pa-controls button { max-width: 100%; white-space: normal; }
 }

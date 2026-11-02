@@ -10,85 +10,50 @@
       </div>
     </div>
 
-    <div class="hero-summary">
-      <div class="hero-stat">
-        <div class="label">Patient Flow</div>
-        <div class="value">{{ hasExistingPatientSelection ? 'Existing' : 'New / Manual' }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">Services</div>
-        <div class="value">{{ billingServices.length }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">Referral Sources</div>
-        <div class="value">{{ internalReferralDoctors.length }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">Billing Items</div>
-        <div class="value">{{ items.length }}</div>
-      </div>
-      <div class="hero-stat">
-        <div class="label">Discount Caps</div>
-        <div class="value">{{ maxItemDiscountPercentage }}% / {{ maxInvoiceDiscountPercentage }}%</div>
-      </div>
-    </div>
-
-    <div class="billing-steps">
-      @for (step of billingSteps; track step.label) {
-        <div class="billing-step" [class.billing-step--done]="step.state === 'done'" [class.billing-step--active]="step.state === 'active'">
-          <span></span>
-          <strong>{{ step.label }}</strong>
-        </div>
-      }
-      <div class="billing-step billing-step--context">
-        <span></span>
-        <strong>{{ sourceContextLabel }}</strong>
-      </div>
-    </div>
+    <nav class="billing-step-nav" aria-label="Invoice steps">
+      <button type="button" [class.active]="billingStep==='patient'" [attr.aria-current]="billingStep==='patient'?'step':null" (click)="changeBillingStep('patient')"><span>1</span>Patient</button>
+      <button type="button" [class.active]="billingStep==='items'" [attr.aria-current]="billingStep==='items'?'step':null" (click)="changeBillingStep('items')"><span>2</span>Items</button>
+      <button type="button" [class.active]="billingStep==='payment'" [attr.aria-current]="billingStep==='payment'?'step':null" (click)="changeBillingStep('payment')"><span>3</span>Payment</button>
+    </nav>
   </section>
 
-  <form class="billing-layout" [formGroup]="form" (ngSubmit)="submit()">
-    <section class="invoice-overview-strip">
-      @for (item of invoiceOverviewItems; track item.label) {
-        <article [attr.data-tone]="item.tone">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </article>
-      }
-    </section>
-
+  <form [attr.data-navigation-only]="billingStep!=='payment'?'':null" class="billing-layout" [formGroup]="form" (ngSubmit)="onBillingSubmit()">
     @if (selectedPatient) {
       <section class="top-patient-bar">
         <div>
-          <strong>{{ selectedPatient.patient_number }} - {{ selectedPatientName }}</strong>
-          <span>{{ selectedPatient.phone || '-' }} · {{ selectedPatient.gender || '-' }} · {{ selectedPatient.email || '-' }}</span>
+          <strong>{{ selectedPatientName }}</strong>
+          <span>{{ selectedPatient.patient_number }} · {{ selectedPatient.phone || 'No phone' }}</span>
         </div>
+        @if (draft && !sourceVisit && !sourceAdmission) {<div class="source-chip">{{sourceContextLabel}}</div>}
         @if (sourceVisit) {
           <div class="source-chip">OPD {{ sourceVisit.visit_number }}</div>
         }
         @if (sourceAdmission) {
           <div class="source-chip">IPD {{ sourceAdmission.admission_number }}</div>
         }
-        @if (sourceVisit || sourceAdmission) {
+        @if (sourceVisit || sourceAdmission || draft) {
           <button class="secondary-btn compact-btn" type="button" (click)="clearBillingContext()">Direct Bill</button>
         }
-        <button class="danger-btn compact-btn" type="button" (click)="clearPatientSelection()">Clear</button>
+        <button class="ghost-btn compact-btn" type="button" (click)="resetInvoiceDraft()">Change patient</button>
       </section>
 
+      @if(billingStep==='patient'){<details class="billing-patient-history">
+        <summary>Patient history and clinical context</summary>
       <app-patient-context-panel
         [patient]="selectedPatient"
         [patientId]="selectedPatient.id"
         contextLabel="Billing Patient"
         [compact]="true"
       ></app-patient-context-panel>
+      </details>}
     }
 
-    <div class="billing-main">
-    @if (!selectedPatient) {
+    <div class="billing-main" [hidden]="billingStep==='payment'">
+    @if (billingStep==='patient'&&!selectedPatient) {
       <section class="soft-panel">
       <div class="section-header">
         <div>
-          <h2 class="section-title">Patient</h2>
+          <h2 class="section-title">1. Select patient</h2>
         </div>
       </div>
 
@@ -145,11 +110,10 @@
           </div>
         }
 
-        <div class="intake-hint">
-          <strong>New patient</strong>
-        </div>
       </div>
 
+      <details class="new-patient-details">
+        <summary>Register a new patient instead</summary>
       <div class="patient-grid">
         <label class="field" [class.field--invalid]="validation.isInvalid(form.controls.first_name, submitted)">
           <div class="field-label-row">
@@ -259,16 +223,21 @@
           <textarea rows="3" formControlName="address" [readonly]="hasExistingPatientSelection" placeholder="Address"></textarea>
         </label>
       </div>
+      </details>
     </section>
     }
 
-    <section class="soft-panel">
-      <div class="section-header">
+    @if(billingStep==='patient'){
+      <div class="flow-footer"><span>{{selectedPatient?'Patient selected. Continue to services.':'Enter or select patient details to continue.'}}</span><button class="primary-btn" type="submit">Continue to items</button></div>
+    }
+    @if(billingStep==='items'){
+    <section class="soft-panel invoice-items-panel">
+      <div class="section-header billing-flow-heading">
         <div>
-          <h2 class="section-title">Billing Items</h2>
-          <div class="section-copy">Allowed for your role: {{ allowedBillingItemLabels }}</div>
+          <h2 class="section-title">Services and items</h2>
+          <div class="section-copy">Search the catalog, set quantities, then review payment.</div>
         </div>
-        <button class="secondary-btn" type="button" (click)="addItem()">Add More</button>
+        <button class="secondary-btn" type="button" (click)="addItem()">Add item</button>
       </div>
 
       @if (!hasAnyBillingItemPermission) {
@@ -278,22 +247,7 @@
         </div>
       }
 
-      <div class="discount-cap-note">
-        Default item discount: <strong>{{ maxItemDiscountPercentage }}%</strong> · Max invoice discount: <strong>{{ maxInvoiceDiscountPercentage }}%</strong>
-      </div>
-
-      @if (quickCatalogOptions.length) {
-        <div class="quick-add-strip">
-          <span>Quick add</span>
-          @for (option of quickCatalogOptions; track option.key) {
-            <button class="quick-add-btn" type="button" (click)="addQuickCatalogOption(option)">
-              <strong>{{ option.group }}</strong>
-              {{ option.name }}
-            </button>
-          }
-        </div>
-      }
-
+      <details class="quick-catalog"><summary>Browse suggested services</summary><div class="quick-add-strip">@for(option of quickCatalogOptions;track option.key){<button class="quick-add-btn" type="button" (click)="addQuickCatalogOption(option)">{{option.name}}</button>}</div></details>
       <div class="invoice-table-shell" formArrayName="items">
         @if (draft?.billing_stage === 'ipd_final') {
           <div class="billing-prefill-banner reconciliation-banner">
@@ -306,21 +260,17 @@
         }
         <div class="invoice-table-head">
           <span>Service</span>
-          <span>Code</span>
-          <span>Rate</span>
           <span>Quantity</span>
-          <span>Item Discount %</span>
-          <span>Discount Amt</span>
           <span>Amount</span>
           <span></span>
         </div>
 
         @for (item of items.controls; track $index; let itemIndex = $index) {
           <div class="invoice-row" [ngClass]="itemCategoryClass(itemIndex)" [formGroupName]="itemIndex">
-            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('billing_service_id'), submitted)">
-              <span class="item-type-badge">{{ itemCategoryLabel(itemIndex) }}</span>
+            <div class="field compact-field service-cell" [class.field--invalid]="validation.isInvalid(item.get('billing_service_id'), submitted)">
               <input
                 type="text"
+                aria-label="Billing item"
                 formControlName="catalog_search"
                 [placeholder]="billingItemPlaceholder"
                 [disabled]="!hasAnyBillingItemPermission"
@@ -328,6 +278,7 @@
                 (input)="activeItemSearchIndex = itemIndex"
                 (keydown.tab)="onCatalogTab(itemIndex, $any($event))"
               />
+              <div class="field-hint">{{ getCatalogUnitPrice(itemIndex) }} each · {{ getCatalogCode(itemIndex) }}</div>
               @if (showItemSearch(itemIndex)) {
                 <div class="search-dropdown catalog-dropdown">
                   @for (option of filteredCatalogOptions(itemIndex); track option.key) {
@@ -351,32 +302,24 @@
               @if (submitted && !item.get('source_item_id')?.value && !item.get('billing_service_id')?.value) {
                 <div class="field-error">Billing item is required.</div>
               }
-              @if (item.get('source_label')?.value) {
-                <div class="field-hint">{{ item.get('source_label')?.value }}</div>
-                @if (getSelectedCatalogOption(itemIndex)?.roomNumber) {
-                  <div class="field-hint">Room {{ getSelectedCatalogOption(itemIndex)?.roomNumber }}</div>
-                }
-              }
-            </label>
-
-            <div class="row-readonly">{{ getCatalogCode(itemIndex) }}</div>
-            <div class="row-readonly">{{ getCatalogUnitPrice(itemIndex) }}</div>
-
-            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('quantity'), submitted)">
-              <input type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
-              @if (validation.isInvalid(item.get('quantity'), submitted)) {
-                <div class="field-error">{{ validation.errorMessage(item.get('quantity'), 'Quantity') }}</div>
-              }
-            </label>
-
-            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('discount_percentage'), submitted)">
+            <details class="item-adjustment"><summary>Discount{{item.get('discount_percentage')?.value ? ' · '+item.get('discount_percentage')?.value+'%' : ''}}{{item.get('discount_amount')?.value ? ' · '+formatCurrency(item.get('discount_amount')?.value ?? 0) : ''}}</summary>            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('discount_percentage'), submitted)">
               <input
                 type="number"
                 min="0"
                 [max]="getItemMaxDiscountPercentage(itemIndex)"
                 step="0.01"
+                aria-label="Item discount percentage"
                 formControlName="discount_percentage"
-                (input)="onBillingItemChanged()"
+                (input)="chooseDiscount(item, 'percentage'); onBillingItemChanged()"
+              />
+              <input
+                type="number"
+                min="0"
+                step="1"
+                aria-label="Item discount in Taka"
+                placeholder="or Taka off"
+                formControlName="discount_amount"
+                (input)="chooseDiscount(item, 'amount'); onBillingItemChanged()"
               />
               <div class="field-hint">
                 Cap {{ getItemMaxDiscountPercentage(itemIndex) }}%
@@ -387,30 +330,140 @@
               @if (validation.isInvalid(item.get('discount_percentage'), submitted)) {
                 <div class="field-error">{{ validation.errorMessage(item.get('discount_percentage'), 'Item discount') }}</div>
               }
+            </label></details></div>
+
+
+            <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('quantity'), submitted)">
+              <span class="mobile-field-label">Qty</span>
+              <input aria-label="Item quantity" type="number" min="0.01" step="0.01" formControlName="quantity" (input)="onBillingItemChanged()" />
+              @if (validation.isInvalid(item.get('quantity'), submitted)) {
+                <div class="field-error">{{ validation.errorMessage(item.get('quantity'), 'Quantity') }}</div>
+              }
             </label>
 
-            <div class="row-readonly">
-              {{ getCatalogDiscountAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}
-            </div>
 
-            <div class="row-readonly strong">{{ getCatalogAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}</div>
+
+
+            <div class="row-readonly strong"><span class="mobile-field-label">Amount</span>{{ getCatalogAmount(itemIndex, item.get('quantity')?.value ?? 0, item.get('discount_percentage')?.value ?? 0) }}</div>
 
             <div class="toolbar-row">
-              <button class="secondary-btn compact-btn" type="button" title="Add next item" (click)="addItem()">+</button>
-              <button class="danger-btn compact-btn" type="button" (click)="removeItem(itemIndex)">Delete</button>
+              <button class="remove-item" type="button" aria-label="Remove item" title="Remove item" (click)="removeItem(itemIndex)">×</button>
             </div>
           </div>
         }
       </div>
-      <div class="readiness-note" [class.readiness-note--ready]="readyToPost">{{ postReadinessMessage }}</div>
+      <div class="flow-footer"><div><span>{{selectedItemCount}} item(s)</span><strong>{{formatCurrency(preview?.total_amount||0)}}</strong></div><button class="primary-btn" type="submit" [disabled]="!selectedItemCount">Review payment</button></div>
     </section>
 
-    <section class="soft-panel">
+    }
+    @if(billingStep==='payment'){
+
+    }
+    </div>
+
+    @if(billingStep==='payment'){
+    <aside class="soft-panel preview-panel">
       <div class="section-header">
         <div>
-          <h2 class="section-title">Context</h2>
+          <h2 class="section-title billing-flow-heading">Review and payment</h2><button class="ghost-btn" type="button" (click)="changeBillingStep('items')">Edit items</button>
         </div>
       </div>
+
+      @if (preview) {
+        <div class="payment-total"><span>Invoice total</span><strong>{{formatCurrency(preview.total_amount)}}</strong><small>{{selectedItemCount}} item(s) · {{selectedPatientName}}</small></div>
+        <details class="checkout-items"><summary>Review selected items ({{selectedItemCount}})</summary><ul>@for(item of items.controls;track $index;let index=$index){@if(getSelectedCatalogOption(index);as option){<li><span>{{option.name}}<small>Qty {{item.get('quantity')?.value}} · {{formatCurrency(option.unitPrice)}} each</small></span><strong>{{getCatalogAmount(index,item.get('quantity')?.value,item.get('discount_percentage')?.value)}}</strong></li>}}</ul></details>
+        <details class="amount-breakdown"><summary>Amount breakdown</summary><dl><div><dt>Subtotal</dt><dd>{{formatCurrency(preview.sub_total)}}</dd></div><div><dt>Item discounts</dt><dd>{{formatCurrency(preview.item_discount_amount)}}</dd></div><div><dt>Invoice discount</dt><dd>{{formatCurrency(preview.invoice_discount_amount)}}</dd></div><div><dt>Total discount</dt><dd>{{formatCurrency(preview.discount_amount)}}</dd></div><div><dt>Referral amount</dt><dd>{{formatCurrency(preview.referred_doctor_amount)}}</dd></div></dl></details>
+      } @else {
+        <div class="empty-state">{{ previewMessage || 'No billable item selected.' }}</div>
+      }
+
+      <div class="right-pane-form">
+        <details class="discount-settings"><summary>Discount and billing classification</summary>        <label class="field"><span>Billing type / department</span><select formControlName="billing_type_id"><option value="">Use item departments</option>@for (type of billingTypes; track type.id) {<option [value]="type.id">{{ type.name }} · {{ type.department }}</option>}</select></label>
+          <label class="field"><span>Discount reason</span><input formControlName="discount_reason" placeholder="Reason or approval reference" />@if(form.controls.discount_reason.hasError('reasonRequired')){<span class="field-error">Enter at least 3 characters explaining the discount.</span>}</label>
+          <label class="field">
+          <div class="field-label-row">
+            <span>Invoice Discount %</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="number" min="0" [max]="maxInvoiceDiscountPercentage" formControlName="discount_percentage" (input)="chooseDiscount(form, 'percentage'); recalculatePreview()" />
+          <div class="field-help">Cap {{ maxInvoiceDiscountPercentage }}%</div>
+        </label>
+        <label class="field">
+          <div class="field-label-row">
+            <span>Invoice Discount (Taka)</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="number" min="0" step="1" formControlName="discount_amount" placeholder="Flat amount off the whole bill" (input)="chooseDiscount(form, 'amount'); recalculatePreview()" />
+          <div class="field-help">Use either the percentage or the Taka amount</div>
+        </label>
+
+</details>
+        <div class="payment-grid">
+          <label class="field">
+            <div class="field-label-row">
+              <span>Collect Now</span>
+              <span class="field-label-meta">
+                <span class="field-badge field-badge--optional">Optional</span>
+              </span>
+            </div>
+            <input type="number" min="0" [max]="paymentDuePreview" step="0.01" formControlName="payment_amount" />
+          </label>
+
+          <label class="field">
+            <div class="field-label-row">
+              <span>Method</span>
+            </div>
+            <select formControlName="payment_method">
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="mobile_banking">Mobile Banking</option>
+              <option value="bank_transfer">Bank Transfer / Cheque</option>
+            </select>
+          </label>
+          @if (form.controls.payment_method.value === 'mobile_banking') {
+            <label class="field">
+              <div class="field-label-row"><span>Provider</span></div>
+              <select formControlName="payment_provider" aria-label="Mobile banking provider">
+                <option value="bkash">bKash</option>
+                <option value="nagad">Nagad</option>
+                <option value="rocket">Rocket</option>
+                <option value="upay">Upay</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          }
+          @if (showPaymentReference) {
+            <label class="field">
+              <div class="field-label-row"><span>{{ form.controls.payment_method.value === 'mobile_banking' ? 'Transaction ID (TrxID)' : form.controls.payment_method.value === 'card' ? 'Card approval code' : 'Transfer / cheque no.' }}</span></div>
+              <input type="text" formControlName="payment_reference" autocomplete="off" aria-label="Payment reference" />
+            </label>
+          }
+        </div>
+
+        <div class="pane-actions">
+          <button class="secondary-btn compact-btn" type="button" (click)="fillFullPayment()" [disabled]="!preview">Collect full amount</button>
+          @if (stickerItemCount) {
+            <span class="sticker-hint">{{ stickerItemCount }} investigation sticker(s) after post</span>
+          }
+        </div>
+
+        <label class="field">
+          <div class="field-label-row">
+            <span>Payment Note</span>
+            <span class="field-label-meta">
+              <span class="field-badge field-badge--optional">Optional</span>
+            </span>
+          </div>
+          <input type="text" formControlName="payment_note" placeholder="Receipt note" />
+        </label>
+      </div>
+
+    <details class="soft-panel billing-extra-details">
+      <summary>Referral and internal notes <span>Optional</span></summary>
 
       <div class="context-grid">
         <label class="field">
@@ -438,121 +491,12 @@
           <textarea rows="4" formControlName="note" placeholder="Billing note or handoff context"></textarea>
         </label>
       </div>
-    </section>
-    </div>
-
-    <aside class="soft-panel preview-panel">
-      <div class="section-header">
-        <div>
-          <h2 class="section-title">Totals</h2>
-        </div>
-      </div>
-
-      <div class="preview-topline">
-        <div>
-          <div class="preview-label">Patient</div>
-          <strong>{{ selectedPatientName }}</strong>
-        </div>
-        <div>
-          <div class="preview-label">Mode</div>
-          <strong>{{ hasExistingPatientSelection ? 'Existing' : 'New' }}</strong>
-        </div>
-        <div>
-          <div class="preview-label">Source</div>
-          <strong>{{ sourceContextLabel }}</strong>
-        </div>
-      </div>
-
-      @if (preview) {
-        <div class="metric-grid">
-          <div class="metric-card">
-            <div class="label">Sub Total</div>
-            <div class="value">{{ formatCurrency(preview.sub_total) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Item Discount</div>
-            <div class="value">{{ formatCurrency(preview.item_discount_amount) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Invoice Discount</div>
-            <div class="value">{{ formatCurrency(preview.invoice_discount_amount) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Total Discount</div>
-            <div class="value">{{ formatCurrency(preview.discount_amount) }}</div>
-          </div>
-          <div class="metric-card">
-            <div class="label">Referral Amount</div>
-            <div class="value">{{ formatCurrency(preview.referred_doctor_amount) }}</div>
-          </div>
-          <div class="metric-card grand-total">
-            <div class="label">Grand Total</div>
-            <div class="value">{{ formatCurrency(preview.total_amount) }}</div>
-          </div>
-        </div>
-      } @else {
-        <div class="empty-state">{{ previewMessage || 'No billable item selected.' }}</div>
-      }
-
-      <div class="right-pane-form">
-        <label class="field">
-          <div class="field-label-row">
-            <span>Invoice Discount %</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--optional">Optional</span>
-            </span>
-          </div>
-          <input type="number" min="0" [max]="maxInvoiceDiscountPercentage" formControlName="discount_percentage" (input)="recalculatePreview()" />
-          <div class="field-help">Cap {{ maxInvoiceDiscountPercentage }}%</div>
-        </label>
-
-        <div class="payment-grid">
-          <label class="field">
-            <div class="field-label-row">
-              <span>Collect Now</span>
-              <span class="field-label-meta">
-                <span class="field-badge field-badge--optional">Optional</span>
-              </span>
-            </div>
-            <input type="number" min="0" [max]="paymentDuePreview" step="0.01" formControlName="payment_amount" />
-          </label>
-
-          <label class="field">
-            <div class="field-label-row">
-              <span>Method</span>
-            </div>
-            <select formControlName="payment_method">
-              <option value="cash">Cash</option>
-              <option value="card">Card</option>
-              <option value="mobile_banking">Mobile Banking</option>
-              <option value="bank_transfer">Bank Transfer</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="pane-actions">
-          <button class="secondary-btn compact-btn" type="button" (click)="fillFullPayment()" [disabled]="!preview">Full Paid</button>
-          @if (stickerItemCount) {
-            <span class="sticker-hint">{{ stickerItemCount }} investigation sticker(s) after post</span>
-          }
-        </div>
-
-        <label class="field">
-          <div class="field-label-row">
-            <span>Payment Note</span>
-            <span class="field-label-meta">
-              <span class="field-badge field-badge--optional">Optional</span>
-            </span>
-          </div>
-          <input type="text" formControlName="payment_note" placeholder="Receipt note" />
-        </label>
-      </div>
-
+    </details>
       <div class="submit-row sticky-actions">
-        <span class="form-helper">{{ hasUnsavedChanges() ? postReadinessMessage : 'Invoice draft clean' }}</span>
+        <span class="form-helper">Remaining due: {{formatCurrency(paymentDuePreview-(form.getRawValue().payment_amount||0))}}</span>
         <button class="ghost-btn compact-btn" type="button" (click)="resetInvoiceDraft()" [disabled]="saving">Reset</button>
         <button class="primary-btn" type="submit" [disabled]="saving || !readyToPost">{{ saving ? 'Saving...' : 'Post Invoice' }}</button>
       </div>
-    </aside>
+    </aside>}
   </form>
 </div>

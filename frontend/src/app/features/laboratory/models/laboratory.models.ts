@@ -1,6 +1,7 @@
 export interface InvestigationWorkItem {
   order_id: string;
-  visit_id: string;
+  admission_id?: string | null;
+  visit_id: string | null;
   visit_number: string;
   visit_date: string;
   patient_id: string;
