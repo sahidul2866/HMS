@@ -45,7 +45,10 @@
       </label>
       <label class="field">
         <span>Unit Price</span>
-        <input type="number" min="0.01" step="0.01" formControlName="unit_price" />
+        <input type="number" min="0.01" max="9999999999.99" step="0.01" formControlName="unit_price" aria-describedby="service-price-error" />
+        @if (form.controls.unit_price.invalid && (form.controls.unit_price.dirty || form.controls.unit_price.touched)) {
+          <span id="service-price-error" class="error-text" role="alert">Enter a price from BDT 0.01 to 9,999,999,999.99, with at most 2 decimal places.</span>
+        }
       </label>
       <label class="field">
         <span>Doctor Share Percentage</span>

@@ -1,0 +1,8 @@
+HMS DEMONSTRATION RECORD
+
+This file is synthetic demo content for checking attachment links and downloads.
+It is not a medical report, identity document, prescription or payment receipt.
+
+Dataset: mediprofit-demo-v1
+Patient: Demo Preview (PAT-DEMO-FULL)
+Purpose: preview the application's document features.

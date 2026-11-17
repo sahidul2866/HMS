@@ -39,7 +39,7 @@ export class BillingServicesComponent {
     service_code: ['', Validators.required],
     name: ['', Validators.required],
     description: [''],
-    unit_price: [0, [Validators.required, Validators.min(0.01)]],
+    unit_price: [0, [Validators.required, Validators.min(0.01), Validators.max(9999999999.99), Validators.pattern(/^\d+(\.\d{1,2})?$/)]],
     doctor_share_percentage: [0, [Validators.required, Validators.min(0), Validators.max(100)]],
   });
 
@@ -87,6 +87,7 @@ export class BillingServicesComponent {
 
   submit(): void {
     if (this.form.invalid) {
+      this.form.markAllAsTouched();
       return;
     }
 

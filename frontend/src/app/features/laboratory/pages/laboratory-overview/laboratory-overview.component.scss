@@ -3,6 +3,18 @@
   gap: 1.5rem;
 }
 
+button.task-item {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+button.task-item[aria-pressed='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .hero-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -12,7 +24,7 @@
 .hero-stat {
   padding: 1rem 1.1rem;
   border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 64, 175, 0.85));
+  background: linear-gradient(180deg, #17243e, #24479c);
   color: #eff6ff;
 }
 
@@ -20,10 +32,12 @@
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(219, 234, 254, 0.75);
+  color: #eff6ff;
+  font-weight: 700;
 }
 
 .hero-stat .value {
+  color: #ffffff;
   margin-top: 0.35rem;
   font-size: 1.65rem;
   font-weight: 700;

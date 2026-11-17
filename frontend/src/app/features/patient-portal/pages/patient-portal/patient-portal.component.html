@@ -1,5 +1,8 @@
 <div class="workspace-shell patient-app-shell">
-  <h1 class="page-title">Patient portal</h1>
+  <div class="portal-title-row">
+    <h1 class="page-title">Patient portal</h1>
+    <button type="button" class="secondary-btn" [disabled]="loading" (click)="retryPortal()">{{ loading ? 'Refreshing...' : 'Refresh records' }}</button>
+  </div>
   @if (loading) {
     <section class="page-card patient-skeleton">
       <div></div>
@@ -16,10 +19,10 @@
         </div>
       </div>
       <div class="home-actions">
-        <button class="primary-btn" type="button" (click)="setTab('book')">Find Doctor</button>
-        <button class="secondary-btn" type="button" (click)="setTab('book')">Book Appointment</button>
-        <button class="secondary-btn" type="button" (click)="setTab('assistant')">Health Assistant</button>
-        <button class="secondary-btn" type="button" (click)="toggleQuickActionsModal()">More Actions</button>
+        <button [class]="activeHomeAction === 'find-doctor' ? 'primary-btn' : 'secondary-btn'" [attr.aria-pressed]="activeHomeAction === 'find-doctor'" type="button" (click)="setTab('book', 'find-doctor')">Find Doctor</button>
+        <button [class]="activeHomeAction === 'book-appointment' ? 'primary-btn' : 'secondary-btn'" [attr.aria-pressed]="activeHomeAction === 'book-appointment'" type="button" (click)="setTab('book')">Book Appointment</button>
+        <button [class]="activeHomeAction === 'assistant' ? 'primary-btn' : 'secondary-btn'" [attr.aria-pressed]="activeHomeAction === 'assistant'" type="button" (click)="setTab('assistant')">Health Assistant</button>
+        <button [class]="activeHomeAction === 'more' ? 'primary-btn' : 'secondary-btn'" [attr.aria-expanded]="quickActionsModalOpen" aria-controls="portal-quick-actions" type="button" (click)="toggleQuickActionsModal()">More Actions</button>
       </div>
     </section>
 
@@ -110,7 +113,7 @@
               </div>
             </div>
             <div class="action-grid">
-              <button type="button" (click)="setTab('book')">Find Doctor</button>
+              <button type="button" (click)="setTab('book', 'find-doctor')">Find Doctor</button>
               <button type="button" (click)="setTab('reports')">View Reports</button>
               <button type="button" (click)="setTab('prescriptions')">View Prescriptions</button>
               <button type="button" (click)="setTab('billing')">Pay or Check Bill</button>
@@ -314,7 +317,7 @@
               </div>
             </div>
           }
-          <form class="booking-form" [formGroup]="form" (ngSubmit)="submit()">
+          <form #bookingForm class="booking-form no-smart-input" data-skip-global-validation data-submit-managed [formGroup]="form" (ngSubmit)="submit()">
             <label>
               <span>Doctor</span>
               <select formControlName="doctor_user_id">
@@ -348,6 +351,7 @@
                     type="button"
                     class="slot-chip"
                     [class.slot-chip--selected]="selectedSlot?.slot_start_at === slot.slot_start_at"
+                    [attr.aria-pressed]="selectedSlot?.slot_start_at === slot.slot_start_at"
                     [class.slot-chip--booked]="slot.status !== 'available'"
                     [disabled]="slot.status !== 'available'"
                     (click)="selectSlot(slot)"
@@ -355,25 +359,55 @@
                     {{ formatSlotTime(slot.slot_start_at) }}
                   </button>
                 } @empty {
-                  <span class="subtle-text">Select a doctor and date to view configured slots.</span>
+                  <span class="subtle-text">{{ loadingSlots ? 'Loading appointment times...' : slotLoadError || (form.value.doctor_user_id && form.value.slot_date ? 'No slots are available on this date. Try another date or doctor, or contact reception.' : 'Select a doctor and date to see available times.') }}</span>
                 }
               </div>
+              @if (slotLoadError) {
+                <button type="button" (click)="loadSlots()">Retry loading times</button>
+              }
             </div>
             <label>
               <span>Reason</span>
-              <textarea rows="3" formControlName="reason"></textarea>
+              <textarea rows="3" formControlName="reason" maxlength="500"></textarea>
             </label>
             <label>
               <span>Note</span>
               <textarea rows="2" formControlName="note"></textarea>
             </label>
-            <button class="primary-action" type="submit">Confirm Request</button>
+            <div #bookingFeedback class="booking-error" role="alert" tabindex="-1" [hidden]="!bookingError">{{ bookingError }}</div>
+            <button class="primary-btn" type="submit" [disabled]="bookingSubmitting || loadingSlots" [attr.aria-busy]="bookingSubmitting">{{ bookingSubmitting ? 'Saving appointment...' : 'Confirm Request' }}</button>
           </form>
         </aside>
       </section>
     }
 
     @if (activeTab === 'appointments') {
+      @if (bookingConfirmation; as appointment) {
+        <section #bookingReceipt class="page-card portal-panel booking-receipt" tabindex="-1" aria-label="Appointment details">
+          <span class="eyebrow">Booking reference · {{ appointment.appointment_number }}</span>
+          <h2>{{ appointment.status === 'cancelled' ? 'Appointment cancelled' : 'Appointment booked successfully' }}</h2>
+          <p role="status">Status: <strong>{{ appointmentStatusLabel(appointment.status) }}</strong></p>
+          <dl class="booking-details">
+            <dt>Patient</dt><dd>{{ patientName }} · {{ history.patient.patient_number }}</dd>
+            <dt>Doctor</dt><dd>{{ appointment.doctor_name }}</dd>
+            <dt>Date and time</dt><dd>{{ appointment.appointment_at | date:'medium':'+0600' }} (Bangladesh time)</dd>
+            <dt>Reason</dt><dd>{{ appointment.reason }}</dd>
+            <dt>Location</dt><dd>{{ confirmationDoctor?.opd_prescription_header_chamber || 'Confirm the chamber at reception' }}{{ confirmationDoctor?.opd_prescription_header_address ? ' · ' + confirmationDoctor?.opd_prescription_header_address : '' }}</dd>
+            <dt>Consultation fee</dt><dd>{{ confirmationDoctor?.opd_consultation_fee != null ? formatCurrency(confirmationDoctor!.opd_consultation_fee!) : 'Confirm the fee at reception' }} · No payment collected by this form.</dd>
+          </dl>
+          @if (appointment.status === 'scheduled' || appointment.status === 'confirmed') {
+            <h3>What to do next</h3>
+            <ol class="booking-next-steps">
+              <li>Save your booking reference, doctor's name and appointment time.</li>
+              <li>Bring your patient ID or registered phone number, plus relevant previous reports and prescriptions.</li>
+              <li>Check in at reception on arrival to receive your OPD queue instructions.</li>
+              <li>Confirm any applicable fees at the billing desk. This booking is not a payment receipt.</li>
+              <li>Check the appointment status here before your visit. If your plans change, cancel from the appointment list.</li>
+            </ol>
+          }
+          <button type="button" class="secondary-btn" (click)="bookingConfirmation = null">Close details</button>
+        </section>
+      }
       <section class="page-card portal-panel">
         <div class="panel-title-row">
           <div>
@@ -392,6 +426,7 @@
                   <small>{{ appointment.appointment_at | date:'medium' }} · {{ appointment.reason || 'Consultation' }}</small>
                   <div class="row-actions">
                     <span class="status-pill info">{{ appointmentStatusLabel(appointment.status) }}</span>
+                    <button type="button" (click)="showBookingDetails(appointment)">Details &amp; next steps</button>
                     @if (appointment.status === 'scheduled' || appointment.status === 'confirmed') {
                       <button type="button" (click)="cancelAppointment(appointment)">Cancel</button>
                     }
@@ -649,13 +684,6 @@
             <option value="365">This year</option>
           </select>
         </div>
-        <div class="document-category-strip">
-          @for (category of documentCategories; track category.type) {
-            <button type="button" [class.active]="documentType === category.type" (click)="documentType = category.type">
-              {{ category.type }} <span>{{ category.count }}</span>
-            </button>
-          }
-        </div>
         <div class="recent-documents">
           <div>
             <span class="eyebrow">Recently Added</span>
@@ -680,7 +708,7 @@
               <p>{{ document.description }}</p>
               <small>{{ document.owner }} · {{ document.date | date:'mediumDate' }} · {{ document.status }}</small>
               <div class="row-actions">
-                <button type="button">Preview</button>
+                <button type="button" (click)="previewDocument = document">Preview</button>
                 <button type="button" (click)="downloadDocument(document)">Download</button>
                 <button type="button" (click)="printDocument(document)">Print</button>
               </div>
@@ -789,7 +817,7 @@
             <button type="button" class="ghost-action" (click)="resetBot()">Start over</button>
           </div>
 
-          <div class="assistant-chat">
+          <div #assistantChat class="assistant-chat" role="log" aria-label="Assistant conversation" aria-live="polite">
             @for (item of botMessages; track $index) {
               <article class="assistant-message" [class.patient]="item.sender === 'patient'" [class.bot]="item.sender === 'bot'">
                 <div class="assistant-avatar">{{ item.sender === 'patient' ? profileInitials || 'P' : 'AI' }}</div>
@@ -846,8 +874,8 @@
             }
           </div>
 
-          <form class="assistant-input" (ngSubmit)="sendBotMessage()">
-            <input [(ngModel)]="botInput" [ngModelOptions]="{ standalone: true }" placeholder="Tell me your symptom, question, or what you need help with" />
+          <form #assistantInput class="assistant-input no-smart-input" data-native-enter data-submit-managed (ngSubmit)="sendBotMessage()">
+            <input [(ngModel)]="botInput" [ngModelOptions]="{ standalone: true }" aria-label="Message to health assistant" enterkeyhint="send" autocomplete="off" placeholder="Tell me your symptom, question, or what you need help with" />
             <button type="submit" class="primary-action" [disabled]="botLoading">Send</button>
           </form>
         </section>
@@ -929,9 +957,49 @@
     </section>
   }
 
+  @if (previewDocument; as document) {
+    <div class="modal-backdrop" (click)="previewDocument = null">
+      <section class="modal-card document-preview-modal" appDialog (appDialogClose)="previewDocument = null" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div><span class="eyebrow">{{ document.type }}</span><h2>{{ document.title }}</h2></div>
+          <button type="button" class="secondary-btn" aria-label="Close document preview" (click)="previewDocument = null">Close</button>
+        </div>
+        <p>{{ patientName }} · {{ history?.patient?.patient_number }}</p>
+        <p class="subtle-text">{{ document.owner }} · {{ document.date | date:'mediumDate' }} · {{ document.status }}</p>
+        <p class="document-preview-content">{{ document.description }}</p>
+        <button type="button" class="primary-btn" (click)="downloadDocument(document)">Download</button>
+      </section>
+    </div>
+  }
+
+  @if (profileDoctor; as doctor) {
+    <div class="modal-backdrop" (click)="profileDoctor = null">
+      <section class="modal-card doctor-profile-modal" appDialog (appDialogClose)="profileDoctor = null" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div><span class="eyebrow">Doctor profile</span><h2>{{ doctor.full_name }}</h2></div>
+          <button type="button" class="secondary-btn" aria-label="Close doctor profile" (click)="profileDoctor = null">Close</button>
+        </div>
+        <dl class="booking-details">
+          <dt>Specialty</dt><dd>{{ doctor.opd_prescription_header_specialty || 'Not provided' }}</dd>
+          <dt>Qualifications</dt><dd>{{ doctor.opd_prescription_header_degrees || 'Not provided' }}</dd>
+          <dt>Workplace</dt><dd>{{ doctor.opd_prescription_header_workplace || 'Not provided' }}</dd>
+          <dt>Chamber</dt><dd>{{ doctor.opd_prescription_header_chamber || 'Confirm at reception' }}</dd>
+          <dt>Address</dt><dd>{{ doctor.opd_prescription_header_address || 'Confirm at reception' }}</dd>
+          <dt>Contact</dt><dd>{{ doctor.opd_prescription_header_phone || 'Contact hospital reception' }}</dd>
+          <dt>Consultation fee</dt><dd>{{ doctor.opd_consultation_fee != null ? formatCurrency(doctor.opd_consultation_fee) : 'Confirm at reception' }}</dd>
+          @if (doctor.opd_follow_up_fee != null) {
+            <dt>Follow-up fee</dt><dd>{{ formatCurrency(doctor.opd_follow_up_fee) }}</dd>
+          }
+        </dl>
+        <p>Select this doctor and an appointment date to see their available times.</p>
+        <button type="button" class="primary-btn" (click)="selectDoctor(doctor)">Select for booking</button>
+      </section>
+    </div>
+  }
+
   @if (quickActionsModalOpen) {
     <div class="modal-backdrop" (click)="toggleQuickActionsModal()">
-      <section class="modal-card quick-action-modal" (click)="$event.stopPropagation()">
+      <section class="modal-card quick-action-modal" id="portal-quick-actions" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div>
             <h3>Quick Actions</h3>

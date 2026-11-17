@@ -239,7 +239,7 @@
                   <span class="field-badge" [class.field-badge--required]="validation.isRequired(form.controls.slot_date)" [class.field-badge--optional]="!validation.isRequired(form.controls.slot_date)">{{ validation.fieldStateLabel(form.controls.slot_date) }}</span>
                 </span>
               </div>
-              <input type="date" formControlName="slot_date" />
+              <input type="date" formControlName="slot_date" [min]="today" />
             </label>
           </div>
         </div>
@@ -348,9 +348,18 @@
               @if (loadingSlots) {
                 <span role="status" aria-busy="true">Loading...<span class="app-inline-skeleton" aria-hidden="true"></span></span>
               } @else {
-                <span>{{ slots.length }} slots</span>
+                <span>{{ availableSlotCount }} available · {{ form.controls.slot_date.value }} (Bangladesh time)</span>
               }
             </div>
+            @if (slotError) {
+              <p role="alert">{{ slotError }} <button type="button" class="secondary-btn" (click)="loadSlots()">Retry</button></p>
+            } @else if (!loadingSlots && form.controls.doctor_user_id.value && !availableSlotCount) {
+              <p role="status">No available slots on this date. Past times and booked slots cannot be selected.</p>
+              <button type="button" class="secondary-btn" (click)="nextSlotDay()">Check next day</button>
+            }
+            @if (selectedSlot) {
+              <p role="status">Selected: {{ form.controls.slot_date.value }} at {{ formatTime(selectedSlot.slot_start_at) }} (Bangladesh time)</p>
+            }
             <div class="slot-grid">
               @for (slot of slots; track slot.slot_start_at) {
                 <button
@@ -359,9 +368,12 @@
                   [class.slot-chip--selected]="selectedSlot?.slot_start_at === slot.slot_start_at"
                   [class.slot-chip--booked]="slot.status !== 'available'"
                   [disabled]="slot.status !== 'available'"
+                  [attr.aria-pressed]="selectedSlot?.slot_start_at === slot.slot_start_at"
+                  [attr.title]="slotLabel(slot)"
                   (click)="selectSlot(slot)"
                 >
                   {{ formatTime(slot.slot_start_at) }}
+                  @if (slot.status !== 'available') { <small>{{ slotLabel(slot) }}</small> }
                 </button>
               }
             </div>

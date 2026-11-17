@@ -1,4 +1,6 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
+import { SessionService } from './core/services/session.service';
 
 import { authGuard } from './core/guards/auth.guard';
 import { permissionGuard } from './core/guards/permission.guard';
@@ -88,7 +90,7 @@ export const appRoutes: Routes = [
     component: AppLayoutComponent,
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      { path: '', redirectTo: () => inject(SessionService).getLandingRoute(), pathMatch: 'full' },
       {
         path: 'profile',
         loadComponent: () => import('./features/profile/pages/account-profile/account-profile.component').then(module => module.AccountProfileComponent),

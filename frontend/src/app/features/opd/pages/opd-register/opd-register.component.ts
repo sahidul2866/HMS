@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnDestroy } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { debounceTime, distinctUntilChanged, finalize } from 'rxjs';
+import { debounceTime, distinctUntilChanged, finalize, Subscription } from 'rxjs';
 
 import { User } from '../../../../core/models/auth.models';
 import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
@@ -25,7 +25,7 @@ type PatientSearchContext = 'lookup' | 'phone' | 'email' | null;
   templateUrl: './opd-register.component.html',
   styleUrls: ['./opd-register.component.scss'],
 })
-export class OPDRegisterComponent {
+export class OPDRegisterComponent implements OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly opdService = inject(OPDService);
   private readonly patientService = inject(PatientService);
@@ -49,6 +49,11 @@ export class OPDRegisterComponent {
   private completed = false;
   isFollowUpAllowed = false;
   loadingSlots = false;
+  slotError = '';
+  private slotRequest?: Subscription;
+  get today(): string { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+  get availableSlotCount(): number { return this.slots.filter(slot => slot.status === 'available').length; }
+  ngOnDestroy(): void { this.slotRequest?.unsubscribe(); }
   slots: DoctorSlotAvailability[] = [];
   selectedSlot: DoctorSlotAvailability | null = null;
 
@@ -63,8 +68,8 @@ export class OPDRegisterComponent {
     address: [''],
     emergency_contact_name: [''],
     emergency_contact_phone: [''],
-    visit_date: [new Date().toISOString().slice(0, 10), Validators.required],
-    slot_date: [new Date().toISOString().slice(0, 10), Validators.required],
+    visit_date: [this.today, Validators.required],
+    slot_date: [this.today, Validators.required],
     department_name: ['General OPD', Validators.required],
     doctor_user_id: [''],
     consulting_doctor_name: ['', Validators.required],
@@ -88,7 +93,13 @@ export class OPDRegisterComponent {
       }
     });
     this.form.controls.doctor_user_id.valueChanges.subscribe(() => this.loadSlots());
-    this.form.controls.slot_date.valueChanges.subscribe(() => this.loadSlots());
+    this.form.controls.slot_date.valueChanges.subscribe(value => {
+      this.form.controls.visit_date.setValue(value, { emitEvent: false });
+      this.loadSlots();
+    });
+    this.form.controls.visit_date.valueChanges.subscribe(value => {
+      if (value !== this.form.controls.slot_date.value) this.form.controls.slot_date.setValue(value);
+    });
   }
 
   loadFormData(): void {
@@ -218,6 +229,9 @@ export class OPDRegisterComponent {
   }
 
   loadSlots(): void {
+    this.slotRequest?.unsubscribe();
+    this.loadingSlots = false;
+    this.slotError = '';
     const doctorId = this.form.controls.doctor_user_id.getRawValue();
     const slotDate = this.form.controls.slot_date.getRawValue();
     this.selectedSlot = null;
@@ -226,11 +240,12 @@ export class OPDRegisterComponent {
       return;
     }
     this.loadingSlots = true;
-    this.appointmentsService
+    this.slotRequest = this.appointmentsService
       .getDoctorSlots(doctorId, slotDate)
       .pipe(finalize(() => (this.loadingSlots = false)))
-      .subscribe((response) => {
-        this.slots = response.slots;
+      .subscribe({
+        next: response => { this.slots = response.slots; },
+        error: () => { this.slotError = 'Could not load doctor slots. Please retry.'; },
       });
   }
 
@@ -242,8 +257,21 @@ export class OPDRegisterComponent {
     this.form.patchValue({ visit_date: this.form.controls.slot_date.getRawValue() });
   }
 
+  nextSlotDay(): void {
+    const current = this.form.controls.slot_date.value || this.today;
+    const date = new Date(`${current < this.today ? this.today : current}T12:00:00+06:00`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    this.form.controls.slot_date.setValue(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date));
+  }
+
+  slotLabel(slot: DoctorSlotAvailability): string {
+    if (slot.status === 'available') return 'Available';
+    if (slot.status === 'booked') return 'Booked';
+    return new Date(slot.slot_start_at).getTime() <= Date.now() ? 'Past time' : 'Unavailable';
+  }
+
   formatTime(value: string): string {
-    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' });
   }
 
   get filteredDoctors(): User[] {
@@ -402,7 +430,7 @@ export class OPDRegisterComponent {
     const createVisit = (patientId: string) => {
       const payload: CreateOPDVisitPayload = {
         patient_id: patientId,
-        visit_date: value.visit_date ?? new Date().toISOString().slice(0, 10),
+        visit_date: value.visit_date ?? this.today,
         slot_start_at: this.selectedSlot?.slot_start_at || null,
         department_name: value.department_name ?? 'General OPD',
         doctor_user_id: value.doctor_user_id || null,
@@ -482,8 +510,8 @@ export class OPDRegisterComponent {
       address: '',
       emergency_contact_name: '',
       emergency_contact_phone: '',
-      visit_date: new Date().toISOString().slice(0, 10),
-      slot_date: new Date().toISOString().slice(0, 10),
+      visit_date: this.today,
+      slot_date: this.today,
       department_name: 'General OPD',
       doctor_user_id: '',
       consulting_doctor_name: '',

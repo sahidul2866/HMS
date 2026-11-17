@@ -327,8 +327,8 @@ class BillingServiceManager:
             referred_doctor_amount=self._money(referred_doctor_amount),
         )
 
-    def get_referral_summary(self, actor: User, filters: BillingInvoiceFilterParams | None = None) -> list[BillingReferralSummaryRead]:
-        rows = self.repository.get_referral_summary(actor.branch_id, filters)
+    def get_referral_summary(self, actor: User, filters: BillingInvoiceFilterParams | None = None, **options) -> list[BillingReferralSummaryRead]:
+        rows = self.repository.get_referral_summary(actor.branch_id, filters, **options)
         return [
             BillingReferralSummaryRead(
                 internal_referral_user_id=row[0],

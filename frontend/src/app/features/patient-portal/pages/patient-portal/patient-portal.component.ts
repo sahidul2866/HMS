@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { afterNextRender, Component, DestroyRef, ElementRef, inject, Injector, ViewChild } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { finalize } from 'rxjs';
+import { finalize, Subscription } from 'rxjs';
+import { DialogDirective } from '../../../../shared/directives/dialog.directive';
 
 import { SessionService } from '../../../../core/services/session.service';
 import { User } from '../../../../core/models/auth.models';
@@ -37,6 +38,7 @@ type PortalTab =
   | 'hospital'
   | 'packages';
 type PortalTabGroup = 'essentials' | 'records' | 'support';
+type PortalBookingAction = 'find-doctor' | 'book-appointment';
 
 interface PortalDocument {
   id: string;
@@ -92,7 +94,7 @@ interface PatientPreferences {
 @Component({
   selector: 'app-patient-portal',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, DialogDirective],
   templateUrl: './patient-portal.component.html',
   styleUrls: ['./patient-portal.component.scss'],
 })
@@ -102,11 +104,20 @@ export class PatientPortalComponent {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly sessionService = inject(SessionService);
+  private readonly injector = inject(Injector);
+  @ViewChild('assistantChat') private assistantChat?: ElementRef<HTMLDivElement>;
+  @ViewChild('assistantInput', { read: ElementRef }) private assistantInput?: ElementRef<HTMLFormElement>;
+  @ViewChild('bookingForm', { read: ElementRef }) private bookingForm?: ElementRef<HTMLFormElement>;
+  @ViewChild('bookingFeedback') private bookingFeedback?: ElementRef<HTMLElement>;
+  @ViewChild('bookingReceipt') private bookingReceipt?: ElementRef<HTMLElement>;
+  private slotsRequest?: Subscription;
+  private readonly destroyRef = inject(DestroyRef);
 
   history: PatientClinicalHistory | null = null;
   appointments: PatientAppointment[] = [];
   doctors: User[] = [];
   activeTab: PortalTab = 'home';
+  private bookingAction: PortalBookingAction = 'book-appointment';
   loading = true;
   portalLoadFailed = false;
   portalMessage = '';
@@ -123,6 +134,12 @@ export class PatientPortalComponent {
   selectedFamilyProfile = 'self';
   selectedDoctorId = '';
   loadingSlots = false;
+  slotLoadError = '';
+  bookingSubmitting = false;
+  bookingError = '';
+  profileDoctor: User | null = null;
+  previewDocument: PortalDocument | null = null;
+  bookingConfirmation: PatientAppointment | null = null;
   availableSlots: DoctorSlotAvailability[] = [];
   selectedSlot: DoctorSlotAvailability | null = null;
   activeTabGroup: PortalTabGroup = 'essentials';
@@ -144,7 +161,7 @@ export class PatientPortalComponent {
     slot_date: [this.defaultAppointmentDate(), Validators.required],
     appointment_at: ['', Validators.required],
     visit_type: ['General Consultation', Validators.required],
-    reason: ['', Validators.required],
+    reason: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(500)]],
     note: [''],
   });
 
@@ -210,6 +227,7 @@ export class PatientPortalComponent {
   ];
 
   constructor() {
+    this.destroyRef.onDestroy(() => this.slotsRequest?.unsubscribe());
     const user = this.sessionService.snapshot.user;
     if (!user?.patient_id && !user?.effective_permissions.includes('patient.portal.view')) {
       void this.router.navigate(['/dashboard']);
@@ -250,26 +268,70 @@ export class PatientPortalComponent {
   }
 
   submit(): void {
-    if (this.form.invalid || !this.selectedSlot) {
+    if (this.bookingSubmitting) return;
+    this.bookingError = '';
+    const raw = this.form.getRawValue();
+    if (!raw.doctor_user_id) this.bookingError = 'Select a doctor before confirming your appointment.';
+    else if (!raw.slot_date) this.bookingError = 'Choose an appointment date.';
+    else if (this.loadingSlots) this.bookingError = 'Please wait for the available times to load.';
+    else if (this.slotLoadError) this.bookingError = this.slotLoadError;
+    else if (!this.selectedSlot) this.bookingError = this.availableSlots.some(slot => slot.status === 'available')
+      ? 'Choose one of the available time slots before confirming.'
+      : 'No available slots for this doctor on this date. Choose another date or doctor, or contact reception.';
+    else if (!raw.reason?.trim()) this.bookingError = 'Enter the reason for your appointment.';
+    else if (raw.reason.trim().length < 3 || raw.reason.trim().length > 500) this.bookingError = 'Use 3 to 500 characters for the appointment reason.';
+    else if (new Date(this.selectedSlot.slot_start_at).getTime() <= Date.now()) this.bookingError = 'This time has already passed. Choose a future slot.';
+    if (this.bookingError || this.form.invalid) {
       this.form.markAllAsTouched();
-      this.portalMessage = 'Select an available appointment slot.';
+      this.bookingError ||= 'Complete the required appointment details.';
+      this.showBookingError();
       return;
     }
-    const raw = this.form.getRawValue();
     const payload = {
       doctor_user_id: raw.doctor_user_id || '',
-      appointment_at: this.selectedSlot.slot_start_at,
-      reason: raw.reason || '',
+      appointment_at: this.selectedSlot!.slot_start_at,
+      reason: raw.reason!.trim(),
       note: [raw.visit_type, raw.note].filter(Boolean).join(' - ') || null,
     };
-    this.portalService.bookAppointment(payload).subscribe((appointment) => {
-      this.appointments = [appointment, ...this.appointments];
-      this.form.reset({ doctor_user_id: '', slot_date: this.defaultAppointmentDate(), appointment_at: '', visit_type: 'General Consultation', reason: '', note: '' });
-      this.availableSlots = [];
-      this.selectedSlot = null;
-      this.portalMessage = `Appointment request ${appointment.appointment_number} has been submitted.`;
-      this.activeTab = 'appointments';
+    this.bookingSubmitting = true;
+    this.portalService.bookAppointment(payload).pipe(finalize(() => this.bookingSubmitting = false)).subscribe({
+      next: (appointment) => {
+        this.appointments = [appointment, ...this.appointments.filter(item => item.id !== appointment.id)];
+        this.form.reset({ doctor_user_id: '', slot_date: this.defaultAppointmentDate(), appointment_at: '', visit_type: 'General Consultation', reason: '', note: '' });
+        this.selectedDoctorId = '';
+        this.showBookingDetails(appointment);
+        this.portalMessage = `Appointment ${appointment.appointment_number} saved successfully.`;
+      },
+      error: (error: { status?: number; error?: { error?: { message?: string } } }) => {
+        if (error.status === 409) this.loadSlots();
+        this.bookingError = error.status === 409
+          ? 'That slot is no longer available. Choose another time from the refreshed list.'
+          : error.status && error.status < 500 && error.error?.error?.message
+            ? error.error.error.message
+            : 'We could not confirm that your appointment was saved. Your details are still here. Check Appointments before trying again.';
+        this.showBookingError();
+      },
     });
+  }
+
+  private showBookingError(): void {
+    afterNextRender(() => {
+      this.bookingFeedback?.nativeElement.focus();
+      this.bookingFeedback?.nativeElement.scrollIntoView({ block: 'nearest' });
+    }, { injector: this.injector });
+  }
+
+  showBookingDetails(appointment: PatientAppointment): void {
+    this.bookingConfirmation = appointment;
+    this.setTab('appointments');
+    afterNextRender(() => {
+      this.bookingReceipt?.nativeElement.focus();
+      this.bookingReceipt?.nativeElement.scrollIntoView({ block: 'start' });
+    }, { injector: this.injector });
+  }
+
+  get confirmationDoctor(): User | null {
+    return this.doctors.find(doctor => doctor.id === this.bookingConfirmation?.doctor_user_id) || null;
   }
 
   cancelAppointment(appointment: PatientAppointment): void {
@@ -278,6 +340,7 @@ export class PatientPortalComponent {
     }
     this.portalService.updateAppointmentStatus(appointment.id, { status: 'cancelled' }).subscribe((updated) => {
       this.appointments = this.appointments.map((item) => (item.id === updated.id ? updated : item));
+      if (this.bookingConfirmation?.id === updated.id) this.bookingConfirmation = updated;
       this.portalMessage = `Appointment ${updated.appointment_number} was cancelled.`;
     });
   }
@@ -306,6 +369,7 @@ export class PatientPortalComponent {
       this.botSettings = settings;
       if (!this.botMessages.length) {
         this.botMessages = [{ sender: 'bot', text: settings.greeting_message }];
+        this.scrollBotToLatest();
       }
     });
   }
@@ -322,36 +386,55 @@ export class PatientPortalComponent {
     this.botMessages = [...this.botMessages, { sender: 'patient', text }];
     this.botInput = '';
     this.botLoading = true;
+    this.scrollBotToLatest();
     this.botService.sendMessage(text, this.botConversationId).subscribe({
       next: (response) => {
         this.botConversationId = response.conversation_id;
         this.botMessages = [...this.botMessages, { sender: 'bot', text: response.message, response }];
         this.botLoading = false;
+        this.scrollBotToLatest();
       },
       error: () => {
         this.botMessages = [...this.botMessages, { sender: 'bot', text: 'I can still help you find a department or doctor. Please try a shorter message or use the quick replies.' }];
         this.botLoading = false;
+        this.scrollBotToLatest();
       },
     });
   }
 
   resetBot(): void {
+    if (this.botLoading) return;
     this.botLoading = true;
+    this.scrollBotToLatest();
     this.botService.reset().subscribe({
       next: (response) => {
         this.botConversationId = response.conversation_id;
         this.botMessages = [{ sender: 'bot', text: response.message, response }];
         this.botLoading = false;
+        this.scrollBotToLatest();
       },
       error: () => {
         this.botMessages = [{ sender: 'bot', text: this.botSettings?.greeting_message || 'Hi, what do you need help with today?' }];
         this.botLoading = false;
+        this.scrollBotToLatest();
       },
     });
   }
 
+  private scrollBotToLatest(): void {
+    afterNextRender({
+      mixedReadWrite: () => {
+        const chat = this.assistantChat?.nativeElement;
+        if (!chat) return;
+        // Measure after rendering, then keep the latest reply and composer in view without moving focus.
+        chat.scrollTop = chat.scrollHeight;
+        this.assistantInput?.nativeElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      },
+    }, { injector: this.injector });
+  }
+
   selectBotDoctor(doctor: PatientBotDoctorCard): void {
-    this.activeTab = 'book';
+    this.setTab('book');
     this.form.patchValue({
       doctor_user_id: doctor.id,
       reason: `Appointment requested from health assistant for ${doctor.specialty}`,
@@ -364,8 +447,18 @@ export class PatientPortalComponent {
     this.portalMessage = `${doctor.name} selected. Choose a date and an available slot to complete booking.`;
   }
 
-  setTab(tab: PortalTab): void {
+  get activeHomeAction(): PortalBookingAction | 'assistant' | 'more' | null {
+    if (this.quickActionsModalOpen) return 'more';
+    if (this.activeTab === 'book') return this.bookingAction;
+    if (this.activeTab === 'assistant') return 'assistant';
+    if (this.activeTab === 'home' || this.activeTab === 'appointments') return null;
+    return 'more';
+  }
+
+  setTab(tab: PortalTab, bookingAction: PortalBookingAction = 'book-appointment'): void {
     this.activeTab = tab;
+    if (tab === 'assistant') this.scrollBotToLatest();
+    if (tab === 'book') this.bookingAction = bookingAction;
     const group = this.tabGroups.find((item) => item.tabs.includes(tab));
     if (group) {
       this.activeTabGroup = group.key;
@@ -392,26 +485,35 @@ export class PatientPortalComponent {
   }
 
   selectDoctor(doctor: User): void {
+    this.setTab('book');
+    this.bookingAction = 'book-appointment';
     this.form.patchValue({ doctor_user_id: doctor.id });
     this.selectedDoctorId = doctor.id;
     this.portalMessage = `${doctor.full_name} selected for appointment booking.`;
+    this.profileDoctor = null;
+    afterNextRender(() => this.bookingForm?.nativeElement.scrollIntoView({ block: 'center' }), { injector: this.injector });
   }
 
   loadSlots(): void {
+    this.slotsRequest?.unsubscribe();
+    this.loadingSlots = false;
+    this.slotLoadError = '';
+    this.bookingError = '';
     const doctorId = this.form.controls.doctor_user_id.getRawValue();
     const slotDate = this.form.controls.slot_date.getRawValue();
     this.selectedSlot = null;
     this.form.controls.appointment_at.setValue('', { emitEvent: false });
     this.availableSlots = [];
+    this.selectedDoctorId = doctorId || '';
     if (!doctorId || !slotDate) {
       return;
     }
     this.loadingSlots = true;
-    this.portalService.getDoctorSlots(doctorId, slotDate)
+    this.slotsRequest = this.portalService.getDoctorSlots(doctorId, slotDate)
       .pipe(finalize(() => (this.loadingSlots = false)))
       .subscribe({
         next: (response) => (this.availableSlots = response.slots),
-        error: () => (this.portalMessage = 'Unable to load appointment slots.'),
+        error: () => (this.slotLoadError = 'Unable to load appointment times. Retry below or contact reception.'),
       });
   }
 
@@ -420,11 +522,12 @@ export class PatientPortalComponent {
       return;
     }
     this.selectedSlot = slot;
+    this.bookingError = '';
     this.form.controls.appointment_at.setValue(slot.slot_start_at);
   }
 
   viewDoctor(doctor: User): void {
-    this.selectedDoctorId = doctor.id;
+    this.profileDoctor = doctor;
   }
 
   toggleFavoriteDoctor(doctor: User): void {
@@ -442,7 +545,7 @@ export class PatientPortalComponent {
 
   bookAgain(appointment: PatientAppointment): void {
     const doctor = this.doctors.find((item) => item.full_name === appointment.doctor_name);
-    this.activeTab = 'book';
+    this.setTab('book');
     this.form.patchValue({
       doctor_user_id: doctor?.id || '',
       reason: appointment.reason || 'Follow-up visit',
@@ -597,6 +700,10 @@ export class PatientPortalComponent {
     );
   }
 
+  get allReports(): ReportRecord[] {
+    return [...this.completedLabReports, ...this.completedRadiologyReports].sort((a, b) => new Date(b.completed_at || b.visit_date).getTime() - new Date(a.completed_at || a.visit_date).getTime());
+  }
+
   get visibleReports(): ReportRecord[] {
     if (this.reportType === 'laboratory') {
       return this.completedLabReports;
@@ -604,7 +711,7 @@ export class PatientPortalComponent {
     if (this.reportType === 'radiology') {
       return this.completedRadiologyReports;
     }
-    return [...this.completedLabReports, ...this.completedRadiologyReports].sort((a, b) => new Date(b.completed_at || b.visit_date).getTime() - new Date(a.completed_at || a.visit_date).getTime());
+    return this.allReports;
   }
 
   get prescriptionArchive(): PrescriptionRecord[] {
@@ -628,7 +735,7 @@ export class PatientPortalComponent {
   }
 
   get latestReport(): ReportRecord | null {
-    return this.visibleReports[0] ?? null;
+    return this.allReports[0] ?? null;
   }
 
   get totalOutstandingDue(): number {
@@ -680,7 +787,7 @@ export class PatientPortalComponent {
       summary: `${admission.ward_name} ${admission.bed_number} · ${admission.attending_doctor_name}`,
       action: 'admissions' as PortalTab,
     }));
-    const reports = this.visibleReports.map((report) => ({
+    const reports = this.allReports.map((report) => ({
       id: `report-${report.id}`,
       type: report.service_area === 'radiology' ? 'Radiology' : 'Lab',
       title: report.item_name,
@@ -711,7 +818,7 @@ export class PatientPortalComponent {
       owner: item.doctor_name,
       description: `${item.item_name}. ${item.instructions || 'No instruction recorded.'}`,
     }));
-    const reports = this.visibleReports.map((item) => ({
+    const reports = this.allReports.map((item) => ({
       id: `report-${item.id}`,
       type: item.service_area === 'radiology' ? 'Radiology Report' : 'Lab Report',
       title: item.item_name,
@@ -764,13 +871,6 @@ export class PatientPortalComponent {
       const matchesDate = !this.documentDateFilter || this.isDocumentWithinDateFilter(item, this.documentDateFilter);
       return matchesType && matchesQuery && matchesDate;
     });
-  }
-
-  get documentCategories(): Array<{ type: string; count: number }> {
-    return this.documentTypes.map((type) => ({
-      type,
-      count: this.documents.filter((document) => document.type === type).length,
-    }));
   }
 
   get recentlyAddedDocuments(): PortalDocument[] {

@@ -9,10 +9,22 @@
   gap: 0.9rem;
 }
 
+button.task-item {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+button.task-item[aria-pressed='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .hero-stat {
   padding: 1rem 1.1rem;
   border-radius: 1rem;
-  background: linear-gradient(180deg, rgba(24, 24, 27, 0.95), rgba(124, 58, 237, 0.84));
+  background: linear-gradient(180deg, #292338, #6033a6);
   color: #faf5ff;
 }
 
@@ -20,10 +32,12 @@
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(233, 213, 255, 0.76);
+  color: #faf5ff;
+  font-weight: 700;
 }
 
 .hero-stat .value {
+  color: #ffffff;
   margin-top: 0.35rem;
   font-size: 1.65rem;
   font-weight: 700;

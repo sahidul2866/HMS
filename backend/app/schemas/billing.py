@@ -13,7 +13,7 @@ class BillingServiceCreate(BaseModel):
     service_code: str = Field(min_length=2, max_length=50)
     name: str = Field(min_length=2, max_length=150)
     description: str | None = None
-    unit_price: Decimal = Field(gt=0)
+    unit_price: Decimal = Field(gt=0, le=Decimal("9999999999.99"), decimal_places=2)
     doctor_share_percentage: Decimal = Field(ge=0, le=100)
     max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
     max_discount_amount: Decimal | None = Field(default=None, ge=0)
@@ -209,6 +209,9 @@ class BillingInvoiceStickerRead(BaseModel):
 
 
 class BillingInvoiceFilterParams(BaseModel):
+    referral_name: str | None = None
+    limit: int | None = None
+    offset: int = 0
     q: str | None = None
     internal_referral_user_id: UUID | None = None
     status: str | None = None

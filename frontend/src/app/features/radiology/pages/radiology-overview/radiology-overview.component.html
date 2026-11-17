@@ -43,10 +43,10 @@
         </div>
       </article>
       <article class="page-card dashboard-panel">
-        <div class="chart-panel__head"><div><h2>Quick Decisions</h2><span>Open studies only when reporting work is needed</span></div></div>
+        <div class="chart-panel__head"><div><h2>Quick Decisions</h2><span>Select a status to see matching studies</span></div></div>
         <div class="task-list">
-          <div class="task-item warning"><span><strong>Pending Studies</strong><span>Awaiting upload, readiness, or report</span></span><b>{{ summary.pending_orders + summary.ready_orders }}</b></div>
-          <div class="task-item good"><span><strong>Verified Reports</strong><span>Ready for release</span></span><b>{{ summary.verified_orders }}</b></div>
+          <button class="task-item warning" type="button" [attr.aria-pressed]="queueStatus === 'pending_studies'" (click)="showQueueStatus('pending_studies')"><span><strong>Pending Studies</strong><span>Pending and ready studies</span></span><b>{{ summary.pending_orders + summary.ready_orders }}</b></button>
+          <button class="task-item good" type="button" [attr.aria-pressed]="queueStatus === 'verified'" (click)="showQueueStatus('verified')"><span><strong>Verified Reports</strong><span>Ready for release</span></span><b>{{ summary.verified_orders }}</b></button>
         </div>
       </article>
     </section>
@@ -56,12 +56,21 @@
     <section class="page-card soft-panel">
       <div class="panel-head">
         <div>
-          <h2 class="section-title">Imaging Queue</h2>
+          <h2 #queueHeading tabindex="-1" class="section-title">{{ queueStatus === 'pending_studies' ? 'Pending Studies' : queueStatus === 'verified' ? 'Verified Reports' : 'Imaging Queue' }}</h2>
           <div class="section-copy">Review active study requests, search by clinical context, and route each order into the reporting workspace.</div>
         </div>
       </div>
 
       <div class="queue-toolbar">
+        <select [(ngModel)]="queueStatus" [ngModelOptions]="{ standalone: true }" aria-label="Filter radiology status">
+          <option value="">All statuses</option>
+          <option value="pending_studies">Pending studies (pending and ready)</option>
+          <option value="pending">Pending</option>
+          <option value="ready">Ready</option>
+          <option value="in_progress">In progress</option>
+          <option value="reported">Reported</option>
+          <option value="verified">Verified</option>
+        </select>
         <input type="text" [(ngModel)]="queueSearch" [ngModelOptions]="{ standalone: true }" placeholder="Search visit, patient, doctor, study, diagnosis" />
         <div class="sort-controls">
           <select [(ngModel)]="sortField" [ngModelOptions]="{ standalone: true }" aria-label="Sort radiology queue">
@@ -74,7 +83,7 @@
           <button class="secondary-btn" type="button" (click)="toggleSortDirection()">{{ sortDirection === 'asc' ? 'Asc' : 'Desc' }}</button>
         </div>
         <div class="pill-row">
-          <span class="pill">Orders {{ worklist.length }}</span>
+          <span class="pill">Showing {{ filteredWorklist.length }} of {{ worklist.length }} orders</span>
           @if (summary) {
             <span class="pill">Verified {{ summary.verified_orders }}</span>
           }

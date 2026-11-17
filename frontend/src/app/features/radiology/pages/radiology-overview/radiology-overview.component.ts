@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, Injector, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -31,6 +31,9 @@ export class RadiologyOverviewComponent {
   summary: RadiologySummary | null = null;
   worklist: InvestigationWorkItem[] = [];
   queueSearch = '';
+  queueStatus = '';
+  private readonly injector = inject(Injector);
+  @ViewChild('queueHeading') queueHeading?: ElementRef<HTMLElement>;
   sortField: WorklistSortField = 'visit_date';
   sortDirection: 'asc' | 'desc' = 'desc';
   selectedItem: InvestigationWorkItem | null = null;
@@ -73,6 +76,16 @@ export class RadiologyOverviewComponent {
         this.selectedMachineCode = machines[0].code;
       }
     });
+  }
+
+  showQueueStatus(status: string): void {
+    this.queueStatus = status;
+    this.queueSearch = '';
+    afterNextRender(() => {
+      const heading = this.queueHeading?.nativeElement;
+      heading?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      heading?.focus({ preventScroll: true });
+    }, { injector: this.injector });
   }
 
   openDetails(item: InvestigationWorkItem): void {
@@ -235,10 +248,23 @@ export class RadiologyOverviewComponent {
     });
   }
 
+  private matchesQueueStatus(status: string): boolean {
+    const stages: Record<string, string[]> = {
+      pending_studies: ['pending', 'pending_study', 'collected', 'study_uploaded'],
+      pending: ['pending', 'pending_study'],
+      ready: ['collected', 'study_uploaded'],
+      in_progress: ['in_progress', 'ready_for_review'],
+      reported: ['completed', 'report_completed'],
+      verified: ['verified'],
+    };
+    return !this.queueStatus || (stages[this.queueStatus] || []).includes(status);
+  }
+
   get filteredWorklist(): InvestigationWorkItem[] {
     const query = this.queueSearch.trim().toLowerCase();
     return this.worklist.filter((item) =>
       (!this.contextPatientId || item.patient_id === this.contextPatientId) &&
+      this.matchesQueueStatus(item.status) &&
       (!query ||
       [
         item.visit_number,

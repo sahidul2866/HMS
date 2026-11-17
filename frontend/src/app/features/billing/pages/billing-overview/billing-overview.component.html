@@ -25,7 +25,7 @@
       }
     </section>
 
-    <section class="decision-grid">
+    <section class="collection-summary">
       <article class="page-card chart-panel">
         <div class="chart-panel__head">
           <div><h2>Collection Health</h2><span>Net collection vs due queue</span></div>
@@ -45,14 +45,6 @@
         </div>
       </article>
 
-      <article class="page-card dashboard-panel">
-        <div class="chart-panel__head"><div><h2>Quick Actions</h2><span>Most used billing workflows</span></div></div>
-        <div class="quick-link-grid">
-          <button class="quick-link-card" type="button" (click)="goToCreateInvoice()"><strong>Create Invoice</strong><small>New bill</small></button>
-          <button class="quick-link-card" type="button" (click)="goToDueList()"><strong>Due Payments</strong><small>{{ dueInvoices.length }} pending</small></button>
-          <button class="quick-link-card" type="button" (click)="goToInvoiceList()"><strong>Invoice List</strong><small>Search and review</small></button>
-        </div>
-      </article>
     </section>
   }
 
@@ -63,9 +55,10 @@
           <h2 class="section-title">Pending Due Queue</h2>
           <div class="section-copy">Invoices with outstanding balance requiring follow-up.</div>
         </div>
+        <button class="secondary-btn" type="button" (click)="goToDueList(true)">View all pending bills ({{ dueInvoices.length }})</button>
       </div>
       <div class="due-list">
-        @for (invoice of dueInvoices; track invoice.id) {
+        @for (invoice of dueInvoices.slice(0, 6); track invoice.id) {
           <button class="due-item" type="button" (click)="openInvoice(invoice.id)">
             <div>
               <strong>{{ invoice.invoice_number }}</strong>
@@ -84,13 +77,14 @@
       <div class="section-header">
         <div>
           <h2 class="section-title">Top Referral Doctors</h2>
-          <div class="section-copy">Referral contribution based on net billed amount.</div>
+          <div class="section-copy">Top 5 by total billed amount. Select a doctor to see their referred bills. These amounts are not doctor payouts.</div>
         </div>
+        <button class="secondary-btn" type="button" (click)="showReferralDoctors()">View all referral doctors</button>
       </div>
       <div class="ref-list">
-        @for (row of referrals; track row.referred_doctor_name) {
+        @for (row of referrals; track row.internal_referral_user_id || row.referred_doctor_name) {
           <div class="ref-item">
-            <strong>{{ row.referred_doctor_name }}</strong>
+            <button class="doctor-link" type="button" (click)="showReferralBills(row)">{{ row.referred_doctor_name }}</button>
             <span>{{ row.invoice_count }} invoices</span>
             <b>{{ formatCurrency(row.net_amount) }}</b>
           </div>
@@ -135,6 +129,55 @@
     </section>
   </section>
 </section>
+
+@if (referralDialog) {
+  <div class="modal-backdrop" (click)="closeReferralDialog()">
+    <section class="modal-card referral-dialog" appDialog (appDialogClose)="closeReferralDialog()" (click)="$event.stopPropagation()">
+      <div class="section-header">
+        <div>
+          <h2>{{ selectedReferral ? selectedReferral.referred_doctor_name + ' — Referred bills' : 'All referral doctors' }}</h2>
+          <p class="section-copy">{{ selectedReferral ? 'Posted invoices attributed to this doctor.' : 'Doctors with posted referrals, ranked by total billed amount.' }}</p>
+        </div>
+        <button class="secondary-btn" type="button" (click)="closeReferralDialog()">Close</button>
+      </div>
+      @if (selectedReferral) {
+        <button class="secondary-btn" type="button" (click)="showReferralDoctors()">Back to referral doctors</button>
+        <p>{{ selectedReferral.invoice_count }} invoices · {{ formatCurrency(selectedReferral.net_amount) }} billed</p>
+      } @else {
+        <form class="referral-search no-smart-input" (ngSubmit)="searchReferrals()" data-native-enter>
+          <input name="referralSearch" [(ngModel)]="referralSearch" aria-label="Search referral doctors" placeholder="Search doctor name" />
+          <button class="primary-btn" type="submit">Search</button>
+        </form>
+      }
+      <div class="referral-results" aria-live="polite">
+        @if (referralLoading) { <p>Loading…</p> }
+        @else if (referralError) {
+          <p role="alert">{{ referralError }}</p>
+          <button class="secondary-btn" (click)="loadReferralPage()">Retry</button>
+        } @else if (selectedReferral) {
+          @for (invoice of referralBills; track invoice.id) {
+            <button class="due-item" type="button" (click)="openInvoice(invoice.id)">
+              <div><strong>{{ invoice.invoice_number }}</strong><span>{{ invoice.patient.first_name }} {{ invoice.patient.last_name }} · {{ invoice.created_at | date:'mediumDate' }}</span></div>
+              <div><strong>{{ formatCurrency(invoice.total_amount) }}</strong><span>Due {{ formatCurrency(invoice.due_amount) }}</span></div>
+            </button>
+          } @empty { <p>No posted bills found for this doctor.</p> }
+        } @else {
+          @for (row of referralRows; track row.internal_referral_user_id || row.referred_doctor_name) {
+            <div class="ref-item">
+              <button class="doctor-link" type="button" (click)="showReferralBills(row)">{{ row.referred_doctor_name }}</button>
+              <span>{{ row.invoice_count }} invoices</span><b>{{ formatCurrency(row.net_amount) }}</b>
+            </div>
+          } @empty { <p>No referral doctors match your search.</p> }
+        }
+      </div>
+      <div class="referral-pagination">
+        <button class="secondary-btn" type="button" [disabled]="referralLoading || referralPage === 0" (click)="changeReferralPage(-1)">Previous</button>
+        <span>Page {{ referralPage + 1 }}</span>
+        <button class="secondary-btn" type="button" [disabled]="referralLoading || !referralHasNext" (click)="changeReferralPage(1)">Next</button>
+      </div>
+    </section>
+  </div>
+}
 
 <app-floating-assistant
   title="Billing Assistant"

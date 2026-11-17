@@ -279,6 +279,9 @@ export interface BillingInvoiceSticker {
 }
 
 export interface BillingInvoiceFilters {
+  referral_name?: string;
+  limit?: number;
+  offset?: number;
   q?: string;
   internal_referral_user_id?: string;
   status?: string;

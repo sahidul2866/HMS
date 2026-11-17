@@ -4,6 +4,7 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/rout
 import { filter } from 'rxjs';
 
 import { MenuItem, menuConfig } from '../../../navigation/menu.config';
+import { SessionService } from '../../../core/services/session.service';
 
 type Breadcrumb = {
   label: string;
@@ -34,6 +35,7 @@ export class BreadcrumbsComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly location = inject(Location);
+  private readonly session = inject(SessionService);
 
   private readonly crumbs = signal<Breadcrumb[]>([]);
   readonly breadcrumbs = computed(() => this.crumbs());
@@ -50,7 +52,7 @@ export class BreadcrumbsComponent {
   }
 
   private buildCrumbs(): Breadcrumb[] {
-    const crumbs: Breadcrumb[] = [{ label: 'Home', url: '/dashboard' }];
+    const crumbs: Breadcrumb[] = [{ label: 'Home', url: this.session.getLandingRoute() }];
     let current = this.route.root;
     let url = '';
     const currentPath = this.normalizePath(this.router.url);
@@ -60,7 +62,7 @@ export class BreadcrumbsComponent {
       this.pushCrumb(crumbs, crumb);
     }
 
-    while (current.firstChild) {
+    while (current.firstChild?.snapshot) {
       current = current.firstChild;
       const segment = current.snapshot.url.map((s) => s.path).filter(Boolean).join('/');
       if (segment) {

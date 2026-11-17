@@ -27,7 +27,8 @@ export class KeyboardWorkflowService {
   private readonly handleSubmit = (event: Event): void => {
     const form = event.target instanceof HTMLFormElement ? event.target : null;
     if (!form) return;
-    if (form.hasAttribute('data-navigation-only')) return;
+    // Request-managed forms (such as chat) already guard against in-flight submissions.
+    if (form.hasAttribute('data-navigation-only') || form.hasAttribute('data-submit-managed')) return;
     if (this.pendingSubmit.has(form)) {
       event.preventDefault();
       event.stopImmediatePropagation();

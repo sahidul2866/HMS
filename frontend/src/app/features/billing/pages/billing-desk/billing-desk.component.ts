@@ -408,46 +408,56 @@ export class BillingDeskComponent {
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>${escapePrintHtml(invoice.invoice_number)}</title>
           <style>
-            :root { --ink:#17304a; --muted:#65758a; --line:#d7dee7; --panel:#f6f8fb; --brand:#0d5c63; --brand-deep:#123b56; }
+            :root { --ink:#17304a; --muted:#65758a; --line:#d7dee7; --panel:#f6f8fb; }
             * { box-sizing:border-box; }
-            body { font-family: Arial, sans-serif; margin: 0; padding: 18px; color: var(--ink); background: #eff4f8; }
-            h1, h2, h3, p { margin: 0; }
-            .preview-shell { max-width: 1020px; margin: 0 auto; display: grid; gap: 20px; }
-            .invoice-copy { display:grid; gap:16px; padding: 24px 26px 28px; background:white; border:1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08); }
-            .copy-header, .footer-row { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start; }
-            .brand-block { display:flex; gap:14px; align-items:center; }
-            .brand-mark { width:72px; height:72px; border-radius:18px; display:grid; place-items:center; background:linear-gradient(135deg, var(--brand-deep), var(--brand)); color:white; font-size:24px; font-weight:800; letter-spacing:.08em; }
-            .brand-copy { display:grid; gap:4px; }
-            .clinic-name { font-size:23px; font-weight:800; }
-            .copy-tag { padding:10px 14px; border-radius:999px; border:1px solid var(--line); background:#f8fafc; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; }
-            .title-band { padding: 12px 16px; text-align:center; border:1px solid var(--line); border-radius:18px; background:linear-gradient(180deg, #f7fafc, #eef4f8); font-size:30px; }
-            .detail-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
-            .barcode-card, .info-card, .table-card { padding:16px; border:1px solid var(--line); border-radius:18px; background:var(--panel); }
-            .id-barcode-svg { width:100%; height:92px; display:block; }
-            .meta-list { display:grid; gap:10px; margin-top: 10px; }
-            .meta-list div { display:flex; justify-content:space-between; gap:12px; padding-bottom:8px; border-bottom:1px dashed #ccd7e2; }
-            .meta-list div:last-child { border-bottom:0; padding-bottom:0; }
-            .meta-list span { color: var(--muted); }
-            .compact-list { margin-top: 14px; }
-            table { width:100%; border-collapse:collapse; table-layout:fixed; background:white; }
-            th, td { border-bottom:1px solid #d9e3ee; padding:10px; text-align:left; overflow-wrap:anywhere; }
+            body { font:12px/1.35 Arial,sans-serif; margin:0; padding:12px; color:var(--ink); background:#eff4f8; }
+            h1, h2, h3, p { margin:0; }
+            .preview-shell { max-width:760px; margin:auto; display:grid; gap:16px; }
+            .invoice-copy { display:grid; gap:10px; padding:18px; background:white; border:1px solid var(--line); border-radius:8px; }
+            .copy-header, .footer-row { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+            .brand-block { display:flex; gap:10px; align-items:center; min-width:0; }
+            .brand-mark { flex-shrink:0; width:42px; height:42px; border-radius:8px; display:grid; place-items:center; background:#0d5c63; color:white; font-size:18px; font-weight:800; }
+            .brand-copy { display:grid; gap:2px; }
+            .clinic-name { font-size:19px; font-weight:800; }
+            .copy-tag { flex-shrink:0; padding:5px 8px; border:1px solid var(--line); border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; }
+            .title-band { padding:5px 10px; text-align:center; border-block:1px solid var(--line); background:var(--panel); font-size:21px; }
+            .detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+            .barcode-card, .info-card { padding:8px; border:1px solid var(--line); border-radius:4px; }
+            .table-card { min-width:0; }
+            .id-barcode-svg { max-width:100%; width:100%; height:54px; display:block; }
+            .meta-list { display:grid; gap:4px; margin-top:6px; }
+            .meta-list div { display:flex; justify-content:space-between; gap:8px; padding-bottom:4px; border-bottom:1px dashed var(--line); }
+            .meta-list div:last-child { border:0; padding:0; }
+            .meta-list span { color:var(--muted); flex-shrink:0; }
+            .meta-list strong { text-align:right; overflow-wrap:anywhere; }
+            table { width:100%; border-collapse:collapse; background:white; }
+            th, td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; }
+            th:first-child { width:30px; }
+            th:nth-child(2) { width:40%; }
+            td:nth-child(2) { overflow-wrap:anywhere; }
+            td:nth-child(n+3) { white-space:nowrap; }
             th:last-child, td:last-child { text-align:right; }
-            th { color: var(--muted); background:#f8fafc; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-            .stamp-wrap { display:flex; align-items:flex-end; }
-            .due-stamp, .paid-stamp { padding: 10px 26px; border: 3px solid currentColor; border-radius: 12px; font-size: 42px; font-weight: 800; text-transform: uppercase; }
-            .due-stamp { color: #b91c1c; }
-            .paid-stamp { color: #166534; }
-            .prepared-by { text-align:right; display:grid; gap:4px; }
-            .page-break { page-break-before: always; }
-            @media (max-width: 920px) {
-              body { padding: 12px; }
-              .detail-grid { grid-template-columns:1fr; }
+            th { color:var(--muted); background:var(--panel); font-size:10px; }
+            tr { break-inside:avoid; }
+            thead { display:table-header-group; }
+            .due-stamp, .paid-stamp { padding:3px 14px; border:2px solid currentColor; border-radius:4px; font-size:23px; font-weight:800; text-transform:uppercase; }
+            .due-stamp { color:#b91c1c; }
+            .paid-stamp { color:#166534; }
+            .prepared-by { text-align:right; display:grid; gap:2px; }
+            .footer-row { break-inside:avoid; }
+            .page-break { display:none; }
+            @media screen and (max-width:560px) {
+              body { padding:6px; }
+              .invoice-copy { padding:10px; }
+              .copy-header { flex-wrap:wrap; }
+              .detail-grid { grid-template-columns:1fr; gap:8px; }
+              th, td { padding:4px 3px; font-size:10px; }
             }
             @media print {
-              body { margin:0; padding:0; background:white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .preview-shell { max-width:none; padding:0; }
-              .invoice-copy { box-shadow:none; border-radius:0; border:0; padding:0; }
-              .page-break { page-break-before: always; }
+              body { padding:0; background:white; font-size:11px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+              .preview-shell { max-width:none; display:block; }
+              .invoice-copy { border:0; border-radius:0; padding:0; }
+              .invoice-copy + .page-break + .invoice-copy { break-before:page; }
               @page { size:A4 portrait; margin:12mm; }
             }
           </style>
@@ -700,7 +710,7 @@ export class BillingDeskComponent {
   }
 
   private isDueInvoice(invoice: BillingInvoiceListItem): boolean {
-    return invoice.status !== 'void' && Number(invoice.due_amount) > 0;
+    return invoice.status === 'posted' && Number(invoice.due_amount) > 0;
   }
 
   closeInvoicePreview(): void {
@@ -757,6 +767,10 @@ export class BillingDeskComponent {
   }
 
   private restoreState(): void {
+    if (this.route.snapshot.queryParamMap.get('view') === 'all-pending') {
+      this.persistState();
+      return;
+    }
     const state = this.uiStateService.load<{ filters?: BillingInvoiceFilters }>(BillingDeskComponent.STATE_KEY);
     if (!state?.filters) {
       return;

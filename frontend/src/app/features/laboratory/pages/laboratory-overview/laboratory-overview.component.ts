@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { afterNextRender, Component, ElementRef, inject, Injector, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 
@@ -27,6 +27,9 @@ export class LaboratoryOverviewComponent {
   summary: LaboratorySummary | null = null;
   worklist: InvestigationWorkItem[] = [];
   queueSearch = '';
+  queueStatus = '';
+  private readonly injector = inject(Injector);
+  @ViewChild('queueHeading') queueHeading?: ElementRef<HTMLElement>;
   sortField: WorklistSortField = 'visit_date';
   sortDirection: 'asc' | 'desc' = 'desc';
   contextPatientId = '';
@@ -55,6 +58,16 @@ export class LaboratoryOverviewComponent {
     void this.router.navigate(['/laboratory/workbench', item.order_id]);
   }
 
+  showQueueStatus(status: string): void {
+    this.queueStatus = status;
+    this.queueSearch = '';
+    afterNextRender(() => {
+      const heading = this.queueHeading?.nativeElement;
+      heading?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      heading?.focus({ preventScroll: true });
+    }, { injector: this.injector });
+  }
+
   printSticker(item: InvestigationWorkItem): void {
     printInvestigationStickers(
       [
@@ -77,6 +90,7 @@ export class LaboratoryOverviewComponent {
     const query = this.queueSearch.trim().toLowerCase();
     return this.worklist.filter((item) =>
       (!this.contextPatientId || item.patient_id === this.contextPatientId) &&
+      (!this.queueStatus || item.status === this.queueStatus) &&
       (!query ||
       [
         item.visit_number,

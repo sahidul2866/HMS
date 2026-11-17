@@ -82,6 +82,9 @@ export class BillingServiceApi extends ApiBaseService {
 
   listInvoices(filters: BillingInvoiceFilters = {}): Observable<BillingInvoiceListItem[]> {
     const params = new URLSearchParams();
+    if (filters.referral_name) params.set('referral_name', filters.referral_name);
+    if (filters.limit != null) params.set('limit', String(filters.limit));
+    if (filters.offset != null) params.set('offset', String(filters.offset));
     if (filters.q) params.set('q', filters.q);
     if (filters.internal_referral_user_id) params.set('internal_referral_user_id', filters.internal_referral_user_id);
     if (filters.status) params.set('status', filters.status);
@@ -168,8 +171,12 @@ export class BillingServiceApi extends ApiBaseService {
     return this.cache.get(`billing:summary:${query}`, () => this.http.get<BillingSummary>(this.url(`/billing/reports/summary${query ? `?${query}` : ''}`)));
   }
 
-  getReferralSummary(filters: BillingInvoiceFilters = {}): Observable<BillingReferralSummary[]> {
+  getReferralSummary(filters: BillingInvoiceFilters & { doctors_only?: boolean } = {}): Observable<BillingReferralSummary[]> {
     const params = new URLSearchParams();
+    if (filters.q) params.set('q', filters.q);
+    if (filters.limit != null) params.set('limit', String(filters.limit));
+    if (filters.offset != null) params.set('offset', String(filters.offset));
+    if (filters.doctors_only) params.set('doctors_only', 'true');
     if (filters.date_from) params.set('date_from', filters.date_from);
     if (filters.date_to) params.set('date_to', filters.date_to);
     const query = params.toString();

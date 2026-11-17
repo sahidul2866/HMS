@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -86,6 +86,9 @@ def update_billing_service_controls(
 
 @router.get("/invoices", response_model=list[BillingInvoiceListItem], dependencies=[Depends(require_permissions("billing.view"))])
 def list_billing_invoices(
+    referral_name: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     q: str | None = None,
     internal_referral_user_id: UUID | None = None,
     status: str | None = None,
@@ -97,7 +100,7 @@ def list_billing_invoices(
     db: Session = Depends(get_db),
 ) -> list[BillingInvoiceListItem]:
     filters = BillingInvoiceFilterParams(
-        q=q,
+        q=q, referral_name=referral_name, limit=limit, offset=offset,
         internal_referral_user_id=internal_referral_user_id,
         status=status,
         payment_status=payment_status,
@@ -137,13 +140,17 @@ def get_billing_summary(
 
 @router.get("/reports/referrals", response_model=list[BillingReferralSummaryRead], dependencies=[Depends(require_permissions("reporting.financial.view"))])
 def get_billing_referral_summary(
+    q: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    doctors_only: bool = False,
     date_from: date | None = None,
     date_to: date | None = None,
     user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[BillingReferralSummaryRead]:
     filters = BillingInvoiceFilterParams(date_from=date_from, date_to=date_to)
-    return BillingServiceManager(db).get_referral_summary(user, filters)
+    return BillingServiceManager(db).get_referral_summary(user, filters, q=q, limit=limit, offset=offset, doctors_only=doctors_only)
 
 
 @router.post("/invoices/preview", response_model=BillingInvoicePreview, dependencies=[Depends(require_permissions("billing.view"))])

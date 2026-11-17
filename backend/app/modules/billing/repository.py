@@ -116,7 +116,7 @@ class BillingRepository:
         stmt = (
             select(BillingInvoice)
             .options(joinedload(BillingInvoice.patient), joinedload(BillingInvoice.referred_doctor))
-            .order_by(BillingInvoice.created_at.desc())
+            .order_by(BillingInvoice.created_at.desc(), BillingInvoice.id.desc())
         )
         if branch_id:
             stmt = stmt.where(BillingInvoice.branch_id == branch_id)
@@ -133,6 +133,8 @@ class BillingRepository:
                 )
             if filters.internal_referral_user_id:
                 stmt = stmt.where(BillingInvoice.internal_referral_user_id == filters.internal_referral_user_id)
+            if filters.referral_name:
+                stmt = stmt.where(BillingInvoice.internal_referral_user_id.is_(None), BillingInvoice.referred_doctor_name == filters.referral_name)
             if filters.status:
                 stmt = stmt.where(BillingInvoice.status == filters.status)
             if filters.payment_status:
@@ -148,6 +150,8 @@ class BillingRepository:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) >= filters.date_from)
             if filters.date_to:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) <= filters.date_to)
+        if filters and filters.limit is not None:
+            stmt = stmt.limit(filters.limit).offset(filters.offset)
         return list(self.db.scalars(stmt).unique())
 
     def get_invoice(self, invoice_id: UUID) -> BillingInvoice | None:
@@ -250,11 +254,12 @@ class BillingRepository:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) <= filters.date_to)
         return self.db.execute(stmt).one()
 
-    def get_referral_summary(self, branch_id: UUID | None, filters: BillingInvoiceFilterParams | None = None):
+    def get_referral_summary(self, branch_id: UUID | None, filters: BillingInvoiceFilterParams | None = None, *, q=None, limit=None, offset=0, doctors_only=False):
+        doctor_name = func.coalesce(User.full_name, BillingInvoice.referred_doctor_name, "Unassigned")
         stmt = (
             select(
                 BillingInvoice.internal_referral_user_id,
-                func.coalesce(User.full_name, BillingInvoice.referred_doctor_name, "Unassigned"),
+                doctor_name,
                 func.count(BillingInvoice.id),
                 func.coalesce(func.sum(BillingInvoice.total_amount), 0),
                 func.coalesce(func.sum(BillingInvoice.referred_doctor_amount), 0),
@@ -262,8 +267,8 @@ class BillingRepository:
             .select_from(BillingInvoice)
             .outerjoin(User, BillingInvoice.internal_referral_user_id == User.id)
             .where(BillingInvoice.status == "posted")
-            .group_by(BillingInvoice.internal_referral_user_id, User.full_name, BillingInvoice.referred_doctor_name)
-            .order_by(func.coalesce(func.sum(BillingInvoice.referred_doctor_amount), 0).desc())
+            .group_by(BillingInvoice.internal_referral_user_id, doctor_name)
+            .order_by(func.sum(BillingInvoice.total_amount).desc(), doctor_name, BillingInvoice.internal_referral_user_id)
         )
         if branch_id:
             stmt = stmt.where(BillingInvoice.branch_id == branch_id)
@@ -272,4 +277,10 @@ class BillingRepository:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) >= filters.date_from)
             if filters.date_to:
                 stmt = stmt.where(cast(BillingInvoice.created_at, Date) <= filters.date_to)
+        if doctors_only:
+            stmt = stmt.where(or_(BillingInvoice.internal_referral_user_id.is_not(None), func.trim(func.coalesce(BillingInvoice.referred_doctor_name, "")) != ""))
+        if q and q.strip():
+            stmt = stmt.where(func.coalesce(User.full_name, BillingInvoice.referred_doctor_name, "").ilike(f"%{q.strip()}%"))
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
         return list(self.db.execute(stmt).all())

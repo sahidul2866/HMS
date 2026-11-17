@@ -134,9 +134,8 @@
 .metric-row__copy strong {
   display: block;
   color: #10233c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .metric-row__value {
@@ -599,8 +598,18 @@
 
 .hero-stat {
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #ffffff;
+  border: 1px solid #d6e5eb;
+}
+
+.hero-stat .label {
+  color: #43576b;
+  font-weight: 700;
+}
+
+.hero-stat .value {
+  color: #102c40;
+  font-weight: 800;
 }
 
 .page-card + .page-card {

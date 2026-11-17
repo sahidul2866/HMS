@@ -1,6 +1,9 @@
 import { SessionService } from '../../../../core/services/session.service';
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnDestroy } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { DialogDirective } from '../../../../shared/directives/dialog.directive';
 import { Router } from '@angular/router';
 
 import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
@@ -10,11 +13,11 @@ import { BillingServiceApi } from '../../services/billing.service';
 @Component({
   selector: 'app-billing-overview',
   standalone: true,
-  imports: [CommonModule, FloatingAssistantComponent],
+  imports: [CommonModule, FormsModule, DialogDirective, FloatingAssistantComponent],
   templateUrl: './billing-overview.component.html',
   styleUrls: ['./billing-overview.component.scss'],
 })
-export class BillingOverviewComponent {
+export class BillingOverviewComponent implements OnDestroy {
   readonly access = inject(SessionService);
   private readonly billingService = inject(BillingServiceApi);
   private readonly router = inject(Router);
@@ -41,19 +44,90 @@ export class BillingOverviewComponent {
 
   load(): void {
     if(this.access.hasPermission('reporting.financial.view')) this.billingService.getSummary().subscribe((summary) => (this.summary = summary));
-    if(this.access.hasPermission('reporting.financial.view')) this.billingService.getReferralSummary().subscribe((items) => (this.referrals = items.slice(0, 5)));
+    if(this.access.hasPermission('reporting.financial.view')) this.billingService.getReferralSummary({ limit: 5, doctors_only: true }).subscribe((items) => (this.referrals = [...items].sort((a, b) => Number(b.net_amount) - Number(a.net_amount)).slice(0, 5)));
     this.billingService.listInvoices({ status: 'posted' }).subscribe((items) => {
       this.recentInvoices = items.slice(0, 8);
-      this.dueInvoices = items.filter((item) => Number(item.due_amount || 0) > 0).slice(0, 6);
+      this.dueInvoices = items.filter((item) => Number(item.due_amount || 0) > 0);
     });
+  }
+
+  referralDialog = false;
+  referralSearch = '';
+  referralPage = 0;
+  referralRows: BillingReferralSummary[] = [];
+  selectedReferral: BillingReferralSummary | null = null;
+  referralBills: BillingInvoiceListItem[] = [];
+  referralLoading = false;
+  referralError = '';
+  referralHasNext = false;
+  private referralRequest?: Subscription;
+  readonly referralPageSize = 20;
+
+  ngOnDestroy(): void { this.referralRequest?.unsubscribe(); }
+
+  showReferralDoctors(): void {
+    this.referralDialog = true;
+    this.selectedReferral = null;
+    this.referralPage = 0;
+    this.loadReferralPage();
+  }
+
+  showReferralBills(row: BillingReferralSummary): void {
+    this.referralDialog = true;
+    this.selectedReferral = row;
+    this.referralPage = 0;
+    this.loadReferralPage();
+  }
+
+  searchReferrals(): void {
+    this.referralPage = 0;
+    this.loadReferralPage();
+  }
+
+  changeReferralPage(delta: number): void {
+    this.referralPage += delta;
+    this.loadReferralPage();
+  }
+
+  closeReferralDialog(): void {
+    this.referralRequest?.unsubscribe();
+    this.referralDialog = false;
+  }
+
+  loadReferralPage(): void {
+    this.referralRequest?.unsubscribe();
+    this.referralLoading = true;
+    this.referralError = '';
+    this.referralRows = [];
+    this.referralBills = [];
+    this.referralHasNext = false;
+    const paging = { limit: this.referralPageSize + 1, offset: this.referralPage * this.referralPageSize };
+    const fail = () => { this.referralLoading = false; this.referralError = 'Could not load referral records. Please retry.'; };
+    if (this.selectedReferral) {
+      const row = this.selectedReferral;
+      this.referralRequest = this.billingService.listInvoices({ ...paging, status: 'posted',
+        internal_referral_user_id: row.internal_referral_user_id || undefined,
+        referral_name: row.internal_referral_user_id ? undefined : row.referred_doctor_name,
+      }).subscribe({ next: items => {
+        this.referralBills = items.slice(0, this.referralPageSize);
+        this.referralHasNext = items.length > this.referralPageSize;
+        this.referralLoading = false;
+      }, error: fail });
+    } else {
+      this.referralRequest = this.billingService.getReferralSummary({ ...paging, q: this.referralSearch.trim(), doctors_only: true }).subscribe({ next: items => {
+        this.referralRows = items.slice(0, this.referralPageSize);
+        this.referralHasNext = items.length > this.referralPageSize;
+        this.referralLoading = false;
+      }, error: fail });
+    }
   }
 
   goToInvoiceList(): void {
     void this.router.navigate(['/billing/list']);
   }
 
-  goToDueList(): void {
-    void this.router.navigate(['/billing/due-payments']);
+  goToDueList(showAll = false): void {
+    void this.router.navigate(['/billing/due-payments'], { queryParams: showAll ? { view: 'all-pending' } : {} });
   }
 
   goToCreateInvoice(): void {
@@ -61,6 +135,7 @@ export class BillingOverviewComponent {
   }
 
   openInvoice(invoiceId: string): void {
+    this.closeReferralDialog();
     void this.router.navigate(['/billing/list'], { queryParams: { invoiceId } });
   }
 

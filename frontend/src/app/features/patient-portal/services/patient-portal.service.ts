@@ -26,12 +26,16 @@ export class PatientPortalService extends ApiBaseService {
   }
 
   bookAppointment(payload: PatientAppointmentPayload): Observable<PatientAppointment> {
-    return this.http.post<PatientAppointment>(this.url('/portal/appointments'), payload).pipe(tap(() => this.clearCache()));
+    return this.http.post<PatientAppointment>(this.url('/portal/appointments'), payload, {
+      context: new HttpContext().set(SKIP_ERROR_NOTIFICATION, true),
+    }).pipe(tap(() => this.clearCache()));
   }
 
   getDoctorSlots(doctorUserId: string, slotDate: string): Observable<DoctorSlotsResponse> {
     const params = `doctor_user_id=${encodeURIComponent(doctorUserId)}&slot_date=${encodeURIComponent(slotDate)}`;
-    return this.http.get<DoctorSlotsResponse>(this.url(`/portal/doctor-slots?${params}`));
+    return this.http.get<DoctorSlotsResponse>(this.url(`/portal/doctor-slots?${params}`), {
+      context: new HttpContext().set(SKIP_ERROR_NOTIFICATION, true),
+    });
   }
 
   updateAppointmentStatus(appointmentId: string, payload: PatientAppointmentStatusPayload): Observable<PatientAppointment> {

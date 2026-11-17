@@ -118,7 +118,7 @@ export class AppLayoutComponent {
     }
 
     const routeMap: Record<string, string> = {
-      '1': '/dashboard',
+      '1': this.sessionService.getLandingRoute(),
       '2': '/patients',
       '3': '/opd/visits',
       '4': '/billing/create',
