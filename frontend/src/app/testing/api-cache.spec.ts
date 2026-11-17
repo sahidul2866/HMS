@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { ApiCacheService } from '../core/services/api-cache.service';
 
 describe('persistent lookup cache', () => {
@@ -38,4 +38,14 @@ describe('persistent lookup cache', () => {
     sessionStorage.setItem('hms-api-cache:lookup', JSON.stringify(['stale']));
     expect(read(cache, ['fresh'], { n: 0 })).toEqual(['fresh']);
   });
+  it('does not persist an in-flight read after invalidation', () => {
+    const pending = new Subject<string[]>();
+    cache.getPersistent('lookup', () => pending).subscribe();
+    cache.clearAll();
+    pending.next(['stale']);
+    pending.complete();
+    expect(sessionStorage.getItem('hms-api-cache:lookup')).toBeNull();
+    expect(read(cache, ['fresh'], { n: 0 })).toEqual(['fresh']);
+  });
+
 });

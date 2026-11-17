@@ -157,3 +157,26 @@ Not implemented, by decision: VAT/tax lines and rounding to whole Taka. Most cli
 - Transport pages answer 500 against the dev database: `transport_requests.posting_policy` is missing. Migration `20261101_0074_operational_posting` (another change set) is recorded as applied but its columns are not in the dev database; it needs to be re-applied by its owner. Not touched here.
 - My payment-reference migration was renumbered `0075` because two migrations were created as `0074` at the same time.
 - A running dev backend must be restarted to serve the new billing fields; the older code simply ignores them.
+
+## Seventh pass (2026-11-03) — OPD dashboard review
+
+Source: an external review of the OPD dashboard. Every point was traced to code first.
+
+Root cause of the inconsistent numbers: the page mixed two scopes. Hero cards used the server count for "today" (computed on the UTC date, so it lagged until 06:00 in Dhaka), while the card details, queue shares, revenue and doctor load were computed in the browser from the entire visit history. "Billing Desk" came from visits created by billing with no doctor (`consulting_doctor_name`), and Outstanding was summed from visit fee fields that stay 0 until an invoice exists.
+
+Fix: `GET /opd/summary` (`modules/opd/dashboard.py`) is now the single source for one hospital day (Asia/Dhaka, `HOSPITAL_TIMEZONE`): counts by stage, payment state, money from that day's non-void invoices (billed = collected + outstanding), doctor load by real doctor, a 7-day trend ending on the chosen day, order mix and a live queue. It accepts `visit_date` and `doctor_user_id`. The page loads only that summary (it no longer downloads every visit).
+
+| Review point | Result |
+|---|---|
+| Today Visits 0 vs "1 paid registrations" | One scope; card is "Registered today" with its parts (paid, with a balance, not billed yet, cancelled) |
+| Queue 0 vs Prescribed 2 | "Post-consultation" is its own stage with an explanation; not counted as queue |
+| Outstanding BDT 0.00 with "2 visits need payment" | Amount is the invoices' due; visits with no invoice are reported as "not billed yet", never as owed |
+| Billing Desk as a doctor | Doctor load is by real doctor; visits registered without one are named in a note |
+| Empty states | "No OPD visits registered today — Register Visit" and per-panel messages; a refused read shows why instead of zeros |
+| Trend | Last bar labelled Today, date range shown, cancelled excluded |
+| Filters | Day (with previous/next/today) and doctor on the dashboard; cards open the Visit List already filtered (status, payment, day); new "Awaiting payment" payment filter |
+| Clickable KPIs | Every card |
+| Live Queue panel | Token, patient, doctor, wait, payment, next action, Open |
+| Currency / last updated | `en-BD` BDT formatting; "Last updated" stamp, refresh button, 60 s auto refresh |
+
+Not done: dashboard-level filters for department and visit type, and invoice aging (the dashboard shows one day, so aging would always be zero). Tests: `backend/tests/test_opd_dashboard_summary.py` (7), `frontend/src/app/testing/opd-dashboard.spec.ts` (5), `npm run test:opd:dashboard` (browser).

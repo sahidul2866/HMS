@@ -55,15 +55,10 @@ class OPDService:
             raise AppException(404, "opd_visit_not_found", "OPD visit not found")
         return self._validate_visit_access(visit, actor)
 
-    def get_summary(self, actor: User, doctor_user_id=None) -> OPDSummary:
-        doctor_scope = self._resolve_doctor_scope(actor, doctor_user_id)
-        totals = self.repository.get_summary(actor.branch_id, datetime.now(UTC).date(), doctor_scope)
-        return OPDSummary(
-            total_visits=totals[0],
-            waiting_visits=totals[1],
-            in_consultation_visits=totals[2],
-            completed_visits=totals[3],
-        )
+    def get_summary(self, actor: User, doctor_user_id=None, visit_date=None) -> OPDSummary:
+        from app.modules.opd.dashboard import build_summary
+
+        return build_summary(self.db, actor.branch_id, self._resolve_doctor_scope(actor, doctor_user_id), visit_date)
 
     def create_visit(self, payload: OPDVisitCreate, actor: User, context: dict[str, str | None], source_appointment_id=None, *, commit: bool = True) -> OPDVisit:
         patient = self.patients.get_patient(payload.patient_id)

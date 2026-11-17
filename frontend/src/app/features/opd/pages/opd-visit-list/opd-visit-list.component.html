@@ -45,6 +45,7 @@
             <span>Payment</span>
             <select [(ngModel)]="selectedPayment" (ngModelChange)="onFiltersChanged()">
               <option value="">All</option>
+              <option value="due">Awaiting payment</option>
               <option value="paid">Paid</option>
               <option value="unpaid">Unpaid</option>
               <option value="partial">Partially paid</option>

@@ -1,10 +1,48 @@
 import { Patient } from '../../patients/models/patient.models';
 
+export interface OPDDoctorLoad {
+  doctor_user_id: string;
+  doctor_name: string;
+  visits: number;
+}
+
+export interface OPDLiveQueueItem {
+  visit_id: string;
+  queue_number?: string | null;
+  patient_name: string;
+  patient_number?: string | null;
+  doctor_name?: string | null;
+  status: string;
+  payment_status: string;
+  waiting_minutes: number;
+  next_action: string;
+}
+
+/** One hospital day of OPD figures; money comes from that day's invoices. */
 export interface OPDSummary {
   total_visits: number;
   waiting_visits: number;
   in_consultation_visits: number;
   completed_visits: number;
+  summary_date?: string | null;
+  as_of?: string | null;
+  prescribed_visits?: number;
+  cancelled_visits?: number;
+  not_billed_visits?: number;
+  paid_visits?: number;
+  visits_with_balance?: number;
+  gross_amount?: string;
+  discount_amount?: string;
+  billed_amount?: string;
+  collected_amount?: string;
+  outstanding_amount?: string;
+  prescription_orders?: number;
+  investigation_orders?: number;
+  procedure_orders?: number;
+  unassigned_visits?: number;
+  doctor_load?: OPDDoctorLoad[];
+  daily_visits?: Array<{ day: string; visits: number }>;
+  live_queue?: OPDLiveQueueItem[];
 }
 
 export interface OPDVisitOrder {

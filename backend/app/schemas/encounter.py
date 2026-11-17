@@ -139,11 +139,56 @@ class OPDVisitRead(OPDVisitCreate):
     model_config = {"from_attributes": True}
 
 
+class OPDDoctorLoad(BaseModel):
+    doctor_user_id: UUID
+    doctor_name: str
+    visits: int
+
+
+class OPDDailyCount(BaseModel):
+    day: date
+    visits: int
+
+
+class OPDLiveQueueItem(BaseModel):
+    visit_id: UUID
+    queue_number: str | None = None
+    patient_name: str
+    patient_number: str | None = None
+    doctor_name: str | None = None
+    status: str
+    payment_status: str
+    waiting_minutes: int
+    next_action: str
+
+
 class OPDSummary(BaseModel):
+    """Everything on the OPD dashboard, for one hospital day. total_visits counts every visit registered that day,
+    including cancelled ones; the money figures come from that day's non-void invoices."""
     total_visits: int
     waiting_visits: int
     in_consultation_visits: int
     completed_visits: int
+    summary_date: date | None = None
+    as_of: datetime | None = None
+    prescribed_visits: int = 0
+    cancelled_visits: int = 0
+    # Consultation billing state of the day's visits.
+    not_billed_visits: int = 0
+    paid_visits: int = 0
+    visits_with_balance: int = 0
+    gross_amount: Decimal = Decimal("0.00")
+    discount_amount: Decimal = Decimal("0.00")
+    billed_amount: Decimal = Decimal("0.00")
+    collected_amount: Decimal = Decimal("0.00")
+    outstanding_amount: Decimal = Decimal("0.00")
+    prescription_orders: int = 0
+    investigation_orders: int = 0
+    procedure_orders: int = 0
+    unassigned_visits: int = 0
+    doctor_load: list[OPDDoctorLoad] = []
+    daily_visits: list[OPDDailyCount] = []
+    live_queue: list[OPDLiveQueueItem] = []
 
 
 class ERVisitArrivalMode(str, Enum):

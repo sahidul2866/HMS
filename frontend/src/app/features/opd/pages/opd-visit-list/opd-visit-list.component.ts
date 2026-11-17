@@ -133,6 +133,10 @@ export class OPDVisitListComponent implements OnDestroy {
     this.loadPrescriptionCatalog();
     this.loadVisits();
     this.route.queryParamMap.subscribe((params) => {
+      // Dashboard cards open this list already filtered (status, payment, day).
+      this.selectedStatus = params.get('status') ?? this.selectedStatus;
+      this.selectedPayment = params.get('payment') ?? this.selectedPayment;
+      this.selectedDate = params.get('date') ?? this.selectedDate;
       const openVisit = params.get('openVisit');
       if (openVisit) {
         this.openVisit(openVisit);
@@ -250,7 +254,7 @@ export class OPDVisitListComponent implements OnDestroy {
     return this.visits.filter((visit) => {
       const statusMatch = !this.selectedStatus || visit.status === this.selectedStatus;
       const paymentStatus = (visit.consultation_payment_status || 'unpaid').toLowerCase();
-      const paymentMatch = !this.selectedPayment || paymentStatus === this.selectedPayment;
+      const paymentMatch = !this.selectedPayment || (this.selectedPayment === 'due' ? ['unpaid', 'partial'].includes(paymentStatus) : paymentStatus === this.selectedPayment);
       const dateMatch = !this.selectedDate || visit.visit_date === this.selectedDate;
       const searchMatch =
         !search ||

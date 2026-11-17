@@ -763,3 +763,123 @@
     height: 120px;
   }
 }
+
+.dashboard-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.day-switch {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-stamp {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+  color: var(--text-muted, #5b6b7a);
+  font-size: 0.85rem;
+}
+
+.kpi-card--action {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(15, 40, 60, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--chart-teal, #0f766e);
+    outline-offset: 2px;
+  }
+}
+
+.empty-day {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.live-queue {
+  align-content: start;
+}
+
+.live-queue .table-wrap {
+  overflow-x: auto;
+}
+
+.live-queue table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.55rem 0.6rem;
+    border-bottom: 1px solid rgba(15, 40, 60, 0.08);
+  }
+
+  small {
+    display: block;
+    color: var(--text-muted, #5b6b7a);
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-stamp {
+    margin-left: 0;
+  }
+
+  .live-queue table,
+  .live-queue thead,
+  .live-queue tbody,
+  .live-queue tr,
+  .live-queue td {
+    display: block;
+  }
+
+  .live-queue thead {
+    display: none;
+  }
+
+  .live-queue tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(15, 40, 60, 0.1);
+  }
+
+  .live-queue td {
+    border: 0;
+    padding: 0.15rem 0;
+  }
+
+  .live-queue td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--text-muted, #5b6b7a);
+  }
+}
+
+// The hero sits on a dark gradient: keep its figures and filter labels readable.
+.page-card.module-hero .hero-stat .label,
+.page-card.module-hero .dashboard-filters .field span,
+.page-card.module-hero .dashboard-stamp {
+  color: rgba(236, 248, 255, 0.86);
+}
+
+.page-card.module-hero .hero-stat .value {
+  color: #f8fbff;
+}

@@ -1,9 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, OnDestroy, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Params, Router } from '@angular/router';
 
+import { User } from '../../../../core/models/auth.models';
+import { DoctorDirectoryService } from '../../../../core/services/doctor-directory.service';
 import { FloatingAssistantComponent } from '../../../../shared/components/floating-assistant/floating-assistant.component';
-import { OPDSummary, OPDVisit } from '../../models/opd.models';
+import { OPDSummary } from '../../models/opd.models';
 import { OPDService } from '../../services/opd.service';
 
 type DashboardKPI = {
@@ -11,6 +14,8 @@ type DashboardKPI = {
   value: string;
   detail: string;
   tone: string;
+  /** Visit List filters this card opens. */
+  query: Params;
 };
 
 type DashboardBar = {
@@ -21,19 +26,28 @@ type DashboardBar = {
   tone: string;
 };
 
+const REFRESH_MS = 60_000;
+
 @Component({
   selector: 'app-opd-overview',
   standalone: true,
-  imports: [CommonModule, FloatingAssistantComponent],
+  imports: [CommonModule, FormsModule, FloatingAssistantComponent],
   templateUrl: './opd-overview.component.html',
   styleUrls: ['./opd-overview.component.scss'],
 })
-export class OPDOverviewComponent {
+export class OPDOverviewComponent implements OnDestroy {
   private readonly opdService = inject(OPDService);
+  private readonly doctorDirectory = inject(DoctorDirectoryService);
   private readonly router = inject(Router);
+  private readonly timer = window.setInterval(() => this.loadDashboard(true), REFRESH_MS);
 
   summary: OPDSummary | null = null;
-  visits: OPDVisit[] = [];
+  loading = true;
+  error = '';
+  doctors: User[] = [];
+  /** Empty means "today" on the hospital clock. */
+  selectedDate = '';
+  selectedDoctorId = '';
   readonly assistantQuickActions = [
     'Show today’s OPD patients',
     'Show waiting OPD patients',
@@ -46,12 +60,45 @@ export class OPDOverviewComponent {
   ];
 
   constructor() {
+    this.doctorDirectory.listDoctors().subscribe((doctors) => (this.doctors = doctors));
     this.loadDashboard();
   }
 
-  loadDashboard(): void {
-    this.opdService.getSummary(null).subscribe((summary) => (this.summary = summary));
-    this.opdService.listVisits(null).subscribe((visits) => (this.visits = visits));
+  ngOnDestroy(): void {
+    window.clearInterval(this.timer);
+  }
+
+  loadDashboard(background = false): void {
+    if (!background) this.loading = true;
+    this.opdService.getSummary(this.selectedDoctorId || null, this.selectedDate || null, background).subscribe({
+      next: (summary) => {
+        this.summary = summary;
+        this.error = '';
+        this.loading = false;
+      },
+      error: (error) => {
+        // A refused read must not look like a quiet day: say why the numbers are missing.
+        this.loading = false;
+        if (!background) {
+          this.summary = null;
+          this.error = error?.error?.error?.message || 'The OPD figures could not be loaded. Try again shortly.';
+        }
+      },
+    });
+  }
+
+  shiftDay(days: number): void {
+    const base = this.summary?.summary_date ?? this.today;
+    const next = new Date(`${base}T00:00:00`);
+    next.setDate(next.getDate() + days);
+    const value = this.localIso(next);
+    this.selectedDate = value >= this.today ? '' : value;
+    this.loadDashboard();
+  }
+
+  goToday(): void {
+    this.selectedDate = '';
+    this.loadDashboard();
   }
 
   navigateToNewPatient(): void {
@@ -66,170 +113,191 @@ export class OPDOverviewComponent {
     void this.router.navigate(['/opd/queue']);
   }
 
-  navigateToVisitList(): void {
-    void this.router.navigate(['/opd/visits']);
+  navigateToVisitList(query: Params = {}): void {
+    void this.router.navigate(['/opd/visits'], { queryParams: { date: this.summary?.summary_date ?? this.today, ...query } });
+  }
+
+  openVisit(visitId: string): void {
+    void this.router.navigate(['/opd/visits'], { queryParams: { openVisit: visitId } });
+  }
+
+  /** Hospital-clock calendar date, which the server uses for "today". */
+  get today(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Dhaka' });
+  }
+
+  get isToday(): boolean {
+    return !this.summary?.summary_date || this.summary.summary_date === this.today;
+  }
+
+  get dayLabel(): string {
+    return this.isToday ? 'today' : `on ${this.formatDay(this.summary?.summary_date ?? '', true)}`;
+  }
+
+  get lastUpdated(): string {
+    return this.summary?.as_of ? new Date(this.summary.as_of).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Dhaka' }) : '';
+  }
+
+  get hasNoVisits(): boolean {
+    return !!this.summary && this.summary.total_visits === 0;
   }
 
   get dashboardKpis(): DashboardKPI[] {
-    const totalVisits = this.summary?.total_visits ?? this.visits.length;
-    const waitingVisits = this.summary?.waiting_visits ?? this.getVisitCountByStatus('waiting');
-    const consultationVisits = this.summary?.in_consultation_visits ?? this.getVisitCountByStatus('in_consultation');
-    const completedVisits = this.summary?.completed_visits ?? this.getVisitCountByStatus('completed');
-
+    const s = this.summary;
+    if (!s) return [];
+    const billedVisits = Math.max(s.total_visits - (s.cancelled_visits ?? 0) - (s.not_billed_visits ?? 0), 0);
+    const owing = s.visits_with_balance ?? 0;
+    const notBilled = s.not_billed_visits ?? 0;
+    const prescribed = s.prescribed_visits ?? 0;
+    const inQueue = s.waiting_visits + s.in_consultation_visits;
     return [
-      { label: 'Today Visits', value: String(totalVisits), detail: `${this.getPaidVisitsCount()} paid registrations`, tone: 'teal' },
-      { label: 'Collected', value: this.formatCurrency(this.getCollectedAmount()), detail: `${this.getPaidVisitsCount()} settled visits`, tone: 'emerald' },
-      { label: 'Outstanding', value: this.formatCurrency(this.getOutstandingAmount()), detail: `${this.getUnpaidVisitsCount()} visits need payment`, tone: 'amber' },
-      { label: 'In Queue', value: String(waitingVisits + consultationVisits), detail: `${waitingVisits} waiting · ${consultationVisits} in consultation`, tone: 'blue' },
-      { label: 'Completed', value: String(completedVisits), detail: `${this.getCompletionRate()} completion rate`, tone: 'slate' },
-      { label: 'Avg Visit Value', value: this.formatCurrency(this.getAverageVisitValue()), detail: `${this.getTotalOrderCount()} total clinical orders`, tone: 'rose' },
+      {
+        label: `Registered ${this.dayLabel}`,
+        value: String(s.total_visits),
+        detail: s.total_visits ? [`${s.paid_visits ?? 0} paid`, `${owing} with a balance`, `${notBilled} not billed yet`, s.cancelled_visits ? `${s.cancelled_visits} cancelled` : ''].filter(Boolean).join(' · ') : 'No registrations yet',
+        tone: 'teal',
+        query: {},
+      },
+      {
+        label: 'Collected',
+        value: this.formatCurrency(s.collected_amount),
+        detail: `of ${this.formatCurrency(s.billed_amount)} billed ${this.dayLabel}`,
+        tone: 'emerald',
+        query: { payment: 'paid' },
+      },
+      {
+        label: 'Outstanding',
+        value: this.formatCurrency(s.outstanding_amount),
+        detail: owing ? `${owing} visit${owing === 1 ? '' : 's'} with a balance${notBilled ? ` · ${notBilled} not billed yet` : ''}` : notBilled ? `Nothing owed yet · ${notBilled} visit${notBilled === 1 ? '' : 's'} not billed` : 'Nothing owed',
+        tone: 'amber',
+        query: { payment: 'due' },
+      },
+      {
+        label: 'In queue',
+        value: String(inQueue),
+        detail: `${s.waiting_visits} waiting · ${s.in_consultation_visits} in consultation${prescribed ? ` · ${prescribed} post-consultation` : ''}`,
+        tone: 'blue',
+        query: { status: s.waiting_visits || !s.in_consultation_visits ? 'waiting' : 'in_consultation' },
+      },
+      {
+        label: 'Completed',
+        value: String(s.completed_visits),
+        detail: `${this.rate(s.completed_visits, s.total_visits - (s.cancelled_visits ?? 0))} of active visits${prescribed ? ` · ${prescribed} prescribed, not closed` : ''}`,
+        tone: 'slate',
+        query: { status: 'completed' },
+      },
+      {
+        label: 'Average bill',
+        value: this.formatCurrency(billedVisits ? Number(s.billed_amount ?? 0) / billedVisits : 0),
+        detail: `${this.totalOrders} clinical order${this.totalOrders === 1 ? '' : 's'} · per billed visit`,
+        tone: 'rose',
+        query: {},
+      },
     ];
   }
 
   get statusChartItems(): DashboardBar[] {
+    const s = this.summary;
+    if (!s) return [];
+    const known = s.waiting_visits + s.in_consultation_visits + (s.prescribed_visits ?? 0) + s.completed_visits + (s.cancelled_visits ?? 0);
     const items = [
-      { label: 'Waiting', value: this.summary?.waiting_visits ?? this.getVisitCountByStatus('waiting'), tone: 'var(--chart-teal)' },
-      { label: 'In Consultation', value: this.summary?.in_consultation_visits ?? this.getVisitCountByStatus('in_consultation'), tone: 'var(--chart-blue)' },
-      { label: 'Completed', value: this.summary?.completed_visits ?? this.getVisitCountByStatus('completed'), tone: 'var(--chart-emerald)' },
-      { label: 'Prescribed', value: this.getVisitCountByStatus('prescribed'), tone: 'var(--chart-gold)' },
-      { label: 'Billed', value: this.getVisitCountByStatus('billed'), tone: 'var(--chart-violet)' },
-    ];
-    const max = Math.max(...items.map((item) => item.value), 1);
-    return items.map((item) => ({
-      ...item,
-      detail: this.getShareLabel(item.value, this.summary?.total_visits ?? this.visits.length),
-      width: `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%`,
-    }));
+      { label: 'Waiting', value: s.waiting_visits, tone: 'var(--chart-teal)', note: '' },
+      { label: 'In consultation', value: s.in_consultation_visits, tone: 'var(--chart-blue)', note: '' },
+      { label: 'Post-consultation', value: s.prescribed_visits ?? 0, tone: 'var(--chart-gold)', note: 'prescribed, not yet closed' },
+      { label: 'Completed', value: s.completed_visits, tone: 'var(--chart-emerald)', note: '' },
+      { label: 'Cancelled', value: s.cancelled_visits ?? 0, tone: 'var(--chart-rose)', note: '' },
+      { label: 'Other', value: Math.max(s.total_visits - known, 0), tone: 'var(--chart-violet)', note: '' },
+    ].filter((item) => item.label !== 'Other' || item.value > 0);
+    return this.bars(items, s.total_visits, (item) => [this.share(item.value, s.total_visits), item.note].filter(Boolean).join(' · '));
   }
 
   get doctorLoadItems(): DashboardBar[] {
-    const counts = new Map<string, number>();
-    for (const visit of this.visits) {
-      const label = visit.consulting_doctor_name || 'Unassigned';
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
+    const rows = (this.summary?.doctor_load ?? []).slice(0, 5);
+    const assigned = (this.summary?.doctor_load ?? []).reduce((sum, row) => sum + row.visits, 0);
+    return this.bars(rows.map((row) => ({ label: row.doctor_name, value: row.visits, tone: 'var(--chart-blue)' })), assigned, (item) => `${item.value} visit${item.value === 1 ? '' : 's'} · ${this.share(item.value, assigned)} of doctor-assigned visits`);
+  }
 
-    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5);
-    const max = Math.max(...sorted.map(([, value]) => value), 1);
-
-    return sorted.map(([label, value]) => ({
-      label,
-      value,
-      detail: this.getShareLabel(value, this.visits.length),
-      width: `${Math.max((value / max) * 100, value > 0 ? 14 : 0)}%`,
-      tone: 'var(--chart-blue)',
-    }));
+  get unassignedNote(): string {
+    const count = this.summary?.unassigned_visits ?? 0;
+    return count ? `${count} visit${count === 1 ? ' was' : 's were'} registered through the billing desk without a doctor and ${count === 1 ? 'is' : 'are'} not counted above.` : '';
   }
 
   get orderMixItems(): DashboardBar[] {
+    const s = this.summary;
     const items = [
-      { label: 'Prescription', value: this.getOrderCountByType('prescription'), tone: 'var(--chart-gold)' },
-      { label: 'Investigation', value: this.getOrderCountByType('investigation'), tone: 'var(--chart-rose)' },
-      { label: 'Procedure', value: this.getOrderCountByType('procedure'), tone: 'var(--chart-violet)' },
+      { label: 'Prescription', value: s?.prescription_orders ?? 0, tone: 'var(--chart-gold)' },
+      { label: 'Investigation', value: s?.investigation_orders ?? 0, tone: 'var(--chart-rose)' },
+      { label: 'Procedure', value: s?.procedure_orders ?? 0, tone: 'var(--chart-violet)' },
     ];
-    const max = Math.max(...items.map((item) => item.value), 1);
     const total = items.reduce((sum, item) => sum + item.value, 0);
+    return this.bars(items, total, (item) => (total ? this.share(item.value, total) : 'No orders yet'));
+  }
 
-    return items.map((item) => ({
-      ...item,
-      detail: total ? this.getShareLabel(item.value, total) : 'No orders yet',
-      width: `${Math.max((item.value / max) * 100, item.value > 0 ? 18 : 0)}%`,
-    }));
+  get totalOrders(): number {
+    const s = this.summary;
+    return (s?.prescription_orders ?? 0) + (s?.investigation_orders ?? 0) + (s?.procedure_orders ?? 0);
   }
 
   get revenueHighlights(): Array<{ label: string; value: string }> {
+    const s = this.summary;
     return [
-      { label: 'Gross Fees', value: this.formatCurrency(this.getGrossAmount()) },
-      { label: 'Discounts', value: this.formatCurrency(this.getDiscountAmount()) },
-      { label: 'Net Collection', value: this.formatCurrency(this.getCollectedAmount()) },
+      { label: 'Gross fees', value: this.formatCurrency(s?.gross_amount) },
+      { label: 'Discounts', value: this.formatCurrency(s?.discount_amount) },
+      { label: 'Billed (net)', value: this.formatCurrency(s?.billed_amount) },
+      { label: 'Collected', value: this.formatCurrency(s?.collected_amount) },
+      { label: 'Outstanding', value: this.formatCurrency(s?.outstanding_amount) },
     ];
   }
 
   get revenueHeadline(): string {
-    return this.formatCurrency(this.getCollectedAmount());
+    return this.formatCurrency(this.summary?.collected_amount);
   }
 
   get weeklyTrendItems(): DashboardBar[] {
-    const today = new Date();
-    const points: Array<{ key: string; label: string }> = [];
-    for (let offset = 6; offset >= 0; offset -= 1) {
-      const date = new Date(today);
-      date.setDate(today.getDate() - offset);
-      points.push({ key: date.toISOString().slice(0, 10), label: date.toLocaleDateString('en-US', { weekday: 'short' }) });
-    }
-
-    const counts = new Map<string, number>();
-    for (const visit of this.visits) {
-      counts.set(visit.visit_date, (counts.get(visit.visit_date) ?? 0) + 1);
-    }
-
-    const max = Math.max(...points.map((point) => counts.get(point.key) ?? 0), 1);
-    return points.map((point) => {
-      const value = counts.get(point.key) ?? 0;
-      return {
-        label: point.label,
-        value,
-        detail: point.key,
-        width: `${Math.max((value / max) * 100, value > 0 ? 12 : 8)}%`,
-        tone: 'var(--chart-teal)',
-      };
-    });
+    const points = this.summary?.daily_visits ?? [];
+    const max = Math.max(...points.map((point) => point.visits), 1);
+    const last = points.length - 1;
+    return points.map((point, index) => ({
+      label: index === last && this.isToday ? 'Today' : this.formatDay(point.day),
+      value: point.visits,
+      detail: point.day,
+      width: `${Math.max((point.visits / max) * 100, point.visits > 0 ? 12 : 8)}%`,
+      tone: index === last ? 'var(--chart-emerald)' : 'var(--chart-teal)',
+    }));
   }
 
-  private getVisitCountByStatus(status: string): number {
-    return this.visits.filter((visit) => visit.status === status).length;
+  get trendRange(): string {
+    const points = this.summary?.daily_visits ?? [];
+    return points.length ? `${this.formatDay(points[0].day, true)} – ${this.formatDay(points[points.length - 1].day, true)}` : '';
   }
 
-  private getOrderCountByType(orderType: string): number {
-    return this.visits.reduce((sum, visit) => sum + visit.orders.filter((order) => order.order_type === orderType).length, 0);
+  paymentLabel(status: string): string {
+    return ({ paid: 'Paid', partial: 'Part paid', unpaid: 'Unpaid', returned: 'Returned' } as Record<string, string>)[status] ?? status;
   }
 
-  private getTotalOrderCount(): number {
-    return this.visits.reduce((sum, visit) => sum + visit.orders.length, 0);
+  private bars<T extends { label: string; value: number; tone: string }>(items: T[], total: number, detail: (item: T) => string): DashboardBar[] {
+    const max = Math.max(...items.map((item) => item.value), 1);
+    return items.map((item) => ({ label: item.label, value: item.value, tone: item.tone, detail: detail(item), width: `${Math.max((item.value / max) * 100, item.value > 0 ? 12 : 0)}%` }));
   }
 
-  private getPaidVisitsCount(): number {
-    return this.visits.filter((visit) => (visit.consultation_payment_status || '').toLowerCase() === 'paid').length;
+  private share(value: number, total: number): string {
+    return total ? `${Math.round((value / total) * 100)}%` : '0%';
   }
 
-  private getUnpaidVisitsCount(): number {
-    return this.visits.filter((visit) => (visit.consultation_payment_status || '').toLowerCase() !== 'paid').length;
+  private rate(value: number, total: number): string {
+    return total > 0 ? `${Math.round((value / total) * 100)}%` : '0%';
   }
 
-  private getGrossAmount(): number {
-    return this.visits.reduce((sum, visit) => sum + Number(visit.consultation_total ?? visit.consultation_fee ?? 0), 0);
+  private formatDay(iso: string, withYear = false): string {
+    if (!iso) return '';
+    return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', withYear ? { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' } : { weekday: 'short', day: 'numeric', month: 'short' });
   }
 
-  private getDiscountAmount(): number {
-    return this.visits.reduce((sum, visit) => sum + Number(visit.consultation_discount ?? 0), 0);
+  private localIso(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
-  private getCollectedAmount(): number {
-    return this.visits
-      .filter((visit) => (visit.consultation_payment_status || '').toLowerCase() === 'paid')
-      .reduce((sum, visit) => sum + Number(visit.consultation_total ?? visit.consultation_fee ?? 0), 0);
-  }
-
-  private getOutstandingAmount(): number {
-    return Math.max(this.getGrossAmount() - this.getCollectedAmount(), 0);
-  }
-
-  private getAverageVisitValue(): number {
-    return this.visits.length ? this.getGrossAmount() / this.visits.length : 0;
-  }
-
-  private getCompletionRate(): string {
-    const total = this.summary?.total_visits ?? this.visits.length;
-    const completed = this.summary?.completed_visits ?? this.getVisitCountByStatus('completed');
-    return total ? `${Math.round((completed / total) * 100)}%` : '0%';
-  }
-
-  private getShareLabel(value: number, total: number): string {
-    if (!total) return '0%';
-    return `${Math.round((value / total) * 100)}% share`;
-  }
-
-  private formatCurrency(value: number): string {
-    return `BDT ${value.toFixed(2)}`;
+  private formatCurrency(value: string | number | null | undefined): string {
+    return new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', minimumFractionDigits: 2 }).format(Number(value ?? 0));
   }
 }

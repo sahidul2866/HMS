@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -36,8 +37,8 @@ def get_opd_visit(visit_id: UUID, user=Depends(get_current_user), db: Session = 
 
 
 @router.get("/summary", response_model=OPDSummary, dependencies=[Depends(require_permissions("opd.view"))])
-def get_opd_summary(doctor_user_id: UUID | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> OPDSummary:
-    return OPDService(db).get_summary(user, doctor_user_id)
+def get_opd_summary(doctor_user_id: UUID | None = None, visit_date: date | None = None, user=Depends(get_current_user), db: Session = Depends(get_db)) -> OPDSummary:
+    return OPDService(db).get_summary(user, doctor_user_id, visit_date)
 
 
 @router.post("/visits", response_model=OPDVisitRead, dependencies=[Depends(require_permissions("opd.visit.create"))])

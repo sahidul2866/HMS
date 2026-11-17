@@ -62,6 +62,12 @@ export class TabRouteReuseStrategy implements RouteReuseStrategy {
     this.invalidatedPaths.clear();
   }
 
+  invalidateAll(activePath: string): void {
+    this.storedHandles.clear();
+    // Do not retain potentially stale data from the visible workspace on exit.
+    this.invalidatePath(activePath);
+  }
+
   invalidateModules(modules: string[]): void {
     for (const key of [...this.storedHandles.keys()]) {
       if (this.matchesAnyModule(key, modules)) {

@@ -4,7 +4,7 @@
       <div>
         <div class="hero-kicker">OPD Dashboard</div>
         <h1 class="page-title">Outpatient Overview</h1>
-        <div class="page-subtitle">Summary-only page with quick navigation. Operational queue and visit actions are on the dedicated Visit List page.</div>
+        <div class="page-subtitle">One hospital day at a glance. Every figure below counts the same visits; open the Visit List for actions.</div>
       </div>
       <div class="toolbar-row">
         <button class="secondary-btn" type="button" (click)="navigateToQueue()">Doctor Serials &amp; PA</button>
@@ -14,95 +14,206 @@
       </div>
     </div>
 
+    <div class="dashboard-filters" role="group" aria-label="Dashboard filters">
+      <div class="day-switch">
+        <button type="button" class="secondary-btn compact-btn" (click)="shiftDay(-1)" aria-label="Previous day">‹</button>
+        <label class="field">
+          <span>Day</span>
+          <input type="date" [(ngModel)]="selectedDate" [max]="today" (ngModelChange)="loadDashboard()" aria-label="Dashboard day" />
+        </label>
+        <button type="button" class="secondary-btn compact-btn" (click)="shiftDay(1)" [disabled]="isToday" aria-label="Next day">›</button>
+        <button type="button" class="secondary-btn compact-btn" (click)="goToday()" [disabled]="isToday && !selectedDate">Today</button>
+      </div>
+      @if (doctors.length) {
+        <label class="field">
+          <span>Doctor</span>
+          <select [(ngModel)]="selectedDoctorId" (ngModelChange)="loadDashboard()" aria-label="Dashboard doctor">
+            <option value="">All doctors</option>
+            @for (doctor of doctors; track doctor.id) {
+              <option [value]="doctor.id">{{ doctor.full_name }}</option>
+            }
+          </select>
+        </label>
+      }
+      <div class="dashboard-stamp">
+        @if (lastUpdated) {
+          <span>Last updated {{ lastUpdated }}</span>
+        }
+        <button type="button" class="secondary-btn compact-btn" (click)="loadDashboard()">Refresh</button>
+      </div>
+    </div>
+
     @if (summary) {
       <div class="hero-summary">
-        <div class="hero-stat"><div class="label">Today Visits</div><div class="value">{{ summary.total_visits }}</div></div>
+        <div class="hero-stat"><div class="label">Registered {{ dayLabel }}</div><div class="value">{{ summary.total_visits }}</div></div>
         <div class="hero-stat"><div class="label">Waiting</div><div class="value">{{ summary.waiting_visits }}</div></div>
         <div class="hero-stat"><div class="label">In Consultation</div><div class="value">{{ summary.in_consultation_visits }}</div></div>
+        <div class="hero-stat"><div class="label">Post-consultation</div><div class="value">{{ summary.prescribed_visits ?? 0 }}</div></div>
         <div class="hero-stat"><div class="label">Completed</div><div class="value">{{ summary.completed_visits }}</div></div>
       </div>
     }
   </div>
 
-  <section class="analytics-grid">
-    <div class="page-card analytics-card analytics-card--wide">
-      <div class="section-header analytics-card__header">
-        <div>
-          <div class="hero-kicker">Dashboard KPIs</div>
-          <h2 class="section-title">Front Desk Snapshot</h2>
-          <div class="section-copy">Live OPD registration, billing, and consultation movement.</div>
+  @if (error) {
+    <div class="page-card operational-access-state" role="alert">
+      <h2 class="section-title">OPD figures are not available</h2>
+      <p class="section-copy">{{ error }}</p>
+      <button class="secondary-btn" type="button" (click)="loadDashboard()">Try again</button>
+    </div>
+  }
+
+  @if (hasNoVisits) {
+    <div class="page-card empty-day" role="status">
+      <div>
+        <h2 class="section-title">No OPD visits registered {{ dayLabel }}</h2>
+        <p class="section-copy">{{ isToday ? 'Register a visit to start today’s queue. The cards below fill in as patients are registered, billed and seen.' : 'Pick another day, or return to today.' }}</p>
+      </div>
+      @if (isToday) {
+        <button class="primary-btn" type="button" (click)="navigateToRegisterVisit()">Register Visit</button>
+      } @else {
+        <button class="secondary-btn" type="button" (click)="goToday()">Back to today</button>
+      }
+    </div>
+  }
+
+  @if (summary) {
+    <section class="analytics-grid">
+      <div class="page-card analytics-card analytics-card--wide">
+        <div class="section-header analytics-card__header">
+          <div>
+            <div class="hero-kicker">Dashboard KPIs</div>
+            <h2 class="section-title">Front Desk Snapshot</h2>
+            <div class="section-copy">Registered = every visit registered {{ dayLabel }}. Collected and Outstanding come from that day’s invoices. Select a card to open the matching visits.</div>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          @for (kpi of dashboardKpis; track kpi.label) {
+            <button type="button" class="kpi-card kpi-card--action" [attr.data-tone]="kpi.tone" (click)="navigateToVisitList(kpi.query)" [attr.aria-label]="kpi.label + ': ' + kpi.value + '. ' + kpi.detail">
+              <span class="kpi-label">{{ kpi.label }}</span>
+              <strong class="kpi-value">{{ kpi.value }}</strong>
+              <span class="kpi-detail">{{ kpi.detail }}</span>
+            </button>
+          }
         </div>
       </div>
 
-      <div class="kpi-grid">
-        @for (kpi of dashboardKpis; track kpi.label) {
-          <article class="kpi-card" [attr.data-tone]="kpi.tone">
-            <span class="kpi-label">{{ kpi.label }}</span>
-            <strong class="kpi-value">{{ kpi.value }}</strong>
-            <span class="kpi-detail">{{ kpi.detail }}</span>
-          </article>
-        }
-      </div>
-    </div>
-
-    <div class="page-card analytics-card">
-      <div class="hero-kicker">Status Mix</div>
-      <h2 class="section-title">Queue Distribution</h2>
-      <div class="chart-stack">
-        @for (item of statusChartItems; track item.label) {
-          <div class="metric-row">
-            <div class="metric-row__copy">
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.detail }}</span>
-            </div>
-            <div class="metric-row__value">{{ item.value }}</div>
-            <div class="metric-bar">
-              <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
-            </div>
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="page-card analytics-card">
-      <div class="hero-kicker">Revenue</div>
-      <h2 class="section-title">Collection Snapshot</h2>
-      <div class="revenue-hero">
-        <strong>{{ revenueHeadline }}</strong>
-        <span>Discount-aware OPD billing rollup</span>
-      </div>
-      <div class="revenue-highlight-grid">
-        @for (item of revenueHighlights; track item.label) {
-          <div class="revenue-tile">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="page-card analytics-card">
-      <div class="hero-kicker">Trend</div>
-      <h2 class="section-title">7-Day Visits</h2>
-      <div class="mini-column-chart">
-        @for (item of weeklyTrendItems; track item.detail) {
-          <div class="mini-column">
-            <div class="mini-column__value">{{ item.value }}</div>
-            <div class="mini-column__track">
-              <span class="mini-column__fill" [style.height]="item.width" [style.background]="item.tone"></span>
-            </div>
-            <div class="mini-column__label">{{ item.label }}</div>
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="page-card analytics-card">
-      <div class="hero-kicker">Doctor Load</div>
-      <h2 class="section-title">Consultant Coverage</h2>
-      @if (doctorLoadItems.length) {
+      <div class="page-card analytics-card">
+        <div class="hero-kicker">Status Mix</div>
+        <h2 class="section-title">Visit stages</h2>
         <div class="chart-stack">
-          @for (item of doctorLoadItems; track item.label) {
+          @for (item of statusChartItems; track item.label) {
+            <div class="metric-row">
+              <div class="metric-row__copy">
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.detail }}</span>
+              </div>
+              <div class="metric-row__value">{{ item.value }}</div>
+              <div class="metric-bar">
+                <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="page-card analytics-card analytics-card--wide live-queue">
+        <div class="section-header analytics-card__header">
+          <div>
+            <div class="hero-kicker">Live queue</div>
+            <h2 class="section-title">Who is next</h2>
+          </div>
+          <button class="secondary-btn compact-btn" type="button" (click)="navigateToQueue()">Open doctor serials</button>
+        </div>
+        @if (summary.live_queue?.length) {
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Token</th><th>Patient</th><th>Doctor</th><th>Waiting</th><th>Payment</th><th>Next</th><th></th></tr></thead>
+              <tbody>
+                @for (item of summary.live_queue; track item.visit_id) {
+                  <tr>
+                    <td data-label="Token"><strong>{{ item.queue_number || '–' }}</strong></td>
+                    <td data-label="Patient">{{ item.patient_name }}<small>{{ item.patient_number }}</small></td>
+                    <td data-label="Doctor">{{ item.doctor_name || '–' }}</td>
+                    <td data-label="Waiting">{{ item.waiting_minutes }} min</td>
+                    <td data-label="Payment"><span class="pill" [attr.data-state]="item.payment_status">{{ paymentLabel(item.payment_status) }}</span></td>
+                    <td data-label="Next">{{ item.next_action }}</td>
+                    <td><button class="secondary-btn compact-btn" type="button" (click)="openVisit(item.visit_id)">Open</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="empty-analytics-state">{{ hasNoVisits ? 'The queue is empty because no visits are registered.' : 'Nobody is waiting or in consultation right now.' }}</div>
+        }
+      </div>
+
+      <div class="page-card analytics-card">
+        <div class="hero-kicker">Revenue</div>
+        <h2 class="section-title">Collection Snapshot</h2>
+        <div class="revenue-hero">
+          <strong>{{ revenueHeadline }}</strong>
+          <span>Collected {{ dayLabel }}, net of refunds</span>
+        </div>
+        <div class="revenue-highlight-grid">
+          @for (item of revenueHighlights; track item.label) {
+            <div class="revenue-tile">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="page-card analytics-card">
+        <div class="hero-kicker">Trend</div>
+        <h2 class="section-title">7-Day Visits</h2>
+        <div class="section-copy">{{ trendRange }} · cancelled visits excluded</div>
+        <div class="mini-column-chart">
+          @for (item of weeklyTrendItems; track item.detail) {
+            <div class="mini-column" [title]="item.detail + ': ' + item.value + ' visits'">
+              <div class="mini-column__value">{{ item.value }}</div>
+              <div class="mini-column__track">
+                <span class="mini-column__fill" [style.height]="item.width" [style.background]="item.tone"></span>
+              </div>
+              <div class="mini-column__label">{{ item.label }}</div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="page-card analytics-card">
+        <div class="hero-kicker">Doctor Load</div>
+        <h2 class="section-title">Consultant Coverage</h2>
+        @if (doctorLoadItems.length) {
+          <div class="chart-stack">
+            @for (item of doctorLoadItems; track item.label) {
+              <div class="metric-row metric-row--tight">
+                <div class="metric-row__copy">
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ item.detail }}</span>
+                </div>
+                <div class="metric-row__value">{{ item.value }}</div>
+                <div class="metric-bar">
+                  <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-analytics-state">No visits are assigned to a doctor {{ dayLabel }}.</div>
+        }
+        @if (unassignedNote) {
+          <div class="section-copy">{{ unassignedNote }}</div>
+        }
+      </div>
+
+      <div class="page-card analytics-card">
+        <div class="hero-kicker">Clinical Orders</div>
+        <h2 class="section-title">Order Mix</h2>
+        <div class="chart-stack">
+          @for (item of orderMixItems; track item.label) {
             <div class="metric-row metric-row--tight">
               <div class="metric-row__copy">
                 <strong>{{ item.label }}</strong>
@@ -115,30 +226,11 @@
             </div>
           }
         </div>
-      } @else {
-        <div class="empty-analytics-state">Doctor-wise load will appear once visits are assigned.</div>
-      }
-    </div>
-
-    <div class="page-card analytics-card">
-      <div class="hero-kicker">Clinical Orders</div>
-      <h2 class="section-title">Order Mix</h2>
-      <div class="chart-stack">
-        @for (item of orderMixItems; track item.label) {
-          <div class="metric-row metric-row--tight">
-            <div class="metric-row__copy">
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.detail }}</span>
-            </div>
-            <div class="metric-row__value">{{ item.value }}</div>
-            <div class="metric-bar">
-              <span class="metric-bar__fill" [style.width]="item.width" [style.background]="item.tone"></span>
-            </div>
-          </div>
-        }
       </div>
-    </div>
-  </section>
+    </section>
+  } @else if (loading) {
+    <div class="page-card empty-day" role="status"><div><h2 class="section-title">Loading OPD figures…</h2></div></div>
+  }
 </section>
 
 <app-floating-assistant

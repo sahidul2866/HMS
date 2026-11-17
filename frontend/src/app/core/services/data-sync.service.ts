@@ -1,3 +1,6 @@
+import { Router } from '@angular/router';
+import { OfflineResponseCache } from '../interceptors/offline.interceptor';
+import { ConnectionStateService } from './connection-state.service';
 import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { ApiCacheService } from './api-cache.service';
@@ -46,6 +49,9 @@ export class DataSyncService {
   private static readonly CHANNEL_NAME = 'hms-data-sync';
   private static readonly STORAGE_KEY = 'hms:data-sync:last-event';
 
+  private readonly router = inject(Router);
+  private readonly offlineCache = inject(OfflineResponseCache);
+  private readonly connectionState = inject(ConnectionStateService);
   private readonly apiCache = inject(ApiCacheService);
   private readonly notificationService = inject(NotificationService);
   private readonly appContext = inject(AppContextService);
@@ -118,9 +124,7 @@ export class DataSyncService {
   prepareApiMutation(url: string): void {
     const module = this.moduleFromApiUrl(url);
     if (!module || ['auth', 'patient-auth'].includes(module)) return;
-    this.apiCache.clearPrefix(`${module}:`);
-    this.apiCache.clearPrefix('dashboard:');
-    this.routeReuseStrategy.invalidateModules([module, 'dashboard']);
+    this.invalidateCachedData();
   }
 
   dismiss(event: AppDataEvent): void {
@@ -134,7 +138,7 @@ export class DataSyncService {
   requestRefresh(): void {
     this.dismissAll();
     window.dispatchEvent(new CustomEvent('hms:data-refresh-request', { detail: this.appContext.snapshot() }));
-    this.notificationService.info('Latest data is available. Reopen or refresh this panel if it does not update automatically.');
+    void this.router.navigateByUrl(this.router.url);
   }
 
   private receive(event: AppDataEvent): void {
@@ -154,14 +158,22 @@ export class DataSyncService {
   }
 
   private applyLocalCacheInvalidation(event: AppDataEvent): void {
-    for (const prefix of event.cachePrefixes || []) {
-      this.apiCache.clearPrefix(prefix);
-    }
-    this.routeReuseStrategy.invalidateModules(event.modules || []);
+    // Shared patients, lookups and summaries cross API module boundaries.
+    this.invalidateCachedData();
+  }
+
+  private invalidateCachedData(): void {
+    this.apiCache.clearAll();
+    this.offlineCache.clear();
+    this.connectionState.cachedAt.set(null);
+    this.routeReuseStrategy.invalidateAll(this.router.url);
   }
 
   private requestSoftRefresh(event: AppDataEvent): void {
     window.dispatchEvent(new CustomEvent('hms:data-refresh-request', { detail: event }));
+    if (!document.querySelector('form.ng-dirty, form.app-form-submitted')) {
+      void this.router.navigateByUrl(this.router.url);
+    }
   }
 
   private isRelevant(event: AppDataEvent): boolean {

@@ -27,6 +27,7 @@
     "test:ipd:browser": "node frontend/e2e/ipd-journey.cjs",
     "test:gui:billing": "node frontend/e2e/billing-layout.cjs",
     "test:billing:bd": "node frontend/e2e/billing-bangladesh.cjs",
+    "test:opd:dashboard": "node frontend/e2e/opd-dashboard.cjs",
     "test:gui:inventory": "node frontend/e2e/gui-inventory.cjs",
     "test:modules:browser": "node frontend/e2e/remaining-modules.cjs",
     "test:gui:dialogs": "node frontend/e2e/module-dialogs.cjs",

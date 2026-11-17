@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     app_name: str = Field(default="MediProfit API", alias="APP_NAME")
     app_env: Literal["development", "staging", "production"] = Field(default="development", alias="APP_ENV")
     debug: bool | str = Field(default=True, alias="DEBUG")
+    # "Today" on operational dashboards follows the hospital's clock, not UTC (Dhaka is UTC+6, so UTC "today" lags until 06:00).
+    hospital_timezone: str = Field(default="Asia/Dhaka", alias="HOSPITAL_TIMEZONE")
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")
     secret_key: str = Field(alias="SECRET_KEY")
     access_token_expire_minutes: int = Field(default=15, alias="ACCESS_TOKEN_EXPIRE_MINUTES")

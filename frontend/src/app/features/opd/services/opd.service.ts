@@ -1,7 +1,9 @@
+import { HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { ApiCacheService } from '../../../core/services/api-cache.service';
+import { SKIP_GLOBAL_LOADER } from '../../../core/http/http-context.tokens';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
 import { IPDAdmission } from '../../ipd/models/ipd.models';
@@ -35,9 +37,13 @@ export class OPDService extends ApiBaseService {
     return this.cache.get(`opd:patient:${patientId}`, () => this.http.get<OPDVisit[]>(this.url(`/patients/${patientId}/opd-visits`)));
   }
 
-  getSummary(doctorUserId?: string | null): Observable<OPDSummary> {
-    const params = doctorUserId ? `?doctor_user_id=${encodeURIComponent(doctorUserId)}` : '';
-    return this.cache.get(`opd:summary:${params}`, () => this.http.get<OPDSummary>(this.url(`/opd/summary${params}`)));
+  /** Live dashboard figures for one hospital day (default today). Never cached: the numbers must match the visit list. */
+  getSummary(doctorUserId?: string | null, visitDate?: string | null, background = false): Observable<OPDSummary> {
+    const params: Record<string, string> = {};
+    if (doctorUserId) params['doctor_user_id'] = doctorUserId;
+    if (visitDate) params['visit_date'] = visitDate;
+    const context = background ? new HttpContext().set(SKIP_GLOBAL_LOADER, true) : undefined;
+    return this.http.get<OPDSummary>(this.url('/opd/summary'), { params, context });
   }
 
   createVisit(payload: CreateOPDVisitPayload): Observable<OPDVisit> {

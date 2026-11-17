@@ -17,3 +17,22 @@ describe('connected module navigation',()=>{
   service.clear();
  });
 });
+
+
+describe('workspace data invalidation', () => {
+ it('discards inactive tabs and prevents retaining the stale active tab', () => {
+  const strategy = new TabRouteReuseStrategy();
+  const route = (path: string) => ({
+   routeConfig: { path },
+   pathFromRoot: [{ url: path.split('/').map(segment => ({ path: segment })) }]
+  } as any);
+  const patients = route('patients'), billing = route('billing');
+  strategy.store(patients, {});
+  strategy.invalidateAll('/billing?view=invoices');
+  expect(strategy.shouldAttach(patients)).toBeFalse();
+  expect(strategy.shouldDetach(billing)).toBeFalse();
+  expect(strategy.shouldReuseRoute(billing, billing)).toBeFalse();
+  expect(strategy.shouldAttach(billing)).toBeFalse();
+  expect(strategy.shouldDetach(billing)).toBeTrue();
+ });
+});

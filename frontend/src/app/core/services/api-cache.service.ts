@@ -7,6 +7,7 @@ export class ApiCacheService {
   /** Stored lookups are reused for this long; after that the next read asks the server again. */
   private readonly persistentTtlMs = 2 * 60 * 1000;
   private readonly cache = new Map<string, Observable<unknown>>();
+  private generation = 0;
   private readonly fetchedAt = new Map<string, number>();
 
   get<T>(key: string, factory: () => Observable<T>): Observable<T> {
@@ -23,11 +24,14 @@ export class ApiCacheService {
     }
     const fetchedAt = this.fetchedAt.get(key);
     if (!this.cache.has(key) || fetchedAt === undefined || Date.now() - fetchedAt > this.persistentTtlMs) {
+      const generation = this.generation;
       this.fetchedAt.set(key, Date.now());
       this.cache.set(
         key,
         factory().pipe(
-          tap((value) => this.writeStored(key, value)),
+          tap((value) => {
+            if (generation === this.generation) this.writeStored(key, value);
+          }),
           shareReplay(1)
         )
       );
@@ -36,11 +40,17 @@ export class ApiCacheService {
   }
 
   clear(key: string): void {
+    this.generation++;
+    this.fetchedAt.delete(key);
     this.cache.delete(key);
     sessionStorage.removeItem(this.storageKey(key));
   }
 
   clearPrefix(prefix: string): void {
+    this.generation++;
+    for (const key of this.fetchedAt.keys()) {
+      if (key.startsWith(prefix)) this.fetchedAt.delete(key);
+    }
     for (const key of this.cache.keys()) {
       if (key.startsWith(prefix)) {
         this.cache.delete(key);
@@ -54,6 +64,8 @@ export class ApiCacheService {
   }
 
   clearAll(): void {
+    this.generation++;
+    this.fetchedAt.clear();
     this.cache.clear();
     for (const key of this.sessionKeys()) {
       if (key.startsWith(this.persistentPrefix)) {
