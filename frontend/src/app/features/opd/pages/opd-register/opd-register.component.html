@@ -27,7 +27,8 @@
         }
       </div>
 
-      <form [formGroup]="form" (ngSubmit)="submit()">
+      <label class="field"><span><input type="checkbox" [(ngModel)]="walkIn" [ngModelOptions]="{standalone:true}"> Walk-in queue entry without an appointment slot</span></label>
+  <form [formGroup]="form" (ngSubmit)="submit()">
         <div class="compact-patient-strip">
           @for (item of patientSummaryItems; track item.label) {
             <article>

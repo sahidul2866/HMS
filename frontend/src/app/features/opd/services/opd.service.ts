@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { ApiCacheService } from '../../../core/services/api-cache.service';
-import { SKIP_GLOBAL_LOADER } from '../../../core/http/http-context.tokens';
+import { SKIP_GLOBAL_LOADER, SKIP_ERROR_NOTIFICATION } from '../../../core/http/http-context.tokens';
 import { ApiBaseService } from '../../../core/services/api-base.service';
 import { DataSyncService } from '../../../core/services/data-sync.service';
 import { IPDAdmission } from '../../ipd/models/ipd.models';
@@ -23,6 +23,9 @@ import {
 export class OPDService extends ApiBaseService {
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
+
+  clinicalGet<T>(path:string):Observable<T>{return this.http.get<T>(this.url('/opd/'+path));}
+  clinicalPost<T>(path:string,payload:unknown):Observable<T>{return this.http.post<T>(this.url('/opd/'+path),payload).pipe(tap(()=>this.clearCache()));}
 
   listVisits(doctorUserId?: string | null): Observable<OPDVisit[]> {
     const params = doctorUserId ? `?doctor_user_id=${encodeURIComponent(doctorUserId)}` : '';
@@ -62,8 +65,8 @@ export class OPDService extends ApiBaseService {
     return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/payment`), payload).pipe(tap((visit) => this.publishVisitEvent('billing.payment.received', visit, 'OPD payment status updated.')));
   }
 
-  updateConsultation(visitId: string, payload: UpdateOPDConsultationPayload): Observable<OPDVisit> {
-    return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/consultation`), payload).pipe(tap((visit) => this.publishVisitEvent('prescription.updated', visit, 'Prescription/consultation updated.')));
+  updateConsultation(visitId: string, payload: UpdateOPDConsultationPayload, background = false): Observable<OPDVisit> {
+    return this.http.put<OPDVisit>(this.url(`/opd/visits/${visitId}/consultation`), payload, {context: background ? new HttpContext().set(SKIP_GLOBAL_LOADER,true).set(SKIP_ERROR_NOTIFICATION,true) : undefined}).pipe(tap((visit) => background ? this.clearCache() : this.publishVisitEvent('prescription.updated', visit, 'Prescription/consultation updated.')));
   }
 
   finalizePrescription(visitId: string, payload: UpdateOPDConsultationPayload): Observable<OPDVisit> {

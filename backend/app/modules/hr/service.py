@@ -412,6 +412,9 @@ class HRService:
     def create_loan(self, payload: HRLoanCreate, actor: User) -> HREmployeeLoan:
         self._get_employee(payload.employee_id, actor)
         entity = HREmployeeLoan(**payload.model_dump(), branch_id=actor.branch_id, remaining_balance=payload.approved_amount, created_by=actor.id, updated_by=actor.id)
+        from app.modules.accounting.controls import policy_for
+        from app.utils.accounting_time import today_local
+        if policy_for(self.db,actor.branch_id,today_local()):entity.status='pending'
         self.db.add(entity)
         self._audit(actor, "loan.create", "hr_employee_loan", None, str(payload.approved_amount))
         self.db.commit()
@@ -653,16 +656,42 @@ class HRService:
         from app.modules.support_posting.service import posted
         gross=Decimal(run.total_gross_salary);net=Decimal(run.total_net_salary)
         meals=sum((item.staff_meal_deduction or ZERO for item in run.items),ZERO)
-        other=Decimal(run.total_deductions)-meals
-        if event=='accrue':lines=[('5100',gross,ZERO),('2200',ZERO,net),('1150',ZERO,meals),('2300',ZERO,other)]
+        loans=sum((Decimal(item.loan_deduction or 0) for item in run.items),ZERO)
+        other=Decimal(run.total_deductions)-meals-loans
+        from app.modules.accounting.controls import policy_for
+        from app.utils.accounting_time import today_local
+        accounting_policy=policy_for(self.db,actor.branch_id,today_local())
+        if accounting_policy and loans>0:
+            from app.models.accounting import Account
+            available=self.db.scalar(select(Account.current_balance).where(Account.branch_id==actor.branch_id,Account.account_code=='1150')) or ZERO
+            if event=='accrue' and loans+meals>available:raise AppException(409,'payroll_advance_opening','Reconcile employee advance and meal receivables before recovering them through payroll')
+        tax=sum((Decimal(item.tax_deduction or 0) for item in run.items),ZERO) if accounting_policy else ZERO
+        attendance=sum((Decimal(item.attendance_deduction or 0) for item in run.items),ZERO) if accounting_policy and accounting_policy.settings.get('payroll_attendance_treatment','reduce_expense')=='reduce_expense' else ZERO
+        other-=tax+attendance
+        tax_account=accounting_policy.settings.get('payroll_tax_account','2250') if accounting_policy else '2300'
+        if event=='accrue':lines=[('5100',gross-attendance,ZERO),('2200',ZERO,net),('1150',ZERO,meals+loans),('2300',ZERO,other),(tax_account,ZERO,tax)]
         elif event=='pay':
             if not posted(self.db,'hr_payroll',run.id,'accrue'):
                 # Historic approved runs need an explicit reviewed accrual, not an inferred backfill.
                 raise AppException(409,'payroll_accrual_missing','This payroll predates automatic accounting; reconcile its accrual before payment')
-            lines=[('2200',net,ZERO),('1001',ZERO,net)]
+            channel=accounting_policy.settings.get('payroll_payment_account','1020') if accounting_policy else '1001'
+            lines=[('2200',net,ZERO),(channel,ZERO,net)]
         else:
             if not posted(self.db,'hr_payroll',run.id,'accrue'):return
-            lines=[('2200',net,ZERO),('1150',meals,ZERO),('2300',other,ZERO),('5100',ZERO,gross)]
+            lines=[('2200',net,ZERO),('1150',meals+loans,ZERO),('2300',other,ZERO),(tax_account,tax,ZERO),('5100',ZERO,gross-attendance)]
+        if event=='accrue':
+            centers={}
+            for item in run.items:
+                center=item.employee.department.name if item.employee and item.employee.department else 'Unallocated HR'
+                reduction=Decimal(item.attendance_deduction or 0) if attendance else ZERO
+                centers[center]=centers.get(center,ZERO)+Decimal(item.gross_salary)-reduction
+            lines=[('5100',amount,ZERO,center) for center,amount in centers.items()]+[line for line in lines if line[0]!='5100']
+        elif event=='reverse':
+            original=posted(self.db,'hr_payroll',run.id,'accrue')
+            if original and original.journal_id:
+                from app.models.accounting import JournalEntry
+                original_journal=self.db.get(JournalEntry,original.journal_id)
+                lines=[(line.account_code,line.credit_amount,line.debit_amount,line.cost_center) for line in original_journal.lines]
         record=journal(self.db,actor,'hr_payroll',run.id,event,lines)
         if record is None and not posted(self.db,'hr_payroll',run.id,event):
             from app.models.operational_posting import OperationalPosting
@@ -737,8 +766,13 @@ class HRService:
         ) or Decimal("0")
         base_allowances = salary.house_rent_allowance + salary.medical_allowance + salary.transport_allowance + salary.food_allowance + salary.night_duty_allowance + salary.on_call_allowance + salary.emergency_duty_allowance + salary.bonus_incentive
         overtime_amount = Decimal(overtime or 0) * salary.overtime_hourly_rate
-        per_day = salary.basic_salary / Decimal("26")
-        attendance_deduction = (absent + unpaid_leave + (late * Decimal("0.25"))) * per_day
+        from app.modules.accounting.controls import policy_for
+        accounting_policy=policy_for(self.db,actor.branch_id,end)
+        payroll_settings=accounting_policy.settings if accounting_policy else {}
+        working_days=Decimal(str(payroll_settings.get('payroll_working_days',26)))
+        late_fraction=Decimal(str(payroll_settings.get('payroll_late_day_fraction','0.25')))
+        per_day = salary.basic_salary / working_days
+        attendance_deduction = (absent + unpaid_leave + (late * late_fraction)) * per_day
         loan_deduction = self.db.scalar(select(func.coalesce(func.sum(func.least(HREmployeeLoan.monthly_installment, HREmployeeLoan.remaining_balance)), 0)).where(HREmployeeLoan.employee_id == employee.id, HREmployeeLoan.status == "active", HREmployeeLoan.deduction_start_month <= payroll_month))
         gross = self._money(salary.basic_salary + base_allowances + overtime_amount + Decimal(shift_allowance or 0))
         total_deduction = self._money(salary.tax_deduction + salary.provident_fund_deduction + salary.other_deductions + Decimal(loan_deduction or 0) + attendance_deduction)
@@ -763,7 +797,7 @@ class HRService:
             other_deductions=salary.other_deductions,
             total_deductions=total_deduction,
             net_salary=self._money(gross - total_deduction),
-            calculation_note=f"{present} present, {absent} absent, {late} late, {overtime or 0} OT hours",
+            calculation_note=f"{present} present, {absent} absent, {late} late, {overtime or 0} OT hours; working days {working_days}, late day fraction {late_fraction}, accounting policy {accounting_policy.version if accounting_policy else 'legacy'}",
             created_by=actor.id,
             updated_by=actor.id,
         )

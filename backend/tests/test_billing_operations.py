@@ -20,7 +20,7 @@ def invoice_fixture(db):
     actor,_,patient,_=seed(db)
     operations=BillingOperations(db);service=BillingServiceManager(db)
     kind=operations.create_type(BillingTypeCreate(code='LAB',name='Diagnostic billing',department='Pathology'),actor)
-    config=service.create_service(BillingServiceCreate(service_code='CUSTOM',name='Synthetic service',unit_price=100,doctor_share_percentage=0,billing_type_id=kind.id,max_discount_percentage=20),actor,{})
+    config=service.create_service(BillingServiceCreate(service_code='CUSTOM',name='Synthetic service',unit_price=100,doctor_share_percentage=0,billing_type_id=kind.id,max_discount_percentage=50),actor,{})
     invoice=service.create_invoice(BillingInvoiceCreate(patient_id=patient.id,billing_type_id=kind.id,discount_reason='Synthetic approved concession',discount_percentage=10,items=[BillingInvoiceItemCreate(billing_service_id=config['id'],quantity=2,discount_percentage=10)]),actor,{})
     return actor,operations,service,invoice,kind
 

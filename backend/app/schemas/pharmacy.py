@@ -93,6 +93,7 @@ class PharmacyCustomerRead(PharmacyCustomerCreate):
 
 
 class PharmacyMedicineCreate(BaseModel):
+    search_aliases: list[str] = Field(default_factory=list, max_length=50)
     medicine_type_id: UUID
     generic_id: UUID
     company_id: UUID
@@ -160,6 +161,9 @@ class PharmacySaleItemWrite(BaseModel):
 
 
 class PharmacySaleCreate(BaseModel):
+    paid_amount: Decimal | None = Field(default=None,ge=0,decimal_places=2)
+    payment_method: str = Field(default='cash',pattern='^(cash|card|mobile_banking|bank_transfer)$')
+    payment_provider: str | None = Field(default=None,max_length=30)
     customer_id: UUID | None = None
     patient_id: UUID | None = None
     source_visit_id: UUID | None = None
@@ -189,6 +193,9 @@ class PharmacySaleItemRead(BaseModel):
 
 
 class PharmacySaleRead(BaseModel):
+    paid_amount: Decimal | None = None
+    payment_method: str | None = None
+    payment_provider: str | None = None
     id: UUID
     customer_id: UUID
     patient_id: UUID | None = None

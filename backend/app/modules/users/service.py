@@ -47,6 +47,8 @@ class UsersService:
             opd_consultation_fee=payload.opd_consultation_fee,
             opd_follow_up_fee=payload.opd_follow_up_fee,
             opd_follow_up_days=payload.opd_follow_up_days,
+            opd_bmdc_registration=payload.opd_bmdc_registration,
+            opd_signature_image=payload.opd_signature_image,
             opd_prescription_header_name=payload.opd_prescription_header_name,
             opd_prescription_header_degrees=payload.opd_prescription_header_degrees,
             opd_prescription_header_specialty=payload.opd_prescription_header_specialty,
@@ -84,6 +86,8 @@ class UsersService:
         user.opd_consultation_fee = payload.opd_consultation_fee
         user.opd_follow_up_fee = payload.opd_follow_up_fee
         user.opd_follow_up_days = payload.opd_follow_up_days
+        user.opd_bmdc_registration = payload.opd_bmdc_registration
+        user.opd_signature_image = payload.opd_signature_image
         user.opd_prescription_header_name = payload.opd_prescription_header_name
         user.opd_prescription_header_degrees = payload.opd_prescription_header_degrees
         user.opd_prescription_header_specialty = payload.opd_prescription_header_specialty

@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import Index, JSON, Boolean, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,12 +46,17 @@ class PharmacyCompany(Base, BaseModelMixin):
 
 class PharmacyMedicine(Base, BaseModelMixin):
     __tablename__ = "pharmacy_medicines"
+    inventory_value: Mapped[Decimal | None] = mapped_column(Numeric(14,2))
+    valuation_opening_value: Mapped[Decimal | None] = mapped_column(Numeric(14,2))
+    valuation_opening_journal_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey('journal_entries.id'))
+    __table_args__ = (Index('ix_medicine_prescribing_scope','branch_id','is_active','name'),)
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     medicine_type_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_medicine_types.id"), nullable=False)
     generic_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_generics.id"), nullable=False)
     company_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_companies.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    search_aliases: Mapped[list | None] = mapped_column(JSON)
     strength: Mapped[str | None] = mapped_column(String(60))
     dosage_form: Mapped[str | None] = mapped_column(String(60))
     sku: Mapped[str | None] = mapped_column(String(80), unique=True)
@@ -116,6 +121,9 @@ class PharmacyCustomer(Base, BaseModelMixin):
 
 class PharmacySale(Base, BaseModelMixin):
     __tablename__ = "pharmacy_sales"
+    paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(14,2))
+    payment_method: Mapped[str | None] = mapped_column(String(40))
+    payment_provider: Mapped[str | None] = mapped_column(String(30))
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     customer_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_customers.id"), nullable=False)
@@ -142,6 +150,7 @@ class PharmacySale(Base, BaseModelMixin):
 
 class PharmacySaleItem(Base, BaseModelMixin):
     __tablename__ = "pharmacy_sale_items"
+    cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(14,2))
 
     sale_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_sales.id"), nullable=False)
     medicine_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("pharmacy_medicines.id"), nullable=False)

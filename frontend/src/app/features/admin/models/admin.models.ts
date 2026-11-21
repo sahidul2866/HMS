@@ -15,6 +15,8 @@ export interface CreateUserPayload {
   opd_consultation_fee?: number;
   opd_follow_up_fee?: number;
   opd_follow_up_days?: number;
+  opd_bmdc_registration?: string | null;
+  opd_signature_image?: string | null;
   opd_prescription_header_name?: string | null;
   opd_prescription_header_degrees?: string | null;
   opd_prescription_header_specialty?: string | null;
@@ -35,6 +37,8 @@ export interface UpdateUserOPDSettingsPayload {
   opd_consultation_fee: number;
   opd_follow_up_fee: number;
   opd_follow_up_days: number;
+  opd_bmdc_registration?: string | null;
+  opd_signature_image?: string | null;
   opd_prescription_header_name?: string | null;
   opd_prescription_header_degrees?: string | null;
   opd_prescription_header_specialty?: string | null;

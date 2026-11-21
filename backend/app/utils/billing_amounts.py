@@ -12,6 +12,8 @@ def net_line_amounts(invoice) -> dict:
     so returning every line can never credit more (or less) than the patient was billed.
     """
     lines = sorted((item for item in invoice.items if item.is_active), key=lambda item: str(item.id))
+    if lines and all(getattr(item, 'financial_snapshot', None) and 'invoice_discount_amount' in item.financial_snapshot for item in lines):
+        return {item.id: money(item.line_total - Decimal(item.financial_snapshot['invoice_discount_amount'])) for item in lines}
     net: dict[UUID, Decimal] = {}
     value_base = sum((item.line_total for item in lines), Decimal("0"))
     remaining_discount = money(invoice.invoice_discount_amount)
@@ -21,7 +23,7 @@ def net_line_amounts(invoice) -> dict:
             amount = money(invoice.total_amount - allocated_net)
         else:
             share = money(invoice.invoice_discount_amount * item.line_total / value_base) if value_base else Decimal("0.00")
-            share = min(share, remaining_discount)
+            share = min(share, remaining_discount, item.line_total)
             remaining_discount -= share
             amount = money(item.line_total - share)
         net[item.id] = amount

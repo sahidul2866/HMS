@@ -3,14 +3,17 @@ from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
+from typing import Literal
 
 
 class AccountingJournalCreate(BaseModel):
     branch_id: UUID | None = None
     reference: str | None = None
     description: str = Field(min_length=3)
-    debit_amount: Decimal
-    credit_amount: Decimal
+    debit_amount: Decimal = Field(gt=0,decimal_places=2)
+    credit_amount: Decimal = Field(gt=0,decimal_places=2)
+    debit_account_code: str | None = None
+    credit_account_code: str | None = None
 
     @model_validator(mode="after")
     def validate_balanced(self) -> "AccountingJournalCreate":
@@ -90,7 +93,10 @@ class AccountCreate(BaseModel):
     account_code: str = Field(max_length=50)
     name: str = Field(max_length=160)
     category: str = Field(max_length=40)
-    normal_balance: str = Field(default="debit", max_length=20)
+    normal_balance: Literal["debit","credit"] = "debit"
+    parent_id: UUID | None = None
+    reporting_group: str | None = Field(default=None,max_length=80)
+    is_control: bool = False
     module_key: str | None = Field(default=None, max_length=80)
     mapped_entity: str | None = Field(default=None, max_length=120)
     opening_balance: Decimal = 0
@@ -111,22 +117,26 @@ class JournalEntryLineCreate(BaseModel):
     account_code: str = Field(max_length=50)
     account_name: str = Field(max_length=160)
     description: str | None = None
-    debit_amount: Decimal = 0
-    credit_amount: Decimal = 0
+    debit_amount: Decimal = Field(default=Decimal(0),ge=0,decimal_places=2,max_digits=14)
+    credit_amount: Decimal = Field(default=Decimal(0),ge=0,decimal_places=2,max_digits=14)
     cost_center: str | None = None
 
 
 class JournalEntryCreate(BaseModel):
     journal_date: date
-    source_module: str | None = None
-    source_reference: str | None = None
-    narration: str = Field(min_length=3)
+    source_module: str | None = Field(default=None,max_length=80)
+    source_reference: str | None = Field(default=None,max_length=120)
+    narration: str = Field(min_length=3,max_length=10000)
     status: str = "posted"
     attachment_url: str | None = None
-    lines: list[JournalEntryLineCreate] = Field(min_length=2)
+    voucher_type: Literal["journal","payment","receipt","contra","adjustment","reversal","opening"] = "journal"
+    request_key: str | None = Field(default=None,min_length=8,max_length=100)
+    lines: list[JournalEntryLineCreate] = Field(min_length=2,max_length=500)
 
     @model_validator(mode="after")
     def validate_balanced_lines(self) -> "JournalEntryCreate":
+        if any((line.debit_amount>0)==(line.credit_amount>0) for line in self.lines):
+            raise ValueError("Each line must contain exactly one positive debit or credit")
         debit = sum(line.debit_amount for line in self.lines)
         credit = sum(line.credit_amount for line in self.lines)
         if debit <= 0 or debit != credit:
@@ -172,9 +182,18 @@ class AccountingSyncRead(BaseModel):
 
 
 class SimpleFinanceCreate(BaseModel):
+    purchase_account_code: str = Field(default="1300",max_length=50)
+    transaction_date: date | None = None
+    due_date: date | None = None
+    patient_id: UUID | None = None
+    receiving_id: UUID | None = None
+    pharmacy_purchase_id: UUID | None = None
+    expense_account_code: str = Field(default="5180",max_length=50)
+    cost_center: str | None = Field(default=None,max_length=120)
+    attachment_url: str | None = Field(default=None,max_length=500)
     reference: str | None = None
     name: str | None = None
-    amount: Decimal
+    amount: Decimal = Field(gt=0,decimal_places=2)
     category: str | None = None
     status: str = "pending"
     payment_method: str = "cash"

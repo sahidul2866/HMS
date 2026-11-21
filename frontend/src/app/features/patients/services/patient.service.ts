@@ -55,7 +55,8 @@ export class PatientService extends ApiBaseService {
     return this.cache.get(`patients:detail:${patientId}`, () => this.http.get<Patient>(this.url(`/patients/${patientId}`)));
   }
 
-  getHistory(patientId: string): Observable<PatientClinicalHistory> {
+  getHistory(patientId: string, refresh = false): Observable<PatientClinicalHistory> {
+    if (refresh) return this.http.get<PatientClinicalHistory>(this.url(`/patients/${patientId}/history`));
     return this.cache.get(`patients:history:${patientId}`, () => this.http.get<PatientClinicalHistory>(this.url(`/patients/${patientId}/history`)));
   }
 

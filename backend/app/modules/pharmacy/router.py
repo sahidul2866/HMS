@@ -544,3 +544,10 @@ def submit_disposal_record(payload: DisposalCreate, context=Depends(get_request_
 @router.post('/stock-reviews/{review_id}/decision', dependencies=[Depends(require_permissions('pharmacy.stock.approve'))])
 def decide_stock_review(review_id: UUID, payload: ReviewDecision, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
     return stock_review.decide(db,review_id,payload,user,context)
+
+
+@router.get('/prescribing-investigations',dependencies=[Depends(require_any_permissions('opd.prescribe','diagnostics.view'))])
+def prescribing_investigations(q:str|None=None,page_size:int=20,user=Depends(get_current_user),db:Session=Depends(get_db)):
+    result=PharmacyService(db).list_investigation_settings(user,page=1,page_size=min(max(page_size,1),50),q=q,service_area=None,is_active=True)
+    allowed={'id','category_name','test_name','code','service_area','room_number','description','is_active'}
+    return {'items':[{key:value for key,value in row.model_dump().items() if key in allowed} for row in result.items],'total':result.total,'page':1,'page_size':result.page_size}

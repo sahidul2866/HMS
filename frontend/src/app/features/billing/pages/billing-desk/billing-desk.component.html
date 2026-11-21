@@ -16,6 +16,9 @@
           <details class="invoice-more-actions"><summary>More actions</summary><div>          @if (sessionService.hasPermission('billing.sticker.print')) {
             <button class="secondary-btn" type="button" (click)="printStickers()">Print Stickers</button>
           }
+          @if (latestInvoice.status === 'posted' && sessionService.hasPermission(['billing.invoice.void', 'billing.payment.refund'])) {
+            <button class="danger-btn" type="button" (click)="cancelLatestInvoice()" [disabled]="returning">Cancel and refund invoice</button>
+          }
           @if (latestInvoice.status !== 'void' && sessionService.hasPermission('billing.invoice.void')) {
             <button class="danger-btn is-destructive" type="button" (click)="voidLatestInvoice()">Void Invoice</button>
           }</div></details>
@@ -97,11 +100,11 @@
               </label>
               <label class="field">
                 <span>Method</span>
-                <select formControlName="payment_method">
+                <select formControlName="payment_method" (change)="loadPatientAdvances()">
                   <option value="cash">Cash</option>
                   <option value="card">Card</option>
                   <option value="mobile_banking">Mobile Banking (bKash, Nagad, Rocket, Upay)</option>
-                  <option value="bank_transfer">Bank Transfer / Cheque</option>
+                  <option value="bank_transfer">Bank Transfer / Cheque</option><option value="patient_advance">Apply existing patient advance</option>
                 </select>
               </label>
               @if (paymentForm.controls.payment_method.value === 'mobile_banking') {
@@ -116,7 +119,8 @@
                   </select>
                 </label>
               }
-              @if (paymentForm.controls.payment_method.value !== 'cash') {
+              @if (paymentForm.controls.payment_method.value === 'patient_advance') {<label class="field"><span>Existing advance receipt</span><select formControlName="advance_payment_id"><option value="">Select received deposit</option>@for(deposit of availablePatientAdvances;track deposit.id){<option [value]="deposit.id">{{deposit.receipt_number}} · BDT {{deposit.balance_amount}}</option>}</select></label>}
+              @if (paymentForm.controls.payment_method.value !== 'cash' && paymentForm.controls.payment_method.value !== 'patient_advance') {
                 <label class="field">
                   <span>{{ paymentForm.controls.payment_method.value === 'mobile_banking' ? 'Transaction ID (TrxID)' : paymentForm.controls.payment_method.value === 'card' ? 'Card approval code' : 'Transfer / cheque no.' }}</span>
                   <input type="text" formControlName="reference_number" autocomplete="off" />

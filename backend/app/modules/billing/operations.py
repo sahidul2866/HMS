@@ -23,19 +23,21 @@ def classification(db, type_id, actor):
 
 def snapshot(invoice):
     fields = ('sub_total','item_discount_amount','discount_percentage','invoice_discount_amount',
-        'discount_amount','total_amount','credited_amount','net_payable_amount','paid_amount','refunded_amount','due_amount')
+        'discount_amount','total_amount','referred_doctor_amount','credited_amount','net_payable_amount','paid_amount','refunded_amount','due_amount')
     return {**{key:str(getattr(invoice,key) or 0) for key in fields},
         'invoice_number':invoice.invoice_number,'status':invoice.status,'payment_status':invoice.payment_status,
         'billed_by_user_id':str(invoice.billed_by_user_id),'billing_type_name':invoice.billing_type_name,
         'billing_department':invoice.billing_department,'note':invoice.note,'discount_reason':invoice.discount_reason,
         'items':[{'id':str(i.id),'name':i.service_name,'quantity':str(i.quantity),'unit_price':str(i.unit_price),
             'discount_percentage':str(i.discount_percentage),'discount_amount':str(i.discount_amount),
-            'line_total':str(i.line_total),'department':i.billing_department,'type':i.billing_type_name} for i in invoice.items]}
+            'line_total':str(i.line_total),'financial_snapshot':i.financial_snapshot,'department':i.billing_department,'type':i.billing_type_name} for i in invoice.items]}
 
 
 def record_event(db, invoice, actor, kind, reason=None, before=None):
     db.flush()
     db.expire(invoice, ["refunds"])
+    from app.modules.billing.policies import FinancialPolicies
+    FinancialPolicies(db).sync(invoice, actor, reason or kind)
     db.add(BillingEvent(branch_id=invoice.branch_id,invoice_id=invoice.id,actor_id=actor.id,
         kind=kind,reason=reason,snapshot={'actor_name':actor.full_name,'before':before,'after':snapshot(invoice)},created_by=actor.id,updated_by=actor.id))
 
@@ -83,11 +85,23 @@ class BillingOperations:
                 raise AppException(409,'billing_edit_refunded','Invoices with returns or refunds retain their original discount; use a separate adjustment invoice')
             if percentage>settings.max_invoice_discount_percentage or (settings.max_invoice_discount_amount is not None and amount>settings.max_invoice_discount_amount):
                 raise AppException(422,'billing_discount_limit','The discount exceeds configured invoice limits')
+            from app.modules.billing.policies import enforce_discount, enforce_catalog_discount, allocate
+            from app.schemas.billing_policy import FinancialRules
+            from app.modules.auth.service import AuthService
+            shares = allocate(amount, {item.id: item.line_total for item in invoice.items if item.is_active})
+            approved = 'billing.service.manage' in AuthService(self.db).get_effective_permissions(actor)
+            for item in invoice.items:
+                enforce_catalog_discount(item, shares[item.id])
+                if item.financial_snapshot and not item.financial_snapshot.get('allocation_only'):
+                    enforce_discount(item, shares[item.id], FinancialRules.model_validate(item.financial_snapshot['rules']), actor, approved)
             total=service._money(invoice.sub_total-amount)
             if total<invoice.paid_amount:
                 raise AppException(409,'billing_edit_overpaid','Refund the excess collection before reducing this invoice total')
             invoice.discount_percentage=percentage;invoice.invoice_discount_amount=amount
             invoice.discount_amount=invoice.item_discount_amount+amount;invoice.total_amount=total
+            for item in invoice.items:
+                if item.financial_snapshot:
+                    item.financial_snapshot = {**item.financial_snapshot, 'invoice_discount_amount': str(shares[item.id])}
             invoice.discount_reason=payload.reason
             service._recalculate_invoice_balance(invoice);service._sync_opd_payment(invoice,actor)
         invoice.updated_by=actor.id

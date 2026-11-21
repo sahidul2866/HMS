@@ -37,15 +37,10 @@
         <button class="ghost-btn compact-btn" type="button" (click)="resetInvoiceDraft()">Change patient</button>
       </section>
 
-      @if(billingStep==='patient'){<details class="billing-patient-history">
-        <summary>Patient history and clinical context</summary>
-      <app-patient-context-panel
-        [patient]="selectedPatient"
-        [patientId]="selectedPatient.id"
-        contextLabel="Billing Patient"
-        [compact]="true"
-      ></app-patient-context-panel>
-      </details>}
+      @if(billingStep==='patient'){
+        <app-billing-patient-summary class="billing-patient-history" [patient]="selectedPatient" (newBilling)="changeBillingStep('items')"></app-billing-patient-summary>
+      }
+
     }
 
     <div class="billing-main" [hidden]="billingStep==='payment'">
@@ -227,7 +222,7 @@
     </section>
     }
 
-    @if(billingStep==='patient'){
+    @if(billingStep==='patient'&&!selectedPatient){
       <div class="flow-footer"><span>{{selectedPatient?'Patient selected. Continue to services.':'Enter or select patient details to continue.'}}</span><button class="primary-btn" type="submit">Continue to items</button></div>
     }
     @if(billingStep==='items'){
@@ -330,7 +325,14 @@
               @if (validation.isInvalid(item.get('discount_percentage'), submitted)) {
                 <div class="field-error">{{ validation.errorMessage(item.get('discount_percentage'), 'Item discount') }}</div>
               }
-            </label></details></div>
+            </label></details>
+            @if (sessionService.hasPermission('billing.service.manage')) {
+              <details><summary>Approved fee override</summary>
+                <label>Override BDT (0 for free)<input type="number" min="0" step="0.01" formControlName="unit_price_override" (input)="recalculatePreview()"></label>
+                <label>Approval reason<input formControlName="override_reason" (input)="recalculatePreview()"></label>
+              </details>
+            }
+            </div>
 
 
             <label class="field compact-field" [class.field--invalid]="validation.isInvalid(item.get('quantity'), submitted)">
@@ -481,6 +483,11 @@
           </select>
         </label>
 
+        <label class="field"><span>External referral source</span>
+          <select formControlName="referred_doctor_id"><option value="">No external referral</option>
+            @for (referrer of externalReferrers; track referrer.id) {<option [value]="referrer.id">{{referrer.full_name}} ({{referrer.referrer_type}})</option>}
+          </select>
+        </label>
         <label class="field note-field">
           <div class="field-label-row">
             <span>Internal Note</span>

@@ -1,5 +1,6 @@
 """Atomic posting helpers. Callers validate the actor/source and own the transaction."""
 from datetime import UTC, date, datetime
+from app.utils.accounting_time import today_local
 from decimal import Decimal
 from uuid import uuid4
 from sqlalchemy import select
@@ -22,18 +23,43 @@ def journal(db,actor,kind,identity,event,lines,*,invoice_id=None,details=None):
     lock_branch(db,actor)
     existing=posted(db,kind,identity,event)
     if existing:return existing
-    amount=sum((Decimal(debit) for code,debit,credit in lines),ZERO).quantize(Decimal('.01'))
+    amount=sum((Decimal(line[1]) for line in lines),ZERO).quantize(Decimal('.01'))
     if amount<=0:return None
     from app.modules.accounting.service import AccountingService
     normalized=[]
-    for code,debit,credit in lines:
+    for values in lines:
+        code,debit,credit=values[:3]
+        center=values[3] if len(values)>3 else None
+        if code not in ACCOUNTS:
+            from app.modules.accounting.coa import ensure_account
+            ensured=ensure_account(db,actor,code)
+            normalized.append((code,ensured.name,Decimal(debit).quantize(Decimal('.01')),Decimal(credit).quantize(Decimal('.01')),center))
+            continue
         name,category,normal=ACCOUNTS[code]
         account=db.scalar(select(Account).where(Account.branch_id==actor.branch_id,Account.account_code==code).with_for_update())
         if not account:
             account=Account(branch_id=actor.branch_id,account_code=code,name=name,category=category,normal_balance=normal,current_balance=0,opening_balance=0,created_by=actor.id,updated_by=actor.id)
             db.add(account);db.flush()
-        normalized.append((code,account.name,Decimal(debit).quantize(Decimal(".01")),Decimal(credit).quantize(Decimal(".01"))))
-    entry=AccountingService(db)._create_auto_entry(actor,kind,str(identity)+':'+event,date.today(),f'{kind} {event}: {identity}',normalized)
+        normalized.append((code,account.name,Decimal(debit).quantize(Decimal(".01")),Decimal(credit).quantize(Decimal(".01")),center))
+    reference=str(identity)+':'+event
+    transaction_date=today_local()
+    if kind in {'billing_payment','billing_refund'}:
+        from app.models.billing import BillingPayment,BillingRefund
+        record=db.get(BillingPayment if kind=='billing_payment' else BillingRefund,identity)
+        if record:
+            reference=record.receipt_number if kind=='billing_payment' else record.refund_number
+            occurred=record.received_at if kind=='billing_payment' else record.refunded_at
+            from zoneinfo import ZoneInfo
+            from app.core.config import get_settings
+            zone=ZoneInfo(get_settings().hospital_timezone)
+            transaction_date=(occurred.replace(tzinfo=zone) if occurred.tzinfo is None else occurred.astimezone(zone)).date()
+    cost_center=None
+    if invoice_id:
+        from app.models.billing import BillingInvoice
+        invoice=db.get(BillingInvoice,invoice_id)
+        if invoice:
+            cost_center=invoice.billing_department or (invoice.source_opd_visit.department_name if invoice.source_opd_visit else None)
+    entry=AccountingService(db)._create_auto_entry(actor,kind,reference,transaction_date,f'{kind} {event}: {identity}',normalized,cost_center=cost_center)
     entry.approved_by_user_id=None  # Derived source posting, not a separate human GL approval.
     db.flush()
     record=OperationalPosting(branch_id=actor.branch_id,source_type=kind,source_id=identity,event=event,amount=amount,invoice_id=invoice_id,journal_id=entry.id,details={**(details or {}),'policy':'operational_v1','source_actor_id':str(actor.id)},created_by=actor.id,updated_by=actor.id)
@@ -81,7 +107,7 @@ def consume_meal_stock(db,actor,task):
                 raise AppException(409,'meal_stock_shortage','No usable kitchen stock batch; receive stock before preparation')
             used=min(remaining,Decimal(batch.quantity)) if batch else remaining
             unit_cost=Decimal(batch.unit_cost) if batch else (Decimal(item.stock_value)/Decimal(item.stock_quantity) if item.stock_quantity else ZERO)
-            issue=StockIssue(id=uuid4(),item_id=item.id,store_id=store.id,batch_id=batch.id if batch else None,quantity=used,issue_date=date.today(),department='Kitchen',purpose='Meal preparation '+task.meal_number,patient_id=task.patient_id,created_by=actor.id,updated_by=actor.id)
+            issue=StockIssue(id=uuid4(),item_id=item.id,store_id=store.id,batch_id=batch.id if batch else None,quantity=used,issue_date=today_local(),department='Kitchen',purpose='Meal preparation '+task.meal_number,patient_id=task.patient_id,created_by=actor.id,updated_by=actor.id)
             db.add(issue);db.flush()
             transaction=service._change_store_stock(store=store,item=item,delta=-used,actor=actor,movement_type='issue',reference_type='catering_meal',reference_id=task.id,batch=batch,note='Consumed for '+task.meal_number,unit_cost=unit_cost)
             if batch:batch.quantity=Decimal(batch.quantity)-used
@@ -94,25 +120,28 @@ def billing_cash_event(db,actor,invoice,record,kind):
     # Only invoices originated by this automatic pipeline are enrolled.
     if not db.scalar(select(OperationalPosting.id).where(OperationalPosting.invoice_id==invoice.id,OperationalPosting.event=='invoice')):return
     amount=Decimal(record.amount)
+    from app.modules.accounting.channels import collection_account
+    provider=getattr(record,'payment_provider',None)
+    if record.payment_method=='mobile_banking' and not provider:
+        candidates=[payment for payment in invoice.payments if payment.payment_method=='mobile_banking' and (not record.payment_id or payment.id==record.payment_id)]
+        providers={payment.payment_provider for payment in candidates}
+        if len(providers)==1:provider=next(iter(providers))
+    channel=collection_account(db,actor,record.payment_method,provider) if amount else '1001'
     if kind=='billing_payment':
-        journal(db,actor,kind,record.id,'receipt',[('1001',amount,ZERO),('1100',ZERO,amount)],invoice_id=invoice.id)
+        journal(db,actor,kind,record.id,'receipt',[(channel,amount,ZERO),('1100',ZERO,amount)],invoice_id=invoice.id)
         # Accounting's existing source sync recognizes the receipt and cannot duplicate it.
     elif kind=='billing_return':
         credit=Decimal(record.credit_amount)
         journal(db,actor,kind,record.id,'credit',[('4100',credit,ZERO),('1100',ZERO,credit)],invoice_id=invoice.id)
-        if amount:journal(db,actor,'billing_refund',record.id,'payout',[('1100',amount,ZERO),('1001',ZERO,amount)],invoice_id=invoice.id)
+        if amount:journal(db,actor,'billing_refund',record.id,'payout',[('1100',amount,ZERO),(channel,ZERO,amount)],invoice_id=invoice.id)
     else:
-        journal(db,actor,'billing_refund',record.id,'payout',[('1100',amount,ZERO),('1001',ZERO,amount)],invoice_id=invoice.id)
+        journal(db,actor,'billing_refund',record.id,'payout',[('1100',amount,ZERO),(channel,ZERO,amount)],invoice_id=invoice.id)
     from app.models.transport import TransportTrip
     for source in db.scalars(select(OperationalPosting).where(OperationalPosting.invoice_id==invoice.id,OperationalPosting.source_type=='transport',OperationalPosting.event=='invoice')):
         trip=db.get(TransportTrip,source.source_id)
         if trip:
             trip.billing_status=invoice.payment_status
             if trip.request:trip.request.billing_status=invoice.payment_status
-    from app.models.accounting import JournalEntry
-    for post in db.scalars(select(OperationalPosting).where(OperationalPosting.source_id==record.id,OperationalPosting.journal_id.is_not(None))):
-        entry=db.get(JournalEntry,post.journal_id)
-        if entry and entry.source_module in {'billing_payment','billing_refund'}:entry.source_reference=getattr(record,'receipt_number',None) or record.refund_number
 
 def posting_rows(db,actor,kinds):
     rows=db.scalars(select(OperationalPosting).where(OperationalPosting.branch_id==actor.branch_id,OperationalPosting.source_type.in_(kinds)).order_by(OperationalPosting.created_at.desc()).limit(200))
@@ -126,7 +155,10 @@ def enroll_invoice(db,actor,invoice,carried):
     if legacy:
         db.add(OperationalPosting(branch_id=actor.branch_id,source_type='billing_invoice',source_id=invoice.id,event='review_required',amount=0,invoice_id=invoice.id,details={'reason':'Carried legacy invoices have no verified accrual; reconcile before automatic accounting'},created_by=actor.id,updated_by=actor.id));return
     amount=Decimal(invoice.total_amount)-sum((row['net'] for row in carried.values()),ZERO)
-    record=journal(db,actor,'billing_invoice',invoice.id,'invoice',[('1100',amount,ZERO),('4000',ZERO,amount)],invoice_id=invoice.id,details={'carried_total':str(sum((row['net'] for row in carried.values()),ZERO))})
+    from app.modules.accounting.controls import policy_for
+    policy=policy_for(db,actor.branch_id,today_local())
+    revenue=policy.settings.get('revenue_accounts',{}).get(invoice.source_module,'4000') if policy else '4000'
+    record=journal(db,actor,'billing_invoice',invoice.id,'invoice',[('1100',amount,ZERO),(revenue,ZERO,amount)],invoice_id=invoice.id,details={'carried_total':str(sum((row['net'] for row in carried.values()),ZERO))})
     if not record:
         db.add(OperationalPosting(branch_id=actor.branch_id,source_type='billing_invoice',source_id=invoice.id,event='invoice',amount=0,invoice_id=invoice.id,details={'carried_total':str(invoice.total_amount)},created_by=actor.id,updated_by=actor.id))
 

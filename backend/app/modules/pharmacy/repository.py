@@ -176,7 +176,7 @@ class PharmacyRepository:
             .where(PharmacyMedicine.id == entity_id)
         )
         if for_update:
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=PharmacyMedicine)
         return self.db.scalar(stmt)
 
     def get_purchase(self, entity_id):

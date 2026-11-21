@@ -28,6 +28,9 @@ class OPDVisitCreate(BaseModel):
 
 
 class OPDVisitConsultationUpdate(BaseModel):
+    expected_version: int | None = Field(default=None, ge=0)
+    prescription_data: dict[str, Any] | None = None
+    prescription_template_id: UUID | None = None
     chief_complaint: str | None = None
     history_of_present_illness: str | None = None
     past_history: str | None = None
@@ -67,12 +70,14 @@ class OPDVisitStatusUpdate(BaseModel):
 
 
 class OPDVisitOrderCreate(BaseModel):
+    prescription_detail: dict[str, Any] | None = None
+    request_key: str | None = Field(default=None, min_length=8, max_length=100)
     order_type: str = Field(pattern="^(prescription|investigation|procedure)$")
     service_area: str | None = Field(default=None, pattern="^(pharmacy|laboratory|radiology)$")
     item_name: str = Field(min_length=2, max_length=180)
     room_number: str | None = Field(default=None, max_length=60)
     instructions: str | None = None
-    quantity: Decimal = Field(default=Decimal("1"), ge=0.01)
+    quantity: Decimal = Field(default=Decimal("1"), ge=0.01, decimal_places=2)
 
     @model_validator(mode="after")
     def validate_service_area(self) -> "OPDVisitOrderCreate":
@@ -88,17 +93,19 @@ class OPDVisitOrderCreate(BaseModel):
 
 
 class OPDVisitOrderUpdate(BaseModel):
+    expected_version: int | None = Field(default=None, ge=0)
     service_area: str | None = Field(default=None, pattern="^(pharmacy|laboratory|radiology)$")
     item_name: str | None = Field(default=None, min_length=2, max_length=180)
     room_number: str | None = Field(default=None, max_length=60)
     instructions: str | None = None
-    quantity: Decimal | None = Field(default=None, ge=0.01)
+    quantity: Decimal | None = Field(default=None, ge=0.01, decimal_places=2)
     status: str | None = Field(default=None, pattern="^(pending|scheduled|collected|in_progress|completed|verified|cancelled)$")
     result_text: str | None = None
     sample_note: str | None = None
 
 
 class OPDVisitOrderRead(OPDVisitOrderCreate):
+    version: int = 0
     id: UUID
     status: str
     sample_note: str | None = None
@@ -112,6 +119,12 @@ class OPDVisitOrderRead(OPDVisitOrderCreate):
 
 
 class OPDVisitRead(OPDVisitCreate):
+    prescription_data: dict[str, Any] | None = None
+    prescription_template_id: UUID | None = None
+    clinical_version: int = 0
+    prescription_status: str = 'draft'
+    consultation_payment_source: str = 'pending'
+    signed_prescription: dict | None = None
     id: UUID
     visit_number: str
     status: str

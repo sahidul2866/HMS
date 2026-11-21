@@ -48,11 +48,11 @@
               <option value="due">Awaiting payment</option>
               <option value="paid">Paid</option>
               <option value="unpaid">Unpaid</option>
-              <option value="partial">Partially paid</option>
+              <option value="partial">Partially paid</option><option value="doctor_direct">Doctor-direct receipt (external)</option><option value="waived">Waived</option><option value="free">Free</option>
             </select>
           </label>
           <label class="field">
-            <span>Visit Date</span>
+            <span>Visit type</span><select [(ngModel)]="selectedVisitType"><option value="">All visits</option><option value="new">New consultation</option><option value="follow_up">Follow-up</option></select><span>Visit Date</span>
             <input type="date" [(ngModel)]="selectedDate" (ngModelChange)="onFiltersChanged()" />
           </label>
           @if (canFilterByDoctor) {
@@ -155,7 +155,7 @@
         </div>
 
         <section class="prescription-workbench">
-          <div class="section-header">
+          <div class="section-header prescription-workbench-head">
             <div>
               <h3 class="section-title">Doctor Prescription</h3>
               <div class="section-copy">
@@ -163,11 +163,34 @@
               </div>
             </div>
             <div class="toolbar-row">
-              <button class="secondary-btn" type="button" (click)="saveConsultation()" [disabled]="savingConsultation">Save Draft</button>
-              <button class="primary-btn" type="button" (click)="finalizePrescription()" [disabled]="savingConsultation || savingOrder || selectedVisit.status !== 'in_consultation'">Finalize Prescription</button>
+              <button class="secondary-btn" type="button" (click)="printPrescription(selectedVisit)">Preview / PDF</button>
+              <button class="secondary-btn" type="button" (click)="saveConsultation()" [disabled]="savingConsultation || isSigned || !canPrescribe">Save Draft</button>
+              <button class="primary-btn" type="button" (click)="finalizePrescription()" [disabled]="savingConsultation || savingOrder || (selectedVisit.status !== 'in_consultation' && selectedVisit.prescription_status !== 'amended') || isSigned || !canPrescribe || session.snapshot.user?.id !== selectedVisit.consulting_doctor_user_id">Finalize Prescription</button>
             </div>
           </div>
 
+          <p class="clinical-alert" role="status">Allergies: {{extraClinicalData['allergies'] || previousAllergies || 'Not recorded — confirm with the patient'}}</p>@for(warning of ingredientWarnings;track warning){<p class="clinical-alert" role="alert">{{warning}}</p>}
+          <p role="status">{{autosaveMessage}} · Prescription: {{selectedVisit.prescription_status || 'draft'}} · Medication interaction/dose-limit checks: unavailable without a validated clinical source.</p>
+          @if(isSigned){<p>Signed content is preserved. Open an amendment to change clinical content.</p><button type="button" (click)="amendPrescription()">Amend signed prescription</button><button type="button" (click)="amendPrescription(true)">Mark entered in error</button>}
+          <details (toggle)="$any($event.target).open && loadPrescriptionHistory()"><summary>Prescription revisions and audit</summary>
+            @for(version of prescriptionVersions;track version.version){<p>Version {{version.version}} · {{version.status}} · {{version.signed_at || 'Legacy signing time unavailable'}} · {{version.reason || ''}} <button type="button" (click)="previewPrescriptionVersion(version)">Preview version {{version.version}}</button></p>}
+            @for(event of prescriptionAudit;track $index){<p>{{event.created_at | date:'medium'}} · {{event.kind}}</p>}
+          </details>
+          <div class="toolbar-row"><button type="button" (click)="recordDirectPayment()">Record doctor-direct payment</button><button type="button" (click)="recordDirectPayment('pending')">Payment pending</button><button type="button" (click)="recordDirectPayment('waived')">Record waiver</button><button type="button" (click)="recordDirectPayment('free')">Free consultation</button></div>
+          <p>Doctor-direct receipts are external claims awaiting reconciliation; they do not count as hospital cash.</p>
+          <details (toggle)="$any($event.target).open && loadExternalPayments()"><summary>External payment reconciliation</summary>
+            @for(claim of externalPaymentClaims;track claim.id){<p>{{claim.kind}} · BDT {{claim.amount}} · {{externalReview(claim)?.decision || 'Unverified'}} · Hospital share due: {{claim.settlement_snapshot?.hospital_share_due ?? 'Configuration required'}} · Remitted: {{claim.hospital_share_remitted}} · Remaining: {{claim.hospital_share_remaining ?? 'Unknown'}}</p>
+              @if(claim.finance_review?.decision==='verified' && +claim.hospital_share_remaining>0 && session.hasPermission('billing.payment.collect') && session.hasPermission('accounting.view')){<button type="button" (click)="linkExternalRemittance(claim)">Link actual hospital remittance</button>}
+              @if(claim.kind==='doctor_direct' && !externalReview(claim) && session.hasPermission('billing.payment.collect')){<button type="button" (click)="reviewExternalPayment(claim,'verified')">Verify external receipt</button><button type="button" (click)="reviewExternalPayment(claim,'rejected')">Reject external receipt</button>}
+            }
+            <p>Verification preserves the external claim and settlement rule. It does not settle an invoice or record hospital cash. Record actual remittance in Accounting, then link its posted receipt here. Reversed receipts cease counting toward the remitted balance.</p>
+          </details>
+          <label>Prescription template<select [(ngModel)]="templateId" (ngModelChange)="applyFieldDefaults()" [ngModelOptions]="{standalone:true}" [disabled]="isSigned || !canPrescribe">@for(profile of configurationProfiles;track profile.id){@if(profile.profile_type==='prescription_layout'){<option [value]="profile.id">{{profile.name}}</option>}}</select></label>
+          <app-prescription-fields [fields]="templateFields" [(values)]="extraClinicalData" [readonly]="isSigned || !canPrescribe" [medicines]="pharmacyMedicines" [investigations]="investigationSettings" [medicineRows]="activePrescriptionOrders" [investigationRows]="activeInvestigationOrders" (catalogSearch)="searchCustomCatalog($event)" (catalogSelected)="selectCustomCatalog($event)" (focusClinicalSection)="focusClinicalSection($event)" (removeClinicalRow)="removeOrder($event)" />
+          <div class="toolbar-row"><button type="button" (click)="favoriteMedicine()">Favorite current medicine</button><button type="button" (click)="favoriteInvestigation()">Favorite investigation</button><button type="button" (click)="saveAdviceSnippet()">Save advice snippet</button></div>
+          <p>Frequently prescribed — select an item and confirm its current catalog entry and instructions.</p><div class="toolbar-row">@for(item of prescribingHistory;track item.item_name+item.order_type){<button type="button" (click)="usePreviousName(item)" [disabled]="isSigned">{{item.item_name}} ({{item.uses}})</button>}</div>
+          <div class="toolbar-row">@for(shortcut of shortcuts;track shortcut.id){<button type="button" (click)="insertShortcut(shortcut)" [disabled]="isSigned">{{shortcut.name}}</button>}</div>
+          <fieldset [disabled]="isSigned || !canPrescribe" style="border:0;padding:0;margin:0;min-width:0"><button type="button" (click)="saveCombination()">Save current combination</button>
           <div class="quick-action-strip">
             <div class="quick-action-group">
               <span>Templates</span>
@@ -237,25 +260,25 @@
                           <button type="button" (click)="applySuggestion('chief_complaint', item)">{{ item }}</button>
                         }
                       </div>
-                      <textarea rows="3" [(ngModel)]="prescriptionDraft.chief_complaint" [ngModelOptions]="{ standalone: true }"></textarea>
+                      <textarea rows="3" aria-label="Chief complaints" [(ngModel)]="prescriptionDraft.chief_complaint" [ngModelOptions]="{ standalone: true }"></textarea>
                     </article>
                   }
                   @case ('history') {
                     <article class="prescription-section" [style.minHeight.px]="section.height">
                       <h4>{{ section.label }}</h4>
-                      <textarea rows="3" [(ngModel)]="prescriptionDraft.history_of_present_illness" [ngModelOptions]="{ standalone: true }"></textarea>
+                      <textarea rows="3" aria-label="Present illness" [(ngModel)]="prescriptionDraft.history_of_present_illness" [ngModelOptions]="{ standalone: true }"></textarea>
                     </article>
                   }
                   @case ('vitals') {
                     <article class="prescription-section" [style.minHeight.px]="section.height">
                       <h4>{{ section.label }}</h4>
-                      <textarea rows="2" [(ngModel)]="prescriptionDraft.vital_signs" [ngModelOptions]="{ standalone: true }"></textarea>
+                      <textarea rows="2" aria-label="Vital signs" [(ngModel)]="prescriptionDraft.vital_signs" [ngModelOptions]="{ standalone: true }"></textarea>
                     </article>
                   }
                   @case ('examination') {
                     <article class="prescription-section" [style.minHeight.px]="section.height">
                       <h4>{{ section.label }}</h4>
-                      <textarea rows="3" [(ngModel)]="prescriptionDraft.examination_note" [ngModelOptions]="{ standalone: true }"></textarea>
+                      <textarea rows="3" aria-label="Clinical examination" [(ngModel)]="prescriptionDraft.examination_note" [ngModelOptions]="{ standalone: true }"></textarea>
                     </article>
                   }
 	                  @case ('diagnosis') {
@@ -293,22 +316,15 @@
 	                      <div class="medicine-entry-grid">
 	                        <input [(ngModel)]="medicineDraft.item_name" [ngModelOptions]="{ standalone: true }" (ngModelChange)="onMedicineQueryChanged($event)" (keydown.enter)="addBestMedicineFromKeyboard()" placeholder="Medicine name" />
 	                        <input [(ngModel)]="medicineDraft.strength" [ngModelOptions]="{ standalone: true }" placeholder="Strength" />
-	                        <select [(ngModel)]="medicineDraft.dosage" [ngModelOptions]="{ standalone: true }">
-	                          @for (item of dosageOptions; track item) { <option [value]="item">{{ item }}</option> }
-	                        </select>
-	                        <select [(ngModel)]="medicineDraft.frequency" [ngModelOptions]="{ standalone: true }">
-	                          @for (item of frequencyOptions; track item) { <option [value]="item">{{ item }}</option> }
-	                        </select>
+	                        <input [(ngModel)]="medicineDraft.dosage" [ngModelOptions]="{ standalone: true }" list="rx-dosage-options" aria-label="Dose" placeholder="Dose (doctor enters / confirms)"><datalist id="rx-dosage-options">@for(item of dosageOptions;track item){<option [value]="item"></option>}</datalist>
+	                        <input [(ngModel)]="medicineDraft.frequency" [ngModelOptions]="{ standalone: true }" list="rx-frequency-options" aria-label="Frequency" placeholder="Frequency (doctor enters / confirms)"><datalist id="rx-frequency-options">@for(item of frequencyOptions;track item){<option [value]="item"></option>}</datalist>
 	                        <input [(ngModel)]="medicineDraft.duration" [ngModelOptions]="{ standalone: true }" placeholder="Duration" />
-	                        <select [(ngModel)]="medicineDraft.timing" [ngModelOptions]="{ standalone: true }">
-	                          @for (item of timingOptions; track item) { <option [value]="item">{{ item }}</option> }
-	                        </select>
-	                        <select [(ngModel)]="medicineDraft.route" [ngModelOptions]="{ standalone: true }">
-	                          @for (item of routeOptions; track item) { <option [value]="item">{{ item }}</option> }
-	                        </select>
-	                        <input type="number" min="1" [(ngModel)]="medicineDraft.quantity" [ngModelOptions]="{ standalone: true }" placeholder="Qty" />
+	                        <input [(ngModel)]="medicineDraft.timing" [ngModelOptions]="{ standalone: true }" list="rx-timing-options" aria-label="Timing" placeholder="Timing (doctor enters / confirms)"><datalist id="rx-timing-options">@for(item of timingOptions;track item){<option [value]="item"></option>}</datalist>
+	                        <input [(ngModel)]="medicineDraft.route" [ngModelOptions]="{ standalone: true }" list="rx-route-options" aria-label="Route" placeholder="Route (doctor enters / confirms)"><datalist id="rx-route-options">@for(item of routeOptions;track item){<option [value]="item"></option>}</datalist>
+	                        <input type="number" min="0.01" [(ngModel)]="medicineDraft.quantity" [ngModelOptions]="{ standalone: true }" placeholder="Qty" step="0.01" />
 	                      </div>
-	                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="$event.preventDefault(); addPrescriptionMedicine()" placeholder="Extra instructions" />
+	                      <p>{{frequencyInterpretation}}</p>
+                      <input [(ngModel)]="medicineDraft.instructions" [ngModelOptions]="{ standalone: true }" (keydown.enter)="$event.preventDefault(); addPrescriptionMedicine()" placeholder="Extra instructions" />
 	                      <div class="suggestion-list">
 	                        @if (medicineSuggestionsLoading) {
 	                          <div class="suggestion-loading" role="status" aria-busy="true">Searching medicines...<span class="app-inline-skeleton" aria-hidden="true"></span></div>
@@ -316,7 +332,7 @@
 	                        @for (medicine of filteredMedicineSuggestions; track medicine.id) {
 	                          <button type="button" (click)="selectMedicineSuggestion(medicine, true)">
 	                            <strong>{{ medicine.name }}</strong>
-	                            <span>{{ medicine.strength || medicine.dosage_form || '-' }} · {{ medicine.generic_name || 'Generic N/A' }} · Stock {{ medicine.stock_quantity }}</span>
+	                            <span>{{ medicine.strength || 'Strength not recorded' }} · {{ medicine.generic_name || 'Generic not recorded' }} · {{medicine.dosage_form || medicine.medicine_type_name || 'Form not recorded'}} · {{medicine.company_name || 'Manufacturer not recorded'}}</span>
 	                          </button>
 	                        }
 	                      </div>
@@ -401,7 +417,7 @@
 	                          <button type="button" (click)="applyAdvice(item)">{{ item }}</button>
 	                        }
 	                      </div>
-                      <textarea rows="2" [(ngModel)]="prescriptionDraft.follow_up_note" [ngModelOptions]="{ standalone: true }"></textarea>
+                      <textarea rows="2" aria-label="Clinical advice" [(ngModel)]="prescriptionDraft.follow_up_note" [ngModelOptions]="{ standalone: true }"></textarea>
                     </article>
                   }
                   @case ('follow_up') {
@@ -421,8 +437,11 @@
             </aside>
           </div>
           </div>
+          </fieldset>
         </section>
       </section>
     </div>
   }
 </section>
+
+@if(prescriptionPreviewUrl){<div class="modal-backdrop" style="z-index:1500" (click)="closePrescriptionPreview()"><section class="modal-card" style="width:min(1000px,96vw);height:94vh;display:flex;flex-direction:column" (click)="$event.stopPropagation()"><div class="toolbar-row"><strong>Prescription preview</strong><button type="button" (click)="printPrescriptionPreview()">Print / Save PDF</button><button type="button" (click)="closePrescriptionPreview()">Close preview</button></div><iframe class="prescription-preview-frame" title="Saved prescription preview" [src]="prescriptionPreviewUrl" style="flex:1;width:100%;border:0"></iframe></section></div>}

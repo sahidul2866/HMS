@@ -50,6 +50,7 @@ export class OPDRegisterComponent {
   isFollowUpAllowed = false;
   loadingSlots = false;
   slots: DoctorSlotAvailability[] = [];
+  walkIn = false;
   selectedSlot: DoctorSlotAvailability | null = null;
 
   readonly form = this.fb.group({
@@ -64,7 +65,7 @@ export class OPDRegisterComponent {
     emergency_contact_name: [''],
     emergency_contact_phone: [''],
     visit_date: [new Date().toISOString().slice(0, 10), Validators.required],
-    slot_date: [new Date().toISOString().slice(0, 10), Validators.required],
+    slot_date: [new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Dhaka'}), Validators.required],
     department_name: ['General OPD', Validators.required],
     doctor_user_id: [''],
     consulting_doctor_name: ['', Validators.required],
@@ -393,7 +394,7 @@ export class OPDRegisterComponent {
       this.notificationService.error('Follow-up visit is not allowed for this patient and doctor combination.');
       return;
     }
-    if (value.doctor_user_id && !this.selectedSlot) {
+    if (value.doctor_user_id && !this.selectedSlot && !this.walkIn) {
       this.notificationService.warning('Please select an available slot for this doctor.');
       return;
     }
@@ -403,7 +404,7 @@ export class OPDRegisterComponent {
       const payload: CreateOPDVisitPayload = {
         patient_id: patientId,
         visit_date: value.visit_date ?? new Date().toISOString().slice(0, 10),
-        slot_start_at: this.selectedSlot?.slot_start_at || null,
+        slot_start_at: this.walkIn ? null : this.selectedSlot?.slot_start_at || null,
         department_name: value.department_name ?? 'General OPD',
         doctor_user_id: value.doctor_user_id || null,
         consulting_doctor_name: value.consulting_doctor_name ?? '',

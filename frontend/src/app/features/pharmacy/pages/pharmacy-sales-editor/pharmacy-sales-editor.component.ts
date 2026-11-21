@@ -32,6 +32,9 @@ export class PharmacySalesEditorComponent {
     source_visit_id: [''],
     sale_date: [new Date().toISOString().slice(0, 10), Validators.required],
     discount_amount: [0, Validators.required],
+    paid_amount: [0, [Validators.required,Validators.min(0)]],
+    payment_method: ['cash',Validators.required],
+    payment_provider: [''],
     note: [''],
     items: this.fb.array([]),
   });

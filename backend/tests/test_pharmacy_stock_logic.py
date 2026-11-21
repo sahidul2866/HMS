@@ -38,6 +38,12 @@ def apply_model_defaults(entity):
 
 
 class FakeDB:
+    def scalar(self, statement):
+        # The unit fixture represents one valid branch with no accounting policy or posted source.
+        from app.models.branch import Branch
+        if statement.column_descriptions[0].get('entity') is Branch:return uuid4()
+        return None
+
     def refresh(self, entity) -> None:
         apply_model_defaults(entity)
         for relationship_name in ("items", "returns"):

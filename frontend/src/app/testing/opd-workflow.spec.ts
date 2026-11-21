@@ -4,7 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { runtimeConfig } from '../core/config/runtime-config';
 import { TestBed } from '@angular/core/testing';
 import { convertToParamMap, ActivatedRoute, Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { QueueAnnouncementService } from '../core/services/queue-announcement.service';
 import { QueueToken } from '../features/queue/models/queue.models';
 import { OPDVisitListComponent } from '../features/opd/pages/opd-visit-list/opd-visit-list.component';
@@ -23,8 +23,10 @@ describe('OPD consultation controls', () => {
   let opd: jasmine.SpyObj<OPDService>;
   let component: OPDVisitListComponent;
   beforeEach(() => {
+    sessionStorage.removeItem('hms.rx.draft:doctor:visit');sessionStorage.removeItem('hms.rx.draft:doctor:other-visit');
     opd = jasmine.createSpyObj('OPDService', ['listVisits', 'getVisit', 'getPatientVisits', 'updateStatus', 'updateConsultation', 'finalizePrescription']);
     opd.listVisits.and.returnValue(of([testVisit]));
+    opd.getVisit.and.returnValue(of(testVisit));
     opd.getPatientVisits.and.returnValue(of([]));
     opd.updateStatus.and.returnValue(of({ ...testVisit, status: 'in_consultation' }));
     TestBed.configureTestingModule({ providers: [
@@ -37,6 +39,46 @@ describe('OPD consultation controls', () => {
     ] });
     TestBed.inject(SessionService).setUser({ id: 'doctor', roles: [{ is_doctor_role: true }], effective_permissions: ['opd.visit.manage', 'opd.prescribe'] } as unknown as User);
     component = TestBed.createComponent(OPDVisitListComponent).componentInstance;
+  });
+  it('configures editor sections independently from the printed document',()=>{
+    component.openVisit(testVisit.id);
+    component.configurationProfiles=[{id:'layout',profile_type:'prescription_layout',is_default:true,payload:{sections:['rx'],editor_sections:['complaint','rx']}} as any];
+    component.templateId='layout';
+    expect(component.prescriptionSections).toEqual(['complaint','rx']);
+    const html=buildOPDPrescriptionHtml({visit:{...testVisit,chief_complaint:'Editor-only complaint'},layoutProfile:component.configurationProfiles[0]});
+    expect(html).not.toContain('Editor-only complaint');
+  });
+  it('preserves text entered while starting the already open patient', () => {
+    component.openVisit(testVisit.id);
+    const request = new Subject<OPDVisit>();opd.updateStatus.and.returnValue(request);
+    component.startVisit(testVisit);
+    component.prescriptionDraft.chief_complaint='Typed while the start request is pending';
+    component.extraClinicalData={allergies:'Patient-confirmed allergy history'};
+    request.next({...testVisit,status:'in_consultation'});
+    expect(component.prescriptionDraft.chief_complaint).toBe('Typed while the start request is pending');
+    expect(component.extraClinicalData['allergies']).toBe('Patient-confirmed allergy history');
+    expect(component.hasUnsavedChanges()).toBeTrue();
+  });
+  it('ignores a late response for a different selected patient', () => {
+    const first=new Subject<OPDVisit>();const second=new Subject<OPDVisit>();
+    opd.getVisit.and.callFake(id=>id==='first'?first:second);
+    component.openVisit('first');component.openVisit('second');
+    second.next({...testVisit,id:'second'});first.next({...testVisit,id:'first'});
+    expect(component.selectedVisit?.id).toBe('second');
+  });
+  it('does not carry an unfinished medicine into another patient', () => {
+    component.openVisit(testVisit.id);component.medicineDraft.item_name='Unfinished medicine for the first visit';
+    component.persistLocalDraft();spyOn(window,'confirm').and.returnValue(true);
+    opd.getVisit.and.returnValue(of({...testVisit,id:'other-visit'}));component.openVisit('other-visit');
+    expect(component.medicineDraft.item_name).toBe('');
+    expect(sessionStorage.getItem('hms.rx.draft:doctor:'+testVisit.id)).toBeNull();
+  });
+  it('keeps unconfirmed medicine locally without repeatedly saving an unchanged clinical note', () => {
+    component.openVisit(testVisit.id);component.medicineDraft.item_name='Unconfirmed catalog selection';
+    component.persistLocalDraft();component.autosave();
+    expect(opd.updateConsultation).not.toHaveBeenCalled();
+    const saved=JSON.parse(sessionStorage.getItem('hms.rx.draft:doctor:'+testVisit.id)||'{}');
+    expect(saved.medicine.item_name).toBe('Unconfirmed catalog selection');
   });
   it('starts the consultation and opens its prescription editor', () => {
     component.startVisit(testVisit);

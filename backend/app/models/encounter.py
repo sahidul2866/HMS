@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Index, Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +26,7 @@ class IPDBed(Base, BaseModelMixin):
 
 class OPDVisit(Base, BaseModelMixin):
     __tablename__ = "opd_visits"
+    __table_args__ = (Index('ix_opd_doctor_worklist','branch_id','consulting_doctor_user_id','visit_date','status'),)
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)
@@ -55,9 +56,24 @@ class OPDVisit(Base, BaseModelMixin):
     consultation_discount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     consultation_total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     consultation_payment_status: Mapped[str] = mapped_column(String(30), nullable=False, default="unpaid")
+    prescription_data: Mapped[dict | None] = mapped_column(JSON)
+    prescription_template_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey('configuration_profiles.id'))
+    clinical_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    prescription_status: Mapped[str] = mapped_column(String(20), nullable=False, default='draft', server_default='draft')
+    consultation_payment_source: Mapped[str] = mapped_column(String(30), nullable=False, default='pending', server_default='pending')
     consultation_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     note: Mapped[str | None] = mapped_column(Text)
     registered_by_user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    @property
+    def signed_prescription(self):
+        from sqlalchemy.orm import object_session
+        from sqlalchemy import select
+        from app.models.prescription import PrescriptionRevision
+        session = object_session(self)
+        if not session: return None
+        row = session.scalar(select(PrescriptionRevision).where(PrescriptionRevision.visit_id == self.id).order_by(PrescriptionRevision.version.desc()).limit(1))
+        return row.snapshot if row else None
 
     branch = relationship("Branch")
     patient = relationship("Patient")
@@ -70,12 +86,16 @@ class OPDVisit(Base, BaseModelMixin):
 
 class OPDVisitOrder(Base, BaseModelMixin):
     __tablename__ = "opd_visit_orders"
+    __table_args__ = (UniqueConstraint("visit_id","request_key",name="uq_opd_visit_order_request"),)
 
     visit_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("opd_visits.id"), nullable=False)
     order_type: Mapped[str] = mapped_column(String(30), nullable=False)
     service_area: Mapped[str | None] = mapped_column(String(30))
     item_name: Mapped[str] = mapped_column(String(180), nullable=False)
     room_number: Mapped[str | None] = mapped_column(String(60))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default='0')
+    request_key: Mapped[str | None] = mapped_column(String(100))
+    prescription_detail: Mapped[dict | None] = mapped_column(JSON)
     instructions: Mapped[str | None] = mapped_column(Text)
     quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")

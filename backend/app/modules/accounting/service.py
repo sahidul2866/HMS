@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from app.utils.accounting_time import today_local
 from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import AppException
@@ -59,37 +60,19 @@ class AccountingService:
         self.repository = AccountingRepository(db)
 
     def list_journals(self, actor: User) -> list[AccountingJournal]:
-        return self.repository.list_journals(actor.branch_id)
+        return list(self.db.scalars(select(AccountingJournal).where(AccountingJournal.branch_id==actor.branch_id).order_by(AccountingJournal.created_at.desc())))
 
     def post_journal(self, payload: AccountingJournalCreate, actor: User, context: dict[str, str | None]) -> AccountingJournal:
-        sequence = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        journal = AccountingJournal(
-            **payload.model_dump(),
-            journal_number=f"JRN-{sequence}",
-            branch_id=payload.branch_id or actor.branch_id,
-            posted_by_user_id=actor.id,
-            status="posted",
-            created_by=actor.id,
-            updated_by=actor.id,
-        )
-        self.repository.create_journal(journal)
-        self._audit(actor, "accounting.legacy_journal.post", "AccountingJournal", str(journal.id), context, {"journal_number": journal.journal_number})
-        AuditService(self.db).log(
-            user_id=actor.id,
-            action=AuditAction.ACCOUNTING_POST,
-            module="accounting",
-            entity_type="accounting_journal",
-            entity_id=str(journal.id),
-            detail={"journal_number": journal.journal_number, "reference": journal.reference},
-            context=context,
-        )
-        self.db.commit()
-        self.db.refresh(journal)
-        return journal
+        if payload.branch_id and payload.branch_id!=actor.branch_id:
+            raise AppException(403,'accounting_branch','Journal must belong to the active branch')
+        if not payload.debit_account_code or not payload.credit_account_code:
+            raise AppException(422,'legacy_accounts_required','Select explicit debit and credit accounts; summary-only journals cannot update the GL')
+        from app.schemas.accounting import JournalEntryLineCreate
+        return self.create_journal_entry(JournalEntryCreate(journal_date=today_local(),source_module='legacy_journal',source_reference=payload.reference or str(uuid4()),narration=payload.description,lines=[JournalEntryLineCreate(account_code=payload.debit_account_code,account_name=payload.debit_account_code,debit_amount=payload.debit_amount),JournalEntryLineCreate(account_code=payload.credit_account_code,account_name=payload.credit_account_code,credit_amount=payload.credit_amount)]),actor,context)
 
     def dashboard(self, actor: User) -> AccountingDashboardRead:
         branch_id = actor.branch_id
-        today = date.today()
+        today = today_local()
         month_start = today.replace(day=1)
         today_start = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
 
@@ -116,7 +99,17 @@ class AccountingService:
         settlement=self.db.scalar(select(Account.current_balance).where(Account.branch_id==branch_id,Account.account_code=='1001'))
         if settlement is not None:cash_balance=Decimal(settlement)
         bank_balance = self._sum(BankAccount.current_balance, BankAccount.branch_id == branch_id)
+        from app.modules.accounting.management import AccountingManagement
+        book=AccountingManagement(self.db).statements(actor,month_start,today)
+        monthly_revenue=Decimal(book['profit_and_loss']['income'])
+        expenses=Decimal(book['profit_and_loss']['expenses'])
         net_profit = monthly_revenue - expenses
+        cash_codes={'1001','1011','1012','1013'};bank_codes={'1020'};clearing_codes={'1031','1032','1033','1034'}
+        cumulative={row['code']:Decimal(row['signed_balance']) for row in book['trial_balance']}
+        cash_balance=sum((value for code,value in cumulative.items() if code in cash_codes),Decimal(0))
+        bank_balance=sum((value for code,value in cumulative.items() if code in bank_codes),Decimal(0))
+        clearing_balance=sum((value for code,value in cumulative.items() if code in clearing_codes),Decimal(0))
+        collection_today=self.db.scalar(select(func.coalesce(func.sum(JournalEntryLine.debit_amount),0)).join(JournalEntry,JournalEntryLine.journal_entry_id==JournalEntry.id).where(JournalEntry.branch_id==branch_id,JournalEntry.posting_applied_at.is_not(None),JournalEntry.journal_date==today,JournalEntryLine.account_code.in_(cash_codes|bank_codes|clearing_codes),or_(JournalEntry.source_module.in_(['billing_payment','patient_advance','pharmacy_sale','opd_external_remittance']),JournalEntry.voucher_type=='receipt'))) or Decimal(0)
 
         return AccountingDashboardRead(
             kpis=[
@@ -124,7 +117,8 @@ class AccountingService:
                 AccountingKPI(label="Monthly Revenue (book)", value=monthly_revenue, tone="info"),
                 AccountingKPI(label="Total Expenses", value=expenses, tone="warn"),
                 AccountingKPI(label="Net Profit / Loss", value=net_profit, tone="good" if net_profit >= 0 else "danger"),
-                AccountingKPI(label="Cash / Bank book", value=cash_balance, tone="info"),
+                AccountingKPI(label="Cash in Hand (book)", value=cash_balance, tone="info"),
+                AccountingKPI(label="Mobile / Card Clearing (book)", value=clearing_balance, tone="info"),
                 AccountingKPI(label="Bank Balance", value=bank_balance, tone="info"),
                 AccountingKPI(label="Pending Patient Dues", value=pending_due, tone="danger" if pending_due else "good"),
                 AccountingKPI(label="Insurance Claims", value=insurance_due, tone="warn"),
@@ -156,6 +150,14 @@ class AccountingService:
         return list(self.db.scalars(stmt))
 
     def create_account(self, payload: AccountCreate, actor: User, context: dict[str, str | None]) -> Account:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        if payload.opening_balance or payload.current_balance:raise AppException(422,'account_opening_voucher','Use a balanced opening voucher instead of setting account balances')
+        if self._find_account(actor.branch_id,None,payload.account_code):raise AppException(409,'account_code_exists','Account code already exists in this branch')
+        if payload.parent_id:
+            parent=self._find_account(actor.branch_id,payload.parent_id,None)
+            if not parent or not parent.is_control:raise AppException(422,'account_parent','Choose a control account in this branch')
+        if payload.category not in {'assets','liabilities','equity','income','expenses'}:raise AppException(422,'account_category','Choose a standard account category')
         account = Account(**payload.model_dump(), branch_id=actor.branch_id, created_by=actor.id, updated_by=actor.id)
         self.db.add(account)
         self._audit(actor, "account.create", "Account", None, context, payload.model_dump(mode="json"))
@@ -168,6 +170,28 @@ class AccountingService:
         return list(self.db.scalars(stmt))
 
     def create_journal_entry(self, payload: JournalEntryCreate, actor: User, context: dict[str, str | None]) -> JournalEntry:
+        from app.modules.accounting.controls import SYSTEM_SOURCES
+        if payload.source_module in SYSTEM_SOURCES:raise AppException(422,'reserved_accounting_source','Use the originating HMS workflow for this financial event')
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        from app.modules.auth.service import AuthService
+        permissions=set(AuthService(self.db).get_effective_permissions(actor))
+        if payload.status=='posted' and not permissions.intersection({'accounting.journal.post','accounting.voucher.post'}):raise AppException(403,'accounting_post_permission','Posting permission is required')
+        if payload.status=='approved':raise AppException(403,'accounting_approval_action','Use the independent approval action')
+        if payload.request_key:
+            from app.models.accounting_control import AccountingPostingKey
+            previous=self.db.scalar(select(AccountingPostingKey).where(AccountingPostingKey.branch_id==actor.branch_id,AccountingPostingKey.source_module=='manual_request',AccountingPostingKey.source_reference==payload.request_key))
+            if previous:
+                import hashlib
+                digest=hashlib.sha256(payload.model_dump_json(exclude={'request_key'}).encode()).hexdigest()
+                if previous.fingerprint!=digest:raise AppException(409,'journal_request_conflict','Request key was used for different journal content')
+                return self.db.get(JournalEntry,previous.journal_id)
+        from app.models.accounting_control import FinancialPeriod
+        if self.db.scalar(select(FinancialPeriod.id).where(FinancialPeriod.branch_id==actor.branch_id,FinancialPeriod.start_date<=payload.journal_date,FinancialPeriod.end_date>=payload.journal_date,FinancialPeriod.status!='open')):raise AppException(409,'accounting_period_locked','Cannot create or post a voucher in a locked period')
+        from app.modules.accounting.controls import policy_for
+        policy=policy_for(self.db,actor.branch_id,payload.journal_date)
+        if policy and policy.settings.get('maker_checker') and payload.status in {'approved','posted'}:
+            raise AppException(403,'journal_approval_required','Submit the voucher for independent approval before posting')
         if payload.source_module and payload.source_reference and self._source_entry_exists(actor.branch_id, payload.source_module, payload.source_reference):
             raise AppException(status.HTTP_409_CONFLICT, "duplicate_journal_entry", "Accounting entry already exists for this source transaction.")
         if payload.status not in {"draft", "submitted", "approved", "posted"}:
@@ -176,7 +200,7 @@ class AccountingService:
         total_credit = sum(line.credit_amount for line in payload.lines)
         entry = JournalEntry(
             branch_id=actor.branch_id,
-            journal_number=f"JE-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
+            journal_number=f"JE-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex.upper()}",
             journal_date=payload.journal_date,
             source_module=payload.source_module,
             source_reference=payload.source_reference,
@@ -187,6 +211,7 @@ class AccountingService:
             posted_at=datetime.now(UTC) if payload.status == "posted" else None,
             approved_by_user_id=actor.id if payload.status == "posted" else None,
             attachment_url=payload.attachment_url,
+            voucher_type=payload.voucher_type,
             created_by=actor.id,
             updated_by=actor.id,
         )
@@ -201,6 +226,10 @@ class AccountingService:
         self.db.add(entry)
         if entry.status == "posted":
             self._apply_posting(entry, actor)
+        if payload.request_key:
+            import hashlib
+            self.db.flush()
+            self.db.add(AccountingPostingKey(branch_id=actor.branch_id,source_module='manual_request',source_reference=payload.request_key,journal=entry,fingerprint=hashlib.sha256(payload.model_dump_json(exclude={'request_key'}).encode()).hexdigest(),created_by=actor.id,updated_by=actor.id))
         self._audit(actor, "journal_entry.create", "JournalEntry", None, context, {"journal_number": entry.journal_number})
         self.db.commit()
         self.db.refresh(entry)
@@ -210,9 +239,8 @@ class AccountingService:
         stmt = (
             select(JournalEntryLine, JournalEntry)
             .join(JournalEntry, JournalEntryLine.journal_entry_id == JournalEntry.id)
-            .where(JournalEntry.branch_id == actor.branch_id, JournalEntry.status == "posted")
+            .where(JournalEntry.branch_id == actor.branch_id, JournalEntry.status.in_(["posted","reversed"]))
             .order_by(JournalEntry.journal_date, JournalEntry.created_at, JournalEntryLine.created_at)
-            .limit(min(limit, 500))
         )
         if account_code:
             stmt = stmt.where(JournalEntryLine.account_code == account_code)
@@ -223,10 +251,15 @@ class AccountingService:
         if date_to:
             stmt = stmt.where(JournalEntry.journal_date <= date_to)
 
-        balance = Decimal(0)
+        balances={}
+        if date_from:
+            opening=select(JournalEntryLine.account_code,func.sum(JournalEntryLine.debit_amount-JournalEntryLine.credit_amount)).join(JournalEntry,JournalEntryLine.journal_entry_id==JournalEntry.id).where(JournalEntry.branch_id==actor.branch_id,JournalEntry.status.in_(['posted','reversed']),JournalEntry.journal_date<date_from)
+            if source_module:opening=opening.where(JournalEntry.source_module==source_module)
+            balances=dict(self.db.execute(opening.group_by(JournalEntryLine.account_code)).all())
         rows: list[GeneralLedgerLineRead] = []
-        for line, entry in self.db.execute(stmt).all():
-            balance += Decimal(line.debit_amount or 0) - Decimal(line.credit_amount or 0)
+        for line, entry in self.db.execute(stmt.limit(min(max(limit,1),500))).all():
+            balances[line.account_code]=Decimal(balances.get(line.account_code,0))+Decimal(line.debit_amount or 0)-Decimal(line.credit_amount or 0)
+            balance=balances[line.account_code]
             rows.append(
                 GeneralLedgerLineRead(
                     id=line.id,
@@ -247,11 +280,22 @@ class AccountingService:
         return rows
 
     def voucher_action(self, entry_id, action: str, actor: User, context: dict[str, str | None]) -> JournalEntry:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         entry = self.db.scalar(
             select(JournalEntry).options(selectinload(JournalEntry.lines)).where(JournalEntry.id == entry_id, JournalEntry.branch_id == actor.branch_id)
         )
         if not entry:
             raise AppException(status.HTTP_404_NOT_FOUND, "voucher_not_found", "Voucher not found.")
+        from app.modules.auth.service import AuthService
+        permissions=set(AuthService(self.db).get_effective_permissions(actor))
+        needed={'approve':{'accounting.voucher.approve','accounting.approve'},'post':{'accounting.voucher.post','accounting.journal.post'},'reverse':{'accounting.voucher.reverse','accounting.journal.post'}}
+        if action in needed and not permissions.intersection(needed[action]):raise AppException(403,'accounting_action_permission','You cannot perform this voucher action')
+        from app.modules.accounting.controls import policy_for
+        policy=policy_for(self.db,actor.branch_id,entry.journal_date)
+        if policy and policy.settings.get('maker_checker'):
+            if action in {'approve','post','reverse'} and entry.created_by==actor.id:raise AppException(403,'accounting_maker_checker','The maker cannot approve, post or reverse this voucher')
+            if action=='post' and entry.status!='approved':raise AppException(409,'voucher_not_approved','Independent approval is required')
         if action == "submit":
             if entry.status != "draft":
                 raise AppException(status.HTTP_409_CONFLICT, "invalid_voucher_state", "Only draft vouchers can be submitted.")
@@ -266,15 +310,15 @@ class AccountingService:
                 return entry
             if entry.status not in {"approved", "submitted", "draft"}:
                 raise AppException(status.HTTP_409_CONFLICT, "invalid_voucher_state", "Voucher cannot be posted from its current status.")
-            self._apply_posting(entry, actor)
-            entry.status = "posted"
-            entry.posted_at = datetime.now(UTC)
             entry.approved_by_user_id = entry.approved_by_user_id or actor.id
+            self._apply_posting(entry, actor)
         elif action == "cancel":
             if entry.status == "posted":
                 raise AppException(status.HTTP_409_CONFLICT, "posted_voucher_locked", "Posted vouchers must be reversed, not cancelled.")
             entry.status = "cancelled"
         elif action == "reverse":
+            from app.modules.accounting.controls import SYSTEM_SOURCES
+            if entry.source_module in SYSTEM_SOURCES:raise AppException(409,'accounting_source_reversal','Reverse or adjust this transaction through its originating HMS workflow so operational balances remain consistent')
             entry = self.reverse_journal_entry(entry, actor, context)
             return entry
         else:
@@ -286,14 +330,17 @@ class AccountingService:
         return entry
 
     def reverse_journal_entry(self, entry: JournalEntry, actor: User, context: dict[str, str | None]) -> JournalEntry:
+        if entry.branch_id!=actor.branch_id:raise AppException(403,'accounting_branch','Cannot reverse another branch voucher')
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor);self.db.refresh(entry,with_for_update=True)
         if entry.status != "posted":
             raise AppException(status.HTTP_409_CONFLICT, "voucher_not_posted", "Only posted vouchers can be reversed.")
         if self.db.scalar(select(JournalEntry.id).where(JournalEntry.reversed_entry_id == entry.id, JournalEntry.branch_id == actor.branch_id)):
             raise AppException(status.HTTP_409_CONFLICT, "voucher_already_reversed", "A reversal voucher already exists.")
         reversal = JournalEntry(
             branch_id=actor.branch_id,
-            journal_number=f"RV-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}",
-            journal_date=date.today(),
+            journal_number=f"RV-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex.upper()}",
+            journal_date=today_local(),
             source_module="accounting_reversal",
             source_reference=entry.journal_number,
             narration=f"Reversal of {entry.journal_number}: {entry.narration}",
@@ -320,10 +367,11 @@ class AccountingService:
                     updated_by=actor.id,
                 )
             )
-        entry.status = "reversed"
-        entry.updated_by = actor.id
         self.db.add(reversal)
         self._apply_posting(reversal, actor)
+        self.db.flush([reversal])
+        entry.status = "reversed"
+        entry.updated_by = actor.id
         self._audit(actor, "journal_entry.reverse", "JournalEntry", str(entry.id), context, {"reversal": reversal.journal_number})
         self.db.commit()
         self.db.refresh(reversal)
@@ -347,29 +395,45 @@ class AccountingService:
         }
 
     def create_simple(self, kind: str, payload, actor: User, context: dict[str, str | None]):
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        if payload.status not in {'pending','draft'}:raise AppException(403,'finance_approval_required','Create a pending record and use an authorized approval action')
+        if kind=='supplier' and (not payload.reference or not payload.name):raise AppException(422,'supplier_invoice_reference','Supplier name and original invoice reference are required')
+        if kind=='supplier' and payload.reference and self.db.scalar(select(SupplierInvoice.id).where(SupplierInvoice.branch_id==actor.branch_id,func.upper(func.trim(SupplierInvoice.invoice_number))==payload.reference.strip().upper(),func.lower(func.trim(SupplierInvoice.supplier_name))==(payload.name or 'Supplier').strip().lower())):
+            raise AppException(409,'supplier_invoice_duplicate','This supplier invoice reference already exists')
         now = datetime.now(UTC)
-        today = date.today()
+        today = payload.transaction_date or today_local()
         amount = Decimal(payload.amount)
         prefix = kind.upper().replace("-", "")[:5]
         common = {"branch_id": actor.branch_id, "created_by": actor.id, "updated_by": actor.id}
         if kind == "advance":
-            entity = AdvancePayment(receipt_number=f"ADV-{now:%Y%m%d%H%M%S}", amount=amount, balance_amount=amount, payment_method=payload.payment_method, status=payload.status or "active", note=payload.note, collected_by_user_id=actor.id, **common)
+            entity = AdvancePayment(patient_id=payload.patient_id,receipt_number=f"ADV-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", amount=amount, balance_amount=amount, payment_method=payload.payment_method, status=payload.status or "active", note=payload.note, collected_by_user_id=actor.id, **common)
         elif kind == "refund":
-            entity = Refund(refund_number=f"REF-{now:%Y%m%d%H%M%S}", refund_type=payload.category or "service", amount=amount, payment_method=payload.payment_method, reason=payload.note or "Refund request", status=payload.status, processed_by_user_id=actor.id, **common)
+            entity = Refund(refund_number=f"REF-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", refund_type=payload.category or "service", amount=amount, payment_method=payload.payment_method, reason=payload.note or "Refund request", status=payload.status, processed_by_user_id=actor.id, **common)
         elif kind == "discount":
             entity = Discount(discount_category=payload.category or "management", requested_amount=amount, approved_amount=amount if payload.status == "approved" else Decimal(0), reason=payload.note, status=payload.status, approved_by_user_id=actor.id if payload.status == "approved" else None, **common)
         elif kind == "insurance":
-            entity = InsuranceClaim(claim_number=f"INS-{now:%Y%m%d%H%M%S}", provider_name=payload.name or "Insurance Provider", claim_amount=amount, status=payload.status or "draft", due_date=today + timedelta(days=21), **common)
+            entity = InsuranceClaim(claim_number=f"INS-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", provider_name=payload.name or "Insurance Provider", claim_amount=amount, status=payload.status or "draft", due_date=payload.due_date, **common)
         elif kind == "corporate":
-            entity = CorporateBill(bill_number=f"CORP-{now:%Y%m%d%H%M%S}", company_name=payload.name or "Corporate Client", bill_month=today.strftime("%Y-%m"), gross_amount=amount, net_amount=amount, due_amount=amount, status=payload.status or "open", due_date=today + timedelta(days=30), **common)
+            entity = CorporateBill(bill_number=f"CORP-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", company_name=payload.name or "Corporate Client", bill_month=today.strftime("%Y-%m"), gross_amount=amount, net_amount=amount, due_amount=amount, status=payload.status or "open", due_date=payload.due_date, **common)
         elif kind == "supplier":
-            entity = SupplierInvoice(supplier_name=payload.name or "Supplier", invoice_number=payload.reference or f"SUP-{now:%Y%m%d%H%M%S}", invoice_date=today, due_date=today + timedelta(days=15), category=payload.category or "inventory", gross_amount=amount, due_amount=amount, status=payload.status or "pending", note=payload.note, **common)
+            entity = SupplierInvoice(purchase_account_code=payload.purchase_account_code,receiving_id=payload.receiving_id,pharmacy_purchase_id=payload.pharmacy_purchase_id,supplier_name=payload.name or "Supplier", invoice_number=payload.reference or f"SUP-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", invoice_date=today, due_date=payload.due_date, category=payload.category or "inventory", gross_amount=amount, due_amount=amount, status=payload.status or "pending", note=payload.note, **common)
         elif kind == "expense":
-            category = self.db.scalar(select(ExpenseCategory).where(ExpenseCategory.branch_id == actor.branch_id).limit(1))
-            entity = Expense(category_id=category.id if category else None, expense_number=f"EXP-{now:%Y%m%d%H%M%S}", expense_date=today, vendor_name=payload.name, amount=amount, payment_method=payload.payment_method, status=payload.status or "pending", description=payload.note, approved_by_user_id=actor.id if payload.status == "approved" else None, **common)
+            category = self.db.scalar(select(ExpenseCategory).where(ExpenseCategory.branch_id == actor.branch_id,ExpenseCategory.name==payload.category).limit(1))
+            entity = Expense(expense_account_code=payload.expense_account_code,cost_center=payload.cost_center,attachment_url=payload.attachment_url,category_id=category.id if category else None, expense_number=f"EXP-{now:%Y%m%d%H%M%S}-{uuid4().hex[:12].upper()}", expense_date=today, vendor_name=payload.name, amount=amount, payment_method=payload.payment_method, status=payload.status or "pending", description=payload.note, approved_by_user_id=actor.id if payload.status == "approved" else None, **common)
         else:
             raise ValueError("Unsupported accounting workflow")
         self.db.add(entity)
+        if kind=='advance':
+            from app.modules.auth.service import AuthService
+            if 'billing.payment.collect' not in AuthService(self.db).get_effective_permissions(actor):raise AppException(403,'advance_collection_permission','Patient advance collection requires cashier collection permission')
+            from app.modules.accounting.channels import collection_account
+            from app.models.patient import Patient
+            patient=self.db.get(Patient,payload.patient_id) if payload.patient_id else None
+            if not patient or patient.branch_id!=actor.branch_id:raise AppException(422,'advance_patient','Select a patient in this branch before collecting an advance')
+            channel=collection_account(self.db,actor,payload.payment_method)
+            entity.status='active'
+            self._create_auto_entry(actor,'patient_advance',entity.receipt_number,today,'Patient advance deposit '+entity.receipt_number,[(channel,'Received patient advance',amount,0),('2210','Patient Advance Deposits',0,amount)])
         self._audit(actor, f"{kind}.create", entity.__class__.__name__, None, context, {"amount": str(amount)})
         self.db.commit()
         self.db.refresh(entity)
@@ -384,16 +448,61 @@ class AccountingService:
             "insurance": InsuranceClaim,
             "corporate": CorporateBill,
         }
+        from app.modules.auth.service import AuthService
+        permissions=set(AuthService(self.db).get_effective_permissions(actor))
+        allowed={'accounting.approve','accounting.manage'} | ({'accounting.expense.approve'} if kind=='expense' else set())
+        if not permissions.intersection(allowed):raise AppException(403,'finance_approval_permission','Approval access is required for this financial workflow')
         model = model_map.get(kind)
         if not model:
             raise AppException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unsupported_record", "Unsupported finance record type.")
         row = self.db.scalar(select(model).where(model.id == record_id, model.branch_id == actor.branch_id))
         if not row:
             raise AppException(status.HTTP_404_NOT_FOUND, "record_not_found", "Finance record not found.")
-        old_status = getattr(row, "status", None)
-        setattr(row, "status", new_status)
-        if hasattr(row, "approved_by_user_id") and new_status in {"approved", "paid"}:
-            setattr(row, "approved_by_user_id", actor.id)
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor);self.db.refresh(row,with_for_update=True)
+        old_status=getattr(row,'status',None)
+        if old_status==new_status:return row
+        transitions={'pending':{'approved','rejected'},'draft':{'approved','rejected'},'approved':{'paid'},'partial':{'paid'}}
+        if new_status not in transitions.get(old_status,set()):raise AppException(409,'finance_record_transition','Use an explicit approved financial adjustment for this transition')
+        from app.modules.accounting.controls import policy_for
+        policy=policy_for(self.db,actor.branch_id,today_local())
+        if policy and policy.settings.get('maker_checker') and row.created_by==actor.id:raise AppException(403,'finance_self_approval','An independent approver is required')
+        if kind=='expense' and new_status=='approved' and policy:
+            limit=Decimal(str(policy.settings.get('expense_approval_limit',0)))
+            if row.amount>limit and 'accounting.manage' not in permissions:raise AppException(403,'expense_approval_limit','This expense exceeds delegated approval authority; a finance administrator must approve it')
+        if kind=='supplier' and new_status=='paid':raise AppException(422,'supplier_payment_required','Record a supplier payment with amount and reference instead of changing its status')
+        if kind=='supplier' and new_status=='approved':
+            from app.modules.accounting.coa import ensure_account
+            purchase_account=ensure_account(self.db,actor,row.purchase_account_code)
+            if purchase_account.category not in {'assets','asset','expenses','expense'} or not purchase_account.is_active or purchase_account.is_control:raise AppException(422,'supplier_purchase_account','Choose an approved active asset or expense purchase account')
+            debit_code=row.purchase_account_code
+            if row.receiving_id and row.pharmacy_purchase_id:raise AppException(422,'supplier_match_source','Select one receipt source')
+            if row.receiving_id:
+                from app.models.inventory import StockReceiving
+                from app.models.operational_posting import OperationalPosting
+                receiving=self.db.get(StockReceiving,row.receiving_id)
+                posted=self.db.scalar(select(OperationalPosting).where(OperationalPosting.source_type=='inventory_receiving',OperationalPosting.source_id==row.receiving_id,OperationalPosting.event=='receive',OperationalPosting.branch_id==actor.branch_id))
+                used=self.db.scalar(select(SupplierInvoice.id).where(SupplierInvoice.receiving_id==row.receiving_id,SupplierInvoice.id!=row.id,SupplierInvoice.status.in_(['approved','paid','partial'])))
+                if not receiving or not posted or used or Decimal(posted.amount)!=row.gross_amount:raise AppException(422,'supplier_receipt_match','Match an unreconciled posted goods receipt with the same amount')
+                debit_code='2400'
+            if row.pharmacy_purchase_id:
+                from app.models.pharmacy import PharmacyPurchase
+                purchase=self.db.get(PharmacyPurchase,row.pharmacy_purchase_id)
+                used=self.db.scalar(select(SupplierInvoice.id).where(SupplierInvoice.pharmacy_purchase_id==row.pharmacy_purchase_id,SupplierInvoice.id!=row.id,SupplierInvoice.status.in_(['approved','paid','partial'])))
+                if not purchase or purchase.branch_id!=actor.branch_id or used or purchase.total_amount!=row.gross_amount or not self._source_entry_exists(actor.branch_id,'pharmacy_purchase',purchase.purchase_number):raise AppException(422,'supplier_pharmacy_match','Match an unreconciled posted pharmacy receipt with the same amount')
+                debit_code='2400'
+            self._create_auto_entry(actor,'supplier_invoice',str(row.id),row.invoice_date,'Approved supplier invoice '+row.invoice_number,[(debit_code,'Approved receipt / inventory account',row.gross_amount,0),('2100','Accounts Payable',0,row.gross_amount)])
+        if kind=='expense':
+            from app.modules.accounting.coa import ensure_account
+            expense_account=ensure_account(self.db,actor,row.expense_account_code)
+            if expense_account.category not in {'expenses','expense'} or expense_account.is_control or not expense_account.is_active:raise AppException(422,'expense_account','Choose an active expense account')
+            if new_status=='approved':self._create_auto_entry(actor,'expense_accrual',str(row.id),row.expense_date,'Approved expense '+row.expense_number,[(row.expense_account_code,'Approved expense account',row.amount,0),('2500','Accrued Expenses',0,row.amount)])
+            if new_status=='paid':
+                from app.modules.accounting.channels import collection_account
+                channel=collection_account(self.db,actor,row.payment_method)
+                self._create_auto_entry(actor,'expense_payment',str(row.id),today_local(),'Expense payment '+row.expense_number,[('2500','Accrued Expenses',row.amount,0),(channel,'Configured payment account',0,row.amount)])
+        setattr(row,'status',new_status)
+        if hasattr(row,'approved_by_user_id') and new_status=='approved':row.approved_by_user_id=actor.id
         row.updated_by = actor.id
         self._audit(actor, f"{kind}.status", row.__class__.__name__, str(row.id), context, {"old_status": old_status, "new_status": new_status})
         self.db.commit()
@@ -402,20 +511,14 @@ class AccountingService:
 
     def reports(self, actor: User) -> AccountingReportSummary:
         branch_id = actor.branch_id
-        accounts = self.list_accounts(actor)
-        by_category: dict[str, Decimal] = {}
-        trial_balance = []
-        for account in accounts:
-            balance = Decimal(account.current_balance or 0)
-            by_category[account.category] = by_category.get(account.category, Decimal(0)) + balance
-            trial_balance.append(AccountingChartPoint(label=f"{account.account_code} {account.name}", value=balance))
-        income = by_category.get("income", Decimal(0)) + by_category.get("revenue", Decimal(0))
-        expenses = by_category.get("expenses", Decimal(0)) + by_category.get("expense", Decimal(0))
-        assets = by_category.get("assets", Decimal(0)) + by_category.get("asset", Decimal(0))
-        liabilities = by_category.get("liabilities", Decimal(0)) + by_category.get("liability", Decimal(0))
-        equity = by_category.get("equity", Decimal(0))
+        from app.modules.accounting.management import AccountingManagement
+        book=AccountingManagement(self.db).statements(actor)
+        trial_balance=[AccountingChartPoint(label=row['code']+' '+row['name'],value=Decimal(row['signed_balance'])) for row in book['trial_balance']]
+        income=Decimal(book['profit_and_loss']['income']);expenses=Decimal(book['profit_and_loss']['expenses'])
+        assets=Decimal(book['balance_sheet']['assets']);liabilities=Decimal(book['balance_sheet']['liabilities'])
+        equity=Decimal(book['balance_sheet']['equity'])+Decimal(book['balance_sheet']['unclosed_earnings'])
         return AccountingReportSummary(
-            trial_balance=trial_balance[:100],
+            trial_balance=trial_balance,
             profit_and_loss=[
                 AccountingChartPoint(label="Income", value=income),
                 AccountingChartPoint(label="Expenses", value=expenses),
@@ -430,84 +533,26 @@ class AccountingService:
             receivable_aging=self._aging_points(BillingInvoice.due_amount, BillingInvoice.created_at, BillingInvoice.branch_id == branch_id, BillingInvoice.due_amount > 0),
             payable_aging=self._aging_points(SupplierInvoice.due_amount, SupplierInvoice.invoice_date, SupplierInvoice.branch_id == branch_id, SupplierInvoice.due_amount > 0),
             cash_bank=[
-                AccountingChartPoint(label="Cash Today", value=self._sum(BillingPayment.amount, BillingPayment.branch_id == branch_id, BillingPayment.received_at >= datetime.combine(date.today(), datetime.min.time(), tzinfo=UTC))),
+                AccountingChartPoint(label="Cash Today", value=self._sum(BillingPayment.amount, BillingPayment.branch_id == branch_id, BillingPayment.received_at >= datetime.combine(today_local(), datetime.min.time(), tzinfo=UTC))),
                 AccountingChartPoint(label="Bank Balance", value=self._sum(BankAccount.current_balance, BankAccount.branch_id == branch_id)),
             ],
         )
 
     def sync_source_entries(self, actor: User, context: dict[str, str | None]) -> dict[str, int | str]:
-        created = 0
-        skipped = 0
-        branch_id = actor.branch_id
-        for payment in self.db.scalars(select(BillingPayment).where(BillingPayment.branch_id == branch_id).order_by(BillingPayment.created_at.desc()).limit(100)):
-            if self._source_entry_exists(branch_id, "billing_payment", payment.receipt_number):
-                skipped += 1
-                continue
-            self._create_auto_entry(
-                actor,
-                "billing_payment",
-                payment.receipt_number,
-                payment.received_at.date(),
-                f"Patient payment received {payment.receipt_number}",
-                [("1001", "Cash / Bank", payment.amount, 0), ("1100", "Patient Receivable", 0, payment.amount)],
-            )
-            created += 1
-        for refund in self.db.scalars(select(BillingRefund).where(BillingRefund.branch_id == branch_id,BillingRefund.amount>0).order_by(BillingRefund.created_at.desc()).limit(50)):
-            if self._source_entry_exists(branch_id, "billing_refund", refund.refund_number):
-                skipped += 1
-                continue
-            self._create_auto_entry(
-                actor,
-                "billing_refund",
-                refund.refund_number,
-                refund.refunded_at.date(),
-                f"Patient refund {refund.refund_number}",
-                [("4100", "Refunds and Adjustments", refund.amount, 0), ("1001", "Cash / Bank", 0, refund.amount)],
-            )
-            created += 1
-        for sale in self.db.scalars(select(PharmacySale).where(PharmacySale.branch_id == branch_id).order_by(PharmacySale.created_at.desc()).limit(50)):
-            if self._source_entry_exists(branch_id, "pharmacy_sale", sale.sale_number):
-                skipped += 1
-                continue
-            self._create_auto_entry(
-                actor,
-                "pharmacy_sale",
-                sale.sale_number,
-                sale.sale_date,
-                f"Pharmacy sale {sale.sale_number}",
-                [("1001", "Cash / Bank", sale.net_payable, 0), ("4200", "Pharmacy Sales", 0, sale.net_payable)],
-            )
-            created += 1
-        for invoice in self.db.scalars(select(SupplierInvoice).where(SupplierInvoice.branch_id == branch_id).order_by(SupplierInvoice.created_at.desc()).limit(50)):
-            if self._source_entry_exists(branch_id, "supplier_invoice", invoice.invoice_number):
-                skipped += 1
-                continue
-            self._create_auto_entry(
-                actor,
-                "supplier_invoice",
-                invoice.invoice_number,
-                invoice.invoice_date,
-                f"Supplier payable {invoice.invoice_number}",
-                [("1300", "Inventory / Supplies", invoice.gross_amount, 0), ("2100", "Supplier Payable", 0, invoice.gross_amount)],
-            )
-            created += 1
-        for payroll in self.db.scalars(select(PayrollAccounting).where(PayrollAccounting.branch_id == branch_id).order_by(PayrollAccounting.created_at.desc()).limit(30)):
-            reference = f"{payroll.payroll_month}-{payroll.id}"
-            if self._source_entry_exists(branch_id, "payroll", reference):
-                skipped += 1
-                continue
-            self._create_auto_entry(
-                actor,
-                "payroll",
-                reference,
-                date.today(),
-                f"Payroll payable {payroll.payroll_month}",
-                [("5100", "Salary Expense", payroll.net_salary_payable, 0), ("2200", "Payroll Payable", 0, payroll.net_salary_payable)],
-            )
-            created += 1
-        self._audit(actor, "accounting.integration_sync", "JournalEntry", None, context, {"created": created, "skipped": skipped})
+        # A missing journal is not proof that an old operational row represents
+        # a verified, unpaid accounting event. Never manufacture historic cash,
+        # cost, tax or payroll entries from summary totals.
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db, actor)
+        counts = {}
+        for name, model in (("billing_payments", BillingPayment), ("billing_refunds", BillingRefund),
+                            ("pharmacy_sales", PharmacySale), ("supplier_invoices", SupplierInvoice),
+                            ("payroll_summaries", PayrollAccounting)):
+            counts[name] = self.db.scalar(select(func.count()).select_from(model).where(model.branch_id == actor.branch_id)) or 0
+        self._audit(actor, "accounting.integration_sync.review", "JournalEntry", None, context, counts)
         self.db.commit()
-        return {"created_entries": created, "skipped_entries": skipped, "message": "Accounting source sync completed."}
+        return {"created_entries": 0, "skipped_entries": sum(counts.values()),
+                "message": "Source review completed without posting. Current transactions post through their verified workflows. Reconcile historical records to reviewed opening vouchers; summary totals cannot establish cash, inventory cost or unpaid liabilities."}
 
     def _source_entry_exists(self, branch_id, source_module: str, source_reference: str) -> bool:
         return bool(
@@ -516,62 +561,68 @@ class AccountingService:
                     JournalEntry.branch_id == branch_id,
                     JournalEntry.source_module == source_module,
                     JournalEntry.source_reference == source_reference,
-                    JournalEntry.status.notin_(["cancelled", "reversed"]),
+                    JournalEntry.status != "cancelled",
                 )
             )
         )
 
     def _find_account(self, branch_id, account_id, account_code: str | None) -> Account | None:
         if account_id:
-            account = self.db.scalar(select(Account).where(Account.id == account_id, Account.branch_id == branch_id))
-            if account:
-                return account
+            account = self.db.scalar(select(Account).where(Account.id == account_id, Account.branch_id == branch_id).with_for_update().execution_options(populate_existing=True))
+            return account
         if account_code:
-            return self.db.scalar(select(Account).where(Account.account_code == account_code, Account.branch_id == branch_id))
+            return self.db.scalar(select(Account).where(Account.account_code == account_code, Account.branch_id == branch_id).with_for_update().execution_options(populate_existing=True))
         return None
 
     def _apply_posting(self, entry: JournalEntry, actor: User) -> None:
-        if actor.branch_id:
-            from app.modules.support_posting.service import lock_branch
-            lock_branch(self.db,actor)
-        if entry.total_debit != entry.total_credit or entry.total_debit <= 0:
-            raise AppException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unbalanced_voucher", "Debit and credit totals must balance before posting.")
-        for line in entry.lines:
-            account = self._find_account(actor.branch_id, line.account_id, line.account_code)
-            if not account:
-                account = Account(
-                    branch_id=actor.branch_id,
-                    account_code=line.account_code,
-                    name=line.account_name,
-                    category="assets" if line.debit_amount >= line.credit_amount else "liabilities",
-                    normal_balance="debit" if line.debit_amount >= line.credit_amount else "credit",
-                    current_balance=0,
-                    opening_balance=0,
-                    is_active=True,
-                    created_by=actor.id,
-                    updated_by=actor.id,
-                )
-                self.db.add(account)
-                self.db.flush()
-            line.account_id = account.id
-            line.account_code = account.account_code
-            line.account_name = account.name
-            debit = Decimal(line.debit_amount or 0)
-            credit = Decimal(line.credit_amount or 0)
-            if account.normal_balance == "credit":
-                account.current_balance = Decimal(account.current_balance or 0) + credit - debit
-            else:
-                account.current_balance = Decimal(account.current_balance or 0) + debit - credit
-            account.updated_by = actor.id
+        with self.db.no_autoflush:
+            from app.modules.accounting.controls import validate_posting
+            from app.modules.accounting.coa import ensure_account
+            validate_posting(self.db,entry,actor)
+            accounts={};deltas={}
+            for line in entry.lines:
+                account=self._find_account(actor.branch_id,line.account_id,line.account_code)
+                if not account and line.account_id:raise AppException(422,'accounting_account_scope','Account identifier does not belong to this branch')
+                if not account:account=ensure_account(self.db,actor,line.account_code)
+                if not account.is_active or account.is_control:raise AppException(422,'account_not_postable','Inactive and control accounts cannot receive postings')
+                line.account_id=account.id;line.account_code=account.account_code;line.account_name=account.name
+                delta=Decimal(line.credit_amount or 0)-Decimal(line.debit_amount or 0)
+                if account.normal_balance!='credit':delta=-delta
+                accounts[account.id]=account;deltas[account.id]=deltas.get(account.id,Decimal(0))+delta
+            for identity,account in accounts.items():
+                cached=Decimal(account.current_balance or 0)
+                snapshot=entry.policy_snapshot or {}
+                if snapshot.get('settings'):
+                    signed=self.db.scalar(select(func.coalesce(func.sum(JournalEntryLine.debit_amount-JournalEntryLine.credit_amount),0)).join(JournalEntry,JournalEntry.id==JournalEntryLine.journal_entry_id).where(JournalEntryLine.account_id==account.id,JournalEntry.posting_applied_at.is_not(None))) or Decimal(0)
+                    prior_book=-signed if account.normal_balance=='credit' else signed
+                    if entry.voucher_type=='opening':
+                        entry.policy_snapshot={**snapshot,'opening_reconciliation':{**snapshot.get('opening_reconciliation',{}),account.account_code:{'previous_cached_balance':str(cached),'prior_gl_balance':str(prior_book),'opening_delta':str(deltas[identity])}}}
+                        cached=prior_book
+                    elif cached!=prior_book:raise AppException(409,'accounting_cutover_reconciliation','Reconcile legacy opening balance for account '+account.account_code+' using a reviewed opening voucher before posting new transactions')
+                new_balance=cached+deltas[identity]
+                settings=(entry.policy_snapshot or {}).get('settings',{})
+                channels=set(settings.get('collection_accounts',{}).values())|set(settings.get('cash_accounts',['1001','1011','1012','1013','1020']))|{'1031','1032','1033','1034'}
+                if settings and new_balance<0 and account.account_code in channels and account.account_code not in settings.get('allow_negative_accounts',[]):raise AppException(409,'accounting_insufficient_recorded_funds','Insufficient recorded funds in account '+account.account_code+'; reconcile funding or use an explicitly approved overdraft policy')
+                if abs(new_balance)>Decimal('999999999999.99'):raise AppException(422,'account_balance_limit','Account balance exceeds supported ledger precision')
+                account.current_balance=new_balance
+                account.updated_by=actor.id
+            from sqlalchemy import inspect
+            if inspect(entry).persistent:self.db.flush(entry.lines)
+            entry.posting_applied_at=datetime.now(UTC)
+            entry.status='posted'
+            entry.posted_at=entry.posted_at or entry.posting_applied_at
+            self.db.flush()
 
-    def _create_auto_entry(self, actor: User, source_module: str, source_reference: str, journal_date: date, narration: str, lines: list[tuple[str, str, Decimal, Decimal]]) -> JournalEntry:
-        total_debit = sum(Decimal(debit or 0) for _, _, debit, _ in lines)
-        total_credit = sum(Decimal(credit or 0) for _, _, _, credit in lines)
+    def _create_auto_entry(self, actor: User, source_module: str, source_reference: str, journal_date: date, narration: str, lines: list[tuple], cost_center: str | None = None, source_snapshot: dict | None = None) -> JournalEntry:
+        lines=[line for line in lines if Decimal(line[2] or 0)!=0 or Decimal(line[3] or 0)!=0]
+        total_debit = sum(Decimal(line[2] or 0) for line in lines)
+        total_credit = sum(Decimal(line[3] or 0) for line in lines)
         if total_debit != total_credit:
             raise AppException(status.HTTP_422_UNPROCESSABLE_ENTITY, "unbalanced_auto_entry", f"Auto entry for {source_reference} is not balanced.")
         entry = JournalEntry(
             branch_id=actor.branch_id,
-            journal_number=f"JE-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:4].upper()}",
+            policy_snapshot={'source':source_snapshot} if source_snapshot else None,
+            journal_number=f"JE-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}-{uuid4().hex.upper()}",
             journal_date=journal_date,
             source_module=source_module,
             source_reference=source_reference,
@@ -580,14 +631,17 @@ class AccountingService:
             total_debit=total_debit,
             total_credit=total_credit,
             posted_at=datetime.now(UTC),
-            approved_by_user_id=actor.id,
+            approved_by_user_id=None,
             created_by=actor.id,
             updated_by=actor.id,
         )
-        for account_code, account_name, debit, credit in lines:
+        for values in lines:
+            account_code,account_name,debit,credit=values[:4]
+            center=values[4] if len(values)>4 and values[4] is not None else cost_center
             entry.lines.append(
                 JournalEntryLine(
                     account_code=account_code,
+                    cost_center=center,
                     account_name=account_name,
                     debit_amount=Decimal(debit or 0),
                     credit_amount=Decimal(credit or 0),
@@ -626,7 +680,7 @@ class AccountingService:
     def _cash_flow(self, branch_id) -> list[AccountingChartPoint]:
         points = []
         for offset in range(6, -1, -1):
-            day = date.today() - timedelta(days=offset)
+            day = today_local() - timedelta(days=offset)
             start = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
             end = start + timedelta(days=1)
             inflow = self._sum(BillingPayment.amount, BillingPayment.branch_id == branch_id, BillingPayment.received_at >= start, BillingPayment.received_at < end)
@@ -637,7 +691,7 @@ class AccountingService:
     def _aging_points(self, amount_column, date_column, *conditions) -> list[AccountingChartPoint]:
         buckets = {"0-7": (0, 7), "8-30": (8, 30), "31-60": (31, 60), "60+": (61, 3650)}
         points = []
-        today = date.today()
+        today = today_local()
         for label, (start_days, end_days) in buckets.items():
             start_date = today - timedelta(days=end_days)
             end_date = today - timedelta(days=start_days)
@@ -671,4 +725,5 @@ class AccountingService:
         return FinanceRecordRead(id=row.id, reference=reference or "-", name=name or "-", amount=amount or Decimal(0), paid_amount=paid or Decimal(0), due_amount=due or Decimal(0), category=category, status=status or "-", created_at=row.created_at)
 
     def _audit(self, actor: User, action: str, entity_type: str | None, entity_id: str | None, context: dict[str, str | None], detail: dict | None = None) -> None:
-        self.db.add(AccountingAuditLog(branch_id=actor.branch_id, actor_user_id=actor.id, action=action, entity_type=entity_type, entity_id=entity_id, new_value=str(detail or {}), ip_address=context.get("ip_address"), user_agent=context.get("user_agent"), created_by=actor.id, updated_by=actor.id))
+        import json
+        self.db.add(AccountingAuditLog(branch_id=actor.branch_id, actor_user_id=actor.id, action=action, entity_type=entity_type, entity_id=entity_id, new_value=json.dumps(detail or {},default=str,ensure_ascii=False), ip_address=context.get("ip_address"), user_agent=context.get("user_agent"), created_by=actor.id, updated_by=actor.id))

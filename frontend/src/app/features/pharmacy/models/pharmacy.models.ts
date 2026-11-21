@@ -41,6 +41,7 @@ export interface PharmacyCustomer {
 }
 
 export interface PharmacyMedicine {
+  search_aliases?: string[];
   id: string;
   medicine_type_id: string;
   generic_id: string;
@@ -95,6 +96,9 @@ export interface PharmacySaleItem {
 }
 
 export interface PharmacySale {
+  paid_amount?: string | null;
+  payment_method?: string | null;
+  payment_provider?: string | null;
   id: string;
   customer_id: string;
   patient_id?: string | null;

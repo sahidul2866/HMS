@@ -1,3 +1,4 @@
+import { FinancialPoliciesComponent } from './financial-policies.component';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -9,7 +10,7 @@ import { BillingServiceApi } from '../../services/billing.service';
 @Component({
   selector: 'app-billing-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, FinancialPoliciesComponent],
   templateUrl: './billing-settings.component.html',
   styleUrls: ['./billing-settings.component.scss'],
 })

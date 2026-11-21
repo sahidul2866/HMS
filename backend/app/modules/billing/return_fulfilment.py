@@ -17,6 +17,11 @@ from app.models.radiology import RadiologyOrder
 
 
 def cancellation_plan(db, item, quantity, previously_returned, actor):
+    rules = (item.financial_snapshot or {}).get('rules', {})
+    if (item.source_module or '').startswith('opd') and not item.source_opd_visit_order_id and not rules.get('consultation_cancellable', True):
+        raise AppException(409, 'billing_consultation_cancellation', 'The frozen consultation policy prohibits cancellation')
+    if rules.get('package_cancellation') == 'whole' and quantity + previously_returned < item.quantity:
+        raise AppException(409, 'billing_package_cancellation', 'This package must be cancelled as a whole')
     # Cashiers may credit goods already physically received by pharmacy. This
     # does not cancel prescriptions or manufacture another stock movement.
     received = list(db.scalars(select(PharmacyDispense).where(PharmacyDispense.billing_invoice_item_id == item.id, PharmacyDispense.is_active.is_(True)).with_for_update()))
@@ -52,6 +57,9 @@ def cancellation_plan(db, item, quantity, previously_returned, actor):
         else:
             sold = db.scalar(select(PharmacySaleItem.id).where(PharmacySaleItem.source_visit_order_id == entity.id, PharmacySaleItem.is_active.is_(True), PharmacySaleItem.quantity > PharmacySaleItem.returned_quantity).limit(1))
             unused = entity.status in {'pending', 'ordered', 'cancelled'} and not sold
+        if not unused and rules.get('allow_started_cancellation') and not isinstance(entity, PharmacyDispense):
+            from app.modules.auth.service import AuthService
+            unused = 'billing.service.manage' in AuthService(db).get_effective_permissions(actor)
         if not unused:
             raise AppException(409, 'billing_return_fulfilled', 'This order has started or goods have been issued. Complete the department return/review first; request an audited billing adjustment for a price concession without cancelling care.')
         if getattr(entity, 'branch_id', None) and actor.branch_id and entity.branch_id != actor.branch_id:

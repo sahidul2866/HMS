@@ -76,7 +76,8 @@ export class BillingDeskComponent {
 
   readonly paymentForm = this.fb.group({
     amount: [0, [Validators.required, Validators.min(0.01)]],
-    payment_method: ['cash' as 'cash' | 'card' | 'mobile_banking' | 'bank_transfer', Validators.required],
+    payment_method: ['cash' as 'cash' | 'card' | 'mobile_banking' | 'bank_transfer' | 'patient_advance', Validators.required],
+    advance_payment_id: [''],
     payment_provider: ['bkash'],
     reference_number: [''],
     note: [''],
@@ -293,18 +294,20 @@ export class BillingDeskComponent {
     const grossAmount = Number(invoice.sub_total ?? 0) + itemDiscountAmount;
     const dueAmount = Number(invoice.due_amount ?? 0);
     const paidAmount = Number(invoice.paid_amount ?? 0);
+    const branding = invoice.items.find(item => item.financial_snapshot?.rules?.hospital_name)?.financial_snapshot?.rules;
     const preparedBy = invoice.billed_by_name || 'Billing Desk';
+    const showItemDiscounts = invoice.items.every(item => item.financial_snapshot?.rules?.show_item_discounts !== false);
     const rows = invoice.items
       .map(
         (item, index) => `
           <tr>
             <td>${index + 1}</td>
             <td>
-              <div>${escapePrintHtml(item.service_name)}</div>
+              <div>${escapePrintHtml(item.service_name)} × ${escapePrintHtml(item.quantity)}</div>
               ${item.source_label ? `<small style="color:#475569;">${escapePrintHtml(item.source_label)}</small>` : ''}
             </td>
             <td>${this.formatCurrency(item.unit_price)}</td>
-            <td>${escapePrintHtml(item.discount_percentage)}</td>
+            <td>${showItemDiscounts ? escapePrintHtml(item.discount_percentage) : '—'}</td>
             <td>${this.formatCurrency(item.line_total)}</td>
           </tr>`
       )
@@ -322,9 +325,9 @@ export class BillingDeskComponent {
           <div class="brand-block">
             <div class="brand-mark">MP</div>
             <div class="brand-copy">
-              <p class="clinic-name">MediProfit</p>
-              <p>Address : 461, Firmview Super Market, Firmgate, Dhaka-1205</p>
-              <p>Contact : +8801720981682</p>
+              <p class="clinic-name">${escapePrintHtml(branding?.hospital_name || 'MediProfit')}</p>
+              <p>Address : ${escapePrintHtml(branding?.hospital_address || '461, Firmview Super Market, Firmgate, Dhaka-1205')}</p>
+              <p>Contact : ${escapePrintHtml(branding?.hospital_contact || '+8801720981682')}</p>
             </div>
           </div>
           <div class="copy-tag">${escapePrintHtml(copyLabel)}</div>
@@ -371,6 +374,8 @@ export class BillingDeskComponent {
                 <td>${this.formatCurrency(grossAmount)}</td>
               </tr>
               ${summaryDiscountRows}
+              <tr><td colspan="4" style="text-align:right;"><b>Net payable after credits</b></td><td>${this.formatCurrency(invoice.net_payable_amount ?? invoice.total_amount)}</td></tr>
+              <tr><td colspan="4" style="text-align:right;"><b>Refunded</b></td><td>${this.formatCurrency(invoice.refunded_amount)}</td></tr>
               <tr>
                 <td colspan="4" style="text-align:right;"><b>Payment Amount</b></td>
                 <td>${this.formatCurrency(paidAmount)}</td>
@@ -445,8 +450,25 @@ export class BillingDeskComponent {
             }
             @media print {
               body { margin:0; padding:0; background:white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .preview-shell { max-width:none; padding:0; }
-              .invoice-copy { box-shadow:none; border-radius:0; border:0; padding:0; }
+              .preview-shell { display:block; max-width:none; padding:0; }
+              .invoice-copy { box-shadow:none; border-radius:0; border:0; padding:0; gap:10px; font-size:12px; }
+              .detail-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+              .barcode-card, .info-card, .table-card { padding:10px; border-radius:8px; }
+              .brand-mark { width:48px; height:48px; font-size:18px; border-radius:8px; }
+              .clinic-name { font-size:18px; }
+              .title-band { font-size:22px; padding:8px; border-radius:8px; }
+              .id-barcode-svg { height:64px; }
+              .meta-list { gap:6px; margin-top:8px; }
+              .meta-list div { gap:6px; padding-bottom:5px; }
+              th, td { padding:6px; }
+              th:first-child { width:7%; }
+              th:nth-child(2) { width:35%; }
+              th:nth-child(3) { width:18%; }
+              th:nth-child(4) { width:15%; }
+              th:last-child { width:25%; }
+              tr { break-inside:avoid; }
+              .due-stamp, .paid-stamp { font-size:26px; padding:8px 18px; }
+              .copy-header, .footer-row { break-inside:avoid; }
               .page-break { page-break-before: always; }
               @page { size:A4 portrait; margin:12mm; }
             }
@@ -483,6 +505,9 @@ export class BillingDeskComponent {
     this.latestInvoice = null;
   }
 
+  availablePatientAdvances:Array<{id:string;receipt_number:string;balance_amount:string}>=[];
+  loadPatientAdvances():void{if(this.latestInvoice)this.billingService.patientAdvances(this.latestInvoice.patient_id).subscribe(rows=>this.availablePatientAdvances=rows);}
+  private paymentRequestKey='';private paymentRequestFingerprint='';
   collectPayment(): void {
     if (!this.latestInvoice || this.latestInvoice.status === 'void' || this.collectingPayment || this.paymentForm.invalid) {
       return;
@@ -491,13 +516,16 @@ export class BillingDeskComponent {
     const raw = this.paymentForm.getRawValue();
     const method = raw.payment_method ?? 'cash';
     const reference = (raw.reference_number ?? '').trim();
-    if (method !== 'cash' && !reference) {
+    if (method !== 'cash' && method !== 'patient_advance' && !reference) {
       this.notificationService.warning(method === 'mobile_banking' ? 'Enter the mobile banking transaction ID (TrxID).' : method === 'card' ? 'Enter the card approval code.' : 'Enter the transfer or cheque number.');
       return;
     }
+    const fingerprint=JSON.stringify(raw);if(fingerprint!==this.paymentRequestFingerprint){this.paymentRequestKey=crypto.randomUUID();this.paymentRequestFingerprint=fingerprint;}
     this.collectingPayment = true;
     this.billingService
       .collectPayment(this.latestInvoice.id, {
+        request_key:this.paymentRequestKey,
+        advance_payment_id:method==='patient_advance'?raw.advance_payment_id||null:null,
         amount: Number(raw.amount ?? 0),
         payment_method: method,
         payment_provider: method === 'mobile_banking' ? raw.payment_provider || null : null,
@@ -558,6 +586,16 @@ export class BillingDeskComponent {
     anchor.download = this.isDueMode ? 'due-payments.csv' : 'billing-list.csv';
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  cancelLatestInvoice(): void {
+    if (!this.latestInvoice || this.returning) return;
+    const reason = window.prompt('Reason for full cancellation and refund');
+    if (!reason || reason.trim().length < 3) return;
+    this.returning = true;
+    this.billingService.postOperation<BillingInvoice>('invoices/' + this.latestInvoice.id + '/cancel', {
+      reason: reason.trim(), payment_method: this.returnForm.getRawValue().payment_method || 'cash', request_key: crypto.randomUUID()
+    }).subscribe({next: invoice => { this.latestInvoice = invoice; this.returning = false; this.loadInvoices(); this.notificationService.success('Invoice cancelled and eligible payment refunded'); }, error: () => this.returning = false});
   }
 
   voidLatestInvoice(): void {

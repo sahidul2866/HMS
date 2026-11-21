@@ -1,3 +1,5 @@
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { PrescriptionField, PrescriptionFieldsComponent } from '../../../../shared/prescription-fields.component';
 import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -11,7 +13,7 @@ import { NotificationService } from '../../../../core/services/notification.serv
 import { ConfigurationProfile, ConfigurationService } from '../../../configuration/services/configuration.service';
 import { PharmacyInvestigationSetting, PharmacyMedicine } from '../../../pharmacy/models/pharmacy.models';
 import { PharmacyService } from '../../../pharmacy/services/pharmacy.service';
-import { printOPDPrescription } from '../../../../shared/utils/opd-prescription-printer';
+import { buildOPDPrescriptionHtml, printOPDPrescription } from '../../../../shared/utils/opd-prescription-printer';
 import { OPDVisit, OPDVisitOrder } from '../../models/opd.models';
 import { OPDService } from '../../services/opd.service';
 
@@ -25,6 +27,7 @@ type PrescriptionSectionView = {
 };
 
 type MedicineDraft = {
+  catalog_id?: string;
   item_name: string;
   strength: string;
   dosage: string;
@@ -66,7 +69,7 @@ const DEFAULT_PRESCRIPTION_SECTIONS: PrescriptionSectionView[] = [
 @Component({
   selector: 'app-opd-visit-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PrescriptionFieldsComponent],
   templateUrl: './opd-visit-list.component.html',
   styleUrls: ['./opd-visit-list.component.scss'],
 })
@@ -77,6 +80,7 @@ export class OPDVisitListComponent implements OnDestroy {
   private readonly doctorDirectoryService = inject(DoctorDirectoryService);
   private readonly configurationService = inject(ConfigurationService);
   private readonly notificationService = inject(NotificationService);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   readonly session = inject(SessionService);
@@ -87,6 +91,7 @@ export class OPDVisitListComponent implements OnDestroy {
   configurationProfiles: ConfigurationProfile[] = [];
   selectedDoctorUserId = '';
   searchText = '';
+  selectedVisitType = '';
   selectedStatus = '';
   selectedPayment = '';
   selectedDate = '';
@@ -106,6 +111,8 @@ export class OPDVisitListComponent implements OnDestroy {
   private medicineSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private investigationSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private medicineSearchToken = 0;
+  private lastMedicineQuery = '';
+  private medicineQueryCache = new Map<string,{at:number;items:PharmacyMedicine[]}>();
   private investigationSearchToken = 0;
   prescriptionDraft = {
     chief_complaint: '',
@@ -127,6 +134,18 @@ export class OPDVisitListComponent implements OnDestroy {
   sortField: 'visit_number' | 'patient' | 'department' | 'doctor' | 'fee' | 'payment' | 'status' = 'visit_number';
   sortDirection: 'asc' | 'desc' = 'desc';
 
+  extraClinicalData: Record<string,any> = {};
+  templateId = '';
+  autosaveMessage = '';
+  prescribingHistory: {item_name:string;order_type:string;uses:number}[] = [];
+  shortcuts: {id:string;name:string;kind:string;content:Record<string,any>}[] = [];
+  private draftTimer = setInterval(()=>this.autosave(),2000);
+  private templateLoadToken = 0;
+  private visitLoadToken = 0;
+  private autosaveBlocked = false;
+  private autosaveFailures = 0;
+  private nextAutosaveAt = 0;
+
   constructor() {
     this.doctorDirectoryService.listDoctors().subscribe((doctors) => (this.doctors = doctors));
     if(this.session.hasPermission('settings.configuration.manage')) this.configurationService.workspace().subscribe((workspace) => (this.configurationProfiles = workspace.profiles));
@@ -135,6 +154,7 @@ export class OPDVisitListComponent implements OnDestroy {
     this.route.queryParamMap.subscribe((params) => {
       // Dashboard cards open this list already filtered (status, payment, day).
       this.selectedStatus = params.get('status') ?? this.selectedStatus;
+      this.selectedVisitType = params.get('visitType') ?? this.selectedVisitType;
       this.selectedPayment = params.get('payment') ?? this.selectedPayment;
       this.selectedDate = params.get('date') ?? this.selectedDate;
       const openVisit = params.get('openVisit');
@@ -153,20 +173,27 @@ export class OPDVisitListComponent implements OnDestroy {
 
   openVisit(visitId: string): void {
     if (this.hasUnsavedChanges() && !window.confirm('Discard the unsaved prescription changes and open this visit?')) return;
+    const discardKey=this.hasUnsavedChanges()?this.draftKey():null;
+    const loadToken=++this.visitLoadToken;
     this.opdService.getVisit(visitId).subscribe((visit) => {
-      this.setSelectedVisit(visit);
-      this.applyVisitToPrescriptionDraft(visit);
+      if(loadToken!==this.visitLoadToken)return;
+      if(discardKey)sessionStorage.removeItem(discardKey);
+      this.setSelectedVisit(visit, true);
+      this.applyVisitToPrescriptionDraft(visit,true);
       this.loadPreviousVisits(visit);
+      this.loadClinicalTools(visit);
     });
   }
 
   closeVisit(): void {
     if (this.hasUnsavedChanges() && !window.confirm('Discard the unsaved prescription changes?')) return;
+    sessionStorage.removeItem(this.draftKey());
+    this.visitLoadToken++;this.templateLoadToken++;
     this.selectedVisit = null;
   }
 
   hasUnsavedChanges(): boolean {
-    return !!this.selectedVisit && !!this.consultationSnapshot && JSON.stringify(this.consultationPayload()) !== this.consultationSnapshot;
+    return !!this.selectedVisit && ((!!this.consultationSnapshot && this.draftFingerprint() !== this.consultationSnapshot) || !!this.medicineDraft.item_name.trim() || !!this.investigationDraft.item_name.trim() || !!this.editingOrderId);
   }
 
   @HostListener('window:beforeunload', ['$event'])
@@ -175,6 +202,8 @@ export class OPDVisitListComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.closePrescriptionPreview();
+    clearInterval(this.draftTimer);
     if (this.medicineSearchTimer) clearTimeout(this.medicineSearchTimer);
     if (this.investigationSearchTimer) clearTimeout(this.investigationSearchTimer);
   }
@@ -194,18 +223,22 @@ export class OPDVisitListComponent implements OnDestroy {
   startVisit(visit: OPDVisit): void {
     if (!this.canStartVisit) return;
     if (this.savingConsultation) return;
-    if (this.hasUnsavedChanges() && !window.confirm('Discard your unsaved consultation changes before starting this visit?')) return;
+    const sameOpenVisit=this.selectedVisit?.id===visit.id;
+    if (!sameOpenVisit && this.hasUnsavedChanges() && !window.confirm('Discard your unsaved consultation changes before starting this visit?')) return;
     if (visit.status === 'in_consultation') {
       this.openVisit(visit.id);
       return;
     }
     this.savingConsultation = true;
+    const loadToken=++this.visitLoadToken;
     this.opdService.updateStatus(visit.id, 'in_consultation').subscribe({
       next: updated => {
         this.savingConsultation = false;
-        this.setSelectedVisit(updated);
-        this.applyVisitToPrescriptionDraft(updated);
+        if(loadToken!==this.visitLoadToken)return;
+        this.setSelectedVisit(updated,true);
+        if(!sameOpenVisit)this.applyVisitToPrescriptionDraft(updated,true);
         this.loadPreviousVisits(updated);
+        if(!sameOpenVisit)this.loadClinicalTools(updated);
       },
       error: error => {
         this.savingConsultation = false;
@@ -263,7 +296,7 @@ export class OPDVisitListComponent implements OnDestroy {
         visit.patient.patient_number.toLowerCase().includes(search) ||
         (visit.consulting_doctor_name || '').toLowerCase().includes(search) ||
         (visit.department_name || '').toLowerCase().includes(search);
-      return statusMatch && paymentMatch && dateMatch && searchMatch;
+      return statusMatch && paymentMatch && dateMatch && searchMatch && (!this.selectedVisitType || visit.visit_type===this.selectedVisitType);
     });
   }
 
@@ -343,7 +376,9 @@ export class OPDVisitListComponent implements OnDestroy {
   }
 
   get activeLayoutProfile(): ConfigurationProfile | null {
-    return this.findProfile('prescription_layout', this.selectedVisit);
+    const frozen=this.selectedVisit?.signed_prescription;
+    if(this.isSigned && frozen?.['template_payload'])return {id:frozen['template_id'] || '',name:'Signed template v'+(frozen['template_version'] || 'legacy'),payload:frozen['template_payload'],profile_type:'prescription_layout'} as ConfigurationProfile;
+    return this.configurationProfiles.find(p=>p.id===this.templateId) || this.findProfile('prescription_layout', this.selectedVisit);
   }
 
   get activeSuggestionProfile(): ConfigurationProfile | null {
@@ -423,28 +458,22 @@ export class OPDVisitListComponent implements OnDestroy {
   }
 
   get quickTemplates(): PrescriptionTemplate[] {
-    return [
-      { name: 'Fever', complaint: 'Fever with body ache', diagnosis: 'Acute febrile illness', medicines: [{ name: 'Paracetamol', dosage: '1 tab', frequency: '1+1+1', duration: '3 days', timing: 'After meal' }], investigations: [{ name: 'CBC', service_area: 'laboratory' }], advice: ['Take adequate fluid', 'Tepid sponging if high fever'] },
-      { name: 'Diabetes F/U', complaint: 'Diabetes follow-up', diagnosis: 'Type 2 diabetes mellitus', medicines: [], investigations: [{ name: 'Fasting Blood Sugar', service_area: 'laboratory' }, { name: 'HbA1c', service_area: 'laboratory' }], advice: ['Continue diabetic diet', 'Regular walking 30 minutes daily'] },
-      { name: 'Hypertension F/U', complaint: 'Hypertension follow-up', diagnosis: 'Hypertension', medicines: [], investigations: [{ name: 'Serum Creatinine', service_area: 'laboratory' }, { name: 'ECG', service_area: 'laboratory' }], advice: ['Low salt diet', 'Monitor blood pressure regularly'] },
-      { name: 'Cold/Cough', complaint: 'Runny nose and cough', diagnosis: 'Upper respiratory tract infection', medicines: [{ name: 'Cetirizine', dosage: '1 tab', frequency: '0+0+1', duration: '5 days', timing: 'At bedtime' }], investigations: [], advice: ['Steam inhalation', 'Avoid cold drinks'] },
-      { name: 'Abdominal Pain', complaint: 'Abdominal pain', diagnosis: 'Abdominal pain under evaluation', medicines: [], investigations: [{ name: 'CBC', service_area: 'laboratory' }, { name: 'USG Whole Abdomen', service_area: 'radiology' }], advice: ['Return urgently if pain increases or vomiting persists'] },
-    ];
+    return this.shortcuts.filter(s=>s.kind==='combination').map(s=>({name:s.name,complaint:'',diagnosis:'',medicines:[],investigations:[],advice:[],...s.content}));
   }
 
   get filteredMedicineSuggestions(): PharmacyMedicine[] {
-    const query = [this.medicineSearch, this.medicineDraft.item_name, this.prescriptionDraft.final_diagnosis, this.prescriptionDraft.provisional_diagnosis].join(' ').trim().toLowerCase();
+    const query = (this.medicineSearch || this.medicineDraft.item_name).trim().toLowerCase();
     const favorites = new Set(this.medicineSuggestions.map((item) => item.toLowerCase()));
     const pool = [...this.pharmacyMedicines].sort((a, b) => {
       const favoriteSort = (favorites.has(a.name.toLowerCase()) ? 0 : 1) - (favorites.has(b.name.toLowerCase()) ? 0 : 1);
-      return favoriteSort || Number(b.stock_quantity || 0) - Number(a.stock_quantity || 0);
+      return favoriteSort || a.name.localeCompare(b.name);
     });
-    if (!query) return pool.slice(0, 8);
+    if (!query || (this.medicineSearch.trim() && this.lastMedicineQuery.toLowerCase()===query)) return pool.slice(0, 8);
     return pool.filter((medicine) => [medicine.name, medicine.generic_name, medicine.strength, medicine.dosage_form, medicine.description].filter(Boolean).join(' ').toLowerCase().includes(query)).slice(0, 8);
   }
 
   get filteredInvestigationSuggestions(): PharmacyInvestigationSetting[] {
-    const query = [this.investigationSearch, this.investigationDraft.item_name, this.prescriptionDraft.final_diagnosis, this.prescriptionDraft.chief_complaint].join(' ').trim().toLowerCase();
+    const query = (this.investigationSearch || this.investigationDraft.item_name).trim().toLowerCase();
     const pool = this.investigationSettings.filter((item) => item.is_active !== false);
     if (!query) return pool.slice(0, 10);
     return pool.filter((item) => [item.test_name, item.category_name, item.service_area, item.description, item.code].filter(Boolean).join(' ').toLowerCase().includes(query)).slice(0, 10);
@@ -485,10 +514,11 @@ export class OPDVisitListComponent implements OnDestroy {
   }
 
   onMedicineQueryChanged(query: string): void {
+    this.medicineDraft.catalog_id = undefined;
     this.medicineSearch = query;
     if (this.medicineSearchTimer) window.clearTimeout(this.medicineSearchTimer);
     const normalized = query.trim();
-    if (normalized.length < 2) return;
+    if (normalized.length < 1) return;
     this.medicineSearchTimer = window.setTimeout(() => this.searchMedicineCatalog(normalized), 160);
   }
 
@@ -496,15 +526,12 @@ export class OPDVisitListComponent implements OnDestroy {
     this.investigationSearch = query;
     if (this.investigationSearchTimer) window.clearTimeout(this.investigationSearchTimer);
     const normalized = query.trim();
-    if (normalized.length < 2) return;
+    if (normalized.length < 1) return;
     this.investigationSearchTimer = window.setTimeout(() => this.searchInvestigationCatalog(normalized), 160);
   }
 
   addBestMedicineFromKeyboard(): void {
-    const bestMatch = this.filteredMedicineSuggestions[0];
-    if (bestMatch && this.medicineDraft.item_name.trim().length >= 2) {
-      this.selectMedicineSuggestion(bestMatch);
-    }
+    if (!this.medicineDraft.catalog_id) { this.notificationService.warning('Select the intended medicine from the catalog, then enter its instructions.'); return; }
     this.addPrescriptionMedicine();
   }
 
@@ -522,6 +549,7 @@ export class OPDVisitListComponent implements OnDestroy {
       if (addNow) this.addPrescriptionMedicine();
       return;
     }
+    this.medicineDraft.catalog_id = medicine.id;
     this.medicineDraft.item_name = medicine.name;
     this.medicineDraft.strength = medicine.strength || this.medicineDraft.strength;
     this.medicineSearch = '';
@@ -552,35 +580,36 @@ export class OPDVisitListComponent implements OnDestroy {
   }
 
   applyTemplate(template: PrescriptionTemplate): void {
-    if (template.complaint) this.prescriptionDraft.chief_complaint = template.complaint;
-    if (template.diagnosis) this.prescriptionDraft.final_diagnosis = template.diagnosis;
-    template.advice.forEach((advice) => this.applyAdvice(advice));
-    template.medicines.forEach((medicine) => {
-      this.medicineDraft = { ...this.emptyMedicineDraft(), ...medicine, item_name: medicine.name };
-      this.addPrescriptionMedicine(false);
-    });
-    template.investigations.forEach((investigation) => {
-      this.investigationDraft = { ...this.emptyInvestigationDraft(), item_name: investigation.name, service_area: investigation.service_area };
-      this.addInvestigation(false);
-    });
+    if(!this.selectedVisit || this.savingOrder || this.isSigned)return;
+    if(template.complaint)this.prescriptionDraft.chief_complaint=template.complaint;
+    if(template.diagnosis)this.prescriptionDraft.final_diagnosis=template.diagnosis;
+    template.advice.forEach(advice=>this.applyAdvice(advice));
+    const orders=[...template.medicines.map(m=>({order_type:'prescription',item_name:[m.name,m.strength].filter(Boolean).join(' '),instructions:this.buildMedicineInstructions({...this.emptyMedicineDraft(),...m,item_name:m.name}),quantity:m.quantity||1,request_key:crypto.randomUUID(),prescription_detail:{...m,confirmed_by_doctor:true}})),...template.investigations.map(i=>({order_type:'investigation',service_area:i.service_area,item_name:i.name,quantity:1,request_key:crypto.randomUUID()}))];
+    if(!orders.length)return;this.savingOrder=true;
+    this.opdService.clinicalPost<OPDVisit>('visits/'+this.selectedVisit.id+'/orders-batch',orders).subscribe({next:visit=>{this.savingOrder=false;this.setSelectedVisit(visit);},error:()=>this.savingOrder=false});
+  }
+  saveCombination():void {
+    if(!this.selectedVisit)return;const name=window.prompt('Name for this medicine / investigation combination');if(!name?.trim())return;
+    this.saveShortcut('combination',name,{medicines:this.activePrescriptionOrders.map(order=>({...(order.prescription_detail||{}),name:order.prescription_detail?.['catalog_snapshot']?.name || order.item_name,instructions:order.instructions,quantity:order.quantity})),investigations:this.activeInvestigationOrders.map(order=>({name:order.item_name,service_area:order.service_area})),advice:[]});
   }
 
   saveConsultation(): void {
-    if (!this.selectedVisit) return;
-    this.savingConsultation = true;
-    this.opdService
-      .updateConsultation(this.selectedVisit.id, this.consultationPayload())
-      .subscribe((visit) => {
-        this.savingConsultation = false;
-        this.setSelectedVisit(visit);
-        this.applyVisitToPrescriptionDraft(visit);
-        this.notificationService.success('Consultation saved.');
-      }, () => (this.savingConsultation = false));
+    if (!this.selectedVisit || this.isSigned || !this.canPrescribe || this.savingConsultation) return;
+    const identity=this.selectedVisit.id;const fingerprint=this.draftFingerprint();
+    this.savingConsultation=true;
+    this.opdService.updateConsultation(identity,this.consultationPayload()).subscribe({next:visit=>{
+      this.savingConsultation=false;if(this.selectedVisit?.id!==identity)return;
+      const unchanged=this.draftFingerprint()===fingerprint;
+      this.setSelectedVisit(visit);
+      if(unchanged)this.applyVisitToPrescriptionDraft(visit);else this.consultationSnapshot=fingerprint;
+      this.notificationService.success('Consultation saved.');
+    },error:()=>this.savingConsultation=false});
   }
 
   finalizePrescription(): void {
     if (!this.selectedVisit || this.savingConsultation || this.savingOrder) return;
-    if (this.selectedVisit.status !== 'in_consultation') {
+    if(this.medicineDraft.item_name.trim() || this.investigationDraft.item_name.trim() || this.editingOrderId){this.notificationService.warning('Add or discard unfinished medicine/investigation entries before signing');return;}
+    if (this.selectedVisit.status !== 'in_consultation' && this.selectedVisit.prescription_status !== 'amended') {
       this.notificationService.warning('Start this consultation before finalizing its prescription.');
       return;
     }
@@ -589,7 +618,7 @@ export class OPDVisitListComponent implements OnDestroy {
     this.opdService.finalizePrescription(this.selectedVisit.id, this.consultationPayload()).subscribe({
       next: visit => {
         this.savingConsultation = false;
-        this.setSelectedVisit(visit);
+        if(!this.setSelectedVisit(visit))return;
         this.applyVisitToPrescriptionDraft(visit);
         this.notificationService.success('Prescription finalized.', 'Print the prescription, review billing, or send the patient to IPD if needed.');
       },
@@ -606,9 +635,12 @@ export class OPDVisitListComponent implements OnDestroy {
       this.notificationService.error('Enter a medicine before adding it to the prescription.');
       return;
     }
+    if (!this.medicineDraft.dosage.trim() || !this.medicineDraft.frequency.trim()) {this.notificationService.warning('Enter and confirm the dose and frequency; no dose is inferred.');return;}
     this.savingOrder = true;
     this.opdService
       .createOrder(this.selectedVisit.id, {
+        request_key: crypto.randomUUID(),
+        prescription_detail: {...this.medicineDraft, confirmed_by_doctor: true},
         order_type: 'prescription',
         service_area: 'pharmacy',
         item_name: this.medicineTitle(this.medicineDraft),
@@ -617,8 +649,9 @@ export class OPDVisitListComponent implements OnDestroy {
       })
       .subscribe((visit) => {
         this.savingOrder = false;
-        this.setSelectedVisit(visit);
+        if(!this.setSelectedVisit(visit))return;
         this.medicineDraft = this.emptyMedicineDraft();
+        this.persistLocalDraft();
         if (showMessage) this.notificationService.success('Medicine added.');
       }, () => (this.savingOrder = false));
   }
@@ -640,8 +673,9 @@ export class OPDVisitListComponent implements OnDestroy {
       })
       .subscribe((visit) => {
         this.savingOrder = false;
-        this.setSelectedVisit(visit);
+        if(!this.setSelectedVisit(visit))return;
         this.investigationDraft = this.emptyInvestigationDraft();
+        this.persistLocalDraft();
         if (showMessage) this.notificationService.success('Investigation added.');
       }, () => (this.savingOrder = false));
   }
@@ -658,6 +692,7 @@ export class OPDVisitListComponent implements OnDestroy {
         item_name: order.item_name,
         instructions: order.instructions || null,
         quantity: Number(order.quantity || 1),
+        expected_version: order.version,
         service_area: order.service_area || (order.order_type === 'prescription' ? 'pharmacy' : 'laboratory'),
         status: order.status,
       })
@@ -693,19 +728,35 @@ export class OPDVisitListComponent implements OnDestroy {
       .subscribe((visit) => this.setSelectedVisit(visit));
   }
 
-  printPrescription(visit: OPDVisit): void {
-    const layoutProfile = this.findProfile('prescription_layout', visit);
-    const printed = printOPDPrescription({
-      visit,
-      doctor: this.doctorForVisit(visit),
-      layoutProfile,
-    });
-    if (!printed) {
-      this.notificationService.warning('Unable to open prescription print. Allow browser printing and try again.');
-    }
+  prescriptionVersions: Array<{version:number;status:string;signed_at:string|null;reason:string|null;snapshot:Record<string,any>}> = [];
+  prescriptionAudit: Array<{kind:string;created_at:string;detail:Record<string,any>}> = [];
+  loadPrescriptionHistory():void {
+    if(!this.selectedVisit)return;const identity=this.selectedVisit.id;
+    this.opdService.clinicalGet<typeof this.prescriptionVersions>('visits/'+identity+'/prescription-history').subscribe(rows=>{if(this.selectedVisit?.id===identity)this.prescriptionVersions=rows;});
+    this.opdService.clinicalGet<typeof this.prescriptionAudit>('visits/'+identity+'/prescription-audit').subscribe(rows=>{if(this.selectedVisit?.id===identity)this.prescriptionAudit=rows;});
+  }
+  previewPrescriptionVersion(row:typeof this.prescriptionVersions[number]):void {
+    if(!this.selectedVisit)return;
+    this.printPrescription({...this.selectedVisit,prescription_status:row.status==='voided'?'voided':'finalized',signed_prescription:{...row.snapshot,_historical_version:row.version}});
   }
 
-  private applyVisitToPrescriptionDraft(visit: OPDVisit): void {
+  prescriptionPreviewUrl: SafeResourceUrl | null = null;
+  private previewBlobUrl: string | null = null;
+  printPrescription(visit: OPDVisit): void {
+    if(!this.canPrescribe && visit.prescription_status!=='finalized'){this.notificationService.warning('Only finalized prescriptions can be printed by non-prescribers');return;}
+    const isCurrentDraft=visit.id===this.selectedVisit?.id && !visit.signed_prescription?.['_historical_version'] && !['finalized','voided'].includes(visit.prescription_status || 'draft');
+    if(isCurrentDraft)visit={...visit,...this.prescriptionDraft,prescription_data:{...this.extraClinicalData},prescription_template_id:this.templateId || null};
+    const layoutProfile=isCurrentDraft?this.activeLayoutProfile:this.findProfile('prescription_layout',visit);
+    const html=buildOPDPrescriptionHtml({visit,doctor:this.doctorForVisit(visit),layoutProfile});
+    if(this.previewBlobUrl)URL.revokeObjectURL(this.previewBlobUrl);
+    this.previewBlobUrl=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+    this.prescriptionPreviewUrl=this.sanitizer.bypassSecurityTrustResourceUrl(this.previewBlobUrl);
+  }
+  printPrescriptionPreview():void {const frame=document.querySelector<HTMLIFrameElement>('.prescription-preview-frame');frame?.contentWindow?.focus();frame?.contentWindow?.print();}
+  closePrescriptionPreview():void {this.prescriptionPreviewUrl=null;if(this.previewBlobUrl)URL.revokeObjectURL(this.previewBlobUrl);this.previewBlobUrl=null;}
+
+  private applyVisitToPrescriptionDraft(visit: OPDVisit, resetEntries = false): void {
+    if(resetEntries){this.prescriptionVersions=[];this.prescriptionAudit=[];this.medicineDraft=this.emptyMedicineDraft();this.investigationDraft=this.emptyInvestigationDraft();this.editingOrderId='';}
     this.prescriptionDraft = {
       chief_complaint: visit.chief_complaint || '',
       history_of_present_illness: visit.history_of_present_illness || '',
@@ -719,29 +770,37 @@ export class OPDVisitListComponent implements OnDestroy {
       instructions: '',
       quantity: 1,
     };
-    this.consultationSnapshot = JSON.stringify(this.consultationPayload());
+    this.extraClinicalData = {...(visit.prescription_data || {})};
+    this.templateId = visit.prescription_template_id || '';
+    this.autosaveBlocked=false;this.autosaveFailures=0;this.nextAutosaveAt=0;
+    this.consultationSnapshot = this.draftFingerprint();
   }
 
   private loadPrescriptionCatalog(): void {
     if(!this.session.hasPermission('opd.prescribe')) return;
     this.pharmacyService.prescribingMedicines({ page_size: 30, is_active: true }).subscribe((response) => (this.pharmacyMedicines = response.items));
-    this.pharmacyService.listInvestigationSettings({ page_size: 30, is_active: 'true' }).subscribe((response) => (this.investigationSettings = response.items));
+    (this.pharmacyService.prescribingInvestigations ? this.pharmacyService.prescribingInvestigations({page_size:30}) : this.pharmacyService.listInvestigationSettings({ page_size: 30, is_active: 'true' })).subscribe((response) => (this.investigationSettings = response.items));
   }
 
   private searchMedicineCatalog(query: string): void {
+    const cached=this.medicineQueryCache.get(query.toLowerCase());
+    if(cached && Date.now()-cached.at<60000){this.lastMedicineQuery=query;this.pharmacyMedicines=cached.items;return;}
     const token = ++this.medicineSearchToken;
     this.medicineSuggestionsLoading = true;
     this.pharmacyService.prescribingMedicines({ page_size: 12, q: query, is_active: true }).subscribe((response) => {
       if (token !== this.medicineSearchToken) return;
       this.medicineSuggestionsLoading = false;
-      this.pharmacyMedicines = this.mergeMedicines(response.items, this.pharmacyMedicines);
+      this.lastMedicineQuery = query;
+      if(this.medicineQueryCache.size>=30)this.medicineQueryCache.delete(this.medicineQueryCache.keys().next().value!);
+      this.medicineQueryCache.set(query.toLowerCase(),{at:Date.now(),items:response.items});
+      this.pharmacyMedicines = response.items;
     }, () => (this.medicineSuggestionsLoading = false));
   }
 
   private searchInvestigationCatalog(query: string): void {
     const token = ++this.investigationSearchToken;
     this.investigationSuggestionsLoading = true;
-    this.pharmacyService.listInvestigationSettings({ page_size: 12, q: query, is_active: 'true' }).subscribe((response) => {
+    (this.pharmacyService.prescribingInvestigations ? this.pharmacyService.prescribingInvestigations({page_size:12,q:query}) : this.pharmacyService.listInvestigationSettings({ page_size: 12, q: query, is_active: 'true' })).subscribe((response) => {
       if (token !== this.investigationSearchToken) return;
       this.investigationSuggestionsLoading = false;
       this.investigationSettings = this.mergeInvestigationSettings(response.items, this.investigationSettings);
@@ -750,33 +809,36 @@ export class OPDVisitListComponent implements OnDestroy {
 
   private loadPreviousVisits(visit: OPDVisit): void {
     this.opdService.getPatientVisits(visit.patient.id).subscribe((visits) => {
+      if(this.selectedVisit?.id!==visit.id)return;
       this.previousVisits = visits
         .filter((item) => item.id !== visit.id && item.orders.some((order) => ['prescription', 'investigation'].includes(order.order_type) && order.status !== 'cancelled'))
         .slice(0, 4);
     });
   }
 
-  private setSelectedVisit(visit: OPDVisit): void {
+  private setSelectedVisit(visit: OPDVisit, allowSwitch = false): boolean {
+    if(!allowSwitch && (!this.selectedVisit || this.selectedVisit.id!==visit.id)){this.visits=this.visits.map(item=>item.id===visit.id?visit:item);return false;}
     this.selectedVisit = {
       ...visit,
       orders: [...visit.orders].sort((a, b) => a.created_at.localeCompare(b.created_at)),
     };
     this.visits = this.visits.map((item) => (item.id === visit.id ? this.selectedVisit as OPDVisit : item));
+    return true;
   }
 
   private activeOrders(type: string): OPDVisitOrder[] {
-    return (this.selectedVisit?.orders || []).filter((order) => order.order_type === type && order.status !== 'cancelled');
+    return (this.selectedVisit?.orders || []).filter((order) => order.order_type === type && order.status !== 'cancelled' && !order.prescription_detail?.['_withdrawn_from_rx']);
   }
 
   private emptyMedicineDraft(): MedicineDraft {
     return {
       item_name: '',
       strength: '',
-      dosage: '1 tab',
-      frequency: '1+0+1',
-      duration: '5 days',
-      route: 'Oral',
-      timing: 'After meal',
+      dosage: '',
+      frequency: '',
+      duration: '',
+      route: '',
+      timing: '',
       instructions: '',
       quantity: 1,
     };
@@ -796,6 +858,9 @@ export class OPDVisitListComponent implements OnDestroy {
 
   private consultationPayload() {
     return {
+      expected_version: this.selectedVisit?.clinical_version,
+      prescription_data: this.extraClinicalData,
+      prescription_template_id: this.templateId || null,
       chief_complaint: this.prescriptionDraft.chief_complaint || null,
       history_of_present_illness: this.prescriptionDraft.history_of_present_illness || null,
       vital_signs: this.prescriptionDraft.vital_signs || null,
@@ -806,6 +871,89 @@ export class OPDVisitListComponent implements OnDestroy {
       follow_up_note: this.prescriptionDraft.follow_up_note || null,
     };
   }
+
+  get previousAllergies():string {return String(this.previousVisits.find(visit=>visit.prescription_data?.['allergies'])?.prescription_data?.['allergies'] || '');}
+  get ingredientWarnings():string[] {const groups=new Map<string,number>();for(const order of this.activePrescriptionOrders){const generic=order.prescription_detail?.['catalog_snapshot']?.generic;if(generic)groups.set(generic,(groups.get(generic)||0)+1);}return [...groups].filter(([,count])=>count>1).map(([generic])=>'Review duplicate catalog ingredient: '+generic+'. No automatic substitution or dose adjustment was made.');}
+  get frequencyInterpretation():string {const match=this.medicineDraft.frequency.match(/^(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)\+(\d+(?:\.\d+)?)$/);return match?'Recorded shorthand: morning '+match[1]+', midday '+match[2]+', evening '+match[3]+'. Confirm the intended dose and timing.':'';}
+
+  searchCustomCatalog(event:{kind:string;query:string}):void {if(event.kind==='medicine'){if(this.medicineSearchTimer)clearTimeout(this.medicineSearchTimer);this.medicineSearchTimer=setTimeout(()=>this.searchMedicineCatalog(event.query),160);}else{if(this.investigationSearchTimer)clearTimeout(this.investigationSearchTimer);this.investigationSearchTimer=setTimeout(()=>this.searchInvestigationCatalog(event.query),160);}}
+  selectCustomCatalog(event:{kind:string;item:any}):void {if(event.kind==='medicine'){this.selectMedicineSuggestion(event.item,false);this.focusClinicalSection('medicine');}else this.selectInvestigationSuggestion(event.item,true);}
+  focusClinicalSection(kind:string):void {const placeholder=kind==='medicine'?'Medicine name':'Search lab or radiology test';const input=document.querySelector<HTMLInputElement>('input[placeholder="'+placeholder+'"]');input?.scrollIntoView({block:'center',behavior:'smooth'});input?.focus();}
+
+  get templateFields(): PrescriptionField[] {return (this.activeLayoutProfile?.payload['fields'] as PrescriptionField[]) || [];}
+  get canPrescribe():boolean {return this.session.hasPermission('opd.prescribe');}
+  get isSigned(): boolean {return ['finalized','voided'].includes(this.selectedVisit?.prescription_status || '');}
+  private draftFingerprint():string {const {expected_version,...content}=this.consultationPayload();return JSON.stringify(content);}
+  private draftKey():string {return 'hms.rx.draft:'+this.session.snapshot.user?.id+':'+this.selectedVisit?.id;}
+  private loadClinicalTools(visit:OPDVisit):void {
+    if(!this.session.hasPermission('opd.prescribe') || !this.opdService.clinicalGet)return;
+    const token=++this.templateLoadToken;
+    this.opdService.clinicalGet<ConfigurationProfile[]>('visits/'+visit.id+'/prescription-templates').subscribe(rows=>{
+      if(token!==this.templateLoadToken || this.selectedVisit?.id!==visit.id || this.isSigned)return;
+      this.configurationProfiles=[...this.configurationProfiles.filter(p=>p.profile_type!=='prescription_layout'),...rows];
+      this.templateId=visit.prescription_template_id || rows[0]?.id || '';
+      this.applyFieldDefaults();
+      try {const raw=sessionStorage.getItem(this.draftKey());if(raw&&!this.isSigned){const saved=JSON.parse(raw);if(saved.version===(visit.clinical_version||0)){this.prescriptionDraft={...this.prescriptionDraft,...saved.draft};this.extraClinicalData=saved.extra;this.medicineDraft={...this.emptyMedicineDraft(),...(saved.medicine||{})};this.investigationDraft={...this.emptyInvestigationDraft(),...(saved.investigation||{})};this.templateId=saved.templateId||this.templateId;this.autosaveMessage='Recovered interrupted draft';}else{this.autosaveMessage='A local draft exists from an older version. Reload history before copying changes.';}}}catch{}
+    });
+    this.opdService.clinicalGet<typeof this.shortcuts>('prescription-shortcuts').subscribe(rows=>this.shortcuts=rows);
+    this.opdService.clinicalGet<{frequent:Array<{item_name:string;order_type:string;uses:number}>}>('prescribing-history').subscribe(response=>this.prescribingHistory=response.frequent);
+  }
+  applyFieldDefaults():void {for(const field of this.templateFields){if(field.key==='date_of_birth' && this.extraClinicalData[field.key]===undefined && this.selectedVisit?.patient.date_of_birth)this.extraClinicalData[field.key]=this.selectedVisit.patient.date_of_birth;if(this.extraClinicalData[field.key]===undefined&&field.default!=null)this.extraClinicalData[field.key]=field.default;}}
+  @HostListener('input')
+  @HostListener('change')
+  checkpointDraft():void {queueMicrotask(()=>this.persistLocalDraft());}
+  persistLocalDraft():void {
+    if(!this.selectedVisit || !this.canPrescribe || this.isSigned)return;
+    try {if(!this.hasUnsavedChanges()){sessionStorage.removeItem(this.draftKey());return;}sessionStorage.setItem(this.draftKey(),JSON.stringify({version:this.selectedVisit.clinical_version||0,draft:this.prescriptionDraft,extra:this.extraClinicalData,medicine:this.medicineDraft,investigation:this.investigationDraft,templateId:this.templateId}));}catch{this.autosaveMessage='Local storage unavailable; keep this window open until saved';}
+  }
+  autosave():void {
+    if(!this.selectedVisit || this.autosaveBlocked || Date.now()<this.nextAutosaveAt || !this.canPrescribe || this.isSigned || this.savingConsultation || this.savingOrder || this.draftFingerprint()===this.consultationSnapshot)return;
+    const visitId=this.selectedVisit.id;const fingerprint=this.draftFingerprint();
+    this.persistLocalDraft();
+    this.savingConsultation=true;this.autosaveMessage='Saving draft…';
+    this.opdService.updateConsultation(visitId,this.consultationPayload(),true).subscribe({next:visit=>{
+      this.savingConsultation=false;if(this.selectedVisit?.id!==visitId)return;
+      this.selectedVisit={...this.selectedVisit,clinical_version:visit.clinical_version,prescription_data:visit.prescription_data,prescription_template_id:visit.prescription_template_id};
+      this.consultationSnapshot=fingerprint;this.autosaveFailures=0;this.nextAutosaveAt=0;this.autosaveMessage='Draft saved';
+      this.persistLocalDraft();
+    },error:error=>{this.savingConsultation=false;this.autosaveBlocked=error.status===409;this.nextAutosaveAt=Date.now()+Math.min(30000,2000*2**(++this.autosaveFailures));this.autosaveMessage=error.status===409?'Draft conflict: another session saved changes. Reload before saving.':'Offline: draft retained in this browser session';}});
+  }
+  @HostListener('document:keydown',['$event'])
+  prescriptionShortcut(event:KeyboardEvent):void {if(!this.selectedVisit)return;if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();this.saveConsultation();}if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='p'){event.preventDefault();this.printPrescription(this.selectedVisit);}}
+  amendPrescription(voided=false):void {
+    if(!this.selectedVisit)return;const reason=window.prompt(voided?'Reason for marking prescription entered in error':'Reason for prescription amendment');if(!reason||reason.trim().length<3)return;
+    this.opdService.clinicalPost<OPDVisit>('visits/'+this.selectedVisit.id+(voided?'/prescription-void':'/prescription-amend'),{reason,expected_version:this.selectedVisit.clinical_version||0}).subscribe(visit=>{if(this.setSelectedVisit(visit))this.applyVisitToPrescriptionDraft(visit);});
+  }
+  externalPaymentClaims:any[]=[];
+  externalPaymentReviews:any[]=[];
+  loadExternalPayments():void {
+    if(!this.selectedVisit)return;const identity=this.selectedVisit.id;
+    this.opdService.clinicalGet<any[]>('visits/'+identity+'/external-payments').subscribe(rows=>{if(this.selectedVisit?.id===identity)this.externalPaymentClaims=rows;});
+    this.opdService.clinicalGet<any[]>('visits/'+identity+'/prescription-audit').subscribe(rows=>{if(this.selectedVisit?.id===identity)this.externalPaymentReviews=rows.filter(row=>row.kind==='external_payment_review');});
+  }
+  externalReview(claim:any):any {return this.externalPaymentReviews.find(row=>row.detail?.claim_id===claim.id)?.detail;}
+  linkExternalRemittance(claim:any):void {
+    if(!this.selectedVisit)return;
+    const journal_id=window.prompt('Posted accounting receipt UUID. Source module: opd_external_remittance. Source reference: '+claim.id);if(!journal_id)return;
+    const amount=window.prompt('Amount of hospital share received (BDT)',claim.hospital_share_remaining);if(!amount)return;
+    const evidence=window.prompt('Finance remittance evidence / receipt reference');if(!evidence || evidence.trim().length<3)return;
+    this.opdService.clinicalPost<any>('visits/'+this.selectedVisit.id+'/external-payments/'+claim.id+'/remittances',{journal_id,amount,evidence,request_key:crypto.randomUUID()}).subscribe(()=>{this.loadExternalPayments();this.notificationService.success('Existing cash receipt linked; no duplicate collection created');});
+  }
+  reviewExternalPayment(claim:any,decision:string):void {
+    if(!this.selectedVisit)return;const evidence=window.prompt('Finance evidence / reconciliation reference. Verification records no hospital cash; actual remittance must be posted separately.');if(!evidence || evidence.trim().length<3)return;
+    this.opdService.clinicalPost<any>('visits/'+this.selectedVisit.id+'/external-payments/'+claim.id+'/review',{decision,evidence,request_key:crypto.randomUUID()}).subscribe(()=>{this.loadExternalPayments();this.notificationService.success('Finance review saved; hospital cash unchanged');});
+  }
+  recordDirectPayment(kind='doctor_direct'):void {
+    if(!this.selectedVisit)return;const reason=window.prompt('Payment information / waiver reason');if(!reason||reason.trim().length<3)return;
+    const amount=kind==='doctor_direct'?window.prompt('Amount received directly by doctor (BDT)'): '0';if(amount===null)return;
+    this.opdService.clinicalPost<OPDVisit>('visits/'+this.selectedVisit.id+'/external-payment',{kind,amount,reason,request_key:crypto.randomUUID()}).subscribe(visit=>{this.setSelectedVisit(visit);this.notificationService.success('Payment information recorded separately from hospital cash');});
+  }
+  saveShortcut(kind:string,name:string,content:Record<string,unknown>):void {this.opdService.clinicalPost<any>('prescription-shortcuts',{kind,name,content}).subscribe(row=>this.shortcuts=[...this.shortcuts,row]);}
+  usePreviousName(item:typeof this.prescribingHistory[number]):void {if(item.order_type==='prescription'){this.medicineDraft=this.emptyMedicineDraft();this.medicineDraft.item_name=item.item_name;this.onMedicineQueryChanged(item.item_name);}else{this.investigationDraft={...this.emptyInvestigationDraft(),item_name:item.item_name};this.onInvestigationQueryChanged(item.item_name);}}
+  favoriteMedicine():void {if(this.medicineDraft.item_name)this.saveShortcut('medicine',this.medicineDraft.item_name,{...this.medicineDraft});}
+  favoriteInvestigation():void {if(this.investigationDraft.item_name)this.saveShortcut('investigation',this.investigationDraft.item_name,{...this.investigationDraft});}
+  saveAdviceSnippet():void {const text=this.prescriptionDraft.follow_up_note.trim();if(text)this.saveShortcut('advice',text.slice(0,100),{text});}
+  insertShortcut(shortcut:typeof this.shortcuts[number]):void {if(shortcut.kind==='medicine')this.medicineDraft={...this.emptyMedicineDraft(),...shortcut.content};else if(shortcut.kind==='investigation')this.investigationDraft={...this.emptyInvestigationDraft(),...shortcut.content};else this.prescriptionDraft.follow_up_note=[this.prescriptionDraft.follow_up_note,shortcut.content['text']||''].filter(Boolean).join('\n');}
 
   private filterTextSuggestions(items: string[], query: string): string[] {
     const normalized = query.trim().toLowerCase();
@@ -848,7 +996,8 @@ export class OPDVisitListComponent implements OnDestroy {
   private normalizePrescriptionSections(payload: Record<string, unknown>): PrescriptionSectionView[] {
     const savedLabels = Array.isArray(payload['section_labels']) ? payload['section_labels'] as Array<Partial<PrescriptionSectionView> & { key?: string }> : [];
     const savedByKey = new Map(savedLabels.filter((item) => item.key).map((item) => [String(item.key), item]));
-    const keys = Array.isArray(payload['sections']) ? payload['sections'].map(String) : DEFAULT_PRESCRIPTION_SECTIONS.map((section) => section.key);
+    const sectionKeys=payload['editor_sections'] ?? payload['sections'];
+    const keys = Array.isArray(sectionKeys) ? sectionKeys.map(String) : DEFAULT_PRESCRIPTION_SECTIONS.map((section) => section.key);
     const structural = new Set(['header', 'patient', 'signature']);
     return keys
       .filter((key) => !structural.has(key))

@@ -372,10 +372,9 @@ class PharmacyService:
             raise AppException(409, "inventory_stock_conflict", f"{item.name} stock would go below zero")
         balance.quantity_on_hand = stock_after
         balance.updated_by = actor.id
-        if batch:
-            item.stock_value = max(Decimal("0"), Decimal(item.stock_value or 0) + quantity * Decimal(batch.unit_cost or 0))
-        self.repository.create(
-            InventoryStockTransaction(
+        unit_cost=Decimal(batch.unit_cost or 0) if batch else (Decimal(item.stock_value or 0)/Decimal(item.stock_quantity) if item.stock_quantity else Decimal(0))
+        item.stock_value=max(Decimal(0),Decimal(item.stock_value or 0)+quantity*unit_cost)
+        transaction=InventoryStockTransaction(
                 id=uuid4(),
                 item_id=item.id,
                 batch_id=batch.id if batch else None,
@@ -384,13 +383,17 @@ class PharmacyService:
                 reference_type="pharmacy_dispense",
                 reference_id=reference_id,
                 quantity_change=Decimal(quantity),
+                unit_cost=unit_cost,
+                cost_amount=(abs(quantity)*unit_cost).quantize(Decimal(".01")),
                 stock_before=stock_before,
                 stock_after=stock_after,
                 note=self._normalize_text(note),
                 created_by=actor.id,
                 updated_by=actor.id,
             )
-        )
+        self.repository.create(transaction)
+        from app.modules.accounting.inventory_posting import post_stock_movement
+        post_stock_movement(self.db,actor,transaction)
 
     def _resolve_or_create_dispense_billing(
         self,
@@ -661,6 +664,8 @@ class PharmacyService:
         note: str | None = None,
     ) -> PharmacyStockMovement:
         stock_before = Decimal(medicine.stock_quantity)
+        from app.modules.accounting.pharmacy_posting import value_movement
+        unit_cost=value_movement(self.db,actor,medicine,Decimal(delta),stock_before,unit_cost)
         stock_after = stock_before + Decimal(delta)
         if stock_after < 0:
             raise AppException(409, "stock_conflict", f"Stock update would reduce {medicine.name} below zero")
@@ -728,6 +733,7 @@ class PharmacyService:
             generic_id=item.generic_id,
             company_id=item.company_id,
             name=item.name,
+            search_aliases=item.search_aliases or [],
             strength=item.strength,
             dosage_form=item.dosage_form,
             sku=item.sku,
@@ -786,6 +792,9 @@ class PharmacyService:
             patient_name = f"{item.customer.patient.first_name} {item.customer.patient.last_name}".strip()
         return PharmacySaleRead(
             id=item.id,
+            paid_amount=item.paid_amount,
+            payment_method=item.payment_method,
+            payment_provider=item.payment_provider,
             customer_id=item.customer_id,
             patient_id=item.patient_id,
             source_visit_id=item.source_visit_id,
@@ -1140,14 +1149,21 @@ class PharmacyService:
         if actor.branch_id:
             stmt = stmt.where(PharmacyMedicine.branch_id == actor.branch_id)
         if q:
-            pattern = f"%{q.strip().lower()}%"
-            stmt = stmt.where(
-                or_(
-                    func.lower(PharmacyMedicine.name).like(pattern),
-                    func.lower(func.coalesce(PharmacyMedicine.strength, "")).like(pattern),
-                    func.lower(func.coalesce(PharmacyMedicine.sku, "")).like(pattern),
-                )
-            )
+            from sqlalchemy import cast, String, exists
+            from sqlalchemy.dialects.postgresql import JSONB
+            # Approved catalog aliases support spelling/Bangla mappings without inventing substitutions.
+            for token in q.strip().lower().split()[:8]:
+                pattern = '%' + token.replace('\\','\\\\').replace('%','\\%').replace('_','\\_') + '%'
+                stmt = stmt.where(or_(
+                    func.lower(PharmacyMedicine.name).like(pattern,escape='\\'),
+                    func.lower(func.coalesce(PharmacyMedicine.strength,'')).like(pattern,escape='\\'),
+                    func.lower(func.coalesce(PharmacyMedicine.dosage_form,'')).like(pattern,escape='\\'),
+                    func.lower(cast(cast(PharmacyMedicine.search_aliases,JSONB),String)).like(pattern,escape='\\'),
+                    exists(select(PharmacyGeneric.id).where(PharmacyGeneric.id==PharmacyMedicine.generic_id,func.lower(PharmacyGeneric.name).like(pattern,escape='\\'))),
+                    exists(select(PharmacyCompany.id).where(PharmacyCompany.id==PharmacyMedicine.company_id,func.lower(PharmacyCompany.name).like(pattern,escape='\\')))))
+            from sqlalchemy import case
+            prefix=q.strip().lower().split()[0]
+            stmt=stmt.order_by(None).order_by(case((func.lower(PharmacyMedicine.name)==q.strip().lower(),0),(func.lower(PharmacyMedicine.name).startswith(prefix,autoescape=True),1),else_=2),PharmacyMedicine.name.asc())
         if medicine_type_id:
             stmt = stmt.where(PharmacyMedicine.medicine_type_id == medicine_type_id)
         if generic_id:
@@ -1245,6 +1261,8 @@ class PharmacyService:
         return meta
 
     def create_purchase(self, payload: PharmacyPurchaseCreate, actor: User, context: dict[str, str | None]) -> PharmacyPurchaseRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         self._validate_purchase_payload(payload)
         medicine = self.repository.get_medicine(payload.medicine_id, for_update=True)
         if not medicine or not medicine.is_active:
@@ -1271,13 +1289,15 @@ class PharmacyService:
             reference_id=item.id,
             batch_no=payload.batch_no,
             expiry_date=payload.expiry_date,
-            unit_cost=payload.unit_cost,
+            unit_cost=total_amount/effective_qty,
             sale_price=payload.sale_price,
             note=payload.note,
         )
         medicine.purchase_price = payload.unit_cost
         if payload.sale_price is not None:
             medicine.sale_price = payload.sale_price
+        from app.modules.accounting.pharmacy_posting import post_purchase
+        post_purchase(self.db,actor,item)
         self._commit_and_log(actor=actor, action="pharmacy.purchase.create", entity_type="pharmacy_purchase", entity_id=str(item.id), detail={"purchase_number": item.purchase_number, "medicine": medicine.name}, context=context)
         self.db.refresh(item)
         item = self.repository.get_purchase(item.id)
@@ -1291,11 +1311,15 @@ class PharmacyService:
         return self._serialize_purchase(item)
 
     def update_purchase(self, entity_id, payload: PharmacyPurchaseUpdate, actor: User, context: dict[str, str | None]) -> PharmacyPurchaseRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         self._validate_purchase_payload(payload)
         item = self.repository.get_purchase(entity_id)
         if not item or not item.is_active:
             raise AppException(404, "purchase_not_found", "Purchase history record not found")
         self._ensure_branch_scope(item, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_purchase',item.purchase_number)
         medicine = self.repository.get_medicine(payload.medicine_id, for_update=True)
         if not medicine or not medicine.is_active:
             raise AppException(404, "medicine_not_found", "Medicine information not found")
@@ -1359,10 +1383,14 @@ class PharmacyService:
         return self._serialize_purchase(item)
 
     def delete_purchase(self, entity_id, actor: User, context: dict[str, str | None]) -> None:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         item = self.repository.get_purchase(entity_id)
         if not item or not item.is_active:
             raise AppException(404, "purchase_not_found", "Purchase history record not found")
         self._ensure_branch_scope(item, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_purchase',item.purchase_number)
         effective_qty = Decimal(item.quantity) + Decimal(item.bonus_quantity)
         self._change_stock(
             medicine=item.medicine,
@@ -1398,7 +1426,7 @@ class PharmacyService:
                 source_order = self.opd_repository.get_order(line.source_visit_order_id)
                 if not source_order:
                     raise AppException(404, "opd_order_not_found", "Prescription source order not found")
-                if source_order.status in {"cancelled", "discontinued"}:
+                if source_order.status in {"cancelled", "discontinued"} or source_order.visit.prescription_status=="voided" or (source_order.prescription_detail or {}).get("_withdrawn_from_rx"):
                     raise AppException(409, "prescription_cancelled", "This prescription was cancelled; review it with the prescribing doctor")
                 if source_order.order_type != "prescription":
                     raise AppException(400, "invalid_opd_order_type", "Only prescription orders can be linked to pharmacy sales")
@@ -1467,11 +1495,16 @@ class PharmacyService:
         return meta
 
     def create_sale(self, payload: PharmacySaleCreate, actor: User, context: dict[str, str | None]) -> PharmacySaleRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         customer = self._resolve_sale_customer(customer_id=payload.customer_id, patient_id=payload.patient_id, actor=actor)
         resolved_items, subtotal = self._resolve_sale_items(payload.items, actor, sale_date=payload.sale_date)
         discount = min(Decimal(payload.discount_amount), subtotal)
         sale = PharmacySale(
             branch_id=actor.branch_id,
+            paid_amount=payload.paid_amount,
+            payment_method=payload.payment_method,
+            payment_provider=payload.payment_provider,
             customer_id=customer.id,
             patient_id=payload.patient_id or customer.patient_id,
             source_visit_id=payload.source_visit_id,
@@ -1505,7 +1538,7 @@ class PharmacyService:
                 updated_by=actor.id,
             )
             sale.items.append(sale_item)
-            self._change_stock(
+            movement=self._change_stock(
                 medicine=medicine,
                 delta=-quantity,
                 actor=actor,
@@ -1517,9 +1550,12 @@ class PharmacyService:
                 sale_price=unit_price,
                 note=note,
             )
+            if movement.unit_cost is not None:sale_item.cost_amount=(quantity*movement.unit_cost).quantize(Decimal('.01'))
             if source_order:
                 source_order.status = "completed"
                 source_order.updated_by = actor.id
+        from app.modules.accounting.pharmacy_posting import post_sale
+        post_sale(self.db,actor,sale)
         self._commit_and_log(actor=actor, action="pharmacy.sale.create", entity_type="pharmacy_sale", entity_id=str(sale.id), detail={"sale_number": sale.sale_number, "subtotal": str(sale.subtotal)}, context=context)
         self.db.refresh(sale)
         sale = self.repository.get_sale(sale.id)
@@ -1533,10 +1569,14 @@ class PharmacyService:
         return self._serialize_sale(sale)
 
     def update_sale(self, entity_id, payload: PharmacySaleUpdate, actor: User, context: dict[str, str | None]) -> PharmacySaleRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         sale = self.repository.get_sale(entity_id)
         if not sale or not sale.is_active:
             raise AppException(404, "sale_not_found", "Medicine sale not found")
         self._ensure_branch_scope(sale, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_sale',sale.sale_number)
         active_returns = [item for item in sale.returns if item.is_active]
         if active_returns:
             raise AppException(409, "sale_has_returns", "Sale with returns cannot be edited")
@@ -1607,10 +1647,14 @@ class PharmacyService:
         return self._serialize_sale(sale)
 
     def delete_sale(self, entity_id, actor: User, context: dict[str, str | None]) -> None:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         sale = self.repository.get_sale(entity_id)
         if not sale or not sale.is_active:
             raise AppException(404, "sale_not_found", "Medicine sale not found")
         self._ensure_branch_scope(sale, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_sale',sale.sale_number)
         active_returns = [item for item in sale.returns if item.is_active]
         if active_returns:
             raise AppException(409, "sale_has_returns", "Sale with returns cannot be deleted")
@@ -1666,6 +1710,8 @@ class PharmacyService:
         return meta
 
     def create_return(self, payload: PharmacySaleReturnCreate, actor: User, context: dict[str, str | None]) -> PharmacySaleReturnRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         sale = self.repository.get_sale(payload.sale_id)
         if not sale or not sale.is_active:
             raise AppException(404, "sale_not_found", "Medicine sale not found")
@@ -1680,7 +1726,9 @@ class PharmacyService:
             raise AppException(422, "invalid_return_date", "Return date cannot be earlier than sale date")
         sale_item.returned_quantity = Decimal(sale_item.returned_quantity) + payload.quantity
         sale_item.updated_by = actor.id
-        total_amount = payload.quantity * Decimal(sale_item.unit_price)
+        from app.modules.accounting.pharmacy_posting import return_amount,post_return
+        original_paid=sale.paid_amount
+        total_amount=return_amount(self.db,actor,sale,sale_item,payload.quantity)
         sale.return_amount = Decimal(sale.return_amount) + total_amount
         sale.updated_by = actor.id
         self._apply_sale_status(sale)
@@ -1714,8 +1762,10 @@ class PharmacyService:
             batch_no=sale_item.batch_no,
             expiry_date=sale_item.expiry_date,
             sale_price=sale_item.unit_price,
+            unit_cost=(sale_item.cost_amount/sale_item.quantity) if sale_item.cost_amount is not None else None,
             note=payload.note,
         )
+        post_return(self.db,actor,sale,sale_item,item,original_paid)
         self._commit_and_log(actor=actor, action="pharmacy.return.create", entity_type="pharmacy_sale_return", entity_id=str(item.id), detail={"return_number": item.return_number}, context=context)
         self.db.refresh(item)
         item = self.repository.get_sale_return(item.id)
@@ -1729,10 +1779,14 @@ class PharmacyService:
         return self._serialize_return(item)
 
     def update_return(self, entity_id, payload: PharmacySaleReturnUpdate, actor: User, context: dict[str, str | None]) -> PharmacySaleReturnRead:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         item = self.repository.get_sale_return(entity_id)
         if not item or not item.is_active:
             raise AppException(404, "return_not_found", "Medicine return not found")
         self._ensure_branch_scope(item, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_return',item.return_number)
         sale_item = item.sale_item
         sale = item.sale
         old_quantity = Decimal(item.quantity)
@@ -1771,10 +1825,14 @@ class PharmacyService:
         return self._serialize_return(item)
 
     def delete_return(self, entity_id, actor: User, context: dict[str, str | None]) -> None:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         item = self.repository.get_sale_return(entity_id)
         if not item or not item.is_active:
             raise AppException(404, "return_not_found", "Medicine return not found")
         self._ensure_branch_scope(item, actor)
+        from app.modules.accounting.pharmacy_posting import assert_unposted
+        assert_unposted(self.db,actor,'pharmacy_return',item.return_number)
         item.sale_item.returned_quantity = Decimal(item.sale_item.returned_quantity) - Decimal(item.quantity)
         item.sale_item.updated_by = actor.id
         self._change_stock(
@@ -2334,13 +2392,16 @@ class PharmacyService:
         return pending
 
     def dispense(self, payload: PharmacyDispenseCreate, actor: User, context: dict[str, str | None]) -> PharmacyDispense:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        from app.modules.accounting.pharmacy_posting import enabled
         source_order = None
         if payload.source_visit_order_id:
             self.db.execute(select(OPDVisitOrder.id).where(OPDVisitOrder.id==payload.source_visit_order_id).with_for_update())
             source_order = self.opd_repository.get_order(payload.source_visit_order_id)
             if not source_order:
                 raise AppException(404, "opd_order_not_found", "OPD prescription order not found")
-            if source_order.status in {"cancelled", "discontinued"}:
+            if source_order.status in {"cancelled", "discontinued"} or source_order.visit.prescription_status=="voided" or (source_order.prescription_detail or {}).get("_withdrawn_from_rx"):
                 raise AppException(409, "prescription_cancelled", "This prescription was cancelled; review it with the prescribing doctor")
             if source_order.order_type != "prescription":
                 raise AppException(400, "invalid_opd_order_type", "Only prescription orders can be dispensed")
@@ -2459,7 +2520,7 @@ class PharmacyService:
         if not dispensed_from_inventory and matched_medicine:
             if Decimal(matched_medicine.stock_quantity) < Decimal(quantity):
                 raise AppException(409, "insufficient_stock", f"Insufficient stock for {matched_medicine.name}")
-            self._change_stock(
+            movement=self._change_stock(
                 medicine=matched_medicine,
                 delta=-Decimal(quantity),
                 actor=actor,
@@ -2468,11 +2529,20 @@ class PharmacyService:
                 reference_id=dispense.id,
                 note=payload.note,
             )
+            if movement.unit_cost is not None and enabled(self.db,actor):
+                from app.modules.accounting.service import AccountingService
+                from app.utils.accounting_time import today_local
+                cost=(Decimal(quantity)*movement.unit_cost).quantize(Decimal('.01'))
+                if cost:AccountingService(self.db)._create_auto_entry(actor,'pharmacy_dispense_cost',str(dispense.id),today_local(),'Pharmacy catalog issue cost',[('5030','Medicine Cost of Goods Sold',cost,0),('1310','Pharmacy Inventory',0,cost)])
         elif not dispensed_from_inventory:
             raise AppException(409, "insufficient_stock", f"No available stock found for {medicine_name}")
         if source_order:
             source_order.status = "completed" if order_remaining_after <= 0 else "in_progress"
             source_order.updated_by = actor.id
+        from app.modules.accounting.pharmacy_posting import enabled
+        if billing_created and billing_invoice and enabled(self.db,actor):
+            from app.modules.support_posting.service import enroll_invoice
+            enroll_invoice(self.db,actor,billing_invoice,{})
         self._commit_and_log(
             actor=actor,
             action="pharmacy.dispense",
@@ -2491,6 +2561,8 @@ class PharmacyService:
         return dispense
 
     def return_dispense(self, dispense_id, payload: PharmacyDispenseReturnCreate, actor: User, context: dict[str, str | None]) -> PharmacyDispense:
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         self.db.execute(select(PharmacyDispense.id).where(PharmacyDispense.id==dispense_id).with_for_update())
         dispense = self.repository.get_dispense(dispense_id)
         if not dispense or not dispense.is_active:

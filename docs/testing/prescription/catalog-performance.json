@@ -1,0 +1,13 @@
+{
+  "catalog_size": 10000,
+  "queries": 4,
+  "timings_ms": [
+    50.02,
+    75.24,
+    78.58,
+    46.75
+  ],
+  "median_ms": 62.629999999999995,
+  "max_ms": 78.58,
+  "scope": "Local PostgreSQL service search including count and page hydration; synthetic entries; not production latency"
+}

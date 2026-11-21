@@ -1,8 +1,9 @@
+import { BillingPatientSummaryComponent } from '../../components/billing-patient-summary.component';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { debounceTime, distinctUntilChanged } from 'rxjs';
+import { debounceTime, distinctUntilChanged, Subscription } from 'rxjs';
 
 import { User } from '../../../../core/models/auth.models';
 import { PERMISSIONS } from '../../../../core/constants/permissions';
@@ -10,7 +11,6 @@ import { DoctorDirectoryService } from '../../../../core/services/doctor-directo
 import { NotificationService } from '../../../../core/services/notification.service';
 import { SessionService } from '../../../../core/services/session.service';
 import { UiStateService } from '../../../../core/services/ui-state.service';
-import { PatientContextPanelComponent } from '../../../../shared/components/patient-context-panel/patient-context-panel.component';
 import { FormValidationUi } from '../../../../shared/utils/form-validation';
 import { printInvestigationStickers } from '../../../../shared/utils/investigation-sticker-printer';
 import { IPDAdmission } from '../../../ipd/models/ipd.models';
@@ -54,7 +54,7 @@ interface BillingCatalogOption {
 @Component({
   selector: 'app-billing-create',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, PatientContextPanelComponent],
+  imports: [CommonModule, ReactiveFormsModule, BillingPatientSummaryComponent],
   templateUrl: './billing-create.component.html',
   styleUrls: ['./billing-create.component.scss'],
 })
@@ -70,7 +70,7 @@ export class BillingCreateComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notificationService = inject(NotificationService);
-  private readonly sessionService = inject(SessionService);
+  readonly sessionService = inject(SessionService);
   private readonly uiStateService = inject(UiStateService);
   readonly validation = FormValidationUi;
 
@@ -120,6 +120,7 @@ export class BillingCreateComponent {
     billing_type_id: [''],
     discount_reason: [''],
     internal_referral_user_id: [''],
+    referred_doctor_id: [''],
     discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
     discount_amount: [0, [Validators.min(0)]],
     payment_amount: [0, [Validators.min(0)]],
@@ -131,7 +132,10 @@ export class BillingCreateComponent {
     items: this.fb.array([]),
   });
 
+  externalReferrers: {id: string; full_name: string; referrer_type: string}[] = [];
+
   constructor() {
+    this.billingService.operations<typeof this.externalReferrers>('referrers').subscribe(rows => this.externalReferrers = rows);
     this.billingService.listTypes().subscribe(types => this.billingTypes = types);
     this.restoreState();
     if (!this.items.length) {
@@ -309,6 +313,8 @@ export class BillingCreateComponent {
         quantity: [1, [Validators.required, Validators.min(0.01)]],
         discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
         discount_amount: [0, [Validators.min(0)]],
+        unit_price_override: [null as number | null, [Validators.min(0)]],
+        override_reason: [''],
         source_opd_visit_order_id: [''],
         source_label: [''],
         source_module: [''],
@@ -518,7 +524,8 @@ export class BillingCreateComponent {
     );
     this.patientLookupControl.setValue(`${result.patient_number} - ${result.full_name}`, { emitEvent: false });
     this.closePatientSearch();
-    this.billingStep='items';
+    this.patientLookupControl.markAsPristine();
+    this.billingStep='patient';
     this.persistState();
   }
 
@@ -683,58 +690,22 @@ export class BillingCreateComponent {
     }
   }
 
+  private previewRequest?: Subscription;
   recalculatePreview(): void {
-    const discountViolation = this.getDiscountLimitViolation();
-    if (discountViolation) {
-      this.preview = null;
-      this.previewMessage = discountViolation;
-      return;
-    }
-
-    let subTotal = 0;
-    let itemDiscountAmount = 0;
-    let referredDoctorAmount = 0;
-    let selectedLineCount = 0;
-
-    this.items.controls.forEach((_, index) => {
-      const option = this.getSelectedCatalogOption(index);
-      if (!option) {
-        return;
-      }
-      const raw = this.items.at(index).getRawValue() as { quantity?: number; discount_percentage?: number; discount_amount?: number };
-      const quantity = Number(raw.quantity || 0);
-      if (quantity <= 0) {
-        return;
-      }
-      selectedLineCount += 1;
-      const lineGross = Number(option.unitPrice || 0) * quantity;
-      const lineDiscount = this.discountOf(lineGross, raw.discount_percentage, raw.discount_amount);
-      const lineNet = Math.max(0, lineGross - lineDiscount);
-      subTotal += lineNet;
-      itemDiscountAmount += lineDiscount;
-      referredDoctorAmount += (lineNet * Number(option.doctorSharePercentage || 0)) / 100;
-    });
-
-    if (!selectedLineCount) {
-      this.preview = null;
-      this.previewMessage = '';
-      return;
-    }
-
-    const rawInvoice = this.form.getRawValue();
-    const invoiceDiscountAmount = this.discountOf(subTotal, rawInvoice.discount_percentage, rawInvoice.discount_amount);
-    const discount = subTotal > 0 ? (invoiceDiscountAmount * 100) / subTotal : 0;
-    const totalAmount = Math.max(0, subTotal - invoiceDiscountAmount);
-    this.preview = {
-      sub_total: this.toMoney(subTotal),
-      item_discount_amount: this.toMoney(itemDiscountAmount),
-      discount_percentage: this.toMoney(discount),
-      invoice_discount_amount: this.toMoney(invoiceDiscountAmount),
-      discount_amount: this.toMoney(itemDiscountAmount + invoiceDiscountAmount),
-      total_amount: this.toMoney(totalAmount),
-      referred_doctor_amount: this.toMoney(referredDoctorAmount),
-    };
-    this.previewMessage = '';
+    this.previewRequest?.unsubscribe();
+    const items = this.getInvoiceItemsPayload();
+    if (!items.length) { this.preview = null; this.previewMessage = ''; return; }
+    const value = this.form.getRawValue();
+    this.previewMessage = 'Calculating invoice…';
+    this.previewRequest = this.billingService.previewInvoice(Number(value.discount_percentage || 0), items, {
+      discount_amount: Number(value.discount_amount || 0) > 0 ? String(value.discount_amount) : null,
+      billing_type_id: value.billing_type_id || null, patient_id: value.patient_id || null,
+      source_opd_visit_id: this.draft?.source_opd_visit_id || this.sourceVisit?.id || null,
+      internal_referral_user_id: value.internal_referral_user_id || null,
+      referred_doctor_id: value.referred_doctor_id || null
+    }).subscribe({next: result => { this.preview = result; this.previewMessage = ''; }, error: () => {
+      this.preview = null; this.previewMessage = 'Invoice could not be calculated. Check service restrictions, discounts and approval permissions.';
+    }});
   }
 
   fillFullPayment(): void {
@@ -834,6 +805,7 @@ export class BillingCreateComponent {
         source_module: this.draft?.source_module || (this.sourceVisit ? 'opd' : this.sourceAdmission ? 'ipd' : null),
         billing_stage: this.draft?.billing_stage || (this.sourceVisit ? 'opd' : this.sourceAdmission ? 'ipd_interim' : null),
         internal_referral_user_id: value.internal_referral_user_id || null,
+        referred_doctor_id: value.referred_doctor_id || null,
         discount_percentage: Number(value.discount_percentage ?? 0),
         discount_amount: Number(value.discount_amount ?? 0) > 0 ? Number(value.discount_amount) : null,
         note: value.note || null,
@@ -1044,6 +1016,8 @@ export class BillingCreateComponent {
       quantity?: number;
       discount_percentage?: number;
       discount_amount?: number;
+      unit_price_override?: number | null;
+      override_reason?: string;
       source_opd_visit_order_id?: string;
       source_label?: string;
       source_module?: string;
@@ -1055,6 +1029,8 @@ export class BillingCreateComponent {
     return rawItems
       .filter((item) => (item.billing_service_id || item.source_item_id) && Number(item.quantity) > 0)
       .map((item) => ({
+        unit_price_override: item.unit_price_override == null ? null : Number(item.unit_price_override),
+        override_reason: item.override_reason || null,
         billing_service_id: item.billing_service_id || null,
         quantity: Number(item.quantity),
         discount_percentage: Number(item.discount_percentage ?? 0),
@@ -1232,6 +1208,8 @@ export class BillingCreateComponent {
             quantity: [item.quantity, [Validators.required, Validators.min(0.01)]],
             discount_percentage: [item.discount_percentage ?? 0, [Validators.min(0), Validators.max(100)]],
             discount_amount: [item.discount_amount ?? 0, [Validators.min(0)]],
+            unit_price_override: [null as number | null, [Validators.min(0)]],
+            override_reason: [''],
             source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
             source_label: [item.source_label || ''],
             source_module: [item.source_module || ''],
@@ -1317,7 +1295,7 @@ export class BillingCreateComponent {
       },
       { emitEvent: false }
     );
-    if(!this.selectedPatient&&this.billingStep==='patient')this.billingStep='items';
+
     this.selectedPatient = patient;
     this.patientLookupControl.setValue(`${patient.patient_number} - ${patient.first_name} ${patient.last_name}`, {
       emitEvent: false,
@@ -1409,6 +1387,8 @@ export class BillingCreateComponent {
           quantity: [1, [Validators.required, Validators.min(0.01)]],
           discount_percentage: [0, [Validators.min(0), Validators.max(100)]],
           discount_amount: [0, [Validators.min(0)]],
+        unit_price_override: [null as number | null, [Validators.min(0)]],
+        override_reason: [''],
           source_opd_visit_order_id: [''],
           source_label: [`Billing Service · ${matchedService.name}`],
           source_module: ['billing'],
@@ -1434,6 +1414,8 @@ export class BillingCreateComponent {
           quantity: [Number(item.quantity), [Validators.required, Validators.min(0.01)]],
           discount_percentage: [Number(item.discount_percentage || 0), [Validators.min(0), Validators.max(100)]],
           discount_amount: [0, [Validators.min(0)]],
+        unit_price_override: [null as number | null, [Validators.min(0)]],
+        override_reason: [''],
           source_opd_visit_order_id: [item.source_opd_visit_order_id || ''],
           source_label: [item.source_label || ''],
           source_module: [item.source_module || ''],

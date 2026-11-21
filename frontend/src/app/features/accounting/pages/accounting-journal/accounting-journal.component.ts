@@ -1,8 +1,11 @@
+import { AccountingControlsComponent } from './accounting-controls.component';
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { SessionService } from '../../../../core/services/session.service';
+import { PatientService } from '../../../patients/services/patient.service';
 import { NotificationService } from '../../../../core/services/notification.service';
 import { AccountingDashboard, AccountingReportSummary, AccountingWorkspace, ChartPoint, FinanceRecord, GeneralLedgerLine, JournalEntry } from '../../models/accounting.models';
 import { AccountingService } from '../../services/accounting.service';
@@ -12,11 +15,13 @@ type AccountingTab = 'dashboard' | 'accounts' | 'ledger' | 'vouchers' | 'collect
 @Component({
   selector: 'app-accounting-journal',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, AccountingControlsComponent],
   templateUrl: './accounting-journal.component.html',
   styleUrls: ['./accounting-journal.component.scss'],
 })
 export class AccountingJournalComponent {
+  readonly session=inject(SessionService);private readonly patientService=inject(PatientService);
+  auditRows:any[]=[];patientMatches:any[]=[];patientQuery='';editingAccountId='';
   private readonly accountingService = inject(AccountingService);
   private readonly notificationService = inject(NotificationService);
   private readonly route = inject(ActivatedRoute);
@@ -65,12 +70,15 @@ export class AccountingJournalComponent {
     });
     this.accountingService.workspace().subscribe((workspace) => (this.workspace = workspace));
     this.accountingService.ledger().subscribe((ledger) => (this.ledger = ledger));
+    if(this.tab()==='audit')this.accountingService.controls<any[]>('audit').subscribe(rows=>this.auditRows=rows);
     this.accountingService.reports().subscribe((reports) => (this.reports = reports));
   }
 
   openModal(modal: typeof this.modal): void {
     this.modal = modal;
-    this.workflowForm = { amount: 0, status: modal === 'advance' ? 'active' : 'pending', payment_method: 'cash' };
+    if(modal==='account'){this.editingAccountId='';this.accountForm={category:'assets',normal_balance:'debit',opening_balance:0,current_balance:0,is_active:true,is_control:false};}
+    if(modal==='journal')this.journalForm={journal_date:this.today(),narration:'',source_module:'manual',status:'draft',voucher_type:'journal',request_key:crypto.randomUUID(),lines:[{account_code:'1001',account_name:'Cash',debit_amount:0,credit_amount:0},{account_code:'4000',account_name:'Revenue',debit_amount:0,credit_amount:0}]};
+    this.workflowForm = { amount: 0, status: 'pending', payment_method: 'cash',expense_account_code:'5180',purchase_account_code:'1300' };
   }
 
   closeModal(): void {
@@ -78,13 +86,19 @@ export class AccountingJournalComponent {
   }
 
   saveAccount(): void {
-    this.accountingService.createAccount(this.accountForm).subscribe(() => {
+    const request=this.editingAccountId?this.accountingService.updateAccount(this.editingAccountId,{name:this.accountForm['name'],parent_id:this.accountForm['parent_id']||null,reporting_group:this.accountForm['reporting_group']||null,is_active:this.accountForm['is_active']}):this.accountingService.createAccount(this.accountForm);
+    request.subscribe(() => {
       this.notificationService.success('Account saved.');
       this.closeModal();
       this.load();
     });
   }
 
+  editAccount(account:any):void{this.modal='account';this.editingAccountId=account.id;this.accountForm={...account};}
+  searchAdvancePatient():void{this.patientService.search(this.patientQuery).subscribe(rows=>this.patientMatches=rows);}
+  paySupplier(record:FinanceRecord):void{const amount=window.prompt('Actual supplier payment (BDT)',String(record.due_amount));if(!amount)return;const reference=window.prompt('Verified payment / bank reference');if(!reference||reference.trim().length<3)return;this.accountingService.controlAction('supplier-invoices/'+record.id+'/payments',{amount,reference,payment_method:'bank_transfer',request_key:crypto.randomUUID()}).subscribe(()=>this.load());}
+  addJournalLine():void{(this.journalForm['lines'] as any[]).push({account_code:'',account_name:'',debit_amount:0,credit_amount:0,cost_center:''});}
+  removeJournalLine(index:number):void{const lines=this.journalForm['lines'] as any[];if(lines.length>2)lines.splice(index,1);}
   saveJournal(): void {
     this.accountingService.createJournalEntry(this.journalForm).subscribe((entry) => {
       this.notificationService.success(`Voucher ${entry.journal_number} saved.`);
@@ -94,7 +108,7 @@ export class AccountingJournalComponent {
   }
 
   saveWorkflow(kind: string): void {
-    this.accountingService.createWorkflow(kind, this.workflowForm).subscribe(() => {
+    this.accountingService.createWorkflow(kind, {...this.workflowForm,patient_id:this.workflowForm['patient_id']||null,receiving_id:this.workflowForm['receiving_id']||null,pharmacy_purchase_id:this.workflowForm['pharmacy_purchase_id']||null,due_date:this.workflowForm['due_date']||null,transaction_date:this.workflowForm['transaction_date']||null}).subscribe(() => {
       this.notificationService.success('Finance record saved.');
       this.closeModal();
       this.load();
@@ -137,7 +151,7 @@ export class AccountingJournalComponent {
 
   syncIntegrations(): void {
     this.accountingService.syncIntegrations().subscribe((result) => {
-      this.notificationService.success(`${result.created_entries} entries synced, ${result.skipped_entries} skipped.`);
+      this.notificationService.success(result.message);
       this.load();
     });
   }
@@ -151,7 +165,7 @@ export class AccountingJournalComponent {
   }
 
   money(value: string | number | null | undefined): string {
-    return `BDT ${this.num(value).toLocaleString('en-BD', { maximumFractionDigits: 0 })}`;
+    return `BDT ${this.num(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   max(points: ChartPoint[]): number {

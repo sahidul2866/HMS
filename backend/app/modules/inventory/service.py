@@ -284,6 +284,8 @@ class InventoryService:
         return balance
 
     def _change_store_stock(self, *, store: InventoryStore, item: InventoryItem, delta: Decimal, actor: User, movement_type: str, reference_type: str, reference_id: str | None, batch: StockBatch | None = None, note: str | None = None, unit_cost: Decimal | None = None):
+        if unit_cost is None:
+            unit_cost=Decimal(batch.unit_cost) if batch else (Decimal(item.stock_value or 0)/Decimal(item.stock_quantity) if item.stock_quantity else None)
         balance = self._get_or_create_balance(store, item, actor, for_update=True)
         stock_before = Decimal(balance.quantity_on_hand)
         stock_after = stock_before + Decimal(delta)
@@ -303,6 +305,8 @@ class InventoryService:
             reference_type=reference_type,
             reference_id=uuid4() if reference_id is None else reference_id,
             quantity_change=Decimal(delta),
+            unit_cost=unit_cost,
+            cost_amount=(abs(Decimal(delta))*Decimal(unit_cost)).quantize(Decimal(".01")) if unit_cost is not None else None,
             stock_before=stock_before,
             stock_after=stock_after,
             note=self._normalize_text(note),
@@ -310,6 +314,8 @@ class InventoryService:
             updated_by=actor.id,
         )
         self.repository.create(transaction)
+        from app.modules.accounting.inventory_posting import post_stock_movement
+        post_stock_movement(self.db,actor,transaction)
         return transaction
 
     def _change_item_stock(self, item: InventoryItem, delta: Decimal, actor: User, movement_type: str, reference_type: str, reference_id: str | None, batch: StockBatch | None = None, note: str | None = None, unit_cost: Decimal | None = None):
@@ -807,6 +813,8 @@ class InventoryService:
         ) for issue in items], total
 
     def create_issue(self, payload: StockIssueCreate, actor: User, context: dict[str, str | None]):
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         item = self._get_item_for_update(str(payload.item_id))
         self._ensure_branch_scope(item,actor)
         store = self._get_store_for_update(str(payload.store_id) if payload.store_id else None, actor)
@@ -888,6 +896,8 @@ class InventoryService:
         ) for transfer in items], total
 
     def create_transfer(self, payload: StockTransferCreate, actor: User, context: dict[str, str | None]):
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
         item = self._get_item_for_update(str(payload.item_id))
         self._ensure_branch_scope(item,actor)
         source_store = self._get_store_for_update(str(payload.source_store_id) if payload.source_store_id else None, actor)
@@ -1000,6 +1010,12 @@ class InventoryService:
         ) for adjustment in items], total
 
     def create_adjustment(self, payload: StockAdjustmentCreate, actor: User, context: dict[str, str | None]):
+        from app.modules.support_posting.service import lock_branch
+        lock_branch(self.db,actor)
+        from app.modules.accounting.controls import policy_for
+        from app.utils.accounting_time import today_local
+        accounting_policy=policy_for(self.db,actor.branch_id,today_local())
+        effective_status='draft' if accounting_policy else payload.status
         item = self._get_item_for_update(str(payload.item_id))
         self._ensure_branch_scope(item,actor)
         store = self._get_store_for_update(str(payload.store_id) if payload.store_id else None, actor)
@@ -1010,8 +1026,6 @@ class InventoryService:
         if batch and payload.adjustment_type.lower() == "deduction" and payload.quantity_change > batch.quantity:
             raise AppException(409, "batch_stock_unavailable", "Batch stock is insufficient for adjustment")
         delta = payload.quantity_change if payload.adjustment_type.lower() in ["addition", "restock"] else -payload.quantity_change
-        if batch:
-            batch.quantity += delta
         adjustment = StockAdjustment(
             id=uuid4(),
             item_id=item.id,
@@ -1021,14 +1035,15 @@ class InventoryService:
             quantity_change=payload.quantity_change,
             reason=self._normalize_text(payload.reason),
             note=self._normalize_text(payload.note),
-            status=payload.status,
-            approved_by=actor.id if payload.status in {"posted", "approved"} else None,
+            status=effective_status,
+            approved_by=actor.id if effective_status in {"posted", "approved"} else None,
             created_by=actor.id,
             updated_by=actor.id,
             created_at=payload.created_at,
         )
         self.repository.create(adjustment)
-        if payload.status in {"posted", "approved"}:
+        if effective_status in {"posted", "approved"}:
+            if batch:batch.quantity+=delta
             self._change_store_stock(store=store, item=item, delta=delta, actor=actor, movement_type="adjustment", reference_type="adjustment", reference_id=str(adjustment.id), batch=batch, note=payload.reason)
         self._commit_and_log(actor=actor, action="inventory.adjustment.create", entity_type="StockAdjustment", entity_id=str(adjustment.id), detail={"item": item.name, "quantity": str(delta)}, context=context)
         return StockAdjustmentRead(

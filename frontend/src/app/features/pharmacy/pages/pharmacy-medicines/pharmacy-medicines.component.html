@@ -36,7 +36,7 @@
         <label class="field"><span>Purchase Price</span><input type="number" formControlName="purchase_price" /></label>
         <label class="field"><span>Sale Price</span><input type="number" formControlName="sale_price" /></label>
         <label class="field"><span>Reorder Level</span><input type="number" formControlName="reorder_level" /></label>
-        <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea rows="3" formControlName="description"></textarea></label>
+        <label class="field" style="grid-column:1/-1;"><span>Approved spelling / Bangla aliases (one per line)</span><textarea rows="2" formControlName="search_aliases"></textarea><span>Description</span><textarea rows="3" formControlName="description"></textarea></label>
         @if (form.invalid && form.touched) {
           <div class="inline-alert inline-alert--warning" style="grid-column:1/-1;">
             <div><strong>Complete required catalog fields</strong><span>Medicine type, generic, company, name, price, and reorder level are required.</span></div>

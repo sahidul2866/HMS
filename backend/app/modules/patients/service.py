@@ -215,7 +215,12 @@ class PatientsService:
 
     def get_patient_opd_visits(self, patient_id, actor: User) -> list:
         patient = self.get_patient(patient_id, actor)
-        return self.repository.list_opd_visits(patient.id)
+        from app.modules.opd.service import OPDService
+        clinical = OPDService(self.db)
+        visits = self.repository.list_opd_visits(patient.id)
+        if clinical._can_view_all_doctors(actor):return visits
+        if clinical._is_doctor(actor):return [visit for visit in visits if visit.consulting_doctor_user_id==actor.id]
+        raise AppException(403,'forbidden','Clinical history access must be assigned')
 
     def create_patient(self, payload: PatientCreate, actor: User, context: dict[str, str | None]) -> Patient:
         normalized_phone = normalize_phone(payload.phone)

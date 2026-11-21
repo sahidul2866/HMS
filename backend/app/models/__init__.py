@@ -345,3 +345,14 @@ __all__ = [
 ]
 
 from app.models.operational_posting import OperationalPosting, HRSalaryRevision, HRPayrollAdjustment
+from app.models.billing_policy import BillingPolicy, BillingAllocation
+
+from app.models.prescription import PrescriptionRevision, ConfigurationProfileVersion, OPDExternalPayment, PrescriptionShortcut
+
+from app.models.prescription import PrescriptionEvent
+
+from app.models.accounting_control import AccountingPolicy, FinancialPeriod, AccountingPostingKey
+
+from app.models.accounting_control import FixedAsset
+
+from app.models.accounting_control import AccountingPaymentAdjustment

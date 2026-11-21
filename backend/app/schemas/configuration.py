@@ -36,6 +36,7 @@ class ConfigurationProfileUpdate(BaseModel):
 
 
 class ConfigurationProfileRead(ConfigurationProfileBase):
+    version: int = 1
     id: UUID
     branch_id: UUID | None = None
     created_at: datetime

@@ -10,11 +10,13 @@
         <button class="secondary-btn" type="button" (click)="openModal('advance')">Advance</button>
         <button class="secondary-btn" type="button" (click)="openModal('expense')">Expense</button>
         <button class="primary-btn" type="button" (click)="openModal('journal')">Journal</button>
-        <button class="secondary-btn" type="button" (click)="syncIntegrations()">Sync Modules</button>
+        <button class="secondary-btn" type="button" (click)="syncIntegrations()">Review source records</button>
         <button class="secondary-btn" type="button" (click)="load()">Refresh</button>
       </div>
     </div>
   </section>
+
+  <app-accounting-controls />
 
   @if (error) { <div class="alert error">{{ error }}</div> }
 
@@ -80,7 +82,7 @@
       <div class="list-toolbar"><button class="primary-btn" type="button" (click)="openModal('account')">Add Account</button></div>
       <div class="table-wrap"><table><thead><tr><th>Code</th><th>Account</th><th>Category</th><th>Module</th><th>Balance</th><th>Status</th></tr></thead><tbody>
         @for (account of workspace.accounts; track account.id) {
-          <tr><td><strong>{{ account.account_code }}</strong></td><td>{{ account.name }}</td><td>{{ account.category }}</td><td>{{ account.module_key || '-' }}</td><td>{{ money(account.current_balance) }}</td><td><span [class]="account.is_active ? 'badge good' : 'badge danger'">{{ account.is_active ? 'active' : 'inactive' }}</span></td></tr>
+          <tr><td><strong>{{ account.account_code }}</strong></td><td>{{ account.name }}</td><td>{{ account.category }}</td><td>{{ account.module_key || '-' }}</td><td>{{ money(account.current_balance) }}</td><td><span [class]="account.is_active ? 'badge good' : 'badge danger'">{{ account.is_active ? 'active' : 'inactive' }}</span> @if(session.hasPermission('accounting.chart_of_accounts.manage')){<button type="button" (click)="editAccount(account)">Edit account</button>}</td></tr>
         }
       </tbody></table></div>
     </section>
@@ -110,7 +112,7 @@
       </div>
       <div class="table-wrap"><table><thead><tr><th>Reference</th><th>Name</th><th>Category</th><th>Amount</th><th>Paid</th><th>Due/Diff</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @for (record of recordsForTab(); track record.id) {
-          <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td><td><button class="tiny-btn" type="button" (click)="approveRecord(record, recordKind())" *ngIf="record.status === 'pending'">Approve</button></td></tr>
+          <tr><td><strong>{{ record.reference }}</strong></td><td>{{ record.name }}</td><td>{{ record.category || '-' }}</td><td>{{ money(record.amount) }}</td><td>{{ money(record.paid_amount) }}</td><td>{{ money(record.due_amount) }}</td><td><span [class]="statusClass(record.status)">{{ record.status }}</span></td><td><button class="tiny-btn" type="button" (click)="approveRecord(record, recordKind())" *ngIf="record.status === 'pending'">Approve</button>@if(tab()==='payables' && (record.status==='approved'||record.status==='partial') && session.hasPermission('accounting.supplier_payment.create')){<button type="button" (click)="paySupplier(record)">Record supplier payment</button>}</td></tr>
         }
         @if (!recordsForTab().length) { <tr><td colspan="8"><div class="empty">No records yet.<span class="app-state-guidance">Use the form in this section to add your first record.</span></div></td></tr> }
       </tbody></table></div>
@@ -152,7 +154,7 @@
   }
 
   @if (tab() === 'audit') {
-    <section class="panel"><div class="empty">Sensitive finance changes are stored in accounting audit logs and system audit logs.</div></section>
+    <section class="page-card"><h2>Immutable financial audit</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Action</th><th>Source</th><th>Actor</th><th>Details</th></tr></thead><tbody>@for(event of auditRows;track event.id){<tr><td>{{event.created_at | date:'medium'}}</td><td>{{event.action}}</td><td>{{event.entity_type}} {{event.entity_id}}</td><td>{{event.actor_user_id}}</td><td>{{event.new_value}}</td></tr>}</tbody></table></div></section>
   }
 </section>
 
@@ -163,12 +165,12 @@
 
       @if (modal === 'account') {
         <div class="form-grid">
-          <label>Code<input [(ngModel)]="accountForm['account_code']" name="account_code" /></label>
+          <label>Code<input [(ngModel)]="accountForm['account_code']" name="account_code" [disabled]="!!editingAccountId" /></label>
           <label>Name<input [(ngModel)]="accountForm['name']" name="account_name" /></label>
-          <label>Category<select [(ngModel)]="accountForm['category']" name="category"><option>assets</option><option>liabilities</option><option>equity</option><option>revenue</option><option>expenses</option></select></label>
-          <label>Normal<select [(ngModel)]="accountForm['normal_balance']" name="normal"><option>debit</option><option>credit</option></select></label>
+          <label>Category<select [(ngModel)]="accountForm['category']" name="category" [disabled]="!!editingAccountId"><option>assets</option><option>liabilities</option><option>equity</option><option value="income">Revenue</option><option>expenses</option></select></label>
+          <label>Normal<select [(ngModel)]="accountForm['normal_balance']" name="normal" [disabled]="!!editingAccountId"><option>debit</option><option>credit</option></select></label>
           <label>Module<input [(ngModel)]="accountForm['module_key']" name="module" /></label>
-          <label>Balance<input type="number" [(ngModel)]="accountForm['current_balance']" name="balance" /></label>
+          <p>Balances come from posted journals. Enter opening balances through a balanced opening voucher.</p><label>Reporting group<input [(ngModel)]="accountForm['reporting_group']" name="reporting_group"></label><label>Parent control account<select [(ngModel)]="accountForm['parent_id']" name="parent_id"><option [ngValue]="null">No parent</option>@for(parent of workspace?.accounts || [];track parent.id){@if($any(parent).is_control){<option [ngValue]="parent.id">{{parent.account_code}} {{parent.name}}</option>}}</select></label><label><input type="checkbox" [(ngModel)]="accountForm['is_active']" name="account_active">Active</label>@if(!editingAccountId){<label><input type="checkbox" [(ngModel)]="accountForm['is_control']" name="is_control">Control account (not directly postable)</label>}
         </div>
         <button class="primary" type="button" (click)="saveAccount()">Save Account</button>
       }
@@ -177,7 +179,7 @@
         <div class="form-grid">
           <label>Date<input type="date" [(ngModel)]="journalForm['journal_date']" name="jdate" /></label>
           <label>Source<input [(ngModel)]="journalForm['source_module']" name="source" /></label>
-          <label>Status<select [(ngModel)]="journalForm['status']" name="jstatus"><option>draft</option><option>submitted</option><option>approved</option><option>posted</option></select></label>
+          <label>Status<select [(ngModel)]="journalForm['status']" name="jstatus"><option>draft</option><option>submitted</option><option>posted</option></select></label><label>Voucher type<select [(ngModel)]="journalForm['voucher_type']" name="voucher_type"><option value="journal">Journal</option><option value="receipt">Receipt</option><option value="payment">Payment</option><option value="contra">Contra</option><option value="adjustment">Adjustment</option><option value="opening">Opening balance</option></select></label>
           <label class="wide">Narration<input [(ngModel)]="journalForm['narration']" name="narration" /></label>
         </div>
         @for (line of $any(journalForm['lines']); track $index) {
@@ -185,19 +187,19 @@
             <label>Code<input [(ngModel)]="line.account_code" [name]="'code' + $index" /></label>
             <label>Account<input [(ngModel)]="line.account_name" [name]="'acc' + $index" /></label>
             <label>Debit<input type="number" [(ngModel)]="line.debit_amount" [name]="'debit' + $index" /></label>
-            <label>Credit<input type="number" [(ngModel)]="line.credit_amount" [name]="'credit' + $index" /></label>
+            <label>Credit<input type="number" [(ngModel)]="line.credit_amount" [name]="'credit' + $index" /></label><label>Department / cost center<input [(ngModel)]="line.cost_center" [name]="'line_center'+$index"></label><button type="button" (click)="removeJournalLine($index)" [disabled]="$any(journalForm['lines']).length<=2">Remove line</button>
           </div>
         }
-        <button class="primary" type="button" (click)="saveJournal()">Save Voucher</button>
+        <button type="button" (click)="addJournalLine()">Add debit / credit line</button><button class="primary" type="button" (click)="saveJournal()">Save Voucher</button>
       }
 
       @if (modal !== 'account' && modal !== 'journal') {
         <div class="form-grid">
-          <label>Reference<input [(ngModel)]="workflowForm['reference']" name="reference" /></label>
+          <label>Reference<input [(ngModel)]="workflowForm['reference']" name="reference" /></label>@if(modal==='advance'){<label>Find patient<input [(ngModel)]="patientQuery" name="patient_search" (ngModelChange)="searchAdvancePatient()"></label><label>Patient<select [(ngModel)]="workflowForm['patient_id']" name="advance_patient"><option value="">Select patient</option>@for(patient of patientMatches;track patient.id){<option [value]="patient.id">{{patient.patient_number}} {{patient.full_name}}</option>}</select></label>}@if(modal==='expense'){<label>Expense account code<input [(ngModel)]="workflowForm['expense_account_code']" name="expense_account"></label><label>Department / cost center<input [(ngModel)]="workflowForm['cost_center']" name="cost_center"></label><label>Supporting document URL<input [(ngModel)]="workflowForm['attachment_url']" name="attachment_url"></label>}@if(modal==='supplier'){<label>Approved purchase debit account<input [(ngModel)]="workflowForm['purchase_account_code']" name="purchase_account_code"></label><label>Matched warehouse receipt UUID (optional)<input [(ngModel)]="workflowForm['receiving_id']" name="receiving_id"></label><label>Matched pharmacy purchase UUID (optional)<input [(ngModel)]="workflowForm['pharmacy_purchase_id']" name="pharmacy_purchase_id"></label>}
           <label>Name<input [(ngModel)]="workflowForm['name']" name="name" /></label>
           <label>Amount<input type="number" [(ngModel)]="workflowForm['amount']" name="amount" /></label>
-          <label>Category<input [(ngModel)]="workflowForm['category']" name="category" /></label>
-          <label>Status<select [(ngModel)]="workflowForm['status']" name="status"><option>pending</option><option>approved</option><option>active</option><option>open</option><option>partial</option><option>paid</option></select></label>
+          <label>Category<input [(ngModel)]="workflowForm['category']" name="category" /></label><label>Transaction date<input type="date" [(ngModel)]="workflowForm['transaction_date']" name="transaction_date"></label><label>Agreed due date (optional)<input type="date" [(ngModel)]="workflowForm['due_date']" name="due_date"></label>
+          <label>Status<select [(ngModel)]="workflowForm['status']" name="status"><option>pending</option><option>draft</option></select></label>
           <label>Method<select [(ngModel)]="workflowForm['payment_method']" name="method"><option>cash</option><option>bank</option><option>card</option><option>mobile_banking</option><option>cheque</option><option>insurance</option><option>corporate</option></select></label>
           <label class="wide">Note<input [(ngModel)]="workflowForm['note']" name="note" /></label>
         </div>

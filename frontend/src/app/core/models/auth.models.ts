@@ -29,6 +29,8 @@ export interface User {
   opd_consultation_fee?: string | number | null;
   opd_follow_up_fee?: string | number | null;
   opd_follow_up_days?: number | null;
+  opd_bmdc_registration?: string | null;
+  opd_signature_image?: string | null;
   opd_prescription_header_name?: string | null;
   opd_prescription_header_degrees?: string | null;
   opd_prescription_header_specialty?: string | null;

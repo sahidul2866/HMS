@@ -95,9 +95,7 @@ class OPDService:
         if slot_start_at and not slot_start_at.tzinfo:
             slot_start_at = slot_start_at.replace(tzinfo=UTC)
 
-        if payload.doctor_user_id:
-            if not slot_start_at:
-                raise AppException(400, "slot_required", "Slot time is required when doctor is selected")
+        if payload.doctor_user_id and slot_start_at:
             self._assert_slot_within_schedule(payload.doctor_user_id, slot_start_at)
 
         consulting_doctor = self._get_doctor(payload.doctor_user_id, actor) if payload.doctor_user_id else None
@@ -115,6 +113,8 @@ class OPDService:
             updated_by=actor.id,
         )
         self.repository.create_visit(visit)
+        from app.modules.opd.prescriptions import audit
+        audit(self.db,visit,actor,'created',{'source':'opd_registration'})
         self.db.flush()
         QueueService(self.db).ensure_token(
             QueueTokenCreate(
@@ -159,6 +159,9 @@ class OPDService:
 
     def update_visit(self, visit_id, payload: OPDVisitUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
+        if visit.prescription_status in {'finalized','voided'} and (payload.chief_complaint!=visit.chief_complaint or payload.doctor_user_id!=visit.consulting_doctor_user_id):
+            raise AppException(409,'prescription_signed','Signed clinical identity and complaints require a controlled prescription amendment or a new consultation')
+
         if visit.status not in {"waiting", "billed"}:
             raise AppException(409, "opd_visit_active", "Only a waiting visit can be reassigned or rescheduled")
         previous_doctor_id = visit.consulting_doctor_user_id
@@ -216,29 +219,22 @@ class OPDService:
         return visit
 
     def update_payment(self, visit_id, payload: OPDVisitPaymentUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
-        visit = self.get_visit(visit_id, actor)
-        visit.consultation_fee = self._money(payload.amount)
-        visit.consultation_discount = self._money(payload.discount)
-        visit.consultation_total = self._money(payload.amount - payload.discount)
-        visit.consultation_payment_status = "paid"
-        visit.consultation_paid_at = datetime.now(UTC)
-        visit.updated_by = actor.id
-        AuditService(self.db).log(
-            user_id=actor.id,
-            action=AuditAction.BILLING_PAYMENT_CREATE,
-            module="opd",
-            entity_type="opd_visit",
-            entity_id=str(visit.id),
-            detail={
-                "visit_number": visit.visit_number,
-                "amount": str(visit.consultation_fee),
-                "discount": str(visit.consultation_discount),
-                "total": str(visit.consultation_total),
-            },
-            context=context,
-        )
-        self.db.commit()
-        self.db.refresh(visit)
+        # Hospital collections must use the same receipt/ledger path as the billing desk.
+        from app.modules.billing.service import BillingServiceManager
+        from app.schemas.billing import BillingInvoiceCreate, BillingInvoiceItemCreate, BillingPaymentCreate
+        billing=BillingServiceManager(self.db)
+        visit=self.get_visit(visit_id,actor)
+        billing.list_services(actor)
+        invoice=billing.repository.get_invoice_by_source(source_opd_visit_id=visit.id,billing_stage='opd')
+        if not invoice:
+            config=billing._consultation_service_for_visit(visit,actor)
+            if not config:raise AppException(422,'consultation_catalog','Configure the doctor consultation fee first')
+            if payload.amount!=config.unit_price:raise AppException(422,'consultation_fee_mismatch','Use an approved billing fee override to change the consultation fee')
+            invoice=billing.create_invoice(BillingInvoiceCreate(patient_id=visit.patient_id,source_opd_visit_id=visit.id,source_module='opd',billing_stage='opd',discount_reason='Authorized OPD consultation concession' if payload.discount else None,items=[BillingInvoiceItemCreate(billing_service_id=config.id,quantity=1,discount_amount=payload.discount)]),actor,context,commit=False)
+        if invoice.paid_amount>0:raise AppException(409,'consultation_collection_exists','Use the billing desk to collect the remaining balance without duplicating receipts')
+        if invoice.total_amount != payload.amount-payload.discount:raise AppException(422,'consultation_invoice_mismatch','The consultation invoice changed; collect its recorded balance from billing')
+        if invoice.due_amount>0:billing.create_payment(invoice.id,BillingPaymentCreate(amount=invoice.due_amount,payment_method='cash'),actor,context)
+        visit=self.get_visit(visit_id,actor);visit.consultation_payment_source='hospital';self.db.commit()
         return visit
 
     def update_status(self, visit_id, status: str, actor: User, context: dict[str, str | None]) -> OPDVisit:
@@ -293,7 +289,25 @@ class OPDService:
 
     def update_consultation(self, visit_id, payload: OPDVisitConsultationUpdate, actor: User, context: dict[str, str | None], *, commit: bool = True) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        from app.modules.opd.prescriptions import lock_visit, assert_draft, audit
+        lock_visit(self.db,visit);assert_draft(visit)
+        if payload.expected_version is not None and payload.expected_version != visit.clinical_version:
+            raise AppException(409,'prescription_conflict','The draft changed in another session; reload before saving')
+        before={key:getattr(visit,key) for key in ['chief_complaint','history_of_present_illness','past_history','vital_signs','examination_note','provisional_diagnosis','final_diagnosis','follow_up_note']}
+        before['prescription_data']=visit.prescription_data
+        values=payload.model_dump(exclude_unset=True,exclude={'expected_version'})
+        if payload.prescription_data is not None:
+            import json
+            try:encoded=json.dumps(payload.prescription_data,allow_nan=False)
+            except (ValueError,TypeError):raise AppException(422,'prescription_data','Clinical data must contain finite, JSON-compatible values')
+            if len(encoded)>500000:raise AppException(422,'prescription_content_size','Prescription exceeds the supported draft size')
+            from app.modules.opd.prescriptions import CLINICAL_FIELDS
+            canonical={key:value for key,value in payload.prescription_data.items() if key in CLINICAL_FIELDS}
+            if canonical:
+                try:validated=OPDVisitConsultationUpdate.model_validate(canonical)
+                except ValueError:raise AppException(422,'prescription_data','A configured field contains invalid clinical data')
+                values.update(validated.model_dump(exclude_unset=True))
+        for field, value in values.items():
             setattr(visit, field, value)
         visit.updated_by = actor.id
         AuditService(self.db).log(
@@ -305,6 +319,8 @@ class OPDService:
             detail={"visit_number": visit.visit_number, "consultation_updated": True},
             context=context,
         )
+        visit.clinical_version += 1
+        audit(self.db,visit,actor,'draft_saved',{'clinical_version':visit.clinical_version,'before':before})
         if commit:
             self.db.commit()
             self.db.refresh(visit)
@@ -316,16 +332,45 @@ class OPDService:
         if token:
             QueueService(self.db)._lock_queue(token.branch_id, "opd", token.token_date, token.doctor_user_id)
         self.db.refresh(visit, with_for_update={"of": OPDVisit})
-        if visit.status == "prescribed":
+        from app.modules.opd.prescriptions import assert_signer, sign
+        assert_signer(visit,actor)
+        if visit.prescription_status == "voided":raise AppException(409,"prescription_voided","A voided prescription cannot be signed again")
+        if visit.prescription_status == "finalized":
             return visit  # A retried finalization must not call another serial.
-        if visit.status != "in_consultation":
+        if visit.status != "in_consultation" and visit.prescription_status != "amended":
             raise AppException(409, "opd_consultation_required", "Start the consultation before finalizing a prescription")
         self.update_consultation(visit.id, payload, actor, context, commit=False)
+        self.db.expire(visit,["orders"])
+        sign(self.db,visit,actor)
+        if visit.status in {"prescribed","completed"}:
+            self.db.commit();self.db.refresh(visit);return visit
         return self.update_status(visit.id, "prescribed", actor, context)
 
-    def create_order(self, visit_id, payload: OPDVisitOrderCreate, actor: User, context: dict[str, str | None]) -> OPDVisit:
+    def create_order(self, visit_id, payload: OPDVisitOrderCreate, actor: User, context: dict[str, str | None], *, commit: bool = True) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
 
+        from app.modules.opd.prescriptions import assert_draft, lock_visit
+        lock_visit(self.db,visit);assert_draft(visit)
+        if payload.request_key:
+            prior = self.db.scalar(select(OPDVisitOrder).where(OPDVisitOrder.visit_id==visit.id,OPDVisitOrder.request_key==payload.request_key))
+            if prior:
+                if prior.order_type != payload.order_type or prior.item_name != payload.item_name or prior.instructions != payload.instructions or prior.quantity != payload.quantity:
+                    raise AppException(409,'prescription_order_conflict','Order request key was used with different content')
+                return visit
+        if payload.order_type=='investigation' and any(o.order_type=='investigation' and o.service_area==payload.service_area and o.item_name.casefold().strip()==payload.item_name.casefold().strip() and o.status!='cancelled' for o in visit.orders):
+            return visit
+        if payload.order_type=='prescription' and (payload.prescription_detail or {}).get('catalog_id'):
+            from app.models.pharmacy import PharmacyMedicine
+            from uuid import UUID
+            try:catalog_id=UUID(payload.prescription_detail['catalog_id'])
+            except (ValueError,TypeError):raise AppException(422,'prescription_catalog','Invalid catalog medicine')
+            medicine=self.db.get(PharmacyMedicine,catalog_id)
+            if not medicine or not medicine.is_active or medicine.branch_id not in {None,visit.branch_id}:
+                raise AppException(422,'prescription_catalog','Medicine is not available in this approved catalog')
+            expected=' '.join(value for value in [medicine.name,medicine.strength] if value)
+            if payload.item_name!=expected or not payload.prescription_detail.get('confirmed_by_doctor'):
+                raise AppException(422,'prescription_selection','Explicitly confirm the selected brand and strength; substitutions are not automatic')
+            payload.prescription_detail={**payload.prescription_detail,'catalog_snapshot':{'name':medicine.name,'generic':medicine.generic.name,'strength':medicine.strength,'dosage_form':medicine.dosage_form,'manufacturer':medicine.company.name}}
         order = OPDVisitOrder(
             visit_id=visit.id,
             **payload.model_dump(),
@@ -415,15 +460,24 @@ class OPDService:
             detail={"visit_number": visit.visit_number, "order_type": order.order_type, "item_name": order.item_name},
             context=context,
         )
-        self.db.commit()
+        if commit:self.db.commit()
+        else:self.db.flush()
         return self.repository.get_visit(visit.id) or visit
 
     def update_order(self, visit_id, order_id, payload: OPDVisitOrderUpdate, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
+        from app.modules.opd.prescriptions import assert_draft, lock_visit
+        lock_visit(self.db,visit)
+        if payload.model_fields_set.intersection({'item_name','instructions','quantity','service_area'}):assert_draft(visit)
 
         order = self.repository.get_order(order_id)
         if not order or order.visit_id != visit.id:
             raise AppException(404, "opd_order_not_found", "OPD order not found")
+        self.db.refresh(order,with_for_update={'of':OPDVisitOrder})
+        if payload.expected_version is not None and payload.expected_version!=order.version:raise AppException(409,'prescription_order_conflict','This order changed in another session; reload it before editing')
+        if order.status in {'completed','verified'} and payload.model_fields_set.intersection({'item_name','instructions','quantity','service_area'}):raise AppException(409,'prescription_order_fulfilled','Completed clinical orders cannot have their original intent rewritten')
+        order.version+=1
+
 
         if payload.item_name is not None:
             order.item_name = payload.item_name
@@ -467,11 +521,19 @@ class OPDService:
 
     def delete_order(self, visit_id, order_id, actor: User, context: dict[str, str | None]) -> OPDVisit:
         visit = self.get_visit(visit_id, actor)
+        from app.modules.opd.prescriptions import assert_draft, lock_visit
+        lock_visit(self.db,visit);assert_draft(visit)
         order = self.repository.get_order(order_id)
         if not order or order.visit_id != visit.id:
             raise AppException(404, "opd_order_not_found", "OPD order not found")
         if order.status in {"completed", "verified"}:
-            raise AppException(400, "opd_order_locked", "Completed or verified orders cannot be removed from the prescription")
+            if visit.prescription_status!='amended':raise AppException(400,"opd_order_locked","Completed orders require a prescription amendment for logical withdrawal")
+            from app.modules.opd.prescriptions import assert_signer,audit
+            assert_signer(visit,actor)
+            order.prescription_detail={**(order.prescription_detail or {}),'_withdrawn_from_rx':True,'withdrawn_at':datetime.now(UTC).isoformat(),'withdrawal_reason':(visit.prescription_data or {}).get('_amendment_reason'),'withdrawn_by':str(actor.id)}
+            order.version+=1
+            audit(self.db,visit,actor,'order_withdrawn',{'order_id':str(order.id),'completed_care_preserved':True})
+            self.db.commit();return self.get_visit(visit.id,actor)
 
         order.status = "cancelled"
         order.updated_by = actor.id

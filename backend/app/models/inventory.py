@@ -235,6 +235,8 @@ class PurchaseRequest(Base, BaseModelMixin):
 
 class InventoryStockTransaction(Base, BaseModelMixin):
     __tablename__ = "inventory_stock_transactions"
+    unit_cost: Mapped[Decimal | None] = mapped_column(Numeric(14,4))
+    cost_amount: Mapped[Decimal | None] = mapped_column(Numeric(14,2))
 
     item_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("inventory_items.id"), nullable=False)
     batch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("stock_batches.id"))

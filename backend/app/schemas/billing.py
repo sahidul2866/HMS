@@ -13,16 +13,16 @@ class BillingServiceCreate(BaseModel):
     service_code: str = Field(min_length=2, max_length=50)
     name: str = Field(min_length=2, max_length=150)
     description: str | None = None
-    unit_price: Decimal = Field(gt=0)
-    doctor_share_percentage: Decimal = Field(ge=0, le=100)
-    max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
-    max_discount_amount: Decimal | None = Field(default=None, ge=0)
+    unit_price: Decimal = Field(decimal_places=2, ge=0)
+    doctor_share_percentage: Decimal = Field(decimal_places=2, ge=0, le=100)
+    max_discount_percentage: Decimal | None = Field(decimal_places=2, default=None, ge=0, le=100)
+    max_discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
     billing_type_id: UUID | None = None
     room_number: str | None = Field(default=None, max_length=60)
 
 
 class BillingServiceRead(BillingServiceCreate):
-    unit_price: Decimal = Field(ge=0)
+    unit_price: Decimal = Field(decimal_places=2, ge=0)
     id: UUID
     source_module: str | None = None
     source_entity_id: UUID | None = None
@@ -33,15 +33,16 @@ class BillingServiceRead(BillingServiceCreate):
 
 
 class BillingServiceControlsUpdate(BaseModel):
-    max_discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
-    max_discount_amount: Decimal | None = Field(default=None, ge=0)
-    doctor_share_percentage: Decimal = Field(ge=0, le=100)
+    max_discount_percentage: Decimal | None = Field(decimal_places=2, default=None, ge=0, le=100)
+    max_discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
+    doctor_share_percentage: Decimal = Field(decimal_places=2, ge=0, le=100)
     billing_type_id: UUID | None = None
     room_number: str | None = Field(default=None, max_length=60)
     is_active: bool | None = None
 
 
 class ReferredDoctorCreate(BaseModel):
+    referrer_type: str = Field(default='external_doctor', pattern='^(external_doctor|pharmacy|person|agent|organization|other)$')
     branch_id: UUID | None = None
     doctor_code: str = Field(min_length=2, max_length=50)
     full_name: str = Field(min_length=2, max_length=150)
@@ -58,12 +59,14 @@ class ReferredDoctorRead(ReferredDoctorCreate):
 
 
 class BillingInvoiceItemCreate(BaseModel):
+    unit_price_override: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    override_reason: str | None = Field(default=None, min_length=3, max_length=500)
     bed_charge_date: date | None = None
     billing_service_id: UUID | None = None
-    quantity: Decimal = Field(gt=0)
-    discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    quantity: Decimal = Field(decimal_places=2, gt=0)
+    discount_percentage: Decimal = Field(decimal_places=2, default=0, ge=0, le=100)
     # Flat Taka discount on this line; use either this or the percentage, not both.
-    discount_amount: Decimal | None = Field(default=None, ge=0)
+    discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
     source_opd_visit_order_id: UUID | None = None
     source_label: str | None = Field(default=None, max_length=180)
     source_module: str | None = Field(default=None, max_length=40)
@@ -83,9 +86,10 @@ class BillingInvoiceCreate(BaseModel):
     source_module: str | None = Field(default=None, max_length=40)
     billing_stage: str | None = Field(default=None, max_length=40)
     internal_referral_user_id: UUID | None = None
-    discount_percentage: Decimal = Field(default=0, ge=0, le=100)
+    referred_doctor_id: UUID | None = None
+    discount_percentage: Decimal = Field(decimal_places=2, default=0, ge=0, le=100)
     # Flat Taka discount on the whole invoice; use either this or the percentage, not both.
-    discount_amount: Decimal | None = Field(default=None, ge=0)
+    discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
     note: str | None = None
     billing_type_id: UUID | None = None
     discount_reason: str | None = Field(default=None, max_length=500)
@@ -93,6 +97,7 @@ class BillingInvoiceCreate(BaseModel):
 
 
 class BillingInvoiceItemRead(BaseModel):
+    financial_snapshot: dict | None = None
     net_amount: Decimal
     returnable_quantity: Decimal
     bed_charge_date: date | None = None
@@ -235,14 +240,23 @@ class BillingReferralSummaryRead(BaseModel):
     referred_doctor_amount: Decimal
 
 
+class BillingInvoiceCancelRequest(BaseModel):
+    request_key: str | None = Field(default=None, min_length=8, max_length=100)
+    payment_method: str = Field(default='cash', pattern='^(cash|card|mobile_banking|bank_transfer)$')
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class BillingInvoiceVoidRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
 class BillingPaymentCreate(BaseModel):
+    advance_payment_id: UUID | None = None
+    advance: bool = False
+    request_key: str | None = Field(default=None, min_length=8, max_length=100)
     model_config = {"str_strip_whitespace": True}
-    amount: Decimal = Field(gt=0)
-    payment_method: str = Field(pattern="^(cash|card|mobile_banking|bank_transfer)$")
+    amount: Decimal = Field(decimal_places=2, gt=0)
+    payment_method: str = Field(pattern="^(cash|card|mobile_banking|bank_transfer|patient_advance)$")
     # Mobile banking: provider (bkash, nagad, rocket, upay, other) and TrxID. Card: approval code. Bank: cheque / transfer reference.
     payment_provider: str | None = Field(default=None, max_length=30)
     reference_number: str | None = Field(default=None, max_length=80)
@@ -269,9 +283,10 @@ class BillingPaymentRead(BaseModel):
 
 
 class BillingRefundCreate(BaseModel):
+    request_key: str | None = Field(default=None, min_length=8, max_length=100)
     model_config = {"str_strip_whitespace": True}
     payment_method: str = Field(default="cash", pattern="^(cash|card|mobile_banking|bank_transfer)$")
-    amount: Decimal = Field(gt=0)
+    amount: Decimal = Field(decimal_places=2, gt=0)
     payment_id: UUID | None = None
     reason: str = Field(min_length=3, max_length=500)
     refunded_at: datetime | None = None
@@ -279,10 +294,11 @@ class BillingRefundCreate(BaseModel):
 
 class BillingReturnItemCreate(BaseModel):
     invoice_item_id: UUID
-    quantity: Decimal = Field(gt=0)
+    quantity: Decimal = Field(decimal_places=2, gt=0)
 
 
 class BillingReturnCreate(BaseModel):
+    request_key: str | None = Field(default=None, min_length=8, max_length=100)
     model_config = {"str_strip_whitespace": True}
     payment_method: str = Field(default="cash", pattern="^(cash|card|mobile_banking|bank_transfer)$")
     items: list[BillingReturnItemCreate] = Field(min_length=1)
@@ -322,8 +338,12 @@ class BillingInvoicePreview(BaseModel):
 
 
 class BillingInvoicePreviewRequest(BaseModel):
-    discount_percentage: Decimal = Field(default=0, ge=0, le=100)
-    discount_amount: Decimal | None = Field(default=None, ge=0)
+    patient_id: UUID | None = None
+    source_opd_visit_id: UUID | None = None
+    internal_referral_user_id: UUID | None = None
+    referred_doctor_id: UUID | None = None
+    discount_percentage: Decimal = Field(decimal_places=2, default=0, ge=0, le=100)
+    discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
     billing_type_id: UUID | None = None
     discount_reason: str | None = Field(default=None, max_length=500)
     items: list[BillingInvoiceItemCreate] = Field(min_length=1)
@@ -380,11 +400,11 @@ class BillingSettingsRead(BaseModel):
 
 
 class BillingSettingsUpdate(BaseModel):
-    max_item_discount_percentage: Decimal = Field(ge=0, le=100)
-    max_item_discount_amount: Decimal | None = Field(default=None, ge=0)
-    max_invoice_discount_percentage: Decimal = Field(ge=0, le=100)
-    max_invoice_discount_amount: Decimal | None = Field(default=None, ge=0)
-    default_referral_percentage: Decimal = Field(ge=0, le=100)
+    max_item_discount_percentage: Decimal = Field(decimal_places=2, ge=0, le=100)
+    max_item_discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
+    max_invoice_discount_percentage: Decimal = Field(decimal_places=2, ge=0, le=100)
+    max_invoice_discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
+    default_referral_percentage: Decimal = Field(decimal_places=2, ge=0, le=100)
 
 
 class BillingItemLinkRead(BaseModel):
@@ -415,14 +435,14 @@ class BillingInvoiceAmend(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     note: str | None = Field(default=None, max_length=2000)
     billing_type_id: UUID | None = None
-    discount_percentage: Decimal | None = Field(default=None, ge=0, le=100)
-    discount_amount: Decimal | None = Field(default=None, ge=0)
+    discount_percentage: Decimal | None = Field(decimal_places=2, default=None, ge=0, le=100)
+    discount_amount: Decimal | None = Field(decimal_places=2, default=None, ge=0)
 
 
 class BillingHandoverCreate(BaseModel):
     model_config = {"str_strip_whitespace": True}
     receiver_id: UUID
-    declared_amount: Decimal = Field(ge=0)
+    declared_amount: Decimal = Field(decimal_places=2, ge=0)
     note: str = Field(min_length=3, max_length=1000)
 
 

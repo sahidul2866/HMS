@@ -32,6 +32,7 @@ export class AccountingService extends ApiBaseService {
     return this.cache.get('accounting:accounts', () => this.http.get<Account[]>(this.url('/accounting/accounts')));
   }
 
+  updateAccount(id:string,payload:unknown):Observable<Account>{return this.http.patch<Account>(this.url('/accounting/accounts/'+id),payload).pipe(tap(()=>this.clear()));}
   createAccount(payload: Record<string, unknown>): Observable<Account> {
     return this.http.post<Account>(this.url('/accounting/accounts'), payload).pipe(tap(() => this.clear()));
   }
@@ -75,6 +76,12 @@ export class AccountingService extends ApiBaseService {
   syncIntegrations(): Observable<AccountingSyncResult> {
     return this.http.post<AccountingSyncResult>(this.url('/accounting/sync-integrations'), {}).pipe(tap(() => this.clear()));
   }
+
+  importStatement(file:File,account:string):Observable<unknown>{const data=new FormData();data.append('file',file);data.append('ledger_account_code',account);return this.http.post(this.url('/accounting/bank-statements/import-csv'),data).pipe(tap(()=>this.clear()));}
+  exportFinancialReport(path:string,query:string):Observable<Blob>{return this.http.get(this.url('/accounting/'+path+'?'+query),{responseType:'blob'});}
+  exportStatements(query:string):Observable<Blob>{return this.http.get(this.url('/accounting/statements.xlsx?'+query),{responseType:'blob'});}
+  controls<T>(path:string):Observable<T>{return this.http.get<T>(this.url('/accounting/'+path));}
+  controlAction<T>(path:string,payload:unknown={}):Observable<T>{return this.http.post<T>(this.url('/accounting/'+path),payload).pipe(tap(()=>this.clear()));}
 
   clear(): void {
     this.cache.clearPrefix('accounting:');

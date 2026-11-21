@@ -1,3 +1,4 @@
+import { PrescriptionField, PrescriptionFieldsComponent } from '../../../../shared/prescription-fields.component';
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -48,15 +49,22 @@ interface PrescriptionSection {
   key: string;
   label: string;
   enabled: boolean;
+  editor_enabled?: boolean;
   placement: SectionPlacement;
   height: number;
 }
 
 interface LayoutDraft extends BuilderDraft {
+  fields: PrescriptionField[];
+  margin_mm: number;
+  paper_width_mm: number;
+  paper_height_mm: number;
   paper_size: string;
   layout: string;
   font_size: number;
   left_column_width: number;
+  hospital_name: string;
+  hospital_logo: string;
   show_logo: boolean;
   show_barcode: boolean;
   show_qr: boolean;
@@ -92,7 +100,7 @@ const SECTION_LIBRARY: PrescriptionSection[] = [
 @Component({
   selector: 'app-configuration-workspace',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, PrescriptionFieldsComponent],
   templateUrl: './configuration-workspace.component.html',
   styleUrls: ['./configuration-workspace.component.scss'],
 })
@@ -220,7 +228,7 @@ export class ConfigurationWorkspaceComponent {
     } else if (profile.profile_type === 'prescription_suggestion') {
       this.suggestionDraft = { ...this.createSuggestionDraft(), ...base, ...payload } as SuggestionDraft;
     } else if (profile.profile_type === 'prescription_layout') {
-      this.layoutDraft = { ...this.createLayoutDraft(), ...base, ...payload, sections: this.normalizeSections(payload['sections'], payload['section_labels']) };
+      this.layoutDraft = { ...this.createLayoutDraft(), ...base, ...payload, sections: this.normalizeSections(payload['sections'], payload['section_labels'], payload['editor_sections']) };
     } else {
       this.genericDraft = { ...this.createGenericDraft(), ...base, ...payload } as GenericDraft;
     }
@@ -260,8 +268,8 @@ export class ConfigurationWorkspaceComponent {
       code: draft.code || this.defaultCode(),
       name: draft.name,
       description: draft.description || null,
-      scope: this.context === 'opd' ? 'doctor' : draft.scope || 'hospital',
-      target_type: draft.target_id ? 'doctor' : null,
+      scope: draft.scope || 'hospital',
+      target_type: draft.target_id ? (draft.scope==='department'?'department':'doctor') : null,
       target_id: draft.target_id || null,
       payload: this.payloadFromDraft(),
       is_default: !!draft.is_default,
@@ -427,6 +435,21 @@ export class ConfigurationWorkspaceComponent {
     this.columnResizeState = null;
   };
 
+  reusableSectionId='';
+  get reusableSections():ConfigurationProfile[] {return this.profiles.filter(profile=>profile.profile_type==='prescription_section');}
+  saveReusableSection():void {const name=window.prompt('Reusable section name');if(!name?.trim()||!this.layoutDraft.fields.length)return;this.configurationService.create({profile_type:'prescription_section',code:'section-'+crypto.randomUUID(),name,scope:'hospital',payload:{fields:this.layoutDraft.fields},is_default:false}).subscribe(profile=>{this.profiles=[...this.profiles,profile];this.notificationService.success('Reusable field section saved');});}
+  insertReusableSection():void {const profile=this.reusableSections.find(item=>item.id===this.reusableSectionId);if(!profile)return;const fields=JSON.parse(JSON.stringify(profile.payload['fields']||[])) as PrescriptionField[];const keys=new Set(this.layoutDraft.fields.map(field=>field.key));const rename=new Map<string,string>();for(const field of fields){const old=field.key;if(keys.has(old))field.key=old.slice(0,50)+'_'+crypto.randomUUID().slice(0,8);rename.set(old,field.key);keys.add(field.key);}for(const field of fields){if(field.show_when)field.show_when=Object.fromEntries(Object.entries(field.show_when).map(([key,value])=>[rename.get(key)||key,value]));}this.layoutDraft.fields.push(...fields);}
+
+  fieldTypes = ['text','textarea','rich_text','number','date','select','searchable_select','checkbox','radio','medicine','investigation','diagnosis','vitals','notes','medicine_rows','investigation_rows','section','header','footer','table','columns'];
+  previewFields: Record<string,any> = {};
+  draggedField: number | null = null;
+  addField():void { this.layoutDraft.fields.push({key:'field_'+crypto.randomUUID().replaceAll('-','').slice(0,8),label:'New clinical field',type:'text',visible:true,print_visible:true,column:'full',options:[]}); }
+  moveField(index:number):void { if(this.draggedField===null)return;const [field]=this.layoutDraft.fields.splice(this.draggedField,1);this.layoutDraft.fields.splice(index,0,field);this.draggedField=null; }
+  fieldOptions(field:PrescriptionField,text:string):void {field.options=text.split('\n').map(s=>s.trim()).filter(Boolean);}
+  setCondition(field:PrescriptionField,key:string,value:string):void {const target=this.layoutDraft.fields.find(item=>item.key===key);const expected=target?.type==='checkbox'?(value.toLowerCase()==='true'):target?.type==='number'?Number(value):value;field.show_when=key?{[key]:expected}:null;}
+  loadHospitalLogo(event:Event):void {const file=(event.target as HTMLInputElement).files?.[0];if(!file)return;if(!['image/png','image/jpeg'].includes(file.type)||file.size>120000){this.notificationService.warning('Choose a PNG/JPEG logo under 120 KB');return;}const reader=new FileReader();reader.onload=()=>this.layoutDraft.hospital_logo=String(reader.result || '');reader.readAsDataURL(file);}
+  installPresets():void {this.configurationService.installPrescriptionPresets().subscribe(()=>{this.load();this.notificationService.success('Editable prescription templates installed');});}
+
   private payloadFromDraft(): Record<string, unknown> {
     if (this.activeType === 'doctor_share') {
       const { code, name, description, scope, target_type, target_id, is_default, ...payload } = this.shareDraft;
@@ -448,6 +471,7 @@ export class ConfigurationWorkspaceComponent {
       return {
         ...payload,
         sections: this.enabledLayoutSections.map((item) => item.key),
+        editor_sections: this.layoutDraft.sections.filter(item=>item.editor_enabled!==false).map(item=>item.key),
         section_labels: this.layoutDraft.sections,
         section_placements: this.enabledLayoutSections.map((item) => ({ key: item.key, placement: item.placement })),
       };
@@ -487,7 +511,7 @@ export class ConfigurationWorkspaceComponent {
       ...this.createBaseDraft(),
       complaints: ['Fever for 3 days', 'Cough and cold', 'Abdominal pain'],
       diagnoses: ['Viral fever', 'URTI', 'Gastritis'],
-      medicines: ['Napa 500 mg - 1+1+1 after meal for 3 days', 'Antacid - before meal for 5 days'],
+      medicines: [],
       investigations: ['CBC', 'Urine R/E'],
       advice: ['Drink plenty of water', 'Take rest', 'Avoid oily food'],
       follow_up_days: 7,
@@ -497,10 +521,13 @@ export class ConfigurationWorkspaceComponent {
   private createLayoutDraft(): LayoutDraft {
     return {
       ...this.createBaseDraft(),
+      fields: [], margin_mm: 7, paper_width_mm: 148, paper_height_mm: 210,
       paper_size: 'A5',
       layout: 'two_column',
       font_size: 11,
       left_column_width: 38,
+      hospital_name: '',
+      hospital_logo: '',
       show_logo: true,
       show_barcode: true,
       show_qr: true,
@@ -526,7 +553,7 @@ export class ConfigurationWorkspaceComponent {
     return value.map((item) => item.trim()).filter(Boolean);
   }
 
-  private normalizeSections(value: unknown, labelsValue?: unknown): PrescriptionSection[] {
+  private normalizeSections(value: unknown, labelsValue?: unknown, editorValue?: unknown): PrescriptionSection[] {
     const keys = Array.isArray(value) ? value.map(String) : SECTION_LIBRARY.map((section) => section.key);
     const savedLabels = Array.isArray(labelsValue) ? labelsValue as Array<Partial<PrescriptionSection> & { key?: string }> : [];
     const savedByKey = new Map(savedLabels.filter((item) => item.key).map((item) => [String(item.key), item]));
@@ -536,7 +563,7 @@ export class ConfigurationWorkspaceComponent {
       return { ...librarySection, ...saved, key, enabled: true, placement: this.normalizePlacement(saved?.placement || librarySection.placement), height: this.normalizeHeight(saved?.height || librarySection.height) };
     });
     const missing = SECTION_LIBRARY.filter((section) => !keys.includes(section.key)).map((section) => ({ ...section, enabled: false }));
-    return [...ordered, ...missing];
+    return [...ordered, ...missing].map(section=>({...section,editor_enabled:Array.isArray(editorValue)?editorValue.includes(section.key):section.enabled}));
   }
 
   private normalizePlacement(value: unknown): SectionPlacement {

@@ -49,6 +49,7 @@ class ReferredDoctor(Base, BaseModelMixin):
     __tablename__ = "referred_doctors"
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
+    referrer_type: Mapped[str] = mapped_column(String(30), nullable=False, default='external_doctor', server_default='external_doctor')
     doctor_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     specialty: Mapped[str | None] = mapped_column(String(120))
@@ -141,6 +142,7 @@ class BillingInvoiceItem(Base, BaseModelMixin):
     __tablename__ = "billing_invoice_items"
 
     invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
+    financial_snapshot: Mapped[dict | None] = mapped_column(JSON)
     bed_charge_date: Mapped[date | None] = mapped_column(Date())
     source_entity_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     billing_instruction: Mapped[str | None] = mapped_column(Text)
@@ -180,6 +182,7 @@ class BillingInvoiceItem(Base, BaseModelMixin):
 
 class BillingPayment(Base, BaseModelMixin):
     __tablename__ = "billing_payments"
+    advance_payment_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey("advance_payments.id"))
 
     invoice_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("billing_invoices.id"), nullable=False)
     patient_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("patients.id"), nullable=False)

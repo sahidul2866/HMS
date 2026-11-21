@@ -29,6 +29,7 @@ if(proxy)assert(/^(127\.0\.0\.1|localhost):\d+$/.test(proxy),'HMS_API_PROXY must
   const patient=(await call('POST','/patients',{first_name:'BDBill',last_name:'Synthetic'+suffix,phone:'017'+String(Date.now()).slice(-8)})).body;assert(patient?.id,'patient created');
   step('patient');
   await go('/billing/create?patientId='+patient.id);
+  await page.getByRole('button',{name:'New Billing',exact:true}).click();
   await page.getByRole('heading',{name:'Services and items',exact:true}).waitFor();
   await page.getByText('Browse suggested services',{exact:true}).click();
   for(let i=0;i<2;i++)await page.locator('.quick-add-btn').first().click();

@@ -25,7 +25,8 @@ assert(['localhost','127.0.0.1'].includes(new URL(base).hostname));
   const patients=await(await page.request.get(cfg.apiBaseUrl+'/patients',{headers:{Authorization:'Bearer '+token}})).json();assert(patients.length);
   for(const width of [1440,1024,768,390]){
    await page.setViewportSize({width,height:1050});await go('/billing/create?patientId='+patients[0].id);
-   await page.getByRole('heading',{name:'Services and items',exact:true}).waitFor();
+   await page.getByRole('button',{name:'New Billing',exact:true}).click();
+  await page.getByRole('heading',{name:'Services and items',exact:true}).waitFor();
    await page.getByText('Browse suggested services',{exact:true}).click();
    for(let i=0;i<3;i++)await page.locator('.quick-add-btn').first().click();
    await page.getByText('Browse suggested services',{exact:true}).click();

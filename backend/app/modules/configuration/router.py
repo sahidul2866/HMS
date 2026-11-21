@@ -40,3 +40,22 @@ def update_profile(profile_id: str, payload: ConfigurationProfileUpdate, user=De
 def delete_profile(profile_id: str, user=Depends(get_current_user), db: Session = Depends(get_db)) -> dict[str, bool]:
     ConfigurationService(db).delete_profile(profile_id, user)
     return {"success": True}
+
+
+@router.post('/prescription-presets',dependencies=[Depends(require_any_permissions('settings.configuration.manage','opd.settings.manage'))])
+def install_prescription_presets(user=Depends(get_current_user),db:Session=Depends(get_db)):
+    from app.modules.configuration.prescription_presets import install_presets
+    return {'profile_ids':install_presets(db,user)}
+
+
+@router.get('/profiles/{profile_id}/versions',dependencies=[Depends(require_any_permissions('settings.configuration.manage','opd.settings.manage'))])
+def configuration_versions(profile_id:str,user=Depends(get_current_user),db:Session=Depends(get_db)):
+    from uuid import UUID
+    from sqlalchemy import select
+    from app.models.configuration import ConfigurationProfile
+    from app.models.prescription import ConfigurationProfileVersion
+    from app.core.exceptions import AppException
+    row=db.get(ConfigurationProfile,UUID(profile_id))
+    if not row or (user.branch_id and row.branch_id not in {None,user.branch_id}):raise AppException(404,'configuration_not_found','Profile not found')
+    ConfigurationService(db)._assert_profile_type_allowed(user,row.profile_type)
+    return [{'version':r.version,'snapshot':r.snapshot,'created_at':r.created_at} for r in db.scalars(select(ConfigurationProfileVersion).where(ConfigurationProfileVersion.profile_id==row.id).order_by(ConfigurationProfileVersion.version))]

@@ -1,0 +1,6 @@
+{
+  "journals": 10000,
+  "lines": 20000,
+  "statement_service_ms": 92.77,
+  "scope": "Local PostgreSQL complete statements, cash-flow aggregation and hydration; synthetic balanced ledger, not production latency"
+}

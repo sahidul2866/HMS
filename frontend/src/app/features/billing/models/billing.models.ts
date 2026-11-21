@@ -61,6 +61,8 @@ export interface CreateReferredDoctorPayload {
 }
 
 export interface BillingInvoiceItemPayload {
+  unit_price_override?: number | null;
+  override_reason?: string | null;
   billing_service_id?: string | null;
   quantity: number;
   discount_percentage: number;
@@ -87,6 +89,7 @@ export interface CreateBillingInvoicePayload {
   source_module?: string | null;
   billing_stage?: string | null;
   internal_referral_user_id?: string | null;
+  referred_doctor_id?: string | null;
   discount_percentage: number;
   /** Flat Taka discount on the whole invoice; used instead of the percentage. */
   discount_amount?: number | null;
@@ -129,8 +132,10 @@ export interface BillingPayment {
 }
 
 export interface BillingPaymentPayload {
+  request_key?: string;
   amount: number;
-  payment_method: 'cash' | 'card' | 'mobile_banking' | 'bank_transfer';
+  advance_payment_id?: string | null;
+  payment_method: 'cash' | 'card' | 'mobile_banking' | 'bank_transfer' | 'patient_advance';
   /** bkash, nagad, rocket, upay or other, for mobile banking. */
   payment_provider?: string | null;
   /** TrxID, card approval code or bank / cheque reference. */
@@ -158,6 +163,7 @@ export interface BillingRefund {
 }
 
 export interface BillingRefundPayload {
+  request_key?: string;
   payment_method?: string;
   amount: number;
   payment_id?: string | null;
@@ -166,6 +172,7 @@ export interface BillingRefundPayload {
 }
 
 export interface BillingReturnPayload {
+  request_key?: string;
   payment_method?: string;
   items: Array<{ invoice_item_id: string; quantity: number }>;
   payment_id?: string | null;
@@ -174,6 +181,7 @@ export interface BillingReturnPayload {
 }
 
 export interface BillingInvoiceItem {
+  financial_snapshot?: { policy_id?: string; rules?: { show_item_discounts?: boolean; hospital_name?: string; hospital_address?: string; hospital_contact?: string } } | null;
   net_amount?: string;
   returnable_quantity?: string;
   id: string;
@@ -214,6 +222,7 @@ export interface BillingInvoice {
   billing_stage?: string | null;
   patient: Patient;
   internal_referral_user_id?: string | null;
+  referred_doctor_id?: string | null;
   referred_doctor_name?: string | null;
   status: string;
   payment_status: string;
@@ -251,6 +260,7 @@ export interface BillingInvoiceListItem {
   billing_stage?: string | null;
   patient: Patient;
   internal_referral_user_id?: string | null;
+  referred_doctor_id?: string | null;
   status: string;
   payment_status: string;
   paid_amount: string;
@@ -299,6 +309,7 @@ export interface BillingSummary {
 
 export interface BillingReferralSummary {
   internal_referral_user_id?: string | null;
+  referred_doctor_id?: string | null;
   referred_doctor_name: string;
   invoice_count: number;
   net_amount: string;
@@ -334,6 +345,7 @@ export interface BillingDraft {
   source_opd_visit_id?: string | null;
   source_ipd_admission_id?: string | null;
   internal_referral_user_id?: string | null;
+  referred_doctor_id?: string | null;
   note?: string | null;
   message?: string | null;
   prior_invoice_count: number;

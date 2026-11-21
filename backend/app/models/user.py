@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String, Text, Table
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +44,8 @@ class User(Base, BaseModelMixin):
     opd_consultation_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     opd_follow_up_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     opd_follow_up_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    opd_bmdc_registration: Mapped[str | None] = mapped_column(String(80))
+    opd_signature_image: Mapped[str | None] = mapped_column(Text)
     opd_prescription_header_name: Mapped[str | None] = mapped_column(String(180))
     opd_prescription_header_degrees: Mapped[str | None] = mapped_column(String(300))
     opd_prescription_header_specialty: Mapped[str | None] = mapped_column(String(220))

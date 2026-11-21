@@ -327,3 +327,8 @@
 }
 
 .opd-visits-table {min-width:790px;}.opd-visits-table td:first-child{max-width:220px;}.opd-visits-table td:nth-child(2){min-width:150px;max-width:240px;}.opd-visits-table td:nth-child(4){white-space:nowrap;font-variant-numeric:tabular-nums;}.record-reference{display:block;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.opd-visits-table small{display:block;margin-top:.25rem;color:var(--text-muted);}.opd-visits-table td{overflow-wrap:normal;}
+
+.prescription-workbench-head {position:sticky;top:0;z-index:4;background:var(--surface,white);padding:10px 0;border-bottom:1px solid #d7e3ea;}
+.clinical-alert {padding:10px 12px;background:#fff7ed;border-left:3px solid #d97706;border-radius:6px;}
+@media(max-width:1100px){.medicine-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:760px){.prescription-two-column{grid-template-columns:1fr !important;}.prescription-workbench-head{position:static;}.medicine-entry-grid{grid-template-columns:1fr;}}

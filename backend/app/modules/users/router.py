@@ -26,6 +26,14 @@ def create_user(payload: UserCreate, context=Depends(get_request_context), user=
     response_model=list[UserRead],
     dependencies=[Depends(require_any_permissions("billing.view", "opd.view", "ipd.view", "settings.user.manage"))],
 )
-def list_doctors(referral_only: bool = False, db: Session = Depends(get_db)) -> list[UserRead]:
+def list_doctors(referral_only: bool = False, user=Depends(get_current_user), db: Session = Depends(get_db)) -> list[UserRead]:
     users = UsersService(db).list_doctors(referral_only=referral_only)
-    return [UserRead.model_validate(item, from_attributes=True) for item in users]
+    from app.modules.auth.service import AuthService
+    permissions=AuthService(db).get_effective_permissions(user)
+    privileged=bool({'opd.settings.manage','settings.user.manage'}.intersection(permissions))
+    result=[]
+    for item in users:
+        row=UserRead.model_validate(item,from_attributes=True)
+        if not privileged and item.id!=user.id:row.opd_signature_image=None
+        result.append(row)
+    return result

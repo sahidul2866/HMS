@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-19",
+  "backend_with_browser": {
+    "passed": 357,
+    "skipped": 0,
+    "seconds": 111.66
+  },
+  "focused_prescription_backend": {
+    "passed": 88
+  },
+  "angular": {
+    "passed": 75
+  },
+  "dedicated_browser_workflows": {
+    "passed": 5
+  },
+  "angular_build": "passed",
+  "local_database": "hms_dev",
+  "local_alembic_head": "20261119_0077",
+  "production_deployed": false,
+  "long_pdf_pages": 7
+}

@@ -78,7 +78,7 @@
             <button class="secondary-btn" type="button" (click)="resetForm()">Cancel</button>
           }
         </div>
-      </form>
+      <div class="form-grid"><label class="field"><span>Amount actually received (BDT; 0 = credit sale)</span><input type="number" step="0.01" min="0" formControlName="paid_amount"></label><label class="field"><span>Collection channel</span><select formControlName="payment_method"><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card">Card clearing</option><option value="mobile_banking">Mobile financial service</option></select></label><label class="field"><span>Mobile provider, when applicable</span><select formControlName="payment_provider"><option value="">Select</option><option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option></select></label></div></form>
     </section>
   </div>
 </section>

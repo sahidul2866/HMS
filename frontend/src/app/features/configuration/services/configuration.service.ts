@@ -6,6 +6,7 @@ import { ApiCacheService } from '../../../core/services/api-cache.service';
 
 export interface ConfigurationProfile {
   id: string;
+  version?: number;
   branch_id?: string | null;
   profile_type: string;
   code: string;
@@ -51,6 +52,8 @@ export class ConfigurationService extends ApiBaseService {
   delete(id: string): Observable<{ success: boolean }> {
     return this.http.delete<{ success: boolean }>(this.url(`/configuration/profiles/${id}`)).pipe(tap(() => this.clear()));
   }
+
+  installPrescriptionPresets(): Observable<unknown> {return this.http.post(this.url('/configuration/prescription-presets'),{}).pipe(tap(()=>this.clear()));}
 
   clear(): void {
     this.cache.clearPrefix('configuration:');

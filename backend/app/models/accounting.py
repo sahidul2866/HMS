@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Index, JSON, Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,11 +52,16 @@ class Account(Base, BaseModelMixin):
     current_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     description: Mapped[str | None] = mapped_column(Text)
 
+    parent_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("accounts.id"))
+    reporting_group: Mapped[str | None] = mapped_column(String(80))
+    is_control: Mapped[bool] = mapped_column(Boolean,nullable=False,default=False,server_default='false')
+    parent = relationship("Account",remote_side="Account.id")
     group = relationship("AccountGroup")
 
 
 class JournalEntry(Base, BaseModelMixin):
     __tablename__ = "journal_entries"
+    __table_args__=(Index("ix_accounting_gl_scope_date","branch_id","journal_date","status"),)
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     journal_number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
@@ -72,11 +77,16 @@ class JournalEntry(Base, BaseModelMixin):
     reversed_entry_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("journal_entries.id"))
     attachment_url: Mapped[str | None] = mapped_column(String(500))
 
+    voucher_type: Mapped[str] = mapped_column(String(30),nullable=False,default='journal',server_default='journal')
+    period_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey('financial_periods.id'))
+    policy_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    posting_applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lines = relationship("JournalEntryLine", back_populates="journal_entry", cascade="all, delete-orphan")
 
 
 class JournalEntryLine(Base, BaseModelMixin):
     __tablename__ = "journal_entry_lines"
+    __table_args__=(Index("ix_accounting_gl_account","account_id","journal_entry_id"),)
 
     journal_entry_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("journal_entries.id"), nullable=False)
     account_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("accounts.id"))
@@ -186,6 +196,9 @@ class CorporateBill(Base, BaseModelMixin):
 
 class SupplierInvoice(Base, BaseModelMixin):
     __tablename__ = "supplier_invoices"
+    purchase_account_code: Mapped[str] = mapped_column(String(50),nullable=False,default="1300",server_default="1300")
+    receiving_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey("stock_receivings.id"))
+    pharmacy_purchase_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey("pharmacy_purchases.id"))
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     supplier_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("suppliers.id"))
@@ -225,6 +238,8 @@ class ExpenseCategory(Base, BaseModelMixin):
 
 class Expense(Base, BaseModelMixin):
     __tablename__ = "expenses"
+    expense_account_code: Mapped[str] = mapped_column(String(50),nullable=False,default="5180",server_default="5180")
+    cost_center: Mapped[str | None] = mapped_column(String(120))
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     category_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("expense_categories.id"))
@@ -272,6 +287,10 @@ class PayrollAccounting(Base, BaseModelMixin):
 
 class CashClosing(Base, BaseModelMixin):
     __tablename__ = "cash_closing"
+    cash_account_code: Mapped[str] = mapped_column(String(50),nullable=False,default='1001',server_default='1001')
+    counter_name: Mapped[str | None] = mapped_column(String(100))
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     cashier_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
@@ -300,6 +319,9 @@ class BankAccount(Base, BaseModelMixin):
 
 class BankTransaction(Base, BaseModelMixin):
     __tablename__ = "bank_transactions"
+    ledger_account_code: Mapped[str | None] = mapped_column(String(50))
+    statement_key: Mapped[str | None] = mapped_column(String(64))
+    matched_journal_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),ForeignKey('journal_entries.id'))
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     bank_account_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("bank_accounts.id"))
@@ -327,6 +349,7 @@ class BankReconciliation(Base, BaseModelMixin):
 
 class AccountingAuditLog(Base, BaseModelMixin):
     __tablename__ = "accounting_audit_logs"
+    __table_args__=(Index("ix_accounting_audit_source","branch_id","action","entity_id"),)
 
     branch_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("branches.id"))
     actor_user_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))

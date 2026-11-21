@@ -46,6 +46,8 @@ export interface OPDSummary {
 }
 
 export interface OPDVisitOrder {
+  version?: number;
+  prescription_detail?: Record<string,any>;
   id: string;
   order_type: string;
   service_area?: string | null;
@@ -59,6 +61,12 @@ export interface OPDVisitOrder {
 }
 
 export interface OPDVisit {
+  prescription_data?: Record<string,any> | null;
+  prescription_template_id?: string | null;
+  clinical_version?: number;
+  prescription_status?: string;
+  consultation_payment_source?: string;
+  signed_prescription?: Record<string,any> | null;
   id: string;
   visit_number: string;
   visit_date: string;
@@ -107,6 +115,9 @@ export interface CreateOPDVisitPayload {
 }
 
 export interface UpdateOPDConsultationPayload {
+  expected_version?: number;
+  prescription_data?: Record<string,any>;
+  prescription_template_id?: string | null;
   chief_complaint?: string | null;
   history_of_present_illness?: string | null;
   past_history?: string | null;
@@ -120,6 +131,8 @@ export interface UpdateOPDConsultationPayload {
 }
 
 export interface CreateOPDVisitOrderPayload {
+  request_key?: string;
+  prescription_detail?: Record<string,unknown>;
   order_type: string;
   service_area?: string | null;
   item_name: string;
@@ -128,6 +141,7 @@ export interface CreateOPDVisitOrderPayload {
 }
 
 export interface UpdateOPDVisitOrderPayload {
+  expected_version?: number;
   service_area?: string | null;
   item_name?: string | null;
   room_number?: string | null;

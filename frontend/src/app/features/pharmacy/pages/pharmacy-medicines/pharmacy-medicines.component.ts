@@ -56,6 +56,7 @@ export class PharmacyMedicinesComponent {
     purchase_price: [0, Validators.required],
     sale_price: [0, Validators.required],
     reorder_level: [0, Validators.required],
+    search_aliases: [''],
     description: [''],
   });
 
@@ -176,6 +177,7 @@ export class PharmacyMedicinesComponent {
       purchase_price: Number(item.purchase_price),
       sale_price: Number(item.sale_price),
       reorder_level: Number(item.reorder_level),
+      search_aliases: (item.search_aliases || []).join('\n'),
       description: item.description || '',
     });
   }
@@ -194,6 +196,7 @@ export class PharmacyMedicinesComponent {
       purchase_price: 0,
       sale_price: 0,
       reorder_level: 0,
+      search_aliases: '',
       description: '',
     });
   }
@@ -203,7 +206,8 @@ export class PharmacyMedicinesComponent {
       this.form.markAllAsTouched();
       return;
     }
-    const payload = this.form.getRawValue();
+    const raw=this.form.getRawValue();
+    const payload = {...raw,search_aliases:(raw.search_aliases||'').split('\n').map(value=>value.trim()).filter(Boolean)};
     const request = this.editingId
       ? this.pharmacyService.updateMedicine(this.editingId, payload as never)
       : this.pharmacyService.createMedicine(payload as never);

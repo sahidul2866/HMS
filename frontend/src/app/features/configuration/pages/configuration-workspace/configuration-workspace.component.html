@@ -67,7 +67,7 @@
           @if (context === 'opd') {
             <label class="field">
               <span>Doctor</span>
-              <select [(ngModel)]="currentDraft.target_id" [ngModelOptions]="{ standalone: true }">
+              <select aria-label="Doctor" [(ngModel)]="currentDraft.target_id" [ngModelOptions]="{ standalone: true }">
                 <option value="">Use as default</option>
                 @for (doctor of doctors; track doctor.id) {
                   <option [value]="doctor.id">{{ doctor.full_name }}</option>
@@ -153,13 +153,44 @@
         }
 
         @if (activeType === 'prescription_layout') {
+          <button type="button" (click)="installPresets()">Install 10 Bangladesh starting templates</button>
+          <div class="editor-grid">
+            <label>Assignment scope<select [(ngModel)]="layoutDraft.scope" [ngModelOptions]="{standalone:true}"><option value="hospital">Hospital / branch</option><option value="doctor">Doctor</option><option value="department">Department</option></select></label>
+            <label>Doctor / department UUID<input [(ngModel)]="layoutDraft.target_id" [ngModelOptions]="{standalone:true}"></label>
+            <label>Print margin (mm)<input type="number" min="0" max="30" [(ngModel)]="layoutDraft.margin_mm" [ngModelOptions]="{standalone:true}"></label>
+            <label>Custom width (mm)<input type="number" min="50" max="500" [(ngModel)]="layoutDraft.paper_width_mm" [ngModelOptions]="{standalone:true}"></label>
+            <label>Custom height (mm)<input type="number" min="50" max="700" [(ngModel)]="layoutDraft.paper_height_mm" [ngModelOptions]="{standalone:true}"></label>
+          </div>
+          <h3>Clinical form fields</h3><div class="toolbar-row"><button type="button" (click)="saveReusableSection()">Save reusable field section</button><select aria-label="Reusable section" [(ngModel)]="reusableSectionId" [ngModelOptions]="{standalone:true}"><option value="">Choose a reusable section</option>@for(section of reusableSections;track section.id){<option [value]="section.id">{{section.name}}</option>}</select><button type="button" (click)="insertReusableSection()">Insert section</button></div><p>Drag fields to reorder. Print visibility is independent of editor visibility. Rich text is stored as safe clinical text.</p>
+          @for(field of layoutDraft.fields;track $index;let index=$index){
+            <div class="builder-panel" draggable="true" (dragstart)="draggedField=index" (dragover)="$event.preventDefault()" (drop)="moveField(index)">
+              <div class="editor-grid">
+                <label>Data key<input [(ngModel)]="field.key" [ngModelOptions]="{standalone:true}"></label>
+                <label>Label (English / Bangla)<input [(ngModel)]="field.label" [ngModelOptions]="{standalone:true}"></label>
+                <label>Component<select aria-label="Component" [(ngModel)]="field.type" [ngModelOptions]="{standalone:true}">@for(type of fieldTypes;track type){<option [value]="type">{{type}}</option>}</select></label>
+                <label>Default value<input [(ngModel)]="field.default" [ngModelOptions]="{standalone:true}"></label>
+                <label><input type="checkbox" [(ngModel)]="field.required" [ngModelOptions]="{standalone:true}">Required</label>
+                <label><input type="checkbox" [(ngModel)]="field.visible" [ngModelOptions]="{standalone:true}">Show in editor</label>
+                <label><input type="checkbox" [(ngModel)]="field.print_visible" [ngModelOptions]="{standalone:true}">Show in print</label>
+                <label>Column<select [(ngModel)]="field.column" [ngModelOptions]="{standalone:true}"><option value="full">Full width</option><option value="left">Left</option><option value="right">Right</option></select></label>
+                <label>Minimum<input type="number" [(ngModel)]="field.min" [ngModelOptions]="{standalone:true}"></label>
+                <label>Maximum<input type="number" [(ngModel)]="field.max" [ngModelOptions]="{standalone:true}"></label>
+                <label>Maximum characters<input type="number" [(ngModel)]="field.max_length" [ngModelOptions]="{standalone:true}"></label>
+                <label>Options (one per line)<textarea [ngModel]="(field.options || []).join('\n')" (ngModelChange)="fieldOptions(field,$event)" [ngModelOptions]="{standalone:true}"></textarea></label>
+                <label>Show when another field equals<input #conditionKey placeholder="Other data key" [value]="field.show_when ? (field.show_when | keyvalue)[0].key : ''" (change)="setCondition(field,conditionKey.value,conditionValue.value)"><input #conditionValue placeholder="Required value" (change)="setCondition(field,conditionKey.value,conditionValue.value)"></label>
+              </div><button type="button" (click)="layoutDraft.fields.splice(index,1)">Remove field</button>
+            </div>
+          }
+          <button type="button" (click)="addField()">Add clinical field</button>
+          <details><summary>Preview clinical entry form</summary><app-prescription-fields [fields]="layoutDraft.fields" [(values)]="previewFields" /></details>
+
           <div class="builder-panel layout-builder">
             <div class="editor-grid">
               <label class="field">
                 <span>Paper Size</span>
                 <select [(ngModel)]="layoutDraft.paper_size" [ngModelOptions]="{ standalone: true }">
                   <option value="A4">A4</option>
-                  <option value="A5">A5</option>
+                  <option value="A5">A5</option><option value="custom">Custom</option>
                   <option value="Letter">Letter</option>
                 </select>
               </label>
@@ -178,6 +209,9 @@
                 <span>Left Column Width %</span>
                 <input type="number" min="25" max="65" [(ngModel)]="layoutDraft.left_column_width" [ngModelOptions]="{ standalone: true }" />
               </label>
+              <label class="field"><span>Hospital / clinic name</span><input [(ngModel)]="layoutDraft.hospital_name" [ngModelOptions]="{ standalone: true }" maxlength="180" /></label>
+              <label class="field"><span>Hospital logo (PNG/JPEG, 120 KB maximum)</span><input type="file" accept="image/png,image/jpeg" (change)="loadHospitalLogo($event)" /></label>
+              @if(layoutDraft.hospital_logo){<button type="button" (click)="layoutDraft.hospital_logo=''">Remove logo</button>}
               <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_logo" [ngModelOptions]="{ standalone: true }" /><span>Logo</span></label>
               <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_qr" [ngModelOptions]="{ standalone: true }" /><span>QR Code</span></label>
               <label class="toggle-field"><input type="checkbox" [(ngModel)]="layoutDraft.show_barcode" [ngModelOptions]="{ standalone: true }" /><span>Barcode</span></label>
@@ -197,7 +231,8 @@
                   [class.disabled]="!section.enabled"
                 >
                   <span class="drag-handle">::</span>
-                  <label><input type="checkbox" [(ngModel)]="section.enabled" [ngModelOptions]="{ standalone: true }" /> {{ section.label }}</label>
+                  <label><input type="checkbox" [(ngModel)]="section.enabled" [ngModelOptions]="{ standalone: true }" /> {{ section.label }} · Print</label>
+                  <label><input type="checkbox" [ngModel]="section.editor_enabled !== false" (ngModelChange)="section.editor_enabled=$event" [ngModelOptions]="{ standalone: true }" /> Editor</label>
                   <select [(ngModel)]="section.placement" [ngModelOptions]="{ standalone: true }" [disabled]="layoutDraft.layout === 'single_column'">
                     <option value="full">Full width</option>
                     <option value="left">Left column</option>

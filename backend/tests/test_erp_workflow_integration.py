@@ -63,7 +63,9 @@ def test_connected_patient_to_ipd_care_final_payment_and_discharge(db):
         assert token['visit_id'] == current['id']
         call('PUT',f'/opd/visits/{current["id"]}/status',{'status':'in_consultation'})
         call('POST',f'/opd/visits/{current["id"]}/orders',{'order_type':'prescription','item_name':'Synthetic prescription item','instructions':'Test-only record'})
+        app.dependency_overrides[get_current_user] = lambda: doctors[0]
         call('POST',f'/opd/visits/{current["id"]}/finalize',{'final_diagnosis':'Synthetic workflow diagnosis'})
+        app.dependency_overrides[get_current_user] = lambda: actor
         admission = call('POST',f'/opd/visits/{current["id"]}/convert-to-ipd',{'bed_id':str(beds[0].id),'admitted_at':datetime.now(UTC).isoformat(),'admission_type':'General','ward_name':'ERP Test Ward','bed_number':beds[0].bed_number,'attending_doctor_name':doctors[0].full_name})
         admission_id = admission['id']
         assert resolve(admission['admission_number'],'ipd_admission',patient_id)['route'].endswith(admission_id)

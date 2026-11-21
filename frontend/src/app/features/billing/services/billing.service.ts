@@ -28,6 +28,8 @@ import {
 
 @Injectable({ providedIn: 'root' })
 export class BillingServiceApi extends ApiBaseService {
+  patientAdvances(patientId:string):Observable<Array<{id:string;receipt_number:string;balance_amount:string}>>{return this.http.get<Array<{id:string;receipt_number:string;balance_amount:string}>>(this.url('/billing/patient-advances/'+patientId));}
+
   private readonly cache = inject(ApiCacheService);
   private readonly dataSync = inject(DataSyncService);
 
@@ -101,8 +103,8 @@ export class BillingServiceApi extends ApiBaseService {
     return this.http.get<BillingInvoiceSticker[]>(this.url(`/billing/invoices/${invoiceId}/stickers`));
   }
 
-  previewInvoice(discount_percentage: number, items: BillingInvoiceItemPayload[]): Observable<BillingInvoicePreview> {
-    return this.http.post<BillingInvoicePreview>(this.url('/billing/invoices/preview'), { discount_percentage, items });
+  previewInvoice(discount_percentage: number, items: BillingInvoiceItemPayload[], context: Record<string, unknown> = {}): Observable<BillingInvoicePreview> {
+    return this.http.post<BillingInvoicePreview>(this.url('/billing/invoices/preview'), { discount_percentage, items, ...context });
   }
 
   getOpdDraft(visitId: string): Observable<BillingDraft> {
@@ -132,6 +134,7 @@ export class BillingServiceApi extends ApiBaseService {
   }
 
   collectPayment(invoiceId: string, payload: BillingPaymentPayload): Observable<BillingInvoice> {
+    payload = { ...payload, request_key: payload.request_key ?? crypto.randomUUID() };
     return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/payments`), payload).pipe(
       tap((invoice) => {
         this.clearInvoiceCache(invoiceId);
@@ -141,6 +144,7 @@ export class BillingServiceApi extends ApiBaseService {
   }
 
   createRefund(invoiceId: string, payload: BillingRefundPayload): Observable<BillingInvoice> {
+    payload = { ...payload, request_key: payload.request_key ?? crypto.randomUUID() };
     return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/refunds`), payload).pipe(
       tap((invoice) => {
         this.clearInvoiceCache(invoiceId);
@@ -150,6 +154,7 @@ export class BillingServiceApi extends ApiBaseService {
   }
 
   createReturn(invoiceId: string, payload: BillingReturnPayload): Observable<BillingInvoice> {
+    payload = { ...payload, request_key: payload.request_key ?? crypto.randomUUID() };
     return this.http.post<BillingInvoice>(this.url(`/billing/invoices/${invoiceId}/return`), payload).pipe(
       tap((invoice) => {
         this.clearInvoiceCache(invoiceId);

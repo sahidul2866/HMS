@@ -1,10 +1,12 @@
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import AppException
 from app.dependencies.auth import get_current_user, get_request_context
 from app.dependencies.permissions import require_permissions
 from app.modules.billing.service import BillingServiceManager
@@ -257,7 +259,7 @@ from app.schemas.billing import BillingTypeCreate, BillingInvoiceAmend, BillingH
 def operation_payload(value):
     # SQLAlchemy public columns only; never serialize internal session state.
     if isinstance(value,list):return [operation_payload(v) for v in value]
-    return jsonable_encoder({column.name:getattr(value,column.name) for column in value.__table__.columns})
+    return jsonable_encoder({column.name:getattr(value,column.name) for column in value.__table__.columns}, custom_encoder={Decimal: str})
 
 
 @router.get('/types', dependencies=[Depends(require_permissions('billing.view'))])
@@ -321,3 +323,56 @@ def saved_billing_reports(user=Depends(get_current_user),db: Session=Depends(get
     from app.models.billing import BillingReportSnapshot
     stmt=BillingOperations(db).scoped(select(BillingReportSnapshot),BillingReportSnapshot,user).order_by(BillingReportSnapshot.created_at.desc()).limit(100)
     return operation_payload(list(db.scalars(stmt)))
+
+# Versioned rules and participant accounts share the existing billing administration permission.
+from app.modules.billing.policies import FinancialPolicies
+from app.schemas.billing_policy import PolicyCreate, SettlementCreate
+
+
+@router.get('/policies', dependencies=[Depends(require_permissions('billing.view'))])
+def financial_policies(user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return operation_payload(FinancialPolicies(db).list(user))
+
+
+@router.post('/policies', dependencies=[Depends(require_permissions('billing.service.manage'))])
+def create_financial_policy(payload: PolicyCreate, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return operation_payload(FinancialPolicies(db).create(payload, user))
+
+
+@router.get('/allocations', dependencies=[Depends(require_permissions('reporting.financial.view'))])
+def financial_allocations(user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return operation_payload(FinancialPolicies(db).entries(user))
+
+
+@router.post('/settlements', dependencies=[Depends(require_permissions('billing.service.manage'))])
+def settle_financial_account(payload: SettlementCreate, user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return operation_payload(FinancialPolicies(db).settle(payload, user))
+
+from app.schemas.billing import BillingInvoiceCancelRequest
+
+
+@router.post('/invoices/{invoice_id}/cancel', response_model=BillingInvoiceRead, dependencies=[Depends(require_permissions('billing.invoice.void', 'billing.payment.refund'))])
+def cancel_financial_invoice(invoice_id: UUID, payload: BillingInvoiceCancelRequest, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return BillingServiceManager(db).cancel_invoice(invoice_id, payload, user, context)
+
+from app.schemas.billing import ReferredDoctorCreate, ReferredDoctorRead
+
+
+@router.get('/referrers', response_model=list[ReferredDoctorRead], dependencies=[Depends(require_permissions('billing.view'))])
+def registered_referrers(user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return BillingServiceManager(db).list_doctors(user)
+
+
+@router.post('/referrers', response_model=ReferredDoctorRead, dependencies=[Depends(require_permissions('billing.service.manage'))])
+def register_referrer(payload: ReferredDoctorCreate, context=Depends(get_request_context), user=Depends(get_current_user), db: Session=Depends(get_db)):
+    return BillingServiceManager(db).create_doctor(payload, user, context)
+
+
+@router.get('/patient-advances/{patient_id}',dependencies=[Depends(require_permissions('billing.payment.collect'))])
+def patient_advances(patient_id:UUID,user=Depends(get_current_user),db:Session=Depends(get_db)):
+    from app.models.accounting import AdvancePayment
+    from app.models.patient import Patient
+    from sqlalchemy import select
+    patient=db.scalar(select(Patient).where(Patient.id==patient_id,Patient.branch_id==user.branch_id))
+    if not patient:raise AppException(404,'patient_not_found','Patient not found in active branch')
+    return [{'id':row.id,'receipt_number':row.receipt_number,'balance_amount':str(row.balance_amount)} for row in db.scalars(select(AdvancePayment).where(AdvancePayment.patient_id==patient_id,AdvancePayment.branch_id==user.branch_id,AdvancePayment.status=='active',AdvancePayment.balance_amount>0))]

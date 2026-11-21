@@ -158,6 +158,11 @@ export class PharmacyService extends ApiBaseService {
     return this.http.delete<{ success: boolean }>(this.url(`/pharmacy/customers/${id}`)).pipe(tap(() => this.clearCache()));
   }
 
+  prescribingInvestigations(params:{page_size?:number;q?:string;is_active?:string}={}):Observable<PaginatedResponse<PharmacyInvestigationSetting>> {
+    const query=new URLSearchParams({page_size:String(params.page_size||20)});if(params.q)query.set('q',params.q);
+    return this.http.get<PaginatedResponse<PharmacyInvestigationSetting>>(this.url('/pharmacy/prescribing-investigations?'+query));
+  }
+
   prescribingMedicines(params: {page_size?: number;q?:string;is_active?:boolean} = {}): Observable<PaginatedResponse<PharmacyMedicine>> {
     const query=new URLSearchParams({page_size:String(params.page_size||30)});if(params.q)query.set('q',params.q);
     return this.http.get<PaginatedResponse<PharmacyMedicine>>(this.url('/pharmacy/prescribing-catalog?'+query));

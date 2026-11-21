@@ -30,16 +30,25 @@ const DEFAULT_SECTIONS: PrintableSection[] = [
 ];
 
 export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
-  const { visit, doctor, layoutProfile } = payload;
+  let { visit, doctor, layoutProfile } = payload;
+  const signed = ['finalized','voided'].includes(visit.prescription_status || '') ? visit.signed_prescription : null;
+  if (signed && ['finalized','voided'].includes(visit.prescription_status || '')) {
+    visit = {...visit,...signed,patient:signed['patient'],orders:signed['orders']} as OPDVisit;
+    doctor = {...doctor,...signed['doctor']} as User;
+    layoutProfile = {...layoutProfile,payload:signed['template_payload'] || {}} as ConfigurationProfile;
+  }
   const layoutPayload = layoutProfile?.payload || {};
-  const paperSize = String(layoutPayload['paper_size'] || 'A5');
+  const configuredPaper = String(layoutPayload['paper_size'] || 'A5');
+  const dimension = (value:unknown,fallback:number,min:number,max:number) => Number.isFinite(Number(value)) ? Math.min(max,Math.max(min,Number(value))) : fallback;
+  const paperSize = configuredPaper==='custom' ? `${dimension(layoutPayload['paper_width_mm'],148,50,500)}mm ${dimension(layoutPayload['paper_height_mm'],210,50,700)}mm` : configuredPaper==='A4'?'A4':'A5';
+  const margin = dimension(layoutPayload['margin_mm'],7,0,30);
   const layout = String(layoutPayload['layout'] || 'two_column');
   const fontSize = Number(layoutPayload['font_size'] || 11);
   const leftColumnWidth = normalizeColumnWidth(layoutPayload['left_column_width']);
   const rightColumnWidth = 100 - leftColumnWidth;
   const showBarcode = layoutPayload['show_barcode'] !== false;
   const sections = normalizeSections(layoutPayload);
-  const prescriptionOrders = visit.orders.filter((order) => order.order_type === 'prescription' && order.status !== 'cancelled');
+  const prescriptionOrders = visit.orders.filter((order) => order.order_type === 'prescription' && order.status !== 'cancelled' && !order.prescription_detail?.['_withdrawn_from_rx']);
   const fullSections = sections.filter((section) => section.placement === 'full');
   const leftSections = layout === 'single_column' ? sections.filter((section) => section.placement !== 'full') : sections.filter((section) => section.placement === 'left');
   const rightSections = layout === 'single_column' ? [] : sections.filter((section) => section.placement === 'right');
@@ -49,9 +58,9 @@ export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
     <meta charset="utf-8" />
     <title>Prescription - ${escapePrintHtml(visit.visit_number)}</title>
     <style>
-      @page { size: ${escapePrintHtml(paperSize)}; margin: 7mm; }
+      @page { size: ${escapePrintHtml(paperSize)}; margin: ${margin}mm; }
       * { box-sizing: border-box; }
-      html, body { width: 100%; min-height: 100%; margin: 0; padding: 0; overflow: visible; background: #fff; color: #111827; font-family: Arial, sans-serif; font-size: ${Math.min(fontSize, 10.5)}px; }
+      html, body { width: 100%; min-height: 100%; margin: 0; padding: 0; overflow: visible; background: #fff; color: #111827; font-family: Arial, sans-serif; font-size: ${Math.min(Math.max(fontSize,8),20)}px; }
       .sheet { min-height: 90vh; height: auto; overflow: visible; padding: 4px 3px; display: grid; grid-template-rows: auto auto auto auto auto; gap: 5px; page-break-inside: auto; break-inside: auto; }
       .doctor-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, auto); gap: 10px; padding-bottom: 5px; border-bottom: 2px solid #111827; }
       .doctor-name { font-size: 18px; font-weight: 800; color: #111827; }
@@ -66,8 +75,8 @@ export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
       .column { min-height: 0; overflow: visible; display: grid; align-content: start; gap: 5px; padding: 6px; }
       .column-left { border-right: ${layout === 'single_column' ? '0' : '1px solid #111827'}; }
       .full-row { border-left: 1px solid #111827; border-right: 1px solid #111827; padding: 4px 6px; overflow: visible; }
-      .clinical-line { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 5px; margin-bottom: 4px; break-inside: avoid; }
-      .clinical-line b { color: #111827; font-size: 9px; }
+      .clinical-line { display: grid; grid-template-columns: minmax(44px, 22%) minmax(0, 1fr); gap: 6px; margin-bottom: 4px; break-inside: avoid; }
+      .clinical-line b { overflow-wrap: anywhere; color: #111827; font-size: 9px; }
       .print-line { line-height: 1.25; margin-bottom: 1px; color: #1f2937; }
       .rx-mark { font-family: Georgia, serif; font-size: 25px; font-weight: 800; color: #111827; margin-bottom: 2px; }
       tr { break-inside: avoid; } thead { display: table-header-group; }
@@ -81,12 +90,20 @@ export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
       .muted { color: #64748b; }
       @media print {
         html, body { width: 100%; height: auto; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .sheet { min-height: 90vh; height: auto; overflow: visible; page-break-after: avoid; page-break-before: avoid; }
+        .sheet { display: block; min-height: 0; height: auto; overflow: visible; page-break-after: auto; page-break-before: auto; }
+        .sheet > * { margin-bottom: 6px; }
+        .column { display: block; }
+        ${layout === 'single_column' ? '.body-grid { display: block; }' : ''}
+        .clinical-line { min-height: 0 !important; margin: 6px 0 10px; }
       }
     </style>
   </head>
   <body>
     <main class="sheet">
+      ${payload.visit.prescription_status==='voided'?'<strong>VOIDED / ENTERED IN ERROR — '+escapePrintHtml(String(signed?.['void_reason']||''))+'</strong>':!signed||payload.visit.prescription_status!=='finalized'?'<strong>DRAFT — NOT SIGNED</strong>':''}
+      ${layoutPayload['show_logo']!==false && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(String(layoutPayload['hospital_logo']||''))?'<img alt="Hospital logo" style="max-width:120px;max-height:64px" src="'+escapePrintHtml(String(layoutPayload['hospital_logo']))+'">':''}
+      ${layoutPayload['hospital_name']?'<h2>'+escapePrintHtml(String(layoutPayload['hospital_name']))+'</h2>':''}
+      ${signed?.['_historical_version'] ? '<p>Historical signed version '+escapePrintHtml(String(signed['_historical_version']))+'</p>' : ''}
       ${renderDoctorHeader(visit, doctor)}
       ${renderPatientBand(visit)}
       ${fullSections.length ? `<section class="full-row">${fullSections.map((section) => renderInlineSection(section, visit, prescriptionOrders)).join('')}</section>` : ''}
@@ -94,12 +111,13 @@ export function buildOPDPrescriptionHtml(payload: PrintPayload): string {
         <div class="column column-left">${leftSections.map((section) => renderInlineSection(section, visit, prescriptionOrders)).join('')}</div>
         ${layout === 'single_column' ? '' : `<div class="column column-right">${rightSections.map((section) => renderInlineSection(section, visit, prescriptionOrders)).join('')}</div>`}
       </section>
+      ${renderCustomFields(layoutPayload,visit.prescription_data || {},visit.orders)}
       <footer class="footer">
         <div>
           ${showBarcode ? `<div class="barcode">${buildBarcodeSvg(visit.visit_number, visit.visit_number)}</div>` : ''}
           <div class="muted">${escapePrintHtml(String(layoutPayload['footer_note'] || 'Please bring this prescription on follow-up.'))}</div>
         </div>
-        <div class="signature">${escapePrintHtml(doctor?.opd_prescription_header_name || visit.consulting_doctor_name)}<br />Doctor Signature</div>
+        <div class="signature">${signed && doctor?.opd_signature_image && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(doctor.opd_signature_image) ? `<img alt="Doctor signature" style="max-width:130px;max-height:55px" src="${doctor.opd_signature_image}"><br>` : ''}${escapePrintHtml(doctor?.opd_prescription_header_name || visit.consulting_doctor_name)}<br />${signed?.['legacy_import'] ? 'Legacy finalized record; signing timestamp unavailable' : signed ? 'Signed electronically: '+escapePrintHtml(String(signed['signed_at'] || '')) : 'Doctor Signature (unsigned draft)'}</div>
       </footer>
     </main>
   </body>
@@ -141,6 +159,7 @@ function renderDoctorHeader(visit: OPDVisit, doctor?: User | null): string {
   return `<header class="doctor-head">
     <div>
       <div class="doctor-name">${escapePrintHtml(doctor?.opd_prescription_header_name || visit.consulting_doctor_name)}</div>
+      <div class="doctor-meta">${doctor?.opd_bmdc_registration ? 'BMDC: '+escapePrintHtml(doctor.opd_bmdc_registration) : ''}</div>
       <div class="doctor-meta">${renderPrintLines(doctor?.opd_prescription_header_degrees, '', 'doctor-meta-line')}</div>
       <div class="doctor-meta">${renderPrintLines(doctor?.opd_prescription_header_specialty, '', 'doctor-meta-line')}</div>
       <div class="doctor-meta">${renderPrintLines(doctor?.opd_prescription_header_workplace, '', 'doctor-meta-line')}</div>
@@ -173,21 +192,21 @@ function renderInlineSection(section: PrintableSection, visit: OPDVisit, orders:
     case 'rx':
       return `<div class="simple-block" ${style}><div class="rx-mark">Rx</div>${renderMedicineTable(orders)}</div>`;
     case 'advice':
-      return renderClinicalLine('Advice', visit.follow_up_note, style);
+      return renderClinicalLine(section.label || 'Advice', visit.follow_up_note, style);
     case 'follow_up':
       return renderClinicalLine('F/U', [visit.follow_up_date, visit.follow_up_note].filter(Boolean).join('\n'), style);
     case 'complaint':
-      return renderClinicalLine('C/C', visit.chief_complaint, style);
+      return renderClinicalLine(section.label || 'C/C', visit.chief_complaint, style);
     case 'history':
-      return renderClinicalLine('H/O', visit.history_of_present_illness || visit.past_history, style);
+      return renderClinicalLine(section.label || 'H/O', visit.history_of_present_illness || visit.past_history, style);
     case 'vitals':
-      return renderClinicalLine('Vitals', visit.vital_signs, style);
+      return renderClinicalLine(section.label || 'Vitals', visit.vital_signs, style);
     case 'examination':
-      return renderClinicalLine('O/E', visit.examination_note, style);
+      return renderClinicalLine(section.label || 'O/E', visit.examination_note, style);
     case 'diagnosis':
-      return renderClinicalLine('Dx', [visit.provisional_diagnosis, visit.final_diagnosis].filter(Boolean).join('\n'), style);
+      return renderClinicalLine(section.label || 'Dx', [visit.provisional_diagnosis, visit.final_diagnosis].filter(Boolean).join('\n'), style);
     case 'investigation':
-      return renderInvestigationBlock(visit.orders.filter((order) => order.order_type === 'investigation' && order.status !== 'cancelled'), style);
+      return renderInvestigationBlock(visit.orders.filter((order) => order.order_type === 'investigation' && order.status !== 'cancelled' && !order.prescription_detail?.['_withdrawn_from_rx']), style);
     default:
       return '';
   }
@@ -244,4 +263,21 @@ function normalizeHeight(value: unknown): number {
 function normalizeColumnWidth(value: unknown): number {
   const width = Number(value || 38);
   return Number.isFinite(width) ? Math.min(Math.max(Math.round(width), 25), 65) : 38;
+}
+
+function renderCustomFields(payload:Record<string,unknown>,values:Record<string,unknown>,orders:OPDVisitOrder[]):string {
+  const fields=Array.isArray(payload['fields'])?payload['fields'] as Array<Record<string,any>>:[];
+  return fields.filter(field=>field['print_visible']!==false && (!field['show_when'] || Object.entries(field['show_when']).every(([key,value])=>values[key]===value))).map(field=>{
+    if(field['type']==='medicine_rows'){if((payload['sections'] as string[]||[]).includes('rx'))return '';return '<section><h4>'+escapePrintHtml(String(field['label']))+'</h4>'+renderMedicineTable(orders.filter(o=>o.order_type==='prescription'&&o.status!=='cancelled'&&!o.prescription_detail?.['_withdrawn_from_rx']))+'</section>';}
+    if(field['type']==='investigation_rows'){if((payload['sections'] as string[]||[]).includes('investigation'))return '';return renderInvestigationBlock(orders.filter(o=>o.order_type==='investigation'&&o.status!=='cancelled'&&!o.prescription_detail?.['_withdrawn_from_rx']));}
+    const value=values[field['key']] ?? field['default'];if(value===undefined||value===null||value==='')return '';
+    const label=escapePrintHtml(String(field['label']||field['key']));
+    if(Array.isArray(value))return `<section><h4>${label}</h4><table><tbody>${value.map(row=>`<tr><td>${escapePrintHtml(String(row?.name||''))}</td><td>${escapePrintHtml(String(row?.instructions||''))}</td></tr>`).join('')}</tbody></table></section>`;
+    const printable=typeof value==='object'?['name','strength','generic','service_area'].map(key=>(value as Record<string,unknown>)[key]).filter(Boolean).join(' — '):String(value);
+    return `<section style="break-inside:avoid"><b>${label}</b><div>${field['type']==='rich_text' ? renderSafeRichText(printable) : renderPrintLines(printable,'')}</div></section>`;
+  }).join('');
+}
+
+export function renderSafeRichText(value:string):string {
+  return escapePrintHtml(value).replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>').replace(/_([^_\n]+)_/g,'<em>$1</em>').replace(/\n/g,'<br>');
 }
